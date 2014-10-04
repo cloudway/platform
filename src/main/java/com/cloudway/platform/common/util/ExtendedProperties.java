@@ -56,11 +56,29 @@ public class ExtendedProperties extends Properties
         }
     }
 
-    public ExtendedProperties group(String name) {
+    public ExtendedProperties category(String name) {
         return groups != null ? groups.get(name) : null;
     }
 
-    public Set<String> groupKeys() {
+    public Set<String> categoryKeys() {
         return groups != null ? groups.keySet() : Collections.emptySet();
+    }
+
+    public boolean getBool(String key, boolean deflt) {
+        String value = getProperty(key);
+        return value != null ? Boolean.valueOf(value) : deflt;
+    }
+
+    public boolean getBool(String key) {
+        return getBool(key, false);
+    }
+
+    public int getInt(String key, int deflt) {
+        String value = getProperty(key);
+        return value != null ? Integer.parseInt(value) : deflt;
+    }
+
+    public int getInt(String key) {
+        return getInt(key, -1);
     }
 }

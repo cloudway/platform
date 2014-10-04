@@ -125,12 +125,12 @@ public class Config
         return conf.stringPropertyNames();
     }
 
-    public ExtendedProperties group(String name) {
-        return conf.group(name);
+    public ExtendedProperties category(String name) {
+        return conf.category(name);
     }
 
-    public Set<String> groupKeys() {
-        return conf.groupKeys();
+    public Set<String> categoryKeys() {
+        return conf.categoryKeys();
     }
 
     public String toString() {

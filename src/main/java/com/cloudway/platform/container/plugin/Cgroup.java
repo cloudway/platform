@@ -40,12 +40,12 @@ public class Cgroup
     public static final List<String> CG_SUBSYSTEMS;
     public static final String DEFAULT_CG_SUBSYSTEMS = "cpu,cpuacct,memory,net_cls,freezer";
 
-    private static final Path CGRULES = Paths.get("/etc/cgrules.conf");
-    private static final Path CGCONFIG = Paths.get("/etc/cgconfig.conf");
-
     public static final Map<String, String> CG_MOUNTS;
     public static final Map<String, Path>   CG_PATHS;
     public static final Map<String, Object> CG_PARAMETERS;
+
+    private static final Path CGRULES = Paths.get("/etc/cgrules.conf");
+    private static final Path CGCONFIG = Paths.get("/etc/cgconfig.conf");
 
     public static final boolean enabled;
 
@@ -55,8 +55,9 @@ public class Cgroup
         CG_SUBSYSTEMS = Arrays.asList(config.get("CGROUP_SUBSYSTEMS", DEFAULT_CG_SUBSYSTEMS).split(","));
 
         Map<String, String> mounts = new LinkedHashMap<>();
-        Map<String, Path>   paths = new LinkedHashMap<>();
+        Map<String, Path>   paths  = new LinkedHashMap<>();
         Map<String, Object> params = new LinkedHashMap<>();
+
         try {
             init_cgmounts(mounts);
             init_cgpaths(mounts, paths);
@@ -188,10 +189,12 @@ public class Cgroup
         Map<String, Map<String,Object>> newcfg = new LinkedHashMap<>();
         Map<String, Object> to_store = new LinkedHashMap<>();
 
-        Map<String, Object> perm = new LinkedHashMap<>();
-        perm.put("task", newmap("uid", uid, "gid", uid));
-        perm.put("admin", newmap("uid", "root", "gid", "root"));
-        newcfg.put("perm", perm);
+        // add the config:
+        // { perm { task  { uid = 1000; gid = 1000; }
+        //          admin { uid = root, gid = root; } } }
+        newcfg.put("perm",
+            newmap("task",  newmap("uid",  uid,   "gid",  uid),
+                   "admin", newmap("uid", "root", "gid", "root")));
 
         CG_SUBSYSTEMS.forEach(s -> newcfg.computeIfAbsent(s, x -> new LinkedHashMap<>()));
 
@@ -277,6 +280,14 @@ public class Cgroup
         } catch (RuntimeIOException ex) {
             throw ex.getCause();
         }
+    }
+
+    public void freeze() throws IOException {
+        store(newmap("freezer.state", "FROZEN"));
+    }
+
+    public void thaw() throws IOException {
+        store(newmap("freezer.state", "THAWED"));
     }
 
     /**

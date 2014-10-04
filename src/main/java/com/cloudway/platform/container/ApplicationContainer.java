@@ -30,6 +30,7 @@ public class ApplicationContainer
     private String uuid;
     private String name;
     private String namespace;
+    private String capacity;
     private Path   home_dir;
     private String shell;
     private int    uid, gid;
@@ -39,12 +40,14 @@ public class ApplicationContainer
     private static final POSIX posix = POSIXFactory.getPOSIX();
 
     public static final String GECOS, SHELL, DOMAIN;
+    public static final String DEFAULT_CAPACITY;
 
     static {
         Config config = Config.getDefault();
         GECOS = config.get("EXECUTOR_GECOS", "Cloudway Executor");
         SHELL = config.get("EXECUTOR_SHELL", "/bin/bash");
         DOMAIN = config.get("CLOUDWAY_DOMAIN", "cloudway.local");
+        DEFAULT_CAPACITY = config.get("DEFAULT_CAPACITY", "small");
     }
 
     /**
@@ -55,10 +58,11 @@ public class ApplicationContainer
      * @param namespace the namespace used for proxy
      * @param pwent the passwd entry for the executor
      */
-    private ApplicationContainer(String uuid, String name, String namespace, Passwd pwent) {
+    private ApplicationContainer(String uuid, String name, String namespace, String capacity, Passwd pwent) {
         this.uuid = uuid;
         this.name = name;
         this.namespace = namespace;
+        this.capacity = capacity != null ? capacity : DEFAULT_CAPACITY;
 
         if (pwent != null) {
             this.uid = (int)pwent.getUID();
@@ -81,10 +85,11 @@ public class ApplicationContainer
     public static ApplicationContainer fromUUID(String uuid) {
         Passwd pwent = passwdFor(uuid);
         Path envdir = Paths.get(pwent.getHome(), ".env");
-        Map<String,String> env = Environ.load(envdir, "CLOUDWAY_APP_{NAME,DNS}*");
+        Map<String,String> env = Environ.load(envdir, "CLOUDWAY_APP{NAME,DNS,SIZE}*");
 
-        String appname = env.get("CLOUDWAY_APP_NAME");
-        String dns = env.get("CLOUDWAY_APP_DNS");
+        String appname  = env.get("CLOUDWAY_APP_NAME");
+        String dns      = env.get("CLOUDWAY_APP_DNS");
+        String capacity = env.get("CLOUDWAY_APP_SIZE");
 
         String namespace;
         try {
@@ -94,7 +99,7 @@ public class ApplicationContainer
             namespace = null;
         }
 
-        return new ApplicationContainer(uuid, appname, namespace, pwent);
+        return new ApplicationContainer(uuid, appname, namespace, capacity, pwent);
     }
 
     static Passwd passwdFor(String uuid) {
@@ -164,6 +169,10 @@ public class ApplicationContainer
         return plugin.getIpAddress(host_id);
     }
 
+    public String getCapacity() {
+        return capacity;
+    }
+
     public int getUID() {
         return uid;
     }
@@ -195,13 +204,14 @@ public class ApplicationContainer
     /**
      * Create a container.
      */
-    public static ApplicationContainer create(String uuid, String name, String namespace)
+    public static ApplicationContainer create(String uuid, String name, String namespace, String capacity)
         throws IOException
     {
         ApplicationContainer container =
             new ApplicationContainer(Objects.requireNonNull(uuid),
                                      Objects.requireNonNull(name),
                                      Objects.requireNonNull(namespace),
+                                     Objects.requireNonNull(capacity),
                                      null);
         container.plugin.create();
         return container;
@@ -211,14 +221,6 @@ public class ApplicationContainer
      * Destroy container.
      */
     public void destroy() throws IOException {
-        if (home_dir == null || !Files.isDirectory(home_dir)) {
-            // executor seems to have been deleted already... suppress any error
-            if (home_dir != null && Files.exists(home_dir)) {
-                FileUtils.deleteTree(home_dir);
-            }
-            return;
-        }
-
         plugin.destroy();
     }
 

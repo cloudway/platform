@@ -147,7 +147,8 @@ public class UnixContainerPlugin extends ContainerPlugin
         // add environment variables
         addEnvVar("APP_UUID", container.getUuid());
         addEnvVar("APP_NAME", container.getName());
-        addEnvVar("APP_DNS", container.getDomainName());
+        addEnvVar("APP_DNS",  container.getDomainName());
+        addEnvVar("APP_SIZE", container.getCapacity());
 
         addEnvVar("HOMEDIR", homedir.toString());
         // Ensure HOME exists for git support

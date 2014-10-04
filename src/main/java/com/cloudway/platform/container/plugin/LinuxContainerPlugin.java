@@ -11,19 +11,21 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.ExtendedProperties;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.ApplicationContainer;
 
+import com.cloudway.platform.container.ResourceLimits;
 import jnr.posix.POSIX;
 import jnr.posix.POSIXFactory;
 
@@ -152,7 +154,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         set_mcs_label(file, get_mcs_label());
     }
 
-    private  void set_mcs_label(Path path, String label)
+    private void set_mcs_label(Path path, String label)
         throws IOException
     {
         if (selinux_enabled) {
@@ -161,12 +163,6 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     }
 
     // Cgroups
-
-    private static final String[] CG_PROFILE_KEYS = {
-        "default", "boosted", "throttled", "frozen", "thawed"
-    };
-
-    private static final String CG_DEFAULT = "default";
 
     private static final Map<String, Map<String,Object>> cgprofiles;
 
@@ -178,40 +174,37 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         }
     }
 
+    private static final String CG_KEY_PREFIX = "cgroup.";
+
     private static Map<String, Map<String,Object>> load_cgprofiles() {
         Map<String, Map<String,Object>> profiles = new HashMap<>();
-        Config res = new Config(Config.CONF_DIR.resolve("limits.conf"), null);
+        ResourceLimits limits = ResourceLimits.getInstance();
+
+        // make a uniform key set from all profiles
+        Set<String> keys = new HashSet<>();
+        limits.categoryKeys().forEach(p -> keys.addAll(limits.category(p).stringPropertyNames()));
+        keys.addAll(limits.stringPropertyNames());
+        keys.removeIf(k -> !k.startsWith(CG_KEY_PREFIX));
+        keys.add("cgroup.freezer.state"); // used to restore freezer state
 
         // load configuration for each cgroup profiles
-        Arrays.stream(CG_PROFILE_KEYS)
-            .forEach(profile -> {
-                Map<String,Object> t = new LinkedHashMap<>();
-                profiles.put(profile, t);
-                ExtendedProperties c = res.group("cgroup." + profile);
-                if (c != null) {
-                    c.stringPropertyNames().forEach(k -> t.put(k, c.get(k)));
-                }
+        limits.categoryKeys().forEach(profile -> {
+            Map<String,Object> t = new LinkedHashMap<>();
+            profiles.put(profile, t);
+            keys.forEach(k -> {
+                String ck = k.substring(CG_KEY_PREFIX.length());
+                Object v = limits.getProperty(profile, k, null);
+                if (v == null)
+                    v = Cgroup.CG_PARAMETERS.get(ck);
+                if (v != null)
+                    t.put(ck, v);
             });
-
-        // apply default configuration values for default cgroup profile
-        Map<String,Object> deflt = profiles.get(CG_DEFAULT);
-        profiles.forEach((profile, cfg) -> {
-            if (!CG_DEFAULT.equals(profile)) {
-                cfg.keySet().forEach(k -> {
-                    if (!deflt.containsKey(k)) {
-                        Object v = Cgroup.CG_PARAMETERS.get(k);
-                        if (v != null) {
-                            deflt.put(k, v);
-                        }
-                    }
-                });
-            }
         });
 
         return Collections.unmodifiableMap(profiles);
     }
 
-    private boolean cgroup(IO.Consumer<Cgroup> action)
+    private boolean cgcall(IO.Consumer<Cgroup> action)
         throws IOException
     {
         if (Cgroup.enabled) {
@@ -222,50 +215,41 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         }
     }
 
+    private boolean cgcall(IO.BiConsumer<Cgroup,Map<String,Object>> action)
+        throws IOException
+    {
+        if (Cgroup.enabled) {
+            Map<String, Object> cfg = cgprofiles.get(container.getCapacity());
+            if (cfg == null) {
+                throw new IllegalArgumentException("Unknown cgroup profile: " + container.getCapacity());
+            }
+
+            Cgroup cg = new Cgroup(container.getUuid(), container.getUID());
+            action.accept(cg, cfg);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     private void cgcreate() throws IOException {
-        cgroup(cg -> cg.create(cgprofiles.get(CG_DEFAULT)));
+        cgcall(Cgroup::create);
     }
 
     private void cgdelete() throws IOException {
-        cgroup(Cgroup::delete);
+        cgcall(Cgroup::delete);
     }
 
     private void cgfreeze() throws IOException {
-        apply_cgroup_profile("frozen", null);
+        cgcall(Cgroup::freeze);
     }
 
     private void cgunfreeze() throws IOException {
-        apply_cgroup_profile("thawed", null);
+        cgcall(Cgroup::thaw);
     }
 
     private void cgrestore() throws IOException {
-        apply_cgroup_profile(CG_DEFAULT, null);
-    }
-
-    /**
-     * Apply a cgroup template. If called with an action, the default
-     * will be restored after the action is completed.
-     */
-    private void apply_cgroup_profile(String profile, Runnable action)
-        throws IOException
-    {
-        cgroup(cg -> {
-            Map<String,Object> t = cgprofiles.get(profile);
-
-            if (t == null) {
-                throw new IllegalArgumentException("Unknown profile: " + profile);
-            }
-
-            cg.store(t);
-
-            if (action != null) {
-                try {
-                    action.run();
-                } finally {
-                    cg.store(cgprofiles.get(CG_DEFAULT));
-                }
-            }
-        });
+        cgcall(Cgroup::store);
     }
 
     // Quota
@@ -274,9 +258,10 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     public static final int DEFAULT_QUOTA_FILES  = 80000;
 
     private void initQuota() throws IOException {
-        Config limits = new Config(Config.CONF_DIR.resolve("limits.conf"), null);
-        set_quota(limits.getInt("quota.blocks", DEFAULT_QUOTA_BLOCKS),
-                  limits.getInt("quota.files", DEFAULT_QUOTA_FILES));
+        ResourceLimits limits = ResourceLimits.getInstance();
+        String category = container.getCapacity();
+        set_quota(limits.getInt(category, "quota.blocks", DEFAULT_QUOTA_BLOCKS),
+                  limits.getInt(category, "quota.files", DEFAULT_QUOTA_FILES));
     }
 
     private void removeQuota() throws IOException {
@@ -299,7 +284,6 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
 
         if (curblocks > maxblocks || curfiles > maxfiles) {
             // Log warning: current usage exceeds requested quota
-            return;
         }
 
         Exec.args("setquota",

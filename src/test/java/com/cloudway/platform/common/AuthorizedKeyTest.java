@@ -143,4 +143,9 @@ public class AuthorizedKeyTest
     public void malformedAuthorizedKey2() {
         AuthorizedKey.parse("foo=bar\" ssh-rsa XXX");
     }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void malformedAuthorizedKey3() {
+        AuthorizedKey.parse("foo=b\"ar ssh-rsa XXX");
+    }
 }
