@@ -1,0 +1,41 @@
+#!/usr/bin/python -tt
+
+import sys, os
+
+if __name__ == '__main__':
+    # Determine the command source
+    #
+    # There are two possible command sources:
+    #
+    # 1) authenticate with SSH public key, and key has command= section
+    #    Get command and args from SSH_ORIGINAL_COMMAND
+    # 2) Authenticate with other means
+    #    Get command and args from sys.argv
+    #
+
+    prog = sys.argv[0]
+    cmd = ['/bin/bash', '--init-file', '/etc/cloudway/bashrc']
+
+    orig_cmd = os.environ.get('SSH_ORIGINAL_COMMAND')
+    if orig_cmd != None:
+        # extract the command which was replaced by SSH auth key command
+        cmd.append('-c')
+        cmd.append(orig_cmd)
+    else:
+        # use the command passed by the user through SSH
+        # be careful not to recurse (ssh adds $SHELL -c)
+        allargs = sys.argv
+        if allargs[:2] == [prog, '-c']:
+            # the final command in a single string
+            if allargs[2] == prog:
+                # avoid recursion, drop to shell
+                cmd.append('-i')
+            else:
+                cmd.append('-c')
+                cmd.append(allargs[2])
+        else:
+            cmd.append('-c')
+            cmd.append(' '.join(allargs))
+
+    os.execv(cmd[0], cmd)
+    sys.exit(1)
