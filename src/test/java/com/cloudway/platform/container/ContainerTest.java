@@ -7,8 +7,11 @@
 package com.cloudway.platform.container;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.UUID;
 
+import com.cloudway.platform.common.util.FileUtils;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -23,22 +26,28 @@ public class ContainerTest
     public static void create() throws IOException {
         uuid = mkuuid();
         container = ApplicationContainer.create(uuid, "test", "demo");
+        container.addAuthorizedKey("default", loadPublicKey());
+    }
+
+    private static String loadPublicKey() throws IOException {
+        Path keyfile = Paths.get(System.getProperty("user.home"), ".ssh", "id_rsa.pub");
+        return FileUtils.read(keyfile);
     }
 
     @AfterClass
     public static void destroy() throws IOException {
         boolean keep = Boolean.getBoolean("container.keep");
 
-        if (!keep) {
-            // destroy all application containers
-            ApplicationContainer.all().forEach(c -> {
+        // destroy all application containers
+        ApplicationContainer.all().forEach(c -> {
+            if (!(keep && uuid.equals(c.getUuid()))) {
                 try {
                     c.destroy();
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
-            });
-        }
+            }
+        });
     }
 
     @Test

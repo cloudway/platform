@@ -13,21 +13,23 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
+import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.ExtendedProperties;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.ApplicationContainer;
 
+import jnr.posix.POSIX;
+import jnr.posix.POSIXFactory;
+
 public class LinuxContainerPlugin extends UnixContainerPlugin
 {
-    private static final int DEF_MCS_SET_SIZE   = 1024;
-    private static final int DEF_MCS_GROUP_SIZE = 2;
-    private static final int DEF_MCS_UID_OFFSET = 0;
-    private static final int DEF_MLS_NUM        = 0;
+    private static final POSIX posix = POSIXFactory.getPOSIX();
 
     public LinuxContainerPlugin(ApplicationContainer container) {
         super(container);
@@ -39,6 +41,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
             createUser();
             cgcreate();
             createHomeDir();
+            initQuota();
         } catch (IOException ex) {
             // cleanup when creating container failed
             nothrow(this::deleteUser);
@@ -55,6 +58,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         nothrow(this::deleteUser);
         nothrow(this::cgunfreeze);
         nothrow(this::cgdelete);
+        nothrow(this::removeQuota);
     }
 
     @Override
@@ -63,6 +67,11 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     }
 
     // SELinux
+
+    private static final int DEF_MCS_SET_SIZE   = 1024;
+    private static final int DEF_MCS_GROUP_SIZE = 2;
+    private static final int DEF_MCS_UID_OFFSET = 0;
+    private static final int DEF_MLS_NUM        = 0;
 
     private static final boolean selinux_enabled = SELinux.enabled();
     private String mcs_label;
@@ -257,5 +266,73 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
                 }
             }
         });
+    }
+
+    // Quota
+
+    public static final int DEFAULT_QUOTA_BLOCKS = 1048576; // 1GB
+    public static final int DEFAULT_QUOTA_FILES  = 80000;
+
+    private void initQuota() throws IOException {
+        Config limits = new Config(Config.CONF_DIR.resolve("limits.conf"), null);
+        set_quota(limits.getInt("quota.blocks", DEFAULT_QUOTA_BLOCKS),
+                  limits.getInt("quota.files", DEFAULT_QUOTA_FILES));
+    }
+
+    private void removeQuota() throws IOException {
+        set_quota(0, 0);
+    }
+
+    private void set_quota(int maxblocks, int maxfiles)
+        throws IOException
+    {
+        int curblocks = 0, curfiles = 0;
+
+        Optional<String[]> quota = get_quota();
+        if (quota.isPresent()) {
+            String[] cur_quota = quota.get();
+            curblocks = Integer.parseInt(cur_quota[1]);
+            maxblocks = Integer.parseInt(cur_quota[3]);
+            curfiles  = Integer.parseInt(cur_quota[5]);
+            maxfiles  = Integer.parseInt(cur_quota[7]);
+        }
+
+        if (curblocks > maxblocks || curfiles > maxfiles) {
+            // Log warning: current usage exceeds requested quota
+            return;
+        }
+
+        Exec.args("setquota",
+                  "-u", container.getUuid(),
+                  0, maxblocks, 0, maxfiles,
+                  "-a",
+                  get_mountpoint(container.getHomeDir()))
+            .silentIO()
+            .checkError()
+            .run();
+
+    }
+
+    private Optional<String[]> get_quota() throws IOException {
+        String out = Exec.args("quota", "-pw", container.getUuid()).silentIO().subst();
+        return Arrays.stream(out.split("\n"))
+            .filter(line -> line.matches("^.*/dev/.*"))
+            .findFirst()
+            .map(line -> line.split("\\s+"));
+    }
+
+    private static Path get_mountpoint(Path path) {
+        Path oldpath = path.toAbsolutePath();
+        long olddev = posix.lstat(oldpath.toString()).dev();
+
+        while (true) {
+            Path newpath = oldpath.getParent();
+            if (newpath == null || newpath.equals(oldpath) ||
+                olddev != posix.lstat(newpath.toString()).dev()) {
+                break;
+            }
+            oldpath = newpath;
+        }
+        return oldpath;
     }
 }
