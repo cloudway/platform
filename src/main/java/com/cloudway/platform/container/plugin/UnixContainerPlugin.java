@@ -207,10 +207,10 @@ public class UnixContainerPlugin extends ContainerPlugin
         throws IOException
     {
         file.seek(0);
-        IO.caught(() -> keys.forEach(IO.wrap((AuthorizedKey key) -> {
+        IO.forEach(keys, key -> {
             file.write(key.toString().getBytes());
             file.write('\n');
-        })));
+        });
         file.setLength(file.getFilePointer());
     }
 

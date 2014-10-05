@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.stream.Stream;
 import static java.util.Collections.*;
 import static java.util.stream.Collectors.*;
@@ -30,7 +31,6 @@ import jnr.posix.POSIXFactory;
 
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.FileUtils;
-import com.cloudway.platform.common.util.RuntimeIOException;
 
 public class Cgroup
 {
@@ -39,6 +39,9 @@ public class Cgroup
 
     public static final List<String> CG_SUBSYSTEMS;
     public static final String DEFAULT_CG_SUBSYSTEMS = "cpu,cpuacct,memory,net_cls,freezer";
+
+    public static final int NET_CLS_MAJOR  = 1;
+    public static final int UID_WRAPAROUND = 65536;
 
     public static final Map<String, String> CG_MOUNTS;
     public static final Map<String, Path>   CG_PATHS;
@@ -99,7 +102,7 @@ public class Cgroup
     private static void init_cgpaths(Map<String, String> mounts, Map<String, Path> paths)
         throws IOException
     {
-        IO.caught(() -> mounts.forEach(IO.wrap((subsys, fs) -> paths.put(subsys, root_cgpath(fs)))));
+        IO.forEach(mounts, (subsys, fs) -> paths.put(subsys, root_cgpath(fs)));
     }
 
     private static Path root_cgpath(String fs)
@@ -114,20 +117,19 @@ public class Cgroup
     private static void init_cgparameters(Map<String, Path> paths, Map<String, Object> params)
         throws IOException
     {
-        IO.caught(() -> paths.forEach(IO.wrap((subsys, path) -> {
+        IO.forEach(paths, (subsys, path) -> {
             try (Stream<Path> files = FileUtils.find(path, 1, subsys + ".*")) {
-                files
-                    .sorted(Comparator.comparingInt(Cgroup::count_dots))
-                    .forEach(file -> {
-                        try {
-                            String pval = FileUtils.read(file).trim();
-                            params.put(file.getFileName().toString(), parse_cgparam(pval));
-                        } catch (IOException ex) {
-                            // ignore unreadable file
-                        }
-                    });
+                files.sorted(Comparator.comparingInt(Cgroup::count_dots))
+                     .forEach(file -> {
+                         try {
+                             String pval = FileUtils.read(file).trim();
+                             params.put(file.getFileName().toString(), parse_cgparam(pval));
+                         } catch (IOException ex) {
+                             // ignore unreadable file
+                         }
+                     });
             }
-        })));
+        });
     }
 
     private static int count_dots(Path path) {
@@ -189,12 +191,16 @@ public class Cgroup
         Map<String, Map<String,Object>> newcfg = new LinkedHashMap<>();
         Map<String, Object> to_store = new LinkedHashMap<>();
 
-        // add the config:
+        // add the cgroup permissions:
         // { perm { task  { uid = 1000; gid = 1000; }
         //          admin { uid = root, gid = root; } } }
-        newcfg.put("perm",
-            newmap("task",  newmap("uid",  uid,   "gid",  uid),
-                   "admin", newmap("uid", "root", "gid", "root")));
+        newcfg.put("perm", pmap("task",  pmap("uid",  uid,   "gid",  uid),
+                                "admin", pmap("uid", "root", "gid", "root")));
+
+        // add the net_cls.classid
+        int net_cls = (NET_CLS_MAJOR << 16) + (uid % UID_WRAPAROUND);
+        newcfg.put("net_cls", pmap("net_cls.classid", net_cls));
+        to_store.put("net_cls.classid", net_cls);
 
         CG_SUBSYSTEMS.forEach(s -> newcfg.computeIfAbsent(s, x -> new LinkedHashMap<>()));
 
@@ -216,7 +222,7 @@ public class Cgroup
         cgclassify();
     }
 
-    private static Map<String,Object> newmap(Object... args) {
+    private static Map<String,Object> pmap(Object... args) {
         Map<String,Object> map = new LinkedHashMap<>();
         for (int i = 0; i < args.length; i += 2) {
             map.put((String)args[i], args[i+1]);
@@ -237,72 +243,79 @@ public class Cgroup
      * Fetch parameters for a specific uuid, or a map of key=>value
      * for all parameters for the application container.
      */
-    public Map<String, Object> fetch() throws IOException {
+    public Map<String, Object> fetch(Set<String> keys) {
         Map<String,Object> vals = new LinkedHashMap<>();
 
-        IO.caught(() -> CG_PARAMETERS.forEach((param, defval) -> {
-            String subsys = param.substring(0, param.indexOf('.'));
-            Path path = cgpaths.get(subsys);
+        CG_PARAMETERS.forEach((param, defval) -> {
+            if (keys.contains(param)) {
+                String subsys = param.substring(0, param.indexOf('.'));
+                Path path = cgpaths.get(subsys);
 
-            if (path == null || !Files.exists(path)) {
-                throw new RuntimeException("User does not exist in cgroups: " + uuid);
-            }
+                if (path == null || !Files.exists(path)) {
+                    throw new RuntimeException("User does not exist in cgroups: " + uuid);
+                }
 
-            try {
-                String val = FileUtils.read(path.resolve(param));
-                vals.put(param, parse_cgparam(val));
-            } catch (IOException ex) {
-                throw new RuntimeIOException(ex);
+                try {
+                    String val = FileUtils.read(path.resolve(param));
+                    vals.put(param, parse_cgparam(val));
+                } catch (IOException ex) {
+                    throw new RuntimeException("Cgroup parameter not found: " + param);
+                }
             }
-        }));
+        });
 
         return vals;
     }
 
     public void store(Map<String,Object> vals) throws IOException {
-        try {
-            CG_PARAMETERS.forEach((param, val) -> {
-                val = vals.get(param);
-                if (val != null) {
-                    String subsys = param.substring(0, param.indexOf('.'));
-                    Path path = cgpaths.get(subsys);
-                    try {
-                        if (path == null || !Files.exists(path)) {
-                            throw new IOException("User does not exist in cgroups: " + uuid);
-                        } else {
-                            FileUtils.write(path.resolve(param), format_cgparam(val));
-                        }
-                    } catch (IOException ex) {
-                        throw new RuntimeIOException(ex);
-                    }
+        IO.forEach(CG_PARAMETERS, (param, val) -> {
+            val = vals.get(param);
+            if (val != null) {
+                String subsys = param.substring(0, param.indexOf('.'));
+                Path path = cgpaths.get(subsys);
+                if (path == null || !Files.exists(path)) {
+                    throw new IOException("User does not exist in cgroups: " + uuid);
+                } else {
+                    FileUtils.write(path.resolve(param), format_cgparam(val));
                 }
-            });
-        } catch (RuntimeIOException ex) {
-            throw ex.getCause();
-        }
+            }
+        });
     }
 
     public void freeze() throws IOException {
-        store(newmap("freezer.state", "FROZEN"));
+        store(pmap("freezer.state", "FROZEN"));
     }
 
     public void thaw() throws IOException {
-        store(newmap("freezer.state", "THAWED"));
+        store(pmap("freezer.state", "THAWED"));
     }
 
     /**
      * Distribute this user's processes into their cgroup.
      */
     public void cgclassify() throws IOException {
-        String tasks = threads()
-            .filter(p -> p.uid == uid)
-            .map(p -> String.valueOf(p.tid))
-            .collect(joining("\n"));
+        try (Stream<Task> ts = threads()) {
+            String tasks =
+                ts.filter(p -> p.uid == uid)
+                  .map(p -> String.valueOf(p.tid))
+                  .collect(joining("\n"));
 
-        if (tasks.length() != 0) {
-            IO.caught(() -> cgpaths.forEach(IO.wrap(
-                (subsys, path) -> FileUtils.write(path.resolve("tasks"), tasks))));
+            if (tasks.length() != 0) {
+                IO.forEach(cgpaths, (subsys, path) -> FileUtils.write(path.resolve("tasks"), tasks));
+            }
         }
+    }
+
+    /**
+     * List tasks in a cgroup.
+     */
+    public int[] tasks() throws IOException {
+        return IO.caught(() ->
+            cgpaths.values().stream()
+                   .flatMap(IO.wrap((Path path) -> Files.lines(path.resolve("tasks"))))
+                   .mapToInt(Integer::parseInt)
+                   .distinct()
+                   .toArray());
     }
 
     static class Task {
@@ -311,28 +324,17 @@ public class Cgroup
         int uid, gid;
     }
 
-    private Stream<Task> processes() throws IOException {
-        try (Stream<Path> ps = Files.list(Paths.get("/proc"))) {
-            return ps.filter(Cgroup::is_pid_file)
-                     .map(IO.wrap(Cgroup::read_process_info))
-                     .collect(toList())
-                     .stream();
-        } catch (RuntimeIOException ex) {
-            throw ex.getCause();
-        }
+    static Stream<Task> processes() throws IOException {
+        return Files.list(Paths.get("/proc"))
+                    .filter(Cgroup::is_pid_file)
+                    .map(IO.wrap(Cgroup::read_process_info));
     }
 
-    private Stream<Task> threads() throws IOException {
-        return IO.caught(() -> processes().flatMap(p -> {
-            try (Stream<Path> ts = Files.list(Paths.get("/proc", String.valueOf(p.pid), "task"))) {
-                return ts.filter(Cgroup::is_pid_file)
-                         .map(file -> get_thread_info(p, file))
-                         .collect(toList())
-                         .stream();
-            } catch (IOException ex) {
-                throw new RuntimeIOException(ex);
-            }
-        }));
+    static Stream<Task> threads() throws IOException {
+        return processes().flatMap(IO.wrap((Task p) ->
+            Files.list(Paths.get("/proc", String.valueOf(p.pid), "task"))
+                 .filter(Cgroup::is_pid_file)
+                 .map(file -> get_thread_info(p, file))));
     }
 
     private static Task read_process_info(Path file)
@@ -396,16 +398,15 @@ public class Cgroup
     }
 
     private void cgcreate() throws IOException {
-        IO.caught(() ->
-            cgpaths.forEach(IO.wrap((subsys, path) -> {
-                if (!Files.exists(path))
-                    FileUtils.mkdir(path, 0755);
-                FileUtils.chown(path.resolve("tasks"), uuid, uuid);
-            })));
+        IO.forEach(cgpaths, (subsys, path) -> {
+            if (!Files.exists(path))
+                FileUtils.mkdir(path, 0755);
+            FileUtils.chown(path.resolve("tasks"), uuid, uuid);
+        });
     }
 
     private void cgdelete() throws IOException {
-        IO.caught(() -> cgpaths.forEach(IO.wrap((subsys, path) -> Files.deleteIfExists(path))));
+        IO.forEach(cgpaths, (subsys, path) -> Files.deleteIfExists(path));
     }
 
     /**

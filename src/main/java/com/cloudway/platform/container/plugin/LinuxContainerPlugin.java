@@ -136,8 +136,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         if (m == 0) {
             return Stream.of(IntStream.empty());
         } else {
-            return IntStream.rangeClosed(k, n-m)
-                .mapToObj(Integer::valueOf) // this is required because an IntStream cannot do flatMap
+            return IntStream.rangeClosed(k, n-m).boxed()
                 .flatMap(i -> combination(n, i+1, m-1).map(c -> IntStream.concat(IntStream.of(i), c)));
         }
     }
@@ -241,7 +240,24 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     }
 
     private void cgfreeze() throws IOException {
-        cgcall(Cgroup::freeze);
+        cgcall(cg -> {
+            cg.freeze();
+            for (int i = 0; i < 20; i++) {
+                int[] pids = cg.tasks();
+                if (pids.length == 0) {
+                    return;
+                } else {
+                    try {
+                        Arrays.stream(pids).forEach(pid -> posix.kill(pid, 9));
+                        cg.thaw();
+                        Thread.sleep(100);
+                        cg.freeze();
+                    } catch (Exception ex) {
+                        // log and ignore
+                    }
+                }
+            }
+        });
     }
 
     private void cgunfreeze() throws IOException {

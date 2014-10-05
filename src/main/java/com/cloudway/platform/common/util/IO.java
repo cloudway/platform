@@ -7,7 +7,9 @@
 package com.cloudway.platform.common.util;
 
 import java.io.IOException;
-import java.util.function.Supplier;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 public final class IO
 {
@@ -53,7 +55,7 @@ public final class IO
         T get() throws IOException;
     }
 
-    public static <T> java.util.function.Supplier wrap(Supplier<T> other) {
+    public static <T> java.util.function.Supplier<T> wrap(Supplier<? extends T> other) {
         return () -> {
             try {
                 return other.get();
@@ -63,7 +65,7 @@ public final class IO
         };
     }
 
-    public static <T> T caught(Supplier<T> action)
+    public static <T> T caught(Supplier<? extends T> action)
         throws IOException
     {
         try {
@@ -73,12 +75,20 @@ public final class IO
         }
     }
 
+    public static <T> Optional<T> ignore(Supplier<? extends T> action) {
+        try {
+            return Optional.ofNullable(action.get());
+        } catch (IOException|RuntimeIOException ex) {
+            return Optional.empty();
+        }
+    }
+
     @FunctionalInterface
     public static interface Function<T,R> {
         R apply(T t) throws IOException;
     }
 
-    public static <T,R> java.util.function.Function<T,R> wrap(Function<T,R> other) {
+    public static <T,R> java.util.function.Function<T,R> wrap(Function<? super T, ? extends R> other) {
         return (T t) -> {
             try {
                 return other.apply(t);
@@ -93,7 +103,7 @@ public final class IO
         void accept(T t) throws IOException;
     }
 
-    public static <T> java.util.function.Consumer<T> wrap(Consumer<T> other) {
+    public static <T> java.util.function.Consumer<T> wrap(Consumer<? super T> other) {
         return (T t) -> {
             try {
                 other.accept(t);
@@ -108,7 +118,7 @@ public final class IO
         void accept(T t, U u) throws IOException;
     }
 
-    public static <T, U> java.util.function.BiConsumer<T, U> wrap(BiConsumer<T,U> other) {
+    public static <T, U> java.util.function.BiConsumer<T, U> wrap(BiConsumer<? super T, ? super U> other) {
         return (T t, U u) -> {
             try {
                 other.accept(t, u);
@@ -122,7 +132,7 @@ public final class IO
         boolean test(T t) throws IOException;
     }
 
-    public static <T> java.util.function.Predicate<T> wrap(Predicate<T> other) {
+    public static <T> java.util.function.Predicate<T> wrap(Predicate<? super T> other) {
         return (T t) -> {
             try {
                 return other.test(t);
@@ -130,5 +140,35 @@ public final class IO
                 throw new RuntimeIOException(ex);
             }
         };
+    }
+
+    public static <T> void forEach(Stream<T> stream, Consumer<? super T> action)
+        throws IOException
+    {
+        try {
+            stream.forEach(wrap(action));
+        } catch (RuntimeIOException ex) {
+            throw ex.getCause();
+        }
+    }
+
+    public static <T> void forEach(Iterable<T> collection, Consumer<? super T> action)
+        throws IOException
+    {
+        try {
+            collection.forEach(wrap(action));
+        } catch (RuntimeIOException ex) {
+            throw ex.getCause();
+        }
+    }
+
+    public static<K,V> void forEach(Map<K,V> map, BiConsumer<? super K,? super V> action)
+        throws IOException
+    {
+        try {
+            map.forEach(wrap(action));
+        } catch (RuntimeIOException ex) {
+            throw ex.getCause();
+        }
     }
 }
