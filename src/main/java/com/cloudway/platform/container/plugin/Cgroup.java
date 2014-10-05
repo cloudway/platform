@@ -40,17 +40,17 @@ public class Cgroup
     public static final List<String> CG_SUBSYSTEMS;
     public static final String DEFAULT_CG_SUBSYSTEMS = "cpu,cpuacct,memory,net_cls,freezer";
 
-    public static final int NET_CLS_MAJOR  = 1;
-    public static final int UID_WRAPAROUND = 65536;
-
     public static final Map<String, String> CG_MOUNTS;
     public static final Map<String, Path>   CG_PATHS;
     public static final Map<String, Object> CG_PARAMETERS;
 
+    public static final boolean enabled;
+
     private static final Path CGRULES = Paths.get("/etc/cgrules.conf");
     private static final Path CGCONFIG = Paths.get("/etc/cgconfig.conf");
 
-    public static final boolean enabled;
+    private static final int NET_CLS_MAJOR  = 1;
+    private static final int UID_WRAPAROUND = 65536;
 
     static {
         Config config = Config.getDefault();

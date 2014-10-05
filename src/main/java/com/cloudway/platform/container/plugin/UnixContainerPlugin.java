@@ -44,8 +44,8 @@ public class UnixContainerPlugin extends ContainerPlugin
     @Override
     protected void createUser() throws IOException {
         Config config = Config.getDefault();
-        int min_uid = config.getInt("EXECUTOR_MIN_UID", 1000);
-        int max_uid = config.getInt("EXECUTOR_MAX_UID", 2000);
+        int min_uid = config.getInt("GUEST_MIN_UID", 1000);
+        int max_uid = config.getInt("GUEST_MAX_UID", 2000);
         int uid;
 
         // Synchronized to prevent race condition on obtaining a UNIX user uid.
@@ -60,10 +60,10 @@ public class UnixContainerPlugin extends ContainerPlugin
             createUser(container.getUuid(),
                        uid,
                        container.getHomeDir(),
-                       config.get("EXECUTOR_SKEL", Config.CONF_DIR.resolve("skel").toString()),
+                       config.get("GUEST_SKEL", Config.CONF_DIR.resolve("skel").toString()),
                        ApplicationContainer.SHELL,
                        ApplicationContainer.GECOS,
-                       config.get("EXECUTOR_SUPPLEMENTARY_GROUPS"));
+                       config.get("GUEST_SUPPLEMENTARY_GROUPS"));
         }
 
         container.setUID(uid);
@@ -106,7 +106,6 @@ public class UnixContainerPlugin extends ContainerPlugin
 
         // Required for polyinstantiated tmp dirs to work
         FileUtils.mkdir(homedir.resolve(".tmp"), 0000);
-        FileUtils.mkdir(homedir.resolve(".sandbox"), 0000);
 
         Path env_dir = FileUtils.mkdir(homedir.resolve(".env"), 0750);
         setFileReadOnly(env_dir);
@@ -149,9 +148,6 @@ public class UnixContainerPlugin extends ContainerPlugin
         addEnvVar("APP_NAME", container.getName());
         addEnvVar("APP_DNS",  container.getDomainName());
         addEnvVar("APP_SIZE", container.getCapacity());
-
-        addEnvVar("HOMEDIR", homedir.toString());
-        // Ensure HOME exists for git support
         addEnvVar("HOME", homedir.toString(), "");
     }
 

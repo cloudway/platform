@@ -28,15 +28,10 @@ import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.ApplicationContainer;
-
 import com.cloudway.platform.container.ResourceLimits;
-import jnr.posix.POSIX;
-import jnr.posix.POSIXFactory;
 
 public class LinuxContainerPlugin extends UnixContainerPlugin
 {
-    private static final POSIX posix = POSIXFactory.getPOSIX();
-
     public LinuxContainerPlugin(ApplicationContainer container) {
         super(container);
     }

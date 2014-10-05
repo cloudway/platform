@@ -14,6 +14,8 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.cloudway.platform.common.AuthorizedKey;
+import com.cloudway.platform.common.Config;
+import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
 import org.junit.AfterClass;
@@ -57,7 +59,7 @@ public class ContainerTest
         assertEquals("test-demo.cloudway.com", container.getDomainName());
         assertEquals(capacity, container.getCapacity());
         assertEquals("/opt/cloudway/bin/cwsh", container.getShell());
-        assertEquals("/var/lib/cloudway/" + uuid, container.getHomeDir().toString());
+        assertEquals(Config.VAR_DIR.resolve(uuid), container.getHomeDir());
     }
 
     @Test
@@ -68,6 +70,17 @@ public class ContainerTest
         assertEquals(1, akeys.size());
         AuthorizedKey akey = AuthorizedKey.parsePublicKey(akeys.get(0));
         assertEquals(pkey.getBits(), akey.getBits());
+    }
+
+    @Test
+    public void ssh() throws IOException {
+        Exec.args("ssh", uuid + "@localhost", "true").checkError().run();
+    }
+
+    @Test
+    public void runInContext() throws IOException {
+        String who = container.substInContext(Exec.args("whoami").checkError());
+        assertEquals(uuid, who);
     }
 
     private static String mkuuid() {

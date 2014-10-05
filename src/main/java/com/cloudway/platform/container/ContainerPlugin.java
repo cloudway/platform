@@ -250,17 +250,17 @@ public abstract class ContainerPlugin
         throws IOException;
 
     /**
-     * Set file permission to be readonly by executor processes.
+     * Set file permission to be readonly by guest processes.
      */
     public abstract void setFileReadOnly(Path file) throws IOException;
 
     /**
-     * Set file permission can be read and write by executor processes.
+     * Set file permission can be read and write by guest processes.
      */
     public abstract void setFileReadWrite(Path file) throws IOException;
 
     /**
-     * Set all files and directories in a tree to be readonly by executor processes.
+     * Set all files and directories in a tree to be readonly by guest processes.
      */
     public void setFileTreeReadOnly(Path dir)
         throws IOException
@@ -273,7 +273,7 @@ public abstract class ContainerPlugin
     }
 
     /**
-     * Set all files and directories in a tree to be read and write by executor processes.
+     * Set all files and directories in a tree to be read and write by guest processes.
      */
     public void setFileTreeReadWrite(Path dir)
         throws IOException

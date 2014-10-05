@@ -16,6 +16,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.cloudway.platform.common.Config;
@@ -44,8 +45,8 @@ public class ApplicationContainer
 
     static {
         Config config = Config.getDefault();
-        GECOS = config.get("EXECUTOR_GECOS", "Cloudway Executor");
-        SHELL = config.get("EXECUTOR_SHELL", "/bin/bash");
+        GECOS = config.get("GUEST_GECOS", "Cloudway Guest");
+        SHELL = config.get("GUEST_SHELL", "/bin/bash");
         DOMAIN = config.get("CLOUDWAY_DOMAIN", "cloudway.local");
         DEFAULT_CAPACITY = config.get("DEFAULT_CAPACITY", "small");
     }
@@ -56,7 +57,7 @@ public class ApplicationContainer
      * @param uuid the UUID for the application container
      * @param name the name of the application container
      * @param namespace the namespace used for proxy
-     * @param pwent the passwd entry for the executor
+     * @param pwent the passwd entry for the guest
      */
     private ApplicationContainer(String uuid, String name, String namespace, String capacity, Passwd pwent) {
         this.uuid = uuid;
@@ -78,12 +79,14 @@ public class ApplicationContainer
     }
 
     /**
-     * Return an ApplicationContainer object loaded from the executor uuid on the system.
+     * Return an ApplicationContainer object loaded from the guest uuid on the system.
      *
-     * @param uuid the executor uuid
+     * @param uuid the guest uuid
      */
-    public static ApplicationContainer fromUUID(String uuid) {
-        Passwd pwent = passwdFor(uuid);
+    public static ApplicationContainer fromUuid(String uuid) {
+        Passwd pwent = pwent(uuid).orElseThrow(
+            () -> new IllegalArgumentException("Not a cloudway guest: " + uuid));
+
         Path envdir = Paths.get(pwent.getHome(), ".env");
         Map<String,String> env = Environ.load(envdir, "CLOUDWAY_APP{NAME,DNS,SIZE}*");
 
@@ -102,26 +105,22 @@ public class ApplicationContainer
         return new ApplicationContainer(uuid, appname, namespace, capacity, pwent);
     }
 
-    static Passwd passwdFor(String uuid) {
+    static Optional<Passwd> pwent(String uuid) {
         Passwd pwent = posix.getpwnam(uuid);
         if (pwent == null || !GECOS.equals(pwent.getGECOS())) {
-            throw new IllegalArgumentException("Not a cloudway executor: " + uuid);
+            return Optional.empty();
+        } else {
+            return Optional.of(pwent);
         }
-        return pwent;
     }
 
     public static boolean exists(String uuid) {
-        try {
-            passwdFor(uuid);
-            return true;
-        } catch (IllegalArgumentException ex) {
-            return false;
-        }
+        return pwent(uuid).isPresent();
     }
 
     /**
      * Return a Collection which provides a list of uuids
-     * for every cloudway executor in the system.
+     * for every cloudway guest in the system.
      */
     public static Collection<String> uuids() {
         List<String> uuids = new ArrayList<>();
@@ -141,11 +140,11 @@ public class ApplicationContainer
 
     /**
      * Returns a Collection which provides a list of ApplicationContainer
-     * objects for every cloudway executor in the system.
+     * objects for every cloudway guest in the system.
      */
     public static Collection<ApplicationContainer> all() {
         return uuids().stream()
-            .map(ApplicationContainer::fromUUID)
+            .map(ApplicationContainer::fromUuid)
             .collect(Collectors.toList());
     }
 
@@ -226,7 +225,7 @@ public class ApplicationContainer
 
     /**
      * Sets the app state to "stopped" and causes an immediate forced
-     * termination of all executor processes.
+     * termination of all guest processes.
      */
     public void stop() throws IOException {
         plugin.stop();
@@ -237,12 +236,12 @@ public class ApplicationContainer
      * cartridges with the opportunity to perform their own
      * cleanup operations via the tidy hook.
      *
-     * The generic executor-level cleanup flow is:
-     * * Stop the executor
-     * * Executor temp dir cleanup
+     * The generic guest-level cleanup flow is:
+     * * Stop the guest
+     * * Guest temp dir cleanup
      * * Cartridge tidy hook executions
      * * Git cleanup
-     * * Start the executor
+     * * Start the guest
      *
      * Raises an Exception if an internal error occurs, and ignores
      * failed cartridge tidy hook executions.
@@ -251,10 +250,10 @@ public class ApplicationContainer
         Path repo_dir = FileUtils.join(home_dir, "git", name + ".git");
         Path temp_dir = FileUtils.join(home_dir, ".tmp");
 
-        stopExecutor();
+        stopGuest();
 
-        // Perform the executor- and cart- level tidy actions. At this point,
-        // the executor has been stopped; we'll attempt to start the executor
+        // Perform the guest- and cart- level tidy actions. At this point,
+        // the guest has been stopped; we'll attempt to start the guest
         // no matter what tidy operations fail.
         try {
             // clear out the temp dir
@@ -268,25 +267,25 @@ public class ApplicationContainer
             runInContext(Exec.args("git", "prune").directory(repo_dir).checkError());
             runInContext(Exec.args("git", "gc", "--aggressive").directory(repo_dir).checkError());
         } finally {
-            startExecutor();
+            startGuest();
         }
     }
 
     /**
-     * Sets the application state to STARTED and starts the executor. Executor
+     * Sets the application state to STARTED and starts the guest. Guest
      * state implementation is model specific, but options is provided to the
      * implementation.
      */
-    public void startExecutor() {
+    public void startGuest() {
         // TODO
     }
 
     /**
-     * Sets the application state to STOPPED and stops the executor. Executor
+     * Sets the application state to STOPPED and stops the guest. Guest
      * state implementation is model specific, but options is provided to the
      * implementation.
      */
-    public void stopExecutor() {
+    public void stopGuest() {
         // TODO
     }
 
@@ -322,7 +321,7 @@ public class ApplicationContainer
             }
         }
 
-        return new String(contents, 0, i);
+        return new String(contents, 0, i+1);
     }
 
     public void addAuthorizedKey(String id, String key)

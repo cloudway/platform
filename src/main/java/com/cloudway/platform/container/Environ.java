@@ -24,9 +24,9 @@ import com.cloudway.platform.common.util.FileUtils;
 public class Environ
 {
     /**
-     * Load the combined cartridge environments for an executor.
+     * Load the combined cartridge environments for a guest.
      *
-     * @param homeDir Home directory of the executor.
+     * @param homeDir Home directory of the guest.
      */
     public static Map<String, String> loadAll(Path homeDir) {
         // Load system env vars
