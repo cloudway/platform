@@ -6,13 +6,17 @@
 
 package com.cloudway.platform.container.plugin;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -44,10 +48,12 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
             cgcreate();
             createHomeDir();
             initQuota();
+            initPamLimits();
         } catch (IOException ex) {
             // cleanup when creating container failed
             nothrow(this::deleteUser);
             nothrow(this::cgdelete);
+            nothrow(this::removePamLimits);
             throw ex;
         }
     }
@@ -60,7 +66,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         nothrow(this::deleteUser);
         nothrow(this::cgunfreeze);
         nothrow(this::cgdelete);
-        nothrow(this::removeQuota);
+        nothrow(this::removePamLimits);
     }
 
     @Override
@@ -280,10 +286,6 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
                   limits.getInt(category, "quota.files", DEFAULT_QUOTA_FILES));
     }
 
-    private void removeQuota() throws IOException {
-        set_quota(0, 0);
-    }
-
     private void set_quota(int maxblocks, int maxfiles)
         throws IOException
     {
@@ -334,5 +336,43 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
             oldpath = newpath;
         }
         return oldpath;
+    }
+
+    // PAM resource limits
+
+    private static final String PAM_LIMITS_DIR = "/etc/security/limits.d";
+    private static final int PAM_LIMITS_ORDER = ResourceLimits.getInstance().getInt("limits.order", 85);
+
+    private static final List<String> PAM_LIMITS_VARS = Arrays.asList(
+        "core", "data", "fsize", "memlock", "nofile", "rss", "cpu", "nproc", "as",
+        "maxlogins", "priority", "locks", "sigpending", "msgqueue", "nice", "rtprio"
+    );
+    private static final List<String> PAM_SOFT_VARS = Arrays.asList("nproc");
+
+    private void initPamLimits() throws IOException {
+        ResourceLimits cfg = ResourceLimits.getInstance();
+        String uuid = container.getUuid();
+        String profile = container.getCapacity();
+        Path limits_file = Paths.get(PAM_LIMITS_DIR, PAM_LIMITS_ORDER + "-" + uuid + ".conf");
+
+        try (BufferedWriter out = Files.newBufferedWriter(limits_file)) {
+            out.write("# PAM process limits for guest " + uuid + "\n");
+            IO.forEach(PAM_LIMITS_VARS, k -> {
+                String v = cfg.getProperty(profile, "limits." + k, null);
+                if (v != null) {
+                    String limtype =
+                        (PAM_SOFT_VARS.contains(k) && !"0".equals(v))
+                            ? "soft" : "hard";
+                    out.write(String.join("\t", uuid, limtype, k, v));
+                    out.newLine();
+                }
+            });
+        }
+    }
+
+    private void removePamLimits() throws IOException {
+        String uuid = container.getUuid();
+        Path limits_file = Paths.get(PAM_LIMITS_DIR, PAM_LIMITS_ORDER + "-" + uuid + ".conf");
+        Files.deleteIfExists(limits_file);
     }
 }
