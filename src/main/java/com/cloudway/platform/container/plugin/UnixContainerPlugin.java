@@ -276,9 +276,8 @@ public class UnixContainerPlugin extends ContainerPlugin
         return exec.command(command).run();
     }
 
-
     @Override
-    public void killProcs(long term_delay, TimeUnit unit)
+    protected void killProcs(long term_delay, TimeUnit unit)
         throws IOException
     {
         // REMIND:

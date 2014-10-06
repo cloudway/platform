@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -327,7 +328,8 @@ public class Cgroup
     static Stream<Task> processes() throws IOException {
         return Files.list(Paths.get("/proc"))
                     .filter(Cgroup::is_pid_file)
-                    .map(IO.wrap(Cgroup::read_process_info));
+                    .map(Cgroup::read_process_info)
+                    .filter(Objects::nonNull);
     }
 
     static Stream<Task> threads() throws IOException {
@@ -337,13 +339,10 @@ public class Cgroup
                  .map(file -> get_thread_info(p, file))));
     }
 
-    private static Task read_process_info(Path file)
-        throws IOException
-    {
-        Task t = new Task();
-        t.pid = Integer.parseInt(file.getFileName().toString());
-
+    private static Task read_process_info(Path file) {
         try (Stream<String> lines = Files.lines(file.resolve("status"))) {
+            Task t = new Task();
+            t.pid = Integer.parseInt(file.getFileName().toString());
             lines.forEach(line -> {
                 int i = line.indexOf(':');
                 if (i != -1) {
@@ -362,9 +361,11 @@ public class Cgroup
                     }
                 }
             });
+            return t;
+        } catch (IOException ex) {
+            // the process file may no longer exist after list
+            return null;
         }
-
-        return t;
     }
 
     private static Task get_thread_info(Task proc, Path file) {

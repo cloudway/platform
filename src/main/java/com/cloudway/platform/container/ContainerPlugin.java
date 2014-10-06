@@ -109,10 +109,10 @@ public abstract class ContainerPlugin
     /**
      * Stop an application container.
      */
-    public void stop()
+    public void stop(long term_delay, TimeUnit unit)
         throws IOException
     {
-        killProcs();
+        killProcs(term_delay, unit);
     }
 
     /**
@@ -125,8 +125,8 @@ public abstract class ContainerPlugin
     /**
      * Kill processes belonging to this application container.
      */
-    public void killProcs() throws IOException {
-        killProcs(30, TimeUnit.SECONDS);
+    protected void killProcs() throws IOException {
+        killProcs(0, null);
     }
 
     /**
@@ -134,7 +134,7 @@ public abstract class ContainerPlugin
      *
      * @param term_delay send SIGTERM first, wait term_delay then send SIGKILL.
      */
-    public abstract void killProcs(long term_delay, TimeUnit unit)
+    protected abstract void killProcs(long term_delay, TimeUnit unit)
         throws IOException;
 
     /**

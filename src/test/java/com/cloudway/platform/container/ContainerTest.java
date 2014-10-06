@@ -7,6 +7,7 @@
 package com.cloudway.platform.container;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -60,6 +61,7 @@ public class ContainerTest
         assertEquals(capacity, container.getCapacity());
         assertEquals("/opt/cloudway/bin/cwsh", container.getShell());
         assertEquals(Config.VAR_DIR.resolve(uuid), container.getHomeDir());
+        assertEquals(ApplicationState.NEW, container.getState());
     }
 
     @Test
@@ -74,7 +76,8 @@ public class ContainerTest
 
     @Test
     public void ssh() throws IOException {
-        Exec.args("ssh", uuid + "@localhost", "true").checkError().run();
+        Path keyfile = Paths.get(System.getProperty("user.home"), ".cloudway_ssh", "id_rsa");
+        Exec.args("ssh", "-i", keyfile, uuid + "@localhost", "true").checkError().run();
     }
 
     @Test
@@ -96,8 +99,14 @@ public class ContainerTest
     }
 
     private static String loadPublicKey() throws IOException {
-        Path keyfile = Paths.get(System.getProperty("user.home"), ".ssh", "id_rsa.pub");
-        return FileUtils.read(keyfile);
+        Path sshdir = Paths.get(System.getProperty("user.home"), ".cloudway_ssh");
+        Path keyfile = sshdir.resolve("id_rsa");
+
+        if (!Files.exists(keyfile)) {
+            FileUtils.mkdir(sshdir);
+            Exec.args("ssh-keygen", "-N", "", "-f", keyfile).checkError().run();
+        }
+        return FileUtils.read(sshdir.resolve("id_rsa.pub"));
     }
 
     private static <T> Consumer<T> log(IO.Consumer<T> action) {

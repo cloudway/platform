@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import com.cloudway.platform.common.Config;
@@ -37,6 +38,7 @@ public class ApplicationContainer
     private int    uid, gid;
 
     private ContainerPlugin plugin;
+    private AddonManager addons;
 
     private static final POSIX posix = POSIXFactory.getPOSIX();
 
@@ -76,6 +78,7 @@ public class ApplicationContainer
         }
 
         this.plugin = ContainerPlugin.newInstance(this);
+        this.addons = new AddonManager(this);
     }
 
     /**
@@ -213,6 +216,7 @@ public class ApplicationContainer
                                      Objects.requireNonNull(capacity),
                                      null);
         container.plugin.create();
+        container.setState(ApplicationState.NEW);
         return container;
     }
 
@@ -220,73 +224,116 @@ public class ApplicationContainer
      * Destroy container.
      */
     public void destroy() throws IOException {
+        addons.destroy();
         plugin.destroy();
     }
 
     /**
-     * Sets the app state to "stopped" and causes an immediate forced
-     * termination of all guest processes.
+     * Sets the application state to "started" and starts the guest.
      */
-    public void stop() throws IOException {
-        plugin.stop();
+    public void start() throws IOException {
+        plugin.start();
+        start_guest();
+        setState(ApplicationState.STARTED);
     }
 
     /**
-     * Cleans up the gear, providing any installed
-     * cartridges with the opportunity to perform their own
-     * cleanup operations via the tidy hook.
+     * Sets the application state to "stopped" and stops the guest.
+     */
+    public void stop() throws IOException {
+        setState(ApplicationState.STOPPED);
+        stop_guest(true, 0, null);
+    }
+
+    /**
+     * Sets the application state to "idle" and stops the guest.
+     */
+    public void idle() throws IOException {
+        if (getState() != ApplicationState.STOPPED) {
+            stop_guest(true, 30, TimeUnit.SECONDS);
+            setState(ApplicationState.IDLE);
+        }
+    }
+
+    private void start_guest() throws IOException {
+        addons.start();
+    }
+
+    private void stop_guest(boolean force, long term_delay, TimeUnit unit)
+        throws IOException
+    {
+        // stop addons gracefully
+        addons.stop();
+
+        // force to stop all guest processes
+        if (force) {
+            plugin.stop(term_delay, unit);
+        }
+    }
+
+    /**
+     * Sets the application state.
+     */
+    public void setState(ApplicationState new_state) throws IOException {
+        Objects.requireNonNull(new_state);
+        Path state_file = state_file();
+        FileUtils.write(state_file, new_state.name());
+        plugin.setFileReadOnly(state_file);
+    }
+
+    /**
+     * Get the current application state.
+     */
+    public ApplicationState getState() {
+        try {
+            return ApplicationState.valueOf(FileUtils.read(state_file()));
+        } catch (Exception ex) {
+            return ApplicationState.UNKNOWN;
+        }
+    }
+
+    private Path state_file() {
+        return FileUtils.join(home_dir, "app-root", ".state");
+    }
+
+    /**
+     * Cleans up the guest, providing any installed addons with the
+     * opportunity to perform their own cleanup operations via the
+     * tidy hook.
      *
      * The generic guest-level cleanup flow is:
      * * Stop the guest
      * * Guest temp dir cleanup
-     * * Cartridge tidy hook executions
+     * * Addon tidy hook executions
      * * Git cleanup
      * * Start the guest
      *
      * Raises an Exception if an internal error occurs, and ignores
-     * failed cartridge tidy hook executions.
+     * failed addon tidy hook executions.
      */
     public void tidy() throws IOException {
         Path repo_dir = FileUtils.join(home_dir, "git", name + ".git");
         Path temp_dir = FileUtils.join(home_dir, ".tmp");
 
-        stopGuest();
+        stop_guest(false, 0, null);
 
-        // Perform the guest- and cart- level tidy actions. At this point,
+        // Perform the guest- and addon- level tidy actions. At this point,
         // the guest has been stopped; we'll attempt to start the guest
         // no matter what tidy operations fail.
         try {
             // clear out the temp dir
             FileUtils.emptyDirectory(temp_dir);
 
-            // Delegate to cartridge model to perform cart-level tidy operations
-            // for all installed carts.
-            // TODO: cartridge_model.tidy();
+            // Delegate to addon manager to perform addon-level tidy operations
+            // for all installed addons.
+            addons.tidy();
 
             // git gc - do this last to maximize room for git to write changes
             runInContext(Exec.args("git", "prune").directory(repo_dir).checkError());
             runInContext(Exec.args("git", "gc", "--aggressive").directory(repo_dir).checkError());
         } finally {
-            startGuest();
+            start_guest();
         }
-    }
-
-    /**
-     * Sets the application state to STARTED and starts the guest. Guest
-     * state implementation is model specific, but options is provided to the
-     * implementation.
-     */
-    public void startGuest() {
-        // TODO
-    }
-
-    /**
-     * Sets the application state to STOPPED and stops the guest. Guest
-     * state implementation is model specific, but options is provided to the
-     * implementation.
-     */
-    public void stopGuest() {
-        // TODO
     }
 
     /**
