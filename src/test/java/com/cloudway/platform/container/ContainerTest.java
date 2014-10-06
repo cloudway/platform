@@ -86,6 +86,17 @@ public class ContainerTest
         assertEquals(uuid, who);
     }
 
+    @Test
+    public void populateRepository() throws IOException {
+        String dir = System.getProperty("repo.dir");
+        if (dir != null) {
+            ApplicationRepository.newInstance(container).populateFromTemplate(Paths.get(dir));
+        } else {
+            String url = System.getProperty("repo.url", "empty");
+            container.populateRepository(url);
+        }
+    }
+
     private static String mkuuid() {
         UUID uuid = UUID.randomUUID();
         return digits(uuid.getLeastSignificantBits()) + digits(uuid.getLeastSignificantBits());

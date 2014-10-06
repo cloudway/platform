@@ -312,9 +312,6 @@ public class ApplicationContainer
      * failed addon tidy hook executions.
      */
     public void tidy() throws IOException {
-        Path repo_dir = FileUtils.join(home_dir, "git", name + ".git");
-        Path temp_dir = FileUtils.join(home_dir, ".tmp");
-
         stop_guest(false, 0, null);
 
         // Perform the guest- and addon- level tidy actions. At this point,
@@ -322,17 +319,34 @@ public class ApplicationContainer
         // no matter what tidy operations fail.
         try {
             // clear out the temp dir
-            FileUtils.emptyDirectory(temp_dir);
+            FileUtils.emptyDirectory(home_dir.resolve(".tmp"));
 
             // Delegate to addon manager to perform addon-level tidy operations
             // for all installed addons.
             addons.tidy();
 
-            // git gc - do this last to maximize room for git to write changes
-            runInContext(Exec.args("git", "prune").directory(repo_dir).checkError());
-            runInContext(Exec.args("git", "gc", "--aggressive").directory(repo_dir).checkError());
+            // do this last to maximize room for git to write changes
+            ApplicationRepository.newInstance(this).tidy();
         } finally {
             start_guest();
+        }
+    }
+
+    public void populateRepository(String url)
+        throws IOException
+    {
+        ApplicationRepository repo = ApplicationRepository.newInstance(this);
+        try {
+            if (url == null || url.isEmpty()) {
+                repo.populateFromTemplate(addons.getPrimaryAddon().getPath());
+            } else if (url.equals("empty")) {
+                repo.populateEmpty();
+            } else {
+                repo.populateFromURL(url);
+            }
+        } catch (IOException ex) {
+            repo.destroy();
+            throw ex;
         }
     }
 
@@ -387,5 +401,21 @@ public class ApplicationContainer
         throws IOException
     {
         return plugin.getAuthorizedKeys();
+    }
+
+    public void setFileReadOnly(Path file) throws IOException {
+        plugin.setFileReadOnly(file);
+    }
+
+    public void setFileReadWrite(Path file) throws IOException {
+        plugin.setFileReadWrite(file);
+    }
+
+    public void setFileTreeReadOnly(Path dir) throws IOException {
+        plugin.setFileTreeReadOnly(dir);
+    }
+
+    public void setFileTreeReadWrite(Path dir) throws IOException {
+        plugin.setFileTreeReadWrite(dir);
     }
 }

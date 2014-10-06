@@ -7,6 +7,7 @@
 package com.cloudway.platform.container;
 
 import java.io.IOException;
+import java.util.Optional;
 
 public class AddonManager
 {
@@ -14,6 +15,14 @@ public class AddonManager
 
     public AddonManager(ApplicationContainer container) {
         this.container = container;
+    }
+
+    public Optional<Addon> getAddon(String name) {
+        return Optional.empty(); // TODO
+    }
+
+    public Addon getPrimaryAddon() {
+        throw new UnsupportedOperationException();
     }
 
     public void start() throws IOException {

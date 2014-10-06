@@ -32,10 +32,13 @@ if __name__ == '__main__':
                 cmd.append('-i')
             else:
                 cmd.append('-c')
-                cmd.append(allargs[2])
+                cmd.append(allargs[2:])
         else:
-            cmd.append('-c')
-            cmd.append(' '.join(allargs))
+            if len(allargs) == 1:
+                cmd.append('-i')
+            else:
+                cmd.append('-c')
+                cmd.append(' '.join(allargs[1:]))
 
     os.execv(cmd[0], cmd)
     sys.exit(1)
