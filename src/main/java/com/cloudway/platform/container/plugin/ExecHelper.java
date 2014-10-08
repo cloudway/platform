@@ -14,29 +14,66 @@ import jnr.posix.POSIXFactory;
 
 public class ExecHelper
 {
-    public static void main(String[] args) throws Exception {
-        POSIX posix = POSIXFactory.getPOSIX();
+    private static final POSIX posix = POSIXFactory.getPOSIX();
 
+    public static void main(String[] args) throws Exception {
         int uid = Integer.parseInt(System.getProperty("posix.uid"));
 
-        if (posix.setuid(uid) < 0) {
-            System.err.println("failed to set uid to " + uid + ": " +
-                                   Errno.valueOf(posix.errno()).description());
-        }
-
-        try {
-            ProcessBuilder pb = new ProcessBuilder(args).inheritIO();
-            System.exit(pb.start().waitFor());
-        } catch (IOException ex) {
-            System.err.println("exec failed: " + ex.getMessage());
+        if (posix.setgid(uid) < 0 || posix.setuid(uid) < 0) {
+            perror("failed to set uid to " + uid);
             System.exit(-1);
         }
 
-        /*
-        posix.execv(args[0], args);
-
-        System.err.println("exec failed: " + Errno.valueOf(posix.errno()).description());
+        execvp(args[0], args);
+        perror("exec failed: " + args[0]);
         System.exit(-1);
-        */
+    }
+
+    private static void execvp(String file, String[] argv)
+        throws IOException
+    {
+        if (file.indexOf('/') != -1) {
+            posix.execv(file, argv);
+        } else {
+            // We must search PATH
+            int sticky_errno = 0;
+            for (String path : getPathElements()) {
+                String expanded_file = path;
+                if (!path.endsWith("/"))
+                    expanded_file += "/";
+                expanded_file += file;
+
+                posix.execv(expanded_file, argv);
+                switch (Errno.valueOf(posix.errno())) {
+                case EACCES:
+                    sticky_errno = posix.errno();
+                    // FALLTHRU
+                case ENOENT:
+                case ENOTDIR:
+                case ELOOP:
+                case ESTALE:
+                case ENODEV:
+                case ETIMEDOUT:
+                    // try other directories in PATH
+                    break;
+                default:
+                    return;
+                }
+            }
+            if (sticky_errno != 0) {
+                posix.errno(sticky_errno);
+            }
+        }
+    }
+
+    private static String[] getPathElements() {
+        String path = System.getenv("PATH");
+        if (path == null)
+            path = "/usr/bin:bin";
+        return path.split(":");
+    }
+
+    private static void perror(String s) {
+        System.err.println(s + ": " + Errno.valueOf(posix.errno()).description());
     }
 }

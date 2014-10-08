@@ -175,13 +175,10 @@ public class UnixContainerPlugin extends ContainerPlugin
         Path ssh_key = ssh_dir.resolve("id_rsa");
         Path ssh_pub_key = ssh_dir.resolve("id_rsa.pub");
 
-        Exec exec = Exec.args("/usr/bin/ssh-keygen",
-                              "-N", "",
-                              "-f", ssh_key.toString())
-                        .directory(container.getHomeDir())
-                        .silentIO()
-                        .checkError();
-        runInContext(exec);
+        container.join(Exec.args("ssh-keygen", "-N", "", "-f", ssh_key.toString()))
+                 .silentIO()
+                 .checkError()
+                 .run();
 
         FileUtils.chmod(ssh_key, 0600);
         FileUtils.chmod(ssh_pub_key, 0600);
@@ -264,7 +261,7 @@ public class UnixContainerPlugin extends ContainerPlugin
     }
 
     @Override
-    public int runInContext(Exec exec) throws IOException {
+    public Exec join(Exec exec) throws IOException {
         List<String> command = new ArrayList<>();
         command.add(System.getProperty("java.home") + "/bin/java");
         command.add("-classpath");
@@ -272,8 +269,7 @@ public class UnixContainerPlugin extends ContainerPlugin
         command.add("-Dposix.uid=" + container.getUID());
         command.add(ExecHelper.class.getName());
         command.addAll(exec.command());
-
-        return exec.command(command).run();
+        return exec.command(command);
     }
 
     @Override

@@ -56,6 +56,7 @@ public final class SELinux
         int context_type_set(Context con, String type);
         int context_range_set(Context con, String range);
 
+        int getcon(@Out Pointer[] con);
         int lgetfilecon(String path, @Out Pointer[] con);
         int lsetfilecon(String path, String con);
 
@@ -161,6 +162,17 @@ public final class SELinux
         return lib.context_range_set(con, range);
     }
 
+    public static String getcon() throws IOException {
+        Pointer[] ptr = new Pointer[1];
+        if (lib.getcon(ptr) < 0) {
+            throw new IOException(getLastError().description());
+        } else {
+            String res = ptr[0].getString(0);
+            lib.freecon(ptr[0]);
+            return res;
+        }
+    }
+
     public static String lgetfilecon(String path) throws IOException {
         Pointer[] con = new Pointer[1];
         int len = lib.lgetfilecon(path, con);
@@ -177,7 +189,7 @@ public final class SELinux
         throws IOException
     {
         if (len >= 0) {
-            String res = ptr.getString(0, len, StandardCharsets.US_ASCII);
+            String res = ptr.getString(0, len, StandardCharsets.ISO_8859_1);
             lib.freecon(ptr);
             return res;
         } else {

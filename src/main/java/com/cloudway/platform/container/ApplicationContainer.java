@@ -6,7 +6,6 @@
 
 package com.cloudway.platform.container;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -351,38 +350,13 @@ public class ApplicationContainer
     }
 
     /**
-     * Executes specified command in container context and return its exit status.
-     * Or, raise exceptions if certain conditions are not met.
+     * Configure the specified Exec object to run the command in container context.
      */
-    public int runInContext(Exec exec) throws IOException {
+    public Exec join(Exec exec) throws IOException {
         if (exec.directory() == null) {
             exec.directory(home_dir);
         }
-
-        return plugin.runInContext(exec);
-    }
-
-    /**
-     * Executes specified command in container context and substitute standard
-     * output to a string content, or raise exception if certain conditions
-     * are not met.
-     */
-    public String substInContext(Exec exec) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        exec.redirectOutputStream(out);
-        runInContext(exec);
-
-        byte[] contents = out.toByteArray();
-        int i = contents.length - 1;
-        while (i >= 0) {
-            if (contents[i] == '\n' || contents[i] == '\r') {
-                i--;
-            } else {
-                break;
-            }
-        }
-
-        return new String(contents, 0, i+1);
+        return plugin.join(exec);
     }
 
     public void addAuthorizedKey(String id, String key)

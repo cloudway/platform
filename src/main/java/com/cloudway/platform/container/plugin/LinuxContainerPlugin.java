@@ -71,6 +71,10 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
 
     // SELinux
 
+    private static final String DEF_RUN_USER    = "unconfined_u";
+    private static final String DEF_RUN_ROLE    = "system_r";
+    private static final String DEF_RUN_TYPE    = "unconfined_t"; // FIXME
+
     private static final int DEF_MCS_SET_SIZE   = 1024;
     private static final int DEF_MCS_GROUP_SIZE = 2;
     private static final int DEF_MCS_UID_OFFSET = 0;
@@ -84,6 +88,10 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
             mcs_label = get_mcs_label_for(container.getUID());
         }
         return mcs_label;
+    }
+
+    private String get_target_context() {
+        return String.join(":", DEF_RUN_USER, DEF_RUN_ROLE, DEF_RUN_TYPE, get_mcs_label());
     }
 
     /**
@@ -369,5 +377,37 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         String uuid = container.getUuid();
         Path limits_file = Paths.get(PAM_LIMITS_DIR, PAM_LIMITS_ORDER + "-" + uuid + ".conf");
         Files.deleteIfExists(limits_file);
+    }
+
+    // Switch context
+
+    // TODO: we can use a C program to perform the following process
+    @Override
+    public Exec join(Exec exec) throws IOException {
+        if (posix.getuid() != container.getUID()) {
+            String cmd = exec.command().stream()
+                .map(arg -> arg.isEmpty() ? "''" :
+                            arg.indexOf(' ') != -1 ? "\\\"" + arg + "\\\"" :
+                            arg)
+                .collect(Collectors.joining(" "));
+
+            if (Cgroup.enabled) {
+                cmd = "cgexec " + cmd;
+            }
+
+            if (selinux_enabled) {
+                String current_context = SELinux.getcon();
+                String target_context = get_target_context();
+
+                // Only switch contexts if necessary
+                if (!current_context.equals(target_context)) {
+                    cmd = "exec /usr/bin/runcon '" + target_context + "' /bin/sh -c \"" + cmd + "\"";
+                }
+            }
+
+            exec.command("/sbin/runuser", "-s", "/bin/sh", container.getUuid(), "-c", cmd);
+        }
+
+        return exec;
     }
 }

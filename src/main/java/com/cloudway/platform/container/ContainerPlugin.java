@@ -116,11 +116,10 @@ public abstract class ContainerPlugin
     }
 
     /**
-     * Executes specified command and return exit status. Or, raises exception
-     * if certain conditions are not met.
+     * Configure the specified Exec object to run the command in container
+     * context.
      */
-    public abstract int runInContext(Exec exec)
-        throws IOException;
+    public abstract Exec join(Exec exec) throws IOException;
 
     /**
      * Kill processes belonging to this application container.

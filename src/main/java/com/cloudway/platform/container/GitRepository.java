@@ -144,14 +144,16 @@ class GitRepository implements ApplicationRepository
 
     public void tidy() throws IOException {
         if (exists()) {
-            container.runInContext(Exec.args("git", "prune")
-                                       .directory(repo_dir)
-                                       .silentIO()
-                                       .checkError());
-            container.runInContext(Exec.args("git", "gc", "--aggressive")
-                                       .directory(repo_dir)
-                                       .silentIO()
-                                       .checkError());
+            container.join(Exec.args("git", "prune"))
+                     .directory(repo_dir)
+                     .silentIO()
+                     .checkError()
+                     .run();
+            container.join(Exec.args("git", "gc", "--aggressive"))
+                     .directory(repo_dir)
+                     .silentIO()
+                     .checkError()
+                     .run();
         }
     }
 
