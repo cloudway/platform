@@ -40,14 +40,16 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     public void create() throws IOException {
         try {
             createUser();
-            cgcreate();
             createHomeDir();
+            cgcreate();
+            startTrafficControl();
             initQuota();
             initPamLimits();
         } catch (IOException ex) {
-            // cleanup when creating container failed
+            // cleanup when container creation failed
             nothrow(this::deleteUser);
             nothrow(this::cgdelete);
+            nothrow(this::stopTrafficControl);
             nothrow(this::removePamLimits);
             throw ex;
         }
@@ -61,6 +63,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         nothrow(this::deleteUser);
         nothrow(this::cgunfreeze);
         nothrow(this::cgdelete);
+        nothrow(this::stopTrafficControl);
         nothrow(this::removePamLimits);
     }
 
@@ -275,6 +278,14 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
 
     private void cgrestore() throws IOException {
         cgcall(Cgroup::store);
+    }
+
+    private void startTrafficControl() throws IOException {
+        TrafficControl.startUser(container.getUID());
+    }
+
+    private void stopTrafficControl() throws IOException {
+        TrafficControl.stopUser(container.getUID());
     }
 
     // Quota

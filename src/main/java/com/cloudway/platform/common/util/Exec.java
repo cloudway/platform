@@ -364,10 +364,12 @@ public final class Exec
     private static class StreamPumper extends Thread {
         private InputStream in;
         private OutputStream out;
+        private boolean doneClose;
 
-        StreamPumper(InputStream in, OutputStream out) {
+        StreamPumper(InputStream in, OutputStream out, boolean doneClose) {
             this.in = in;
             this.out = out;
+            this.doneClose = doneClose;
         }
 
         @Override
@@ -381,6 +383,14 @@ public final class Exec
                 }
             } catch (Exception ex) {
                 // log and ignore
+            } finally {
+                if (doneClose) {
+                    // We need to close the out, since some
+                    // processes would just wait for the stream
+                    // to be closed before they process its conten,
+                    // and produce the output.
+                    closeIt(out);
+                }
             }
         }
     }
@@ -396,19 +406,19 @@ public final class Exec
 
         if (in != null) {
             pIn = p.getOutputStream();
-            tIn = new StreamPumper(in, pIn);
+            tIn = new StreamPumper(in, pIn, true);
             tIn.start();
         }
 
         if (out != null) {
             pOut = p.getInputStream();
-            tOut = new StreamPumper(pOut, out);
+            tOut = new StreamPumper(pOut, out, false);
             tOut.start();
         }
 
         if (err != null) {
             pErr = p.getErrorStream();
-            tErr = new StreamPumper(pErr, err);
+            tErr = new StreamPumper(pErr, err, false);
             tErr.start();
         }
 

@@ -58,30 +58,34 @@ public class Config
     }
 
     public static Config getDefault() {
-        return new Config(CONF_DIR.resolve("node.conf"), null);
+        return new Config("node.conf");
     }
 
     public Config() {
         this(null, null);
     }
 
-    public Config(Path conf_path, Properties defaults) {
-        if (conf_path != null) {
+    public Config(String name) {
+        this(CONF_DIR.resolve(name), null);
+    }
+
+    public Config(Path path, Properties defaults) {
+        if (path != null) {
             synchronized (conf_parsed) {
                 try {
-                    long conf_mtime = Files.getLastModifiedTime(conf_path).toMillis();
-                    if (!conf_parsed.containsKey(conf_path) || conf_mtime != conf_mtimes.get(conf_path)) {
+                    long conf_mtime = Files.getLastModifiedTime(path).toMillis();
+                    if (!conf_parsed.containsKey(path) || conf_mtime != conf_mtimes.get(path)) {
                         ExtendedProperties conf = new ExtendedProperties(defaults);
-                        try (InputStream in = Files.newInputStream(conf_path)) {
+                        try (InputStream in = Files.newInputStream(path)) {
                             conf.load(in);
                         }
-                        conf_parsed.put(conf_path, conf);
-                        conf_mtimes.put(conf_path, conf_mtime);
+                        conf_parsed.put(path, conf);
+                        conf_mtimes.put(path, conf_mtime);
                     }
-                    this.conf = conf_parsed.get(conf_path);
+                    this.conf = conf_parsed.get(path);
                 } catch (IOException ex) {
                     throw new IllegalArgumentException(
-                        String.format("Could not open config file %s: %s", conf_path, ex.getMessage()));
+                        String.format("Could not open config file %s: %s", path, ex.getMessage()));
                 }
             }
         } else {

@@ -50,8 +50,8 @@ public class Cgroup
     private static final Path CGRULES = Paths.get("/etc/cgrules.conf");
     private static final Path CGCONFIG = Paths.get("/etc/cgconfig.conf");
 
-    private static final int NET_CLS_MAJOR  = 1;
-    private static final int UID_WRAPAROUND = 65536;
+    public static final int NET_CLS_MAJOR  = 1;
+    public static final int UID_WRAPAROUND = 65536;
 
     static {
         Config config = Config.getDefault();
