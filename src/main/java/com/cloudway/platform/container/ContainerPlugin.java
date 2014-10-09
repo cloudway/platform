@@ -264,10 +264,8 @@ public abstract class ContainerPlugin
     public void setFileTreeReadOnly(Path dir)
         throws IOException
     {
-        try (Stream<Path> stream = Files.walk(dir)) {
-            stream.forEach(IO.wrap(this::setFileReadOnly));
-        } catch (RuntimeIOException ex) {
-            throw ex.getCause();
+        try (Stream<Path> files = Files.walk(dir)) {
+            IO.forEach(files, this::setFileReadOnly);
         }
     }
 
@@ -277,10 +275,8 @@ public abstract class ContainerPlugin
     public void setFileTreeReadWrite(Path dir)
         throws IOException
     {
-        try (Stream<Path> stream = Files.walk(dir)) {
-            stream.forEach(IO.wrap(this::setFileReadWrite));
-        } catch (RuntimeIOException ex) {
-            throw ex.getCause();
+        try (Stream<Path> files = Files.walk(dir)) {
+            IO.forEach(files, this::setFileReadWrite);
         }
     }
 

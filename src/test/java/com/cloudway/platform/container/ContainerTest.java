@@ -78,20 +78,11 @@ public class ContainerTest
     }
 
     @Test
-    public void ssh() throws IOException {
-        Path keyfile = Paths.get(System.getProperty("user.home"), ".cloudway_ssh", "id_rsa");
-        Exec.args("ssh", "-i", keyfile, uuid + "@localhost", "true").checkError().run();
-    }
-
-    @Test
     public void runInContext() throws IOException {
         String who = container.join(Exec.args("whoami")).checkError().subst();
         assertEquals(uuid, who);
-    }
 
-    @Test
-    public void runShell() throws IOException {
-        if (Boolean.getBoolean("container.runShell")) {
+        if (Boolean.getBoolean("container.runshell")) {
             Exec exec = Exec.args("/bin/bash", "-i");
             exec.environment().putAll(Environ.loadAll(container.getHomeDir()));
             exec.redirectInput(new File("/dev/tty"))
@@ -99,18 +90,6 @@ public class ContainerTest
                 .redirectError(new File("/dev/tty"));
             container.join(exec).run();
         }
-    }
-
-    private static String mkuuid() {
-        UUID uuid = UUID.randomUUID();
-        return digits(uuid.getLeastSignificantBits()) + digits(uuid.getLeastSignificantBits());
-    }
-
-    private static String digits(long val) {
-        String str = Long.toHexString(val);
-        while (str.length() < 16)
-            str = "0" + str;
-        return str;
     }
 
     private static String loadPublicKey() throws IOException {
@@ -132,6 +111,18 @@ public class ContainerTest
             String url = System.getProperty("repo.url", "empty");
             container.populateRepository(url);
         }
+    }
+
+    private static String mkuuid() {
+        UUID uuid = UUID.randomUUID();
+        return digits(uuid.getLeastSignificantBits()) + digits(uuid.getLeastSignificantBits());
+    }
+
+    private static String digits(long val) {
+        String str = Long.toHexString(val);
+        while (str.length() < 16)
+            str = "0" + str;
+        return str;
     }
 
     private static <T> Consumer<T> log(IO.Consumer<T> action) {

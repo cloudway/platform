@@ -37,7 +37,7 @@ public class ApplicationContainer
     private int    uid, gid;
 
     private ContainerPlugin plugin;
-    private AddonManager addons;
+    private AddonControl addons;
 
     private static final POSIX posix = POSIXFactory.getPOSIX();
 
@@ -77,7 +77,7 @@ public class ApplicationContainer
         }
 
         this.plugin = ContainerPlugin.newInstance(this);
-        this.addons = new AddonManager(this);
+        this.addons = new AddonControl(this);
     }
 
     /**
@@ -292,7 +292,7 @@ public class ApplicationContainer
     }
 
     private Path state_file() {
-        return FileUtils.join(home_dir, "app-root", ".state");
+        return FileUtils.join(home_dir, "app", ".state");
     }
 
     /**
@@ -320,7 +320,7 @@ public class ApplicationContainer
             // clear out the temp dir
             FileUtils.emptyDirectory(home_dir.resolve(".tmp"));
 
-            // Delegate to addon manager to perform addon-level tidy operations
+            // Delegate to addon control to perform addon-level tidy operations
             // for all installed addons.
             addons.tidy();
 
@@ -337,7 +337,12 @@ public class ApplicationContainer
         ApplicationRepository repo = ApplicationRepository.newInstance(this);
         try {
             if (url == null || url.isEmpty()) {
-                repo.populateFromTemplate(addons.getPrimaryAddon().getPath());
+                Optional<Addon> primary = addons.getPrimaryAddon();
+                if (primary.isPresent()) {
+                    repo.populateFromTemplate(primary.get().getPath());
+                } else {
+                    repo.populateEmpty();
+                }
             } else if (url.equals("empty")) {
                 repo.populateEmpty();
             } else {

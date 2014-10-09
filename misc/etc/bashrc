@@ -1,4 +1,4 @@
-[ -f ~/app-root/data/.bash_profile ] && source ~/app-root/data/.bash_profile
+[ -f ~/app/data/.bash_profile ] && source ~/app/data/.bash_profile
 
 # load Cloudway environment variable into context
 function load_env {

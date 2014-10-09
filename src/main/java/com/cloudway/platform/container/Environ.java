@@ -18,13 +18,10 @@ import java.util.stream.Stream;
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.FileUtils;
 
-/**
- * Class represents the analogy of C environ(7)
- */
 public class Environ
 {
     /**
-     * Load the combined cartridge environments for a guest.
+     * Load the combined environments for a guest.
      *
      * @param homeDir Home directory of the guest.
      */
@@ -32,17 +29,17 @@ public class Environ
         // Load system env vars
         Map<String, String> env = load(Config.CONF_DIR.resolve("env"));
 
-        // Merge cart env vars
+        // Merge addon env vars
         try (Stream<Path> stream = Files.list(homeDir)) {
             stream.map(d -> d.resolve("env"))
-                .filter(Files::isDirectory)
-                .map(Environ::load)
-                .forEach(env::putAll);
+                  .filter(Files::isDirectory)
+                  .map(Environ::load)
+                  .forEach(env::putAll);
         } catch (IOException ex) {
             // log and ignore
         }
 
-        // Merge gear env vars
+        // Merge guest env vars
         env.putAll(load(homeDir.resolve(".env")));
 
         return env;

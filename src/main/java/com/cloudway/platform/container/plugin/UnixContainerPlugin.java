@@ -113,7 +113,7 @@ public class UnixContainerPlugin extends ContainerPlugin
         Path ssh_dir = FileUtils.mkdir(homedir.resolve(".ssh"), 0750);
         setFileReadOnly(ssh_dir);
 
-        Path app_dir = FileUtils.mkdir(homedir.resolve("app-root"));
+        Path app_dir = FileUtils.mkdir(homedir.resolve("app"));
 
         Path log_dir = FileUtils.mkdir(app_dir.resolve("logs"), 0750);
         addEnvVar("LOG_DIR", log_dir.toString());
@@ -132,7 +132,7 @@ public class UnixContainerPlugin extends ContainerPlugin
         FileUtils.write(vimrc, "set viminfo+=n" + data_dir.resolve(".viminfo"));
         Files.createSymbolicLink(homedir.resolve(".vimrc"), vimrc);
 
-        // update all directory entries in ~/app-root
+        // update all directory entries in ~/app
         setFileTreeReadWrite(app_dir);
         setFileReadOnly(app_dir);
 
