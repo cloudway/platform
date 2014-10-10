@@ -148,6 +148,7 @@ public class UnixContainerPlugin extends ContainerPlugin
         addEnvVar("APP_NAME", container.getName());
         addEnvVar("APP_DNS",  container.getDomainName());
         addEnvVar("APP_SIZE", container.getCapacity());
+        addEnvVar("HOMEDIR", homedir.toString());
         addEnvVar("HOME", homedir.toString(), "");
     }
 

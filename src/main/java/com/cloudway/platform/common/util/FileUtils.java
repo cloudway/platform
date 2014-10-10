@@ -13,10 +13,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileOwnerAttributeView;
 import java.nio.file.attribute.PosixFileAttributeView;
@@ -24,10 +22,12 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.UserPrincipalLookupService;
 import java.util.EnumSet;
 import java.util.Set;
-import java.util.function.BiPredicate;
 import java.util.stream.Stream;
 
+import static java.nio.file.FileVisitResult.*;
 import static java.nio.file.StandardOpenOption.*;
+import static java.nio.file.StandardCopyOption.*;
+import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 import static java.nio.file.attribute.PosixFilePermissions.*;
 
 public class FileUtils
@@ -51,56 +51,52 @@ public class FileUtils
         return Files.createDirectories(dir, asFileAttribute(fromBits(perms)));
     }
 
-    public static Path mkdir(Path dir, String perms)
+    public static void touch(Path file, int perms)
         throws IOException
     {
-        return Files.createDirectories(dir, asFileAttribute(fromString(perms)));
-    }
-
-    public static Path touch(Path file, int perms)
-        throws IOException
-    {
-        return Files.createFile(file, asFileAttribute(fromBits(perms)));
-    }
-
-    public static Path touch(Path file, String perms)
-        throws IOException
-    {
-        return Files.createFile(file, asFileAttribute(fromString(perms)));
+        if (!Files.exists(file)) {
+            Files.createFile(file, asFileAttribute(fromBits(perms)));
+        }
     }
 
     public static void chown(Path path, String owner, String group)
         throws IOException
     {
-        UserPrincipalLookupService lookup =
-            path.getFileSystem().getUserPrincipalLookupService();
-
-        if (group == null) {
-            FileOwnerAttributeView view =
-                Files.getFileAttributeView(path, FileOwnerAttributeView.class);
-            if (view == null)
-                throw new UnsupportedOperationException();
-            view.setOwner(lookup.lookupPrincipalByName(owner));
+        if (Files.isSymbolicLink(path)) {
+            // FIXME: JDK implementation always change owner to the target of a symbolic link
+            owner = group == null ? owner : owner + ":" + group;
+            Exec.args("chown", "-h", owner, path.toString()).silentIO().run();
         } else {
-            PosixFileAttributeView view =
-                Files.getFileAttributeView(path, PosixFileAttributeView.class);
-            if (view == null)
-                throw new UnsupportedOperationException();
-            view.setOwner(lookup.lookupPrincipalByName(owner));
-            view.setGroup(lookup.lookupPrincipalByGroupName(group));
+            UserPrincipalLookupService lookup =
+                path.getFileSystem().getUserPrincipalLookupService();
+
+            if (group == null) {
+                FileOwnerAttributeView view =
+                    Files.getFileAttributeView(path, FileOwnerAttributeView.class);
+                if (view == null)
+                    throw new UnsupportedOperationException();
+                view.setOwner(lookup.lookupPrincipalByName(owner));
+            } else {
+                PosixFileAttributeView view =
+                    Files.getFileAttributeView(path, PosixFileAttributeView.class);
+                if (view == null)
+                    throw new UnsupportedOperationException();
+                view.setOwner(lookup.lookupPrincipalByName(owner));
+                view.setGroup(lookup.lookupPrincipalByGroupName(group));
+            }
         }
     }
 
     public static void chmod(Path path, int perms)
         throws IOException
     {
-        Files.setPosixFilePermissions(path, fromBits(perms));
-    }
-
-    public static void chmod(Path path, String perms)
-        throws IOException
-    {
-        Files.setPosixFilePermissions(path, fromString(perms));
+        // chmod never changes the permissions of symbolic links;
+        // the chmod system call cannot change their permissions.
+        // This is not a problem since the permissions of symbolic
+        // links are never used.
+        if (!Files.isSymbolicLink(path)) {
+            Files.setPosixFilePermissions(path, fromBits(perms));
+        }
     }
 
     public static int getFileMode(Path path)
@@ -150,7 +146,7 @@ public class FileUtils
 
     public static void deleteTree(Path file) throws IOException {
         if (Files.exists(file)) {
-            if (Files.isDirectory(file))
+            if (Files.isDirectory(file) && !Files.isSymbolicLink(file))
                 emptyDirectory(file);
             Files.delete(file);
         }
@@ -159,14 +155,14 @@ public class FileUtils
     public static void emptyDirectory(Path start) throws IOException {
         Files.walkFileTree(start, new FileVisitor<Path>() {
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                return FileVisitResult.CONTINUE;
+                return CONTINUE;
             }
 
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
                 throws IOException
             {
                 Files.delete(file);
-                return FileVisitResult.CONTINUE;
+                return CONTINUE;
             }
 
             public FileVisitResult visitFileFailed(Path file, IOException exc)
@@ -182,48 +178,21 @@ public class FileUtils
                     throw exc;
                 if (!dir.equals(start))
                     Files.delete(dir);
-                return FileVisitResult.CONTINUE;
+                return CONTINUE;
             }
         });
     }
 
-    public static void copyTree(Path source, Path target)
+    public static void copyTree(final Path source, final Path target)
         throws IOException
     {
-        try (Stream<Path> stream = Files.walk(source)) {
-            stream.forEach(IO.wrap((Path file) -> copyFile(source, target, file)));
-        } catch (RuntimeIOException ex) {
-            throw ex.getCause();
+        Path realSource = source.toRealPath();
+        try (Stream<Path> files = Files.walk(realSource)) {
+            IO.forEach(files, file -> {
+                Files.copy(file, target.resolve(realSource.relativize(file)),
+                           REPLACE_EXISTING, COPY_ATTRIBUTES, NOFOLLOW_LINKS);
+            });
         }
-    }
-
-    public static void copyTree(Path source, Path target, String glob)
-        throws IOException
-    {
-        if (glob == null || glob.equals("*")) {
-            copyTree(source, target);
-            return;
-        }
-
-        // create a matcher and return a filter that uses it.
-        PathMatcher matcher = source.getFileSystem().getPathMatcher("glob:" + glob);
-        BiPredicate<Path, BasicFileAttributes> filter =
-            (file, attrs) -> Files.isDirectory(file) || matcher.matches(file.getFileName());
-
-        try (Stream<Path> stream = Files.find(source, Integer.MAX_VALUE, filter)) {
-            stream.forEach(IO.wrap((Path file) -> copyFile(source, target, file)));
-        } catch (RuntimeIOException ex) {
-            throw ex.getCause();
-        }
-    }
-
-    private static void copyFile(Path sourceDir, Path targetDir, Path file)
-        throws IOException
-    {
-        Files.copy(file, targetDir.resolve(sourceDir.relativize(file)),
-                   StandardCopyOption.REPLACE_EXISTING,
-                   StandardCopyOption.COPY_ATTRIBUTES,
-                   LinkOption.NOFOLLOW_LINKS);
     }
 
     public static String read(Path file)

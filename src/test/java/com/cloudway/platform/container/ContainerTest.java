@@ -41,7 +41,7 @@ public class ContainerTest
 
         container = ApplicationContainer.create(uuid, "test", "demo", capacity);
         container.addAuthorizedKey("default", pubkey);
-        populateRepository();
+        installAddon();
         container.tidy();
     }
 
@@ -103,13 +103,19 @@ public class ContainerTest
         return FileUtils.read(sshdir.resolve("id_rsa.pub"));
     }
 
-    private static void populateRepository() throws IOException {
-        String dir = System.getProperty("repo.dir");
-        if (dir != null) {
-            ApplicationRepository.newInstance(container).populateFromTemplate(Paths.get(dir));
-        } else {
-            String url = System.getProperty("repo.url", "empty");
-            container.populateRepository(url);
+    private static void installAddon() throws IOException {
+        String source = System.getProperty("addon.dir");
+        String repo = System.getProperty("repo.url");
+
+        if (source != null) {
+            Path path = Paths.get(source).toAbsolutePath();
+            String name = path.getFileName().toString();
+            if (name.endsWith(".zip") || name.endsWith(".jar") || name.endsWith(".tar") || name.endsWith(".tgz")) {
+                name = name.substring(0, name.length() - 4);
+            } else if (name.endsWith(".tar.gz")) {
+                name = name.substring(0, name.length() - 7);
+            }
+            container.installAddon(name, path, repo);
         }
     }
 

@@ -331,27 +331,10 @@ public class ApplicationContainer
         }
     }
 
-    public void populateRepository(String url)
+    public void installAddon(String name, Path source, String templateUrl)
         throws IOException
     {
-        ApplicationRepository repo = ApplicationRepository.newInstance(this);
-        try {
-            if (url == null || url.isEmpty()) {
-                Optional<Addon> primary = addons.getPrimaryAddon();
-                if (primary.isPresent()) {
-                    repo.populateFromTemplate(primary.get().getPath());
-                } else {
-                    repo.populateEmpty();
-                }
-            } else if (url.equals("empty")) {
-                repo.populateEmpty();
-            } else {
-                repo.populateFromURL(url);
-            }
-        } catch (IOException ex) {
-            repo.destroy();
-            throw ex;
-        }
+        addons.install(name, source, templateUrl);
     }
 
     /**

@@ -30,6 +30,10 @@ class GitRepository implements ApplicationRepository
     private final String repo_name;
     private final Path git_dir, repo_dir;
 
+    private static final String TEMPLATES[] = {
+        "template", "template.git", "share/template", "share/template.git"
+    };
+
     public GitRepository(ApplicationContainer container)
         throws IOException
     {
@@ -55,7 +59,7 @@ class GitRepository implements ApplicationRepository
             return;
         }
 
-        Optional<Path> t = Stream.of("template", "template.git")
+        Optional<Path> t = Stream.of(TEMPLATES)
             .map(basedir::resolve)
             .filter(Files::isDirectory)
             .findFirst();
