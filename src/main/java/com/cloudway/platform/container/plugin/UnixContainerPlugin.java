@@ -116,14 +116,16 @@ public class UnixContainerPlugin extends ContainerPlugin
         Path app_dir = FileUtils.mkdir(homedir.resolve("app"));
 
         Path log_dir = FileUtils.mkdir(app_dir.resolve("logs"), 0750);
-        addEnvVar("LOG_DIR", log_dir.toString());
-        setFileReadWrite(log_dir);
+        addEnvVar("LOG_DIR", log_dir.toString(), true);
 
         Path data_dir = FileUtils.mkdir(app_dir.resolve("data"));
-        addEnvVar("DATA_DIR", data_dir.toString());
+        addEnvVar("DATA_DIR", data_dir.toString(), true);
+
+        Path repo_dir = FileUtils.mkdir(app_dir.resolve("repo"));
+        addEnvVar("REPO_DIR", repo_dir.toString(), true);
 
         // setup shell environment
-        addEnvVar("HISTFILE", data_dir.resolve(".bash_history").toString(), "");
+        addEnvVar("HISTFILE", data_dir.resolve(".bash_history").toString(), false);
         Path profile = data_dir.resolve(".bash_profile");
         FileUtils.write(profile,
             "# Warning: Be careful with modification to this file,\n" +
@@ -144,12 +146,12 @@ public class UnixContainerPlugin extends ContainerPlugin
         setFileReadOnly(homedir);
 
         // add environment variables
-        addEnvVar("APP_UUID", container.getUuid());
-        addEnvVar("APP_NAME", container.getName());
-        addEnvVar("APP_DNS",  container.getDomainName());
-        addEnvVar("APP_SIZE", container.getCapacity());
-        addEnvVar("HOMEDIR", homedir.toString());
-        addEnvVar("HOME", homedir.toString(), "");
+        addEnvVar("APP_UUID", container.getUuid(), true);
+        addEnvVar("APP_NAME", container.getName(), true);
+        addEnvVar("APP_DNS",  container.getDomainName(), true);
+        addEnvVar("APP_SIZE", container.getCapacity(), true);
+        addEnvVar("HOME_DIR", homedir.toString(), true);
+        addEnvVar("HOME",     homedir.toString(), false);
     }
 
     protected void mk_ssh_dir(Path homedir) throws IOException {
@@ -164,8 +166,8 @@ public class UnixContainerPlugin extends ContainerPlugin
         FileUtils.touch(ssh_config, 0660);
         setFileTreeReadWrite(ssh_dir);
 
-        addEnvVar("APP_SSH_KEY", ssh_key.toString());
-        addEnvVar("APP_SSH_PUBLIC_KEY", ssh_pub_key.toString());
+        addEnvVar("APP_SSH_KEY", ssh_key.toString(), true);
+        addEnvVar("APP_SSH_PUBLIC_KEY", ssh_pub_key.toString(), true);
     }
 
     /**

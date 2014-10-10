@@ -173,9 +173,10 @@ public abstract class ContainerPlugin
      * @param value The String value to place inside the environment variable.
      * @param prefix The String value to append in front of key.
      */
-    public void addEnvVar(String key, String value, String prefix) {
+    public void addEnvVar(String key, String value, boolean prefix) {
         try {
-            String filename = Objects.requireNonNull(prefix) + Objects.requireNonNull(key);
+            String filename = Objects.requireNonNull(key);
+            if (prefix) filename = "CLOUDWAY_" + filename;
             Path file = FileUtils.join(container.getHomeDir(), ".env", filename);
             FileUtils.write(file, value);
             setFileReadOnly(file);
@@ -185,40 +186,20 @@ public abstract class ContainerPlugin
     }
 
     /**
-     * Add an environment variable to a given container with default environment
-     * key prefix.
-     *
-     * @param key The String value of target environment variable.
-     * @param value The String value to place inside the environment variable.
-     */
-    public void addEnvVar(String key, String value) {
-        addEnvVar(key, value, "CLOUDWAY_");
-    }
-
-    /**
      * Remove an environment variable from a given container.
      *
      * @param key name of the environment variable to remove
      * @param prefix The String value to append in front of key.
      */
-    public void removeEnvVar(String key, String prefix) {
+    public void removeEnvVar(String key, boolean prefix) {
         try {
-            String filename = Objects.requireNonNull(prefix) + Objects.requireNonNull(key);
+            String filename = Objects.requireNonNull(key);
+            if (prefix) filename = "CLOUDWAY_" + filename;
             Path file = FileUtils.join(container.getHomeDir(), ".env", filename);
             Files.deleteIfExists(file);
         } catch (IOException ex) {
             throw new RuntimeIOException(ex);
         }
-    }
-
-    /**
-     * Remove an environment variable from a given container with default environment
-     * key prefix.
-     *
-     * @param key name of the environment variable to remove
-     */
-    public void removeEnvVar(String key) {
-        removeEnvVar(key, "CLOUDWAY_");
     }
 
     /**

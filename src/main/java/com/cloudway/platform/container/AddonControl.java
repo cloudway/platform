@@ -7,6 +7,8 @@
 package com.cloudway.platform.container;
 
 import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
 import java.nio.file.FileSystem;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -15,9 +17,9 @@ import java.nio.file.PathMatcher;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -28,11 +30,15 @@ import static java.util.stream.Collectors.toMap;
 import static java.nio.file.StandardCopyOption.*;
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 
+import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.AbstractFileVisitor;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.common.util.RuntimeIOException;
+
+import org.apache.velocity.VelocityContext;
+import org.apache.velocity.app.VelocityEngine;
 
 public class AddonControl
 {
@@ -60,22 +66,22 @@ public class AddonControl
         return Optional.ofNullable(addons().get(name));
     }
 
-    public Optional<Addon> getPrimaryAddon() {
+    public Optional<Addon> getFrameworkAddon() {
         return addons().values().stream()
             .filter(a -> a.getType() == AddonType.FRAMEWORK)
             .findFirst();
     }
 
     public void start() throws IOException {
-        control("start");
+        addon_control("start");
     }
 
     public void stop() throws IOException {
-        control("stop");
+        addon_control("stop");
     }
 
     public void tidy() throws IOException {
-        control("tidy");
+        addon_control("tidy");
     }
 
     public void install(String name, Path source, String templateUrl)
@@ -84,9 +90,10 @@ public class AddonControl
         Map<String, Addon> addons = addons(); // may load already installed addons
         Path target = container.getHomeDir().resolve(name);
 
-        if (addons.containsKey(name) || Files.exists(target)) {
-            throw new IllegalArgumentException("Addon already installed");
-        }
+        if (addons.containsKey(name) || Files.exists(target))
+            throw new IllegalStateException("Addon already installed: " + name);
+        if (getFrameworkAddon().isPresent())
+            throw new IllegalStateException("A framework addon already installed");
 
         try {
             // copy source files into target
@@ -95,14 +102,20 @@ public class AddonControl
 
             // TODO: load addon metadata
             Addon addon = new Addon(target);
-            addon.setType(AddonType.FRAMEWORK);
 
             // add environment variables
             Path envdir = target.resolve("env");
-            addEnvVar(envdir, name + "_DIR", target.toString() + "/", true);
+            addEnvVar(envdir, name + "_DIR", target.toString(), true);
+            if (addon.getType() == AddonType.FRAMEWORK) {
+                container.addEnvVar("FRAMEWORK", name);
+                container.addEnvVar("FRAMEWORK_DIR", target.toString());
+            }
 
-            // run addon actions
-            with_unlocked(target, () -> action(addon, "install"));
+            // run addon actions with files unlocked
+            with_unlocked(target, () -> {
+                process_templates(addon);
+                addon_action(addon, "setup");
+            });
 
             // populate template repository
             if (addon.getType() == AddonType.FRAMEWORK) {
@@ -122,6 +135,14 @@ public class AddonControl
             FileUtils.deleteTree(target);
             throw ex;
         }
+    }
+
+    public void remove(String name) throws IOException {
+        // TODO
+    }
+
+    public void destroy() throws IOException {
+        // TODO
     }
 
     private void installFiles(Path source, Path target)
@@ -173,23 +194,19 @@ public class AddonControl
         throws IOException
     {
         String name = source.getFileName().toString();
+        FileUtils.mkdir(target);
 
         if (name.endsWith(".zip")) {
             Exec.args("unzip", "-d", target, source)
                 .silentIO()
                 .checkError()
                 .run();
-            try (Stream<Path> files = Files.list(target.resolve("bin"))) {
-                IO.forEach(files, file -> FileUtils.chmod(file, 0755));
-            }
         } else if (name.endsWith(".tar.gz") && name.endsWith(".tgz")) {
-            FileUtils.mkdir(target);
             Exec.args("tar", "-C", target, "-xzpf", source)
                 .silentIO()
                 .checkError()
                 .run();
         } else if (name.endsWith(".tar")) {
-            FileUtils.mkdir(target);
             Exec.args("tar", "-C", target, "-xpf", source)
                 .silentIO()
                 .checkError()
@@ -197,6 +214,51 @@ public class AddonControl
         } else {
             throw new IOException("Unsupported addon archive file: " + source);
         }
+    }
+
+    private static final String TEMPLATE_EXT = ".cwt";
+
+    private void process_templates(Addon addon)
+        throws IOException
+    {
+        // Load environment variables and make sure this addon's environments
+        // overrides that of other addons
+        Map<String,String> env = Environ.loadAll(container.getHomeDir());
+        env.putAll(Environ.load(addon.getPath().resolve("env")));
+
+        HashMap<String,String> cfg = new HashMap<>();
+        Config config = Config.getDefault();
+        config.keys().forEach(key -> cfg.put(key, config.get(key)));
+
+        VelocityEngine ve = new VelocityEngine();
+        ve.init();
+
+        try (Stream<Path> files = getTemplateFiles(addon.getPath())) {
+            IO.forEach(files, input -> {
+                String filename = input.getFileName().toString();
+                filename = filename.substring(0, filename.length() - TEMPLATE_EXT.length());
+                Path output = input.resolveSibling(filename);
+
+                try (Reader reader = Files.newBufferedReader(input)) {
+                    try (Writer writer = Files.newBufferedWriter(output)) {
+                        VelocityContext vc = new VelocityContext();
+                        env.forEach(vc::put);
+                        vc.put("config", cfg.clone());
+                        ve.evaluate(vc, writer, addon.getName(), reader);
+                    }
+                }
+
+                Files.deleteIfExists(input);
+            });
+        }
+    }
+
+    private Stream<Path> getTemplateFiles(Path path)
+        throws IOException
+    {
+        // TODO: The template file pattern may be configured in the addon metadata
+        PathMatcher matcher = path.getFileSystem().getPathMatcher("glob:*" + TEMPLATE_EXT);
+        return Files.find(path, Integer.MAX_VALUE, (p,a) -> matcher.matches(p.getFileName()));
     }
 
     private String[] getSharedFiles(Path source)
@@ -232,12 +294,13 @@ public class AddonControl
 
         try (Stream<String> lines = Files.lines(locked_files)) {
             lines.map(s -> makeRelative(target, s))
-                 .filter(Objects::nonNull)
                  .forEach(entry -> {
-                     if (GLOB_CHARS.matcher(entry).find()) {
-                         patterns.add(entry);
-                     } else {
-                         entries.add(entry);
+                     if (entry != null) {
+                         if (GLOB_CHARS.matcher(entry).find()) {
+                             patterns.add(entry);
+                         } else {
+                             entries.add(entry);
+                         }
                      }
                  });
         }
@@ -302,8 +365,8 @@ public class AddonControl
                 return null;
             }
         } else {
-            // Only allow files in app, the addon directory, or dot files/dirs
-            if (!path.startsWith(home.resolve("app")) && !path.startsWith(target)) {
+            // Only allow files in app or addon directory
+            if (!path.startsWith(target) && !path.startsWith(home.resolve("app"))) {
                 System.err.println("invalid lock file entry: " + entry);
                 return null;
             }
@@ -377,29 +440,22 @@ public class AddonControl
         FileUtils.write(file, value);
     }
 
-    public void remove(String name) throws IOException {
-        // TODO
-    }
-
-    public void destroy() throws IOException {
-        // TODO
-    }
-
-    private void control(String action) throws IOException {
+    private void addon_control(String action) throws IOException {
         for (Addon addon : addons().values()) {
-            action(addon, "control", action);
+            addon_action(addon, "control", action);
         }
     }
 
-    private void action(Addon addon, String action, String... args)
+    private void addon_action(Addon addon, String action, String... args)
         throws IOException
     {
         Path path = addon.getPath();
-
         Path executable = FileUtils.join(path, "bin", action);
-        if (!Files.isExecutable(executable)) {
+
+        if (!Files.exists(executable))
             return;
-        }
+        if (!Files.isExecutable(executable))
+            FileUtils.chmod(executable, 0755);
 
         // Make sure this addon's environments overrides that of other addons
         Map<String, String> env = Environ.loadAll(container.getHomeDir());

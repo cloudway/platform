@@ -347,6 +347,22 @@ public class ApplicationContainer
         return plugin.join(exec);
     }
 
+    public void addEnvVar(String key, String value) {
+        plugin.addEnvVar(key, value, true);
+    }
+
+    public void addEnvVar(String key, String value, boolean prefix) {
+        plugin.addEnvVar(key, value, prefix);
+    }
+
+    public void removeEnvVar(String key) {
+        plugin.removeEnvVar(key, true);
+    }
+
+    public void removeEnvVar(String key, boolean prefix) {
+        plugin.removeEnvVar(key, prefix);
+    }
+
     public void addAuthorizedKey(String id, String key)
         throws IOException
     {

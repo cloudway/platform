@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
@@ -90,12 +91,17 @@ public class Environ
         return env;
     }
 
+    private static final Pattern VALID_ENV_KEY = Pattern.compile("\\A[A-Z_0-9]+\\Z");
+
     private static void readEnvFile(Map<String,String> env, Path file) {
         if (Files.isRegularFile(file) && Files.isReadable(file)) {
-            try {
-                env.put(file.getFileName().toString(), FileUtils.read(file));
-            } catch (IOException ex) {
-                // log and ignore
+            String key = file.getFileName().toString();
+            if (VALID_ENV_KEY.matcher(key).matches()) {
+                try {
+                    env.put(key, FileUtils.read(file));
+                } catch (IOException ex) {
+                    // log and ignore
+                }
             }
         }
     }

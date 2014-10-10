@@ -11,7 +11,6 @@ import java.nio.file.Path;
 public class Addon
 {
     private Path path;
-    private AddonType type;
 
     public Addon(Path path) {
         this.path = path;
@@ -21,11 +20,11 @@ public class Addon
         return path;
     }
 
-    public AddonType getType() {
-        return type;
+    public String getName() {
+        return path.getFileName().toString();
     }
 
-    public void setType(AddonType type) {
-        this.type = type;
+    public AddonType getType() {
+        return AddonType.FRAMEWORK; // FIXME
     }
 }
