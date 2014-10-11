@@ -166,10 +166,6 @@ public class ApplicationContainer
         return name + "-" + namespace + "." + DOMAIN;
     }
 
-    public String getIpAddress(int host_id) {
-        return plugin.getIpAddress(host_id);
-    }
-
     public String getCapacity() {
         return capacity;
     }
@@ -411,5 +407,13 @@ public class ApplicationContainer
 
     public void setFileTreeReadWrite(Path dir) throws IOException {
         plugin.setFileTreeReadWrite(dir);
+    }
+
+    public String getIpAddress(int host_id) {
+        return plugin.getIpAddress(host_id);
+    }
+
+    public boolean isAddressInUse(String ip, int port) {
+        return plugin.isAddressInUse(ip, port);
     }
 }

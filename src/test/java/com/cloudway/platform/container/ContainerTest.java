@@ -84,7 +84,7 @@ public class ContainerTest
 
         if (Boolean.getBoolean("container.runshell")) {
             container.join(Exec.args("/bin/bash", "-i"))
-                     .environment(Environ.loadAll(container.getHomeDir()))
+                     .environment(Environ.loadAll(container))
                      .redirectInput(new File("/dev/tty"))
                      .redirectOutput(new File("/dev/tty"))
                      .redirectError(new File("/dev/tty"))

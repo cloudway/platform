@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import com.cloudway.platform.common.util.IO;
+import com.cloudway.platform.common.util.RuntimeIOException;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ContainerPlugin;
 import com.cloudway.platform.common.Config;
@@ -338,5 +339,18 @@ public class UnixContainerPlugin extends ContainerPlugin
     @Override
     public void setFileReadWrite(Path file) throws IOException {
         FileUtils.chown(file, container.getUuid(), container.getUuid());
+    }
+
+    @Override
+    public boolean isAddressInUse(String ip, int port) {
+        try {
+            int rc = Exec.args("/usr/sbin/lsof",
+                               "-sTCP:^CLOSE_WAIT,^FIN_WAIT1,^FIN_WAIT2",
+                               "-i", "@" + ip + ":" + port)
+                         .silentIO().run();
+            return rc == 0;
+        } catch (IOException ex) {
+            throw new RuntimeIOException(ex);
+        }
     }
 }

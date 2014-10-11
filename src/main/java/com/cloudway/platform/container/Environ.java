@@ -23,15 +23,13 @@ public class Environ
 {
     /**
      * Load the combined environments for a guest.
-     *
-     * @param homeDir Home directory of the guest.
      */
-    public static Map<String, String> loadAll(Path homeDir) {
+    public static Map<String, String> loadAll(ApplicationContainer container) {
         // Load system env vars
         Map<String, String> env = load(Config.CONF_DIR.resolve("env"));
 
         // Merge addon env vars
-        try (Stream<Path> stream = Files.list(homeDir)) {
+        try (Stream<Path> stream = Files.list(container.getHomeDir())) {
             stream.map(d -> d.resolve("env"))
                   .filter(Files::isDirectory)
                   .map(Environ::load)
@@ -40,8 +38,8 @@ public class Environ
             // log and ignore
         }
 
-        // Merge guest env vars
-        env.putAll(load(homeDir.resolve(".env")));
+        // Merge application env vars
+        env.putAll(load(container.getEnvDir()));
 
         return env;
     }

@@ -7,6 +7,7 @@
 package com.cloudway.platform.container;
 
 import java.io.IOException;
+import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -164,6 +165,17 @@ public abstract class ContainerPlugin
 
         // Return the IP in dotted-quad notation
         return (ip >> 24) + "." + ((ip >> 16) & 0xFF) + "." + ((ip >> 8) & 0xFF) + "." + (ip & 0xFF);
+    }
+
+    /**
+     * Check to see if the specified IP/port is bound.
+     */
+    public boolean isAddressInUse(String ip, int port) {
+        try (Socket ignored = new Socket(ip, port)) {
+            return true;
+        } catch (IOException ex) {
+            return false;
+        }
     }
 
     /**

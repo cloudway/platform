@@ -20,12 +20,17 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
+import static java.lang.String.format;
 import static java.util.stream.Collectors.toMap;
 import static java.nio.file.StandardCopyOption.*;
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
@@ -99,8 +104,8 @@ public class AddonControl
             // copy source files into target
             installFiles(source.toRealPath(), target);
 
-            // TODO: load addon metadata
-            Addon addon = new Addon(target);
+            // load addon metadata
+            Addon addon = loadMetadata(target);
 
             // add environment variables
             addAddonEnvVar(target, name + "_DIR", target.toString(), true);
@@ -108,6 +113,9 @@ public class AddonControl
                 container.addEnvVar("FRAMEWORK", name);
                 container.addEnvVar("FRAMEWORK_DIR", target.toString());
             }
+
+            // allocates and assigns private IP/port
+            create_private_endpoints(addon);
 
             // run addon actions with files unlocked
             with_unlocked(target, () -> {
@@ -206,6 +214,20 @@ public class AddonControl
         } else {
             throw new IOException("Unsupported addon archive file: " + source);
         }
+    }
+
+    private Addon loadMetadata(Path path) {
+        Addon addon = new Addon(path);
+
+        // TODO:
+        // for test only
+        Addon.Endpoint endpoint = new Addon.Endpoint();
+        endpoint.setPrivateIPName("CLOUDWAY_" + addon.getName().toUpperCase() + "_IP");
+        endpoint.setPrivatePortName("CLOUDWAY_" + addon.getName().toUpperCase() + "_PORT");
+        endpoint.setPrivatePort(8080);
+        addon.getEndpoints().add(endpoint);
+
+        return addon;
     }
 
     private static final String TEMPLATE_EXT = ".cwt";
@@ -413,6 +435,64 @@ public class AddonControl
         container.setFileReadWrite(target);
     }
 
+    private void create_private_endpoints(Addon addon) {
+        if (addon.getEndpoints().isEmpty()) {
+            return;
+        }
+
+        Map<String, String> env = Environ.loadAll(container);
+
+        // Collect all existing endpoint IP allocations
+        Set<String> allocated_ips =
+            addons().values().stream()
+                    .flatMap(a -> a.getEndpoints().stream())
+                    .map(a -> env.get(a.getPrivateIPName()))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+
+        addon.getEndpoints().stream().forEach(endpoint -> {
+            String ip_name   = endpoint.getPrivateIPName();
+            String port_name = endpoint.getPrivatePortName();
+
+            // Reuse previously allocated IPs of the same name.
+            String ip = env.get(ip_name);
+            if (ip == null) {
+                // Find the next IP address available for the current guest user.
+                // The IP is assumed to be available only if IP is not already
+                // associated with an existing endpoint defined by any addon
+                // within the application
+                ip = IntStream.rangeClosed(1, 127)
+                    .mapToObj(container::getIpAddress)
+                    .filter(a -> !allocated_ips.contains(a))
+                    .findAny()
+                    .orElseThrow(() -> new IllegalStateException(
+                        format("No IP was available for endpoint %s(%s)", ip_name, port_name)));
+
+                container.addEnvVar(ip_name, ip, false);
+                env.put(ip_name, ip);
+                allocated_ips.add(ip);
+            }
+            endpoint.setPrivateIP(ip);
+
+            String port = String.valueOf(endpoint.getPrivatePort());
+            if (!env.containsKey(port_name)) {
+                container.addEnvVar(port_name, port, false);
+                env.put(port_name, port);
+            }
+        });
+
+        // Validate all the allocations to ensure they are not already bound.
+        String failure = addon.getEndpoints().stream()
+            .filter(ep -> container.isAddressInUse(ep.getPrivateIP(), ep.getPrivatePort()))
+            .map(ep -> format("%s(%s)=%s(%d)", ep.getPrivateIPName(), ep.getPrivatePortName(),
+                                               ep.getPrivateIP(),     ep.getPrivatePort()))
+            .collect(Collectors.joining(", "));
+
+        if (!failure.isEmpty()) {
+            throw new IllegalStateException("Failed to create the following endpoints: " + failure);
+        }
+    }
+
     private void populate_repository(Path path, String url)
         throws IOException
     {
@@ -434,7 +514,7 @@ public class AddonControl
     private void control_all(String action, boolean enable_action_hooks)
         throws IOException
     {
-        Map<String, String> env = Environ.loadAll(container.getHomeDir());
+        Map<String, String> env = Environ.loadAll(container);
         for (Addon addon : addons().values()) {
             Path path = addon.getPath();
             if (enable_action_hooks) {
@@ -496,7 +576,7 @@ public class AddonControl
     private Map<String, String> getAddonEnv(Path path, Map<String,String> app_env) {
         // make sure the addon's environments overrides that of other addons
         Map<String, String> env =
-            app_env == null ? Environ.loadAll(container.getHomeDir())
+            app_env == null ? Environ.loadAll(container)
                             : new HashMap<>(app_env);
         env.putAll(Environ.load(path.resolve("env")));
         return env;
