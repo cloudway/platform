@@ -50,6 +50,12 @@ public interface ApplicationRepository
         throws IOException;
 
     /**
+     * Checkout repository into target.
+     */
+    void checkout(Path target)
+        throws IOException;
+
+    /**
      * Cleans up the repository.
      */
     void tidy() throws IOException;

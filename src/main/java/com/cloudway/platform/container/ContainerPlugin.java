@@ -177,7 +177,7 @@ public abstract class ContainerPlugin
         try {
             String filename = Objects.requireNonNull(key);
             if (prefix) filename = "CLOUDWAY_" + filename;
-            Path file = FileUtils.join(container.getHomeDir(), ".env", filename);
+            Path file = container.getEnvDir().resolve(filename);
             FileUtils.write(file, value);
             setFileReadOnly(file);
         } catch (IOException ex) {
@@ -195,7 +195,7 @@ public abstract class ContainerPlugin
         try {
             String filename = Objects.requireNonNull(key);
             if (prefix) filename = "CLOUDWAY_" + filename;
-            Path file = FileUtils.join(container.getHomeDir(), ".env", filename);
+            Path file = container.getEnvDir().resolve(filename);
             Files.deleteIfExists(file);
         } catch (IOException ex) {
             throw new RuntimeIOException(ex);

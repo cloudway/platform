@@ -83,12 +83,12 @@ public class ContainerTest
         assertEquals(uuid, who);
 
         if (Boolean.getBoolean("container.runshell")) {
-            Exec exec = Exec.args("/bin/bash", "-i");
-            exec.environment().putAll(Environ.loadAll(container.getHomeDir()));
-            exec.redirectInput(new File("/dev/tty"))
-                .redirectOutput(new File("/dev/tty"))
-                .redirectError(new File("/dev/tty"));
-            container.join(exec).run();
+            container.join(Exec.args("/bin/bash", "-i"))
+                     .environment(Environ.loadAll(container.getHomeDir()))
+                     .redirectInput(new File("/dev/tty"))
+                     .redirectOutput(new File("/dev/tty"))
+                     .redirectError(new File("/dev/tty"))
+                     .run();
         }
     }
 

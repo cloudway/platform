@@ -194,12 +194,28 @@ public class ApplicationContainer
         this.gid = gid;
     }
 
+    public String getShell() {
+        return shell;
+    }
+
     public Path getHomeDir() {
         return home_dir;
     }
 
-    public String getShell() {
-        return shell;
+    public Path getEnvDir() {
+        return home_dir.resolve(".env");
+    }
+
+    public Path getAppDir() {
+        return home_dir.resolve("app");
+    }
+
+    public Path getRepoDir() {
+        return getAppDir().resolve("repo");
+    }
+
+    public Path getDataDir() {
+        return getAppDir().resolve("data");
     }
 
     /**

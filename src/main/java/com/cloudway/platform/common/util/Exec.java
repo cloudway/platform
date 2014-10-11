@@ -112,6 +112,23 @@ public final class Exec
     }
 
     /**
+     * @see ProcessBuilder#environment()
+     */
+    public Exec environment(Map<String,String> env, boolean override) {
+        if (override)
+            builder.environment().clear();
+        builder.environment().putAll(env);
+        return this;
+    }
+
+    /**
+     * @see ProcessBuilder#environment()
+     */
+    public Exec environment(Map<String,String> env) {
+        return environment(env, false);
+    }
+
+    /**
      * @see ProcessBuilder#directory()
      */
     public File directory() {

@@ -87,9 +87,9 @@ class GitRepository implements ApplicationRepository
 
         try {
             Exec.args("/bin/sh", "-c", GIT_INIT)
-                .directory(tmpdir).checkError().run();
+                .directory(tmpdir).silentIO().checkError().run();
             Exec.args("/bin/sh", "-c", format(GIT_CLONE, "template", repo_name))
-                .directory(git_dir).checkError().run();
+                .directory(git_dir).silentIO().checkError().run();
         } finally {
             FileUtils.deleteTree(tmpdir);
         }
@@ -126,8 +126,8 @@ class GitRepository implements ApplicationRepository
         String command = ref == null
                 ? format(GIT_CLONE,     url, repo_name)
                 : format(GIT_URL_CLONE, url, repo_name, ref);
-        Exec.args("/bin/sh", "-c", command).directory(git_dir).checkError().run();
-
+        Exec.args("/bin/sh", "-c", command)
+            .directory(git_dir).silentIO().checkError().run();
         configure();
     }
 
@@ -137,27 +137,29 @@ class GitRepository implements ApplicationRepository
         }
 
         FileUtils.mkdir(repo_dir);
-
         Exec.args("/bin/sh", "-c", GIT_INIT_BARE)
-            .directory(repo_dir)
-            .checkError()
-            .run();
-
+            .directory(repo_dir).silentIO().checkError().run();
         configure();
+    }
+
+    public void checkout(Path target)
+        throws IOException
+    {
+        if (!exists()) {
+            return;
+        }
+
+        FileUtils.emptyDirectory(target);
+        container.join(Exec.args("/bin/sh", "-c", format(GIT_CHECKOUT, target)))
+                 .directory(repo_dir).silentIO().checkError().run();
     }
 
     public void tidy() throws IOException {
         if (exists()) {
             container.join(Exec.args("git", "prune"))
-                     .directory(repo_dir)
-                     .silentIO()
-                     .checkError()
-                     .run();
+                     .directory(repo_dir).silentIO().checkError().run();
             container.join(Exec.args("git", "gc", "--aggressive"))
-                     .directory(repo_dir)
-                     .silentIO()
-                     .checkError()
-                     .run();
+                     .directory(repo_dir).silentIO().checkError().run();
         }
     }
 
@@ -212,6 +214,13 @@ class GitRepository implements ApplicationRepository
         "GIT_DIR=./%2$s git reset --soft '%3$s';" +
         "GIT_DIR=./%2$s git branch master || true;" +
         "GIT_DIR=./%2$s git repack;";
+
+    private static final String GIT_CHECKOUT =
+        "set -xe;\n" +
+        "shopt -s dotglob;\n" +
+        "if [ \"$(find objects -type f 2>/dev/null | wc -l)\" -ne \"0\" ]; then\n" +
+        "  git archive --format=tar master | (cd %1$s && tar --warning=no-timestamp -xf -);\n" +
+        "fi\n";
 
     private static final String GIT_CONFIG =
         "[user]\n" +

@@ -73,15 +73,15 @@ public class AddonControl
     }
 
     public void start() throws IOException {
-        addon_control("start");
+        control_all("start", true);
     }
 
     public void stop() throws IOException {
-        addon_control("stop");
+        control_all("stop", true);
     }
 
     public void tidy() throws IOException {
-        addon_control("tidy");
+        control_all("tidy", false);
     }
 
     public void install(String name, Path source, String templateUrl)
@@ -98,14 +98,12 @@ public class AddonControl
         try {
             // copy source files into target
             installFiles(source.toRealPath(), target);
-            container.setFileTreeReadWrite(target);
 
             // TODO: load addon metadata
             Addon addon = new Addon(target);
 
             // add environment variables
-            Path envdir = target.resolve("env");
-            addEnvVar(envdir, name + "_DIR", target.toString(), true);
+            addAddonEnvVar(target, name + "_DIR", target.toString(), true);
             if (addon.getType() == AddonType.FRAMEWORK) {
                 container.addEnvVar("FRAMEWORK", name);
                 container.addEnvVar("FRAMEWORK_DIR", target.toString());
@@ -113,20 +111,13 @@ public class AddonControl
 
             // run addon actions with files unlocked
             with_unlocked(target, () -> {
-                process_templates(addon);
-                addon_action(addon, "setup");
+                process_templates(target);
+                do_addon_action(target, null, "setup");
             });
 
             // populate template repository
             if (addon.getType() == AddonType.FRAMEWORK) {
-                ApplicationRepository repo = ApplicationRepository.newInstance(container);
-                if (templateUrl == null || templateUrl.isEmpty()) {
-                    repo.populateFromTemplate(target);
-                } else if (templateUrl.equals("empty")) {
-                    repo.populateEmpty();
-                } else {
-                    repo.populateFromURL(templateUrl);
-                }
+                populate_repository(target, templateUrl);
             }
 
             // put addon into cache
@@ -153,6 +144,7 @@ public class AddonControl
         } else {
             extract(source, target);
         }
+        container.setFileTreeReadWrite(target);
     }
 
     private void copydir(Path source, Path target)
@@ -218,13 +210,10 @@ public class AddonControl
 
     private static final String TEMPLATE_EXT = ".cwt";
 
-    private void process_templates(Addon addon)
+    private void process_templates(Path path)
         throws IOException
     {
-        // Load environment variables and make sure this addon's environments
-        // overrides that of other addons
-        Map<String,String> env = Environ.loadAll(container.getHomeDir());
-        env.putAll(Environ.load(addon.getPath().resolve("env")));
+        Map<String,String> env = getAddonEnv(path, null);
 
         HashMap<String,String> cfg = new HashMap<>();
         Config config = Config.getDefault();
@@ -233,7 +222,7 @@ public class AddonControl
         VelocityEngine ve = new VelocityEngine();
         ve.init();
 
-        try (Stream<Path> files = getTemplateFiles(addon.getPath())) {
+        try (Stream<Path> files = getTemplateFiles(path)) {
             IO.forEach(files, input -> {
                 String filename = input.getFileName().toString();
                 filename = filename.substring(0, filename.length() - TEMPLATE_EXT.length());
@@ -244,7 +233,7 @@ public class AddonControl
                         VelocityContext vc = new VelocityContext();
                         env.forEach(vc::put);
                         vc.put("config", cfg.clone());
-                        ve.evaluate(vc, writer, addon.getName(), reader);
+                        ve.evaluate(vc, writer, path.getFileName().toString(), reader);
                     }
                 }
 
@@ -424,48 +413,92 @@ public class AddonControl
         container.setFileReadWrite(target);
     }
 
-    private void addEnvVar(Path path, String name, String value, boolean prefix)
+    private void populate_repository(Path path, String url)
         throws IOException
     {
-        if (!Files.exists(path)) {
-            FileUtils.mkdir(path);
+        ApplicationRepository repo = ApplicationRepository.newInstance(container);
+
+        if (url == null || url.isEmpty()) {
+            repo.populateFromTemplate(path);
+        } else if (url.equals("empty")) {
+            repo.populateEmpty();
+        } else {
+            repo.populateFromURL(url);
         }
 
-        name = name.toUpperCase();
-        if (prefix) {
-            name = "CLOUDWAY_" + name;
+        if (repo.exists()) {
+            repo.checkout(container.getRepoDir());
         }
-
-        Path file = path.resolve(name);
-        FileUtils.write(file, value);
     }
 
-    private void addon_control(String action) throws IOException {
+    private void control_all(String action, boolean enable_action_hooks)
+        throws IOException
+    {
+        Map<String, String> env = Environ.loadAll(container.getHomeDir());
         for (Addon addon : addons().values()) {
-            addon_action(addon, "control", action);
+            Path path = addon.getPath();
+            if (enable_action_hooks) {
+                do_action_hook("pre_" + action, env);
+                do_addon_action(path, env, "control", action);
+                do_action_hook("post_" + action, env);
+            } else {
+                do_addon_action(path, env, "control", action);
+            }
         }
     }
 
-    private void addon_action(Addon addon, String action, String... args)
+    private void do_action_hook(String action, Map<String,String> env)
         throws IOException
     {
-        Path path = addon.getPath();
+        Path hooks_dir = FileUtils.join(container.getRepoDir(), ".cloudway", "hooks");
+        Path action_hook = hooks_dir.resolve(action);
+        if (Files.isExecutable(action_hook)) {
+            container.join(Exec.args(action_hook))
+                     .environment(env)
+                     .checkError()
+                     .run();
+        }
+    }
+
+    private void do_addon_action(Path path, Map<String,String> env, String action, String... args)
+        throws IOException
+    {
         Path executable = FileUtils.join(path, "bin", action);
 
-        if (!Files.exists(executable))
-            return;
-        if (!Files.isExecutable(executable))
-            FileUtils.chmod(executable, 0755);
+        if (Files.exists(executable)) {
+            if (!Files.isExecutable(executable)) {
+                FileUtils.chmod(executable, 0755);
+            }
 
-        // Make sure this addon's environments overrides that of other addons
-        Map<String, String> env = Environ.loadAll(container.getHomeDir());
-        env.putAll(Environ.load(path.resolve("env")));
-
-        Exec exec = Exec.args(executable.toString());
-        if (args.length > 0)
+            Exec exec = Exec.args(executable);
             exec.command().addAll(Arrays.asList(args));
-        exec.environment().putAll(env);
-        exec.directory(path);
-        container.join(exec).checkError().run();
+            container.join(exec)
+                     .directory(path)
+                     .environment(getAddonEnv(path, env))
+                     .checkError()
+                     .run();
+        }
+    }
+
+    private void addAddonEnvVar(Path path, String name, String value, boolean prefix)
+        throws IOException
+    {
+        Path envdir = path.resolve("env");
+        if (!Files.exists(envdir)) {
+            FileUtils.mkdir(envdir);
+        }
+
+        String filename = name.toUpperCase();
+        if (prefix) filename = "CLOUDWAY_" + filename;
+        FileUtils.write(envdir.resolve(filename), value);
+    }
+
+    private Map<String, String> getAddonEnv(Path path, Map<String,String> app_env) {
+        // make sure the addon's environments overrides that of other addons
+        Map<String, String> env =
+            app_env == null ? Environ.loadAll(container.getHomeDir())
+                            : new HashMap<>(app_env);
+        env.putAll(Environ.load(path.resolve("env")));
+        return env;
     }
 }
