@@ -6,12 +6,19 @@
 
 package com.cloudway.platform.container;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.cloudway.platform.common.util.FileUtils;
+
 public class Addon
 {
+    public static boolean isAddonDirectory(Path dir) {
+        return Files.exists(FileUtils.join(dir, "metadata", "addon.xml"));
+    }
+
     public static Addon load(Path path) {
         Addon addon = new Addon(path);
 

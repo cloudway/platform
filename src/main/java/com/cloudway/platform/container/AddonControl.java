@@ -59,7 +59,7 @@ public class AddonControl
         if (_addons == null) {
             try (Stream<Path> paths = Files.list(container.getHomeDir())) {
                 _addons = paths
-                    .filter(p -> Files.exists(FileUtils.join(p, "metadata", "addon.xml")))
+                    .filter(Addon::isAddonDirectory)
                     .map(Addon::load)
                     .collect(toMap(Addon::getName, Function.identity()));
             } catch (IOException ex) {

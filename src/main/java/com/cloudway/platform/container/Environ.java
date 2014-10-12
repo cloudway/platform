@@ -6,6 +6,7 @@
 
 package com.cloudway.platform.container;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
@@ -14,6 +15,7 @@ import java.nio.file.PathMatcher;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
@@ -28,20 +30,47 @@ public class Environ
         // Load system env vars
         Map<String, String> env = load(Config.CONF_DIR.resolve("env"));
 
+        // Merge application env vars
+        env.putAll(load(container.getEnvDir()));
+
         // Merge addon env vars
         try (Stream<Path> stream = Files.list(container.getHomeDir())) {
-            stream.map(d -> d.resolve("env"))
-                  .filter(Files::isDirectory)
-                  .map(Environ::load)
+            stream.filter(Addon::isAddonDirectory)
+                  .map(d -> load(d.resolve("env")))
                   .forEach(env::putAll);
         } catch (IOException ex) {
             // log and ignore
         }
 
-        // Merge application env vars
-        env.putAll(load(container.getEnvDir()));
+        // Collect PATH elements
+        env.put("PATH", collectPathElements(env, "PATH"));
+        env.put("LD_LIBRARY_PATH", collectPathElements(env, "LD_LIBRARY_PATH"));
 
         return env;
+    }
+
+    private static String collectPathElements(Map<String, String> env, String var_name) {
+        if ("PATH".equals(var_name)) {
+            // Prevent conflict with the PATH variable
+            env = new HashMap<>(env);
+            env.keySet().removeIf(key -> key.endsWith("_LD_LIBRARY_PATH_ELEMENT"));
+        }
+
+        Stream<String> elements = env.keySet().stream()
+           .filter(k -> k.startsWith("CLOUDWAY_") && k.endsWith("_" + var_name + "_ELEMENT"))
+           .map(env::get);
+
+        String system_path = env.get(var_name);
+        if (system_path == null) {
+            system_path = System.getenv(var_name);
+            if (system_path == null && "PATH".equals(var_name)) {
+                system_path = "/bin:/usr/bin:/usr/sbin";
+            }
+        }
+        if (system_path != null) {
+            elements = Stream.concat(elements, Stream.of(system_path.split(File.pathSeparator)));
+        }
+        return elements.distinct().collect(Collectors.joining(File.pathSeparator));
     }
 
     /**
@@ -96,7 +125,10 @@ public class Environ
             String key = file.getFileName().toString();
             if (VALID_ENV_KEY.matcher(key).matches()) {
                 try {
-                    env.put(key, FileUtils.chomp(file));
+                    String val = FileUtils.chomp(file);
+                    if (val.indexOf('\0') == -1) { // ignore illegal env vars
+                        env.put(key, val);
+                    }
                 } catch (IOException ex) {
                     // log and ignore
                 }
