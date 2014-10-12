@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -48,23 +49,28 @@ import org.apache.velocity.app.VelocityEngine;
 public class AddonControl
 {
     private final ApplicationContainer container;
-    private Map<String, Addon> addons;
+    private Map<String, Addon> _addons;
 
     public AddonControl(ApplicationContainer container) {
         this.container = container;
     }
 
     public Map<String, Addon> addons() {
-        if (addons == null) {
+        if (_addons == null) {
             try (Stream<Path> paths = Files.list(container.getHomeDir())) {
-                addons = paths
+                _addons = paths
                     .filter(p -> Files.exists(FileUtils.join(p, "metadata", "addon.xml")))
-                    .collect(toMap(p -> p.getFileName().toString(), Addon::new));
+                    .map(Addon::load)
+                    .collect(toMap(Addon::getName, Function.identity()));
             } catch (IOException ex) {
                 throw new RuntimeIOException(ex);
             }
         }
-        return addons;
+        return _addons;
+    }
+
+    private Stream<Addon> valid_addons() {
+        return addons().values().stream().filter(Addon::isValid);
     }
 
     public Optional<Addon> getAddon(String name) {
@@ -75,18 +81,6 @@ public class AddonControl
         return addons().values().stream()
             .filter(a -> a.getType() == AddonType.FRAMEWORK)
             .findFirst();
-    }
-
-    public void start() throws IOException {
-        control_all("start", true);
-    }
-
-    public void stop() throws IOException {
-        control_all("stop", true);
-    }
-
-    public void tidy() throws IOException {
-        control_all("tidy", false);
     }
 
     public void install(String name, Path source, String templateUrl)
@@ -105,7 +99,10 @@ public class AddonControl
             installFiles(source.toRealPath(), target);
 
             // load addon metadata
-            Addon addon = loadMetadata(target);
+            Addon addon = Addon.load(target);
+            if (!addon.isValid()) {
+                throw new IOException("Invalid addon: " + source);
+            }
 
             // add environment variables
             addAddonEnvVar(target, name + "_DIR", target.toString(), true);
@@ -115,17 +112,17 @@ public class AddonControl
             }
 
             // allocates and assigns private IP/port
-            create_private_endpoints(addon);
+            createPrivateEndpoints(addon);
 
             // run addon actions with files unlocked
-            with_unlocked(target, () -> {
-                process_templates(target);
-                do_addon_action(target, null, "setup");
+            with_unlocked(target, true, () -> {
+                processTemplates(target);
+                do_action(target, null, "setup");
             });
 
             // populate template repository
             if (addon.getType() == AddonType.FRAMEWORK) {
-                populate_repository(target, templateUrl);
+                populateRepository(target, templateUrl);
             }
 
             // put addon into cache
@@ -137,11 +134,55 @@ public class AddonControl
     }
 
     public void remove(String name) throws IOException {
-        // TODO
+        Path path = container.getHomeDir().resolve(name);
+        if (!Files.exists(path)) {
+            return;
+        }
+
+        Addon addon;
+        if (this._addons != null) {
+            addon = this._addons.remove(name); // remove addon from cache
+        } else {
+            addon = Addon.load(path);          // load addon metadata
+        }
+
+        try {
+            if (addon.isValid()) {
+                Map<String,String> env = Environ.loadAll(container);
+
+                // remove allocated private IP/port
+                deletePrivateEndpoints(addon);
+
+                // gracefully stop the addon
+                do_control(path, env, "stop", true);
+                with_unlocked(path, false, () -> do_action(path, env, "teardown"));
+            }
+        } finally {
+            FileUtils.deleteTree(path);
+        }
     }
 
-    public void destroy() throws IOException {
-        // TODO
+    public void destroy() {
+        Map<String,String> env = Environ.loadAll(container);
+        valid_addons().map(Addon::getPath).forEach(path -> {
+            try {
+                with_unlocked(path, false, () -> do_action(path, env, "teardown"));
+            } catch (IOException ex) {
+                // log and ignore
+            }
+        });
+    }
+
+    public void start() throws IOException {
+        control_all("start", true);
+    }
+
+    public void stop() throws IOException {
+        control_all("stop", true);
+    }
+
+    public void tidy() throws IOException {
+        control_all("tidy", false);
     }
 
     private void installFiles(Path source, Path target)
@@ -216,23 +257,9 @@ public class AddonControl
         }
     }
 
-    private Addon loadMetadata(Path path) {
-        Addon addon = new Addon(path);
-
-        // TODO:
-        // for test only
-        Addon.Endpoint endpoint = new Addon.Endpoint();
-        endpoint.setPrivateIPName("CLOUDWAY_" + addon.getName().toUpperCase() + "_IP");
-        endpoint.setPrivatePortName("CLOUDWAY_" + addon.getName().toUpperCase() + "_PORT");
-        endpoint.setPrivatePort(8080);
-        addon.getEndpoints().add(endpoint);
-
-        return addon;
-    }
-
     private static final String TEMPLATE_EXT = ".cwt";
 
-    private void process_templates(Path path)
+    private void processTemplates(Path path)
         throws IOException
     {
         Map<String,String> env = getAddonEnv(path, null);
@@ -255,7 +282,7 @@ public class AddonControl
                         VelocityContext vc = new VelocityContext();
                         env.forEach(vc::put);
                         vc.put("config", cfg.clone());
-                        ve.evaluate(vc, writer, path.getFileName().toString(), reader);
+                        ve.evaluate(vc, writer, filename, reader);
                     }
                 }
 
@@ -386,7 +413,7 @@ public class AddonControl
         return rel;
     }
 
-    private void with_unlocked(Path target, IO.Runnable action)
+    private void with_unlocked(Path target, boolean relock, IO.Runnable action)
         throws IOException
     {
         Collection<String> locked_files = getLockedFiles(target);
@@ -394,7 +421,9 @@ public class AddonControl
         try {
             action.run();
         } finally {
-            do_lock(target, locked_files);
+            if (relock) {
+                do_lock(target, locked_files);
+            }
         }
     }
 
@@ -435,7 +464,7 @@ public class AddonControl
         container.setFileReadWrite(target);
     }
 
-    private void create_private_endpoints(Addon addon) {
+    private void createPrivateEndpoints(Addon addon) {
         if (addon.getEndpoints().isEmpty()) {
             return;
         }
@@ -444,11 +473,11 @@ public class AddonControl
 
         // Collect all existing endpoint IP allocations
         Set<String> allocated_ips =
-            addons().values().stream()
-                    .flatMap(a -> a.getEndpoints().stream())
-                    .map(a -> env.get(a.getPrivateIPName()))
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
+            valid_addons()
+                .flatMap(a -> a.getEndpoints().stream())
+                .map(a -> env.get(a.getPrivateIPName()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
         addon.getEndpoints().stream().forEach(endpoint -> {
             String ip_name   = endpoint.getPrivateIPName();
@@ -493,7 +522,14 @@ public class AddonControl
         }
     }
 
-    private void populate_repository(Path path, String url)
+    private void deletePrivateEndpoints(Addon addon) {
+        addon.getEndpoints().forEach(endpoint -> {
+            container.removeEnvVar(endpoint.getPrivateIPName());
+            container.removeEnvVar(endpoint.getPrivatePortName());
+        });
+    }
+
+    private void populateRepository(Path path, String url)
         throws IOException
     {
         ApplicationRepository repo = ApplicationRepository.newInstance(container);
@@ -515,32 +551,23 @@ public class AddonControl
         throws IOException
     {
         Map<String, String> env = Environ.loadAll(container);
-        for (Addon addon : addons().values()) {
-            Path path = addon.getPath();
-            if (enable_action_hooks) {
-                do_action_hook("pre_" + action, env);
-                do_addon_action(path, env, "control", action);
-                do_action_hook("post_" + action, env);
-            } else {
-                do_addon_action(path, env, "control", action);
-            }
-        }
+        IO.forEach(valid_addons().map(Addon::getPath),
+            path -> do_control(path, env, action, enable_action_hooks));
     }
 
-    private void do_action_hook(String action, Map<String,String> env)
+    private void do_control(Path path, Map<String,String> env, String action, boolean enable_action_hooks)
         throws IOException
     {
-        Path hooks_dir = FileUtils.join(container.getRepoDir(), ".cloudway", "hooks");
-        Path action_hook = hooks_dir.resolve(action);
-        if (Files.isExecutable(action_hook)) {
-            container.join(Exec.args(action_hook))
-                     .environment(env)
-                     .checkError()
-                     .run();
+        if (enable_action_hooks) {
+            do_action_hook("pre_" + action, env);
+            do_action(path, env, "control", action);
+            do_action_hook("post_" + action, env);
+        } else {
+            do_action(path, env, "control", action);
         }
     }
 
-    private void do_addon_action(Path path, Map<String,String> env, String action, String... args)
+    private void do_action(Path path, Map<String,String> env, String action, String... args)
         throws IOException
     {
         Path executable = FileUtils.join(path, "bin", action);
@@ -555,6 +582,19 @@ public class AddonControl
             container.join(exec)
                      .directory(path)
                      .environment(getAddonEnv(path, env))
+                     .checkError()
+                     .run();
+        }
+    }
+
+    private void do_action_hook(String action, Map<String,String> env)
+        throws IOException
+    {
+        Path hooks_dir = FileUtils.join(container.getRepoDir(), ".cloudway", "hooks");
+        Path action_hook = hooks_dir.resolve(action);
+        if (Files.isExecutable(action_hook)) {
+            container.join(Exec.args(action_hook))
+                     .environment(env)
                      .checkError()
                      .run();
         }

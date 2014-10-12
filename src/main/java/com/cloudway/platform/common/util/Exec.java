@@ -336,18 +336,7 @@ public final class Exec
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         redirectOutputStream(out);
         run();
-
-        byte[] contents = out.toByteArray();
-        int i = contents.length - 1;
-        while (i >= 0) {
-            if (contents[i] == '\n' || contents[i] == '\r') {
-                i--;
-            } else {
-                break;
-            }
-        }
-
-        return new String(contents, 0, i+1, cs);
+        return FileUtils.chomp(out.toByteArray(), cs);
     }
 
      /**

@@ -123,7 +123,7 @@ public class Cgroup
                 files.sorted(Comparator.comparingInt(Cgroup::count_dots))
                      .forEach(file -> {
                          try {
-                             String pval = FileUtils.read(file).trim();
+                             String pval = FileUtils.chomp(file);
                              params.put(file.getFileName().toString(), parse_cgparam(pval));
                          } catch (IOException ex) {
                              // ignore unreadable file
@@ -257,7 +257,7 @@ public class Cgroup
                 }
 
                 try {
-                    String val = FileUtils.read(path.resolve(param));
+                    String val = FileUtils.chomp(path.resolve(param));
                     vals.put(param, parse_cgparam(val));
                 } catch (IOException ex) {
                     throw new RuntimeException("Cgroup parameter not found: " + param);

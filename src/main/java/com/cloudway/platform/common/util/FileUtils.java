@@ -9,6 +9,7 @@ package com.cloudway.platform.common.util;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
@@ -195,19 +196,42 @@ public class FileUtils
         }
     }
 
-    public static String read(Path file)
-        throws IOException
-    {
-        byte[] contents = Files.readAllBytes(file);
-        return new String(contents, StandardCharsets.UTF_8);
-    }
-
     public static void write(Path file, String contents)
         throws IOException
     {
         try (BufferedWriter out = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             out.write(contents);
         }
+    }
+
+    public static String read(Path file)
+        throws IOException
+    {
+        return read(file, StandardCharsets.UTF_8);
+    }
+
+    public static String read(Path file, Charset cs)
+        throws IOException
+    {
+        return new String(Files.readAllBytes(file), cs);
+    }
+
+    public static String chomp(Path file)
+        throws IOException
+    {
+        return chomp(Files.readAllBytes(file), StandardCharsets.ISO_8859_1);
+    }
+
+    public static String chomp(byte[] b, Charset cs) {
+        int i = b.length - 1;
+        while (i >= 0) {
+            if (b[i] == '\n' || b[i] == '\r') {
+                i--;
+            } else {
+                break;
+            }
+        }
+        return new String(b, 0, i+1, cs);
     }
 
     /**

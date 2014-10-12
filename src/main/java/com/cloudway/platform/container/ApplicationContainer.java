@@ -235,8 +235,11 @@ public class ApplicationContainer
      * Destroy container.
      */
     public void destroy() throws IOException {
-        addons.destroy();
-        plugin.destroy();
+        try {
+            addons.destroy();
+        } finally {
+            plugin.destroy();
+        }
     }
 
     /**
@@ -297,7 +300,7 @@ public class ApplicationContainer
      */
     public ApplicationState getState() {
         try {
-            return ApplicationState.valueOf(FileUtils.read(state_file()));
+            return ApplicationState.valueOf(FileUtils.chomp(state_file()));
         } catch (Exception ex) {
             return ApplicationState.UNKNOWN;
         }
@@ -323,7 +326,11 @@ public class ApplicationContainer
      * failed addon tidy hook executions.
      */
     public void tidy() throws IOException {
-        stop_guest(false, 0, null);
+        boolean running = getState() == ApplicationState.STARTED;
+
+        if (running) {
+            stop_guest(false, 0, null);
+        }
 
         // Perform the guest- and addon- level tidy actions. At this point,
         // the guest has been stopped; we'll attempt to start the guest
@@ -339,14 +346,32 @@ public class ApplicationContainer
             // do this last to maximize room for git to write changes
             ApplicationRepository.newInstance(this).tidy();
         } finally {
-            start_guest();
+            if (running) {
+                start_guest();
+            }
         }
     }
 
-    public void installAddon(String name, Path source, String templateUrl)
+    /**
+     * Install an add-on.
+     *
+     * @param name the add-on name
+     * @param source the add-on source, a directory or an archive file
+     * @param templateUrl the template URL used to populate repository
+     */
+    public void install(String name, Path source, String templateUrl)
         throws IOException
     {
         addons.install(name, source, templateUrl);
+    }
+
+    /**
+     * Remove an add-on.
+     *
+     * @param name the add-on name
+     */
+    public void remove(String name) throws IOException {
+        addons.remove(name);
     }
 
     /**

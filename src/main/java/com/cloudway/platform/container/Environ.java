@@ -96,7 +96,7 @@ public class Environ
             String key = file.getFileName().toString();
             if (VALID_ENV_KEY.matcher(key).matches()) {
                 try {
-                    env.put(key, FileUtils.read(file));
+                    env.put(key, FileUtils.chomp(file));
                 } catch (IOException ex) {
                     // log and ignore
                 }

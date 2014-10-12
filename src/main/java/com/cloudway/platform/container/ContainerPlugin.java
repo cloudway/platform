@@ -76,8 +76,8 @@ public abstract class ContainerPlugin
     public void destroy()
         throws IOException
     {
-        killProcs();
-        deleteUser();
+        nothrow(this::killProcs);
+        nothrow(this::deleteUser);
     }
 
     /**

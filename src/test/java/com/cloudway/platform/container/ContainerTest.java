@@ -41,7 +41,7 @@ public class ContainerTest
 
         container = ApplicationContainer.create(uuid, "test", "demo", capacity);
         container.addAuthorizedKey("default", pubkey);
-        installAddon();
+        installAndStart();
         container.tidy();
     }
 
@@ -64,14 +64,12 @@ public class ContainerTest
         assertEquals(capacity, container.getCapacity());
         assertEquals("/opt/cloudway/bin/cwsh", container.getShell());
         assertEquals(Config.VAR_DIR.resolve(uuid), container.getHomeDir());
-        assertEquals(ApplicationState.NEW, container.getState());
     }
 
     @Test
     public void authorizedKeys() throws IOException {
         List<String> akeys = container.getAuthorizedKeys();
         AuthorizedKey pkey = AuthorizedKey.parsePublicKey(pubkey);
-
         assertEquals(1, akeys.size());
         AuthorizedKey akey = AuthorizedKey.parsePublicKey(akeys.get(0));
         assertEquals(pkey.getBits(), akey.getBits());
@@ -103,7 +101,7 @@ public class ContainerTest
         return FileUtils.read(sshdir.resolve("id_rsa.pub"));
     }
 
-    private static void installAddon() throws IOException {
+    private static void installAndStart() throws IOException {
         String source = System.getProperty("addon.dir");
         String repo = System.getProperty("repo.url");
 
@@ -115,7 +113,12 @@ public class ContainerTest
             } else if (name.endsWith(".tar.gz")) {
                 name = name.substring(0, name.length() - 7);
             }
-            container.installAddon(name, path, repo);
+
+            assertEquals(ApplicationState.NEW, container.getState());
+            container.install(name, path, repo);
+            assertEquals(ApplicationState.NEW, container.getState());
+            container.start();
+            assertEquals(ApplicationState.STARTED, container.getState());
         }
     }
 

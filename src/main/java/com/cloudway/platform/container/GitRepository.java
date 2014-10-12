@@ -219,7 +219,7 @@ class GitRepository implements ApplicationRepository
         "set -xe;\n" +
         "shopt -s dotglob;\n" +
         "if [ \"$(find objects -type f 2>/dev/null | wc -l)\" -ne \"0\" ]; then\n" +
-        "  git archive --format=tar master | (cd %1$s && tar --warning=no-timestamp -xf -);\n" +
+        "  git archive --format=tar master | (cd %1$s && tar -xf -);\n" +
         "fi\n";
 
     private static final String GIT_CONFIG =

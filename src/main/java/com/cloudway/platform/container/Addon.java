@@ -12,6 +12,46 @@ import java.util.List;
 
 public class Addon
 {
+    public static Addon load(Path path) {
+        Addon addon = new Addon(path);
+
+        // TODO: for test only
+        Endpoint endpoint = new Endpoint();
+        endpoint.setPrivateIPName("CLOUDWAY_" + addon.getName().toUpperCase() + "_IP");
+        endpoint.setPrivatePortName("CLOUDWAY_" + addon.getName().toUpperCase() + "_PORT");
+        endpoint.setPrivatePort(8080);
+        addon.getEndpoints().add(endpoint);
+
+        return addon;
+    }
+
+    private final Path path;
+    private final List<Endpoint> endpoints = new ArrayList<>();
+
+    private Addon(Path path) {
+        this.path = path;
+    }
+
+    public Path getPath() {
+        return path;
+    }
+
+    public String getName() {
+        return path.getFileName().toString();
+    }
+
+    public AddonType getType() {
+        return AddonType.FRAMEWORK; // FIXME
+    }
+
+    public boolean isValid() {
+        return true; // FIXME
+    }
+
+    public List<Endpoint> getEndpoints() {
+        return endpoints;
+    }
+
     public static class Endpoint {
         private String privateIPName;
         private String privatePortName;
@@ -49,28 +89,5 @@ public class Addon
         public void setPrivatePort(int port) {
             this.privatePort = port;
         }
-    }
-
-    private final Path path;
-    private final List<Endpoint> endpoints = new ArrayList<>();
-
-    public Addon(Path path) {
-        this.path = path;
-    }
-
-    public Path getPath() {
-        return path;
-    }
-
-    public String getName() {
-        return path.getFileName().toString();
-    }
-
-    public AddonType getType() {
-        return AddonType.FRAMEWORK; // FIXME
-    }
-
-    public List<Endpoint> getEndpoints() {
-        return endpoints;
     }
 }
