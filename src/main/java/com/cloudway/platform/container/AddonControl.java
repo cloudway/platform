@@ -115,15 +115,20 @@ public class AddonControl
             createPrivateEndpoints(addon);
 
             // run addon actions with files unlocked
-            with_unlocked(target, true, () -> {
+            do_validate(target, () -> with_unlocked(target, true, () -> {
                 processTemplates(target);
                 do_action(target, null, "setup");
-            });
+            }));
 
             // populate template repository
             if (addon.getType() == AddonType.FRAMEWORK) {
                 populateRepository(target, templateUrl);
             }
+
+            // securing addon directory
+            container.setFileTreeReadOnly(target.resolve("metadata"));
+            container.setFileTreeReadOnly(target.resolve("bin"));
+            container.setFileTreeReadOnly(target.resolve("env"));
 
             // put addon into cache
             addons.put(name, addon);
@@ -416,13 +421,12 @@ public class AddonControl
     private void with_unlocked(Path target, boolean relock, IO.Runnable action)
         throws IOException
     {
-        Collection<String> locked_files = getLockedFiles(target);
-        do_unlock(target, locked_files);
+        do_unlock(target, getLockedFiles(target));
         try {
             action.run();
         } finally {
             if (relock) {
-                do_lock(target, locked_files);
+                do_lock(target, getLockedFiles(target));
             }
         }
     }
@@ -462,6 +466,37 @@ public class AddonControl
 
         container.setFileReadWrite(home);
         container.setFileReadWrite(target);
+    }
+
+    private void do_validate(Path path, IO.Runnable action)
+        throws IOException
+    {
+        Set<String> before_run = listHomeDir();
+        action.run();
+        Set<String> after_run = listHomeDir();
+
+        after_run.removeAll(before_run);
+        if (!after_run.isEmpty()) {
+            throw new IllegalStateException(
+                "Add-on created the following files or directories in the home directory: " +
+                String.join(", ", after_run));
+        }
+
+        Set<String> env_keys = Environ.list(container.getEnvDir());
+        env_keys.retainAll(Environ.list(path.resolve("env")));
+        if (!env_keys.isEmpty()) {
+            throw new IllegalStateException(
+                "Add-on attempted to override the following environment variables: " +
+                String.join(", ", env_keys));
+        }
+    }
+
+    private Set<String> listHomeDir() throws IOException {
+        try (Stream<Path> files = Files.list(container.getHomeDir())) {
+            return files.map(f -> f.getFileName().toString())
+                        .filter(f -> !f.startsWith("."))
+                        .collect(Collectors.toSet());
+        }
     }
 
     private void createPrivateEndpoints(Addon addon) {
@@ -571,12 +606,7 @@ public class AddonControl
         throws IOException
     {
         Path executable = FileUtils.join(path, "bin", action);
-
-        if (Files.exists(executable)) {
-            if (!Files.isExecutable(executable)) {
-                FileUtils.chmod(executable, 0755);
-            }
-
+        if (Files.isExecutable(executable)) { // FIXME: log warning for unexecutable script
             Exec exec = Exec.args(executable);
             exec.command().addAll(Arrays.asList(args));
             container.join(exec)

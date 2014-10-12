@@ -12,8 +12,10 @@ import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -23,6 +25,8 @@ import com.cloudway.platform.common.util.FileUtils;
 
 public class Environ
 {
+    private static final Pattern VALID_ENV_KEY = Pattern.compile("\\A[A-Z_0-9]+\\Z");
+
     /**
      * Load the combined environments for a guest.
      */
@@ -76,7 +80,7 @@ public class Environ
     /**
      * Read environment variables into a environ map.
      *
-     * @param dir of gear to be read.
+     * @param dir the directory to be read.
      * @return the environment variables names to values map.
      */
     public static Map<String, String> load(Path dir) {
@@ -93,7 +97,7 @@ public class Environ
     /**
      * Read environment variables into a environ map.
      *
-     * @param dir of gear to be read.
+     * @param dir the directory to be read.
      * @param glob env name pattern to be filtered.
      * @return the environment variables names to values map.
      */
@@ -118,7 +122,22 @@ public class Environ
         return env;
     }
 
-    private static final Pattern VALID_ENV_KEY = Pattern.compile("\\A[A-Z_0-9]+\\Z");
+    /**
+     * List environment variable names in the specified directory.
+     * @param dir the directory to be list.
+     * @return the environment variables names
+     */
+    public static Set<String> list(Path dir) {
+        try (Stream<Path> stream = Files.walk(dir)) {
+            return stream.filter(f -> Files.isRegularFile(f) && Files.isReadable(f))
+                         .map(f -> f.getFileName().toString())
+                         .filter(k -> VALID_ENV_KEY.matcher(k).matches())
+                         .collect(Collectors.toSet());
+        } catch (IOException ex) {
+            // log and ignore
+            return Collections.emptySet();
+        }
+    }
 
     private static void readEnvFile(Map<String,String> env, Path file) {
         if (Files.isRegularFile(file) && Files.isReadable(file)) {
