@@ -8,11 +8,11 @@ package com.cloudway.platform.container;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.ExtendedProperties;
-import com.cloudway.platform.common.util.RuntimeIOException;
 
 @SuppressWarnings("serial")
 public final class ResourceLimits extends ExtendedProperties
@@ -25,7 +25,7 @@ public final class ResourceLimits extends ExtendedProperties
             limits.load(in);
             return limits;
         } catch (IOException ex) {
-            throw new RuntimeIOException(ex);
+            throw new UncheckedIOException(ex);
         }
     }
 

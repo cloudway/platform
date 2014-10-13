@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.io.RandomAccessFile;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -19,7 +20,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import com.cloudway.platform.common.util.IO;
-import com.cloudway.platform.common.util.RuntimeIOException;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ContainerPlugin;
 import com.cloudway.platform.common.Config;
@@ -350,7 +350,7 @@ public class UnixContainerPlugin extends ContainerPlugin
                          .silentIO().run();
             return rc == 0;
         } catch (IOException ex) {
-            throw new RuntimeIOException(ex);
+            throw new UncheckedIOException(ex);
         }
     }
 }

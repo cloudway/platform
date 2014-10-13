@@ -7,6 +7,7 @@
 package com.cloudway.platform.common.util;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -27,7 +28,7 @@ public final class IO
             try {
                 other.run();
             } catch (IOException ex) {
-                throw new RuntimeIOException(ex);
+                throw new UncheckedIOException(ex);
             }
         };
     }
@@ -37,7 +38,7 @@ public final class IO
     {
         try {
             action.run();
-        } catch (RuntimeIOException ex) {
+        } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
     }
@@ -45,7 +46,7 @@ public final class IO
     public static void ignore(Runnable action) {
         try {
             action.run();
-        } catch (IOException|RuntimeIOException ex) {
+        } catch (IOException|UncheckedIOException ex) {
             // ignored
         }
     }
@@ -60,7 +61,7 @@ public final class IO
             try {
                 return other.get();
             } catch (IOException ex) {
-                throw new RuntimeIOException(ex);
+                throw new UncheckedIOException(ex);
             }
         };
     }
@@ -70,7 +71,7 @@ public final class IO
     {
         try {
             return action.get();
-        } catch (RuntimeIOException ex) {
+        } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
     }
@@ -78,7 +79,7 @@ public final class IO
     public static <T> Optional<T> ignore(Supplier<? extends T> action) {
         try {
             return Optional.ofNullable(action.get());
-        } catch (IOException|RuntimeIOException ex) {
+        } catch (IOException|UncheckedIOException ex) {
             return Optional.empty();
         }
     }
@@ -93,7 +94,7 @@ public final class IO
             try {
                 return other.apply(t);
             } catch (IOException ex) {
-                throw new RuntimeIOException(ex);
+                throw new UncheckedIOException(ex);
             }
         };
     }
@@ -108,7 +109,7 @@ public final class IO
             try {
                 other.accept(t);
             } catch (IOException ex) {
-                throw new RuntimeIOException(ex);
+                throw new UncheckedIOException(ex);
             }
         };
     }
@@ -123,7 +124,7 @@ public final class IO
             try {
                 other.accept(t, u);
             } catch (IOException ex) {
-                throw new RuntimeIOException(ex);
+                throw new UncheckedIOException(ex);
             }
         };
     }
@@ -137,7 +138,7 @@ public final class IO
             try {
                 return other.test(t);
             } catch (IOException ex) {
-                throw new RuntimeIOException(ex);
+                throw new UncheckedIOException(ex);
             }
         };
     }
@@ -147,7 +148,7 @@ public final class IO
     {
         try {
             stream.forEach(wrap(action));
-        } catch (RuntimeIOException ex) {
+        } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
     }
@@ -157,7 +158,7 @@ public final class IO
     {
         try {
             collection.forEach(wrap(action));
-        } catch (RuntimeIOException ex) {
+        } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
     }
@@ -167,7 +168,7 @@ public final class IO
     {
         try {
             map.forEach(wrap(action));
-        } catch (RuntimeIOException ex) {
+        } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
     }

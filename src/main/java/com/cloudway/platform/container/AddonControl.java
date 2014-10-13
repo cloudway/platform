@@ -8,6 +8,7 @@ package com.cloudway.platform.container;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.FileSystem;
 import java.nio.file.FileVisitResult;
@@ -41,7 +42,6 @@ import com.cloudway.platform.common.util.AbstractFileVisitor;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
-import com.cloudway.platform.common.util.RuntimeIOException;
 
 import com.cloudway.platform.proxy.HttpProxy;
 import org.apache.velocity.VelocityContext;
@@ -64,7 +64,7 @@ public class AddonControl
                     .map(d -> Addon.load(container, d))
                     .collect(toMap(Addon::getName, Function.identity()));
             } catch (IOException ex) {
-                throw new RuntimeIOException(ex);
+                throw new UncheckedIOException(ex);
             }
         }
         return _addons;
@@ -79,7 +79,7 @@ public class AddonControl
     }
 
     public Optional<Addon> getFrameworkAddon() {
-        return addons().values().stream()
+        return valid_addons()
             .filter(a -> a.getType() == AddonType.FRAMEWORK)
             .findFirst();
     }
@@ -144,12 +144,11 @@ public class AddonControl
             return;
         }
 
-        Addon addon;
-        if (this._addons != null) {
+        Addon addon = null;
+        if (this._addons != null)
             addon = this._addons.remove(name);   // remove addon from cache
-        } else {
+        if (addon == null)
             addon = Addon.load(container, path); // load addon metadata
-        }
 
         try {
             if (addon.isValid()) {
@@ -163,7 +162,8 @@ public class AddonControl
                 with_unlocked(path, false, () -> do_action(path, env, "teardown"));
             }
         } finally {
-            removeProxyMappings(addon);
+            if (addon.isValid())
+                removeProxyMappings(addon);
             FileUtils.deleteTree(path);
         }
     }

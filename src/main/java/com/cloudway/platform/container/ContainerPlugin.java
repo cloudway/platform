@@ -7,6 +7,7 @@
 package com.cloudway.platform.container;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,7 +20,6 @@ import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
-import com.cloudway.platform.common.util.RuntimeIOException;
 import com.cloudway.platform.container.plugin.LinuxContainerPlugin;
 import com.cloudway.platform.container.plugin.MacOSContainerPlugin;
 import com.cloudway.platform.container.plugin.UnixContainerPlugin;
@@ -193,7 +193,7 @@ public abstract class ContainerPlugin
             FileUtils.write(file, value);
             setFileReadOnly(file);
         } catch (IOException ex) {
-            throw new RuntimeIOException(ex);
+            throw new UncheckedIOException(ex);
         }
     }
 
@@ -210,7 +210,7 @@ public abstract class ContainerPlugin
             Path file = container.getEnvDir().resolve(filename);
             Files.deleteIfExists(file);
         } catch (IOException ex) {
-            throw new RuntimeIOException(ex);
+            throw new UncheckedIOException(ex);
         }
     }
 
