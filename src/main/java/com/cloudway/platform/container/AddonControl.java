@@ -43,6 +43,7 @@ import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.common.util.RuntimeIOException;
 
+import com.cloudway.platform.proxy.HttpProxy;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
 
@@ -60,7 +61,7 @@ public class AddonControl
             try (Stream<Path> paths = Files.list(container.getHomeDir())) {
                 _addons = paths
                     .filter(Addon::isAddonDirectory)
-                    .map(Addon::load)
+                    .map(d -> Addon.load(container, d))
                     .collect(toMap(Addon::getName, Function.identity()));
             } catch (IOException ex) {
                 throw new RuntimeIOException(ex);
@@ -99,10 +100,8 @@ public class AddonControl
             installFiles(source.toRealPath(), target);
 
             // load addon metadata
-            Addon addon = Addon.load(target);
-            if (!addon.isValid()) {
-                throw new IOException("Invalid addon: " + source);
-            }
+            Addon addon = Addon.load(container, target);
+            addon.validate();
 
             // add environment variables
             addAddonEnvVar(target, name + "_DIR", target.toString(), true);
@@ -120,15 +119,16 @@ public class AddonControl
                 do_action(target, null, "setup");
             }));
 
-            // populate template repository
-            if (addon.getType() == AddonType.FRAMEWORK) {
-                populateRepository(target, templateUrl);
-            }
-
             // securing addon directory
             container.setFileTreeReadOnly(target.resolve("metadata"));
             container.setFileTreeReadOnly(target.resolve("bin"));
             container.setFileTreeReadOnly(target.resolve("env"));
+
+            // initialize repository and proxy mappings for framework addon
+            if (addon.getType() == AddonType.FRAMEWORK) {
+                populateRepository(target, templateUrl);
+                addProxyMappings(addon);
+            }
 
             // put addon into cache
             addons.put(name, addon);
@@ -146,9 +146,9 @@ public class AddonControl
 
         Addon addon;
         if (this._addons != null) {
-            addon = this._addons.remove(name); // remove addon from cache
+            addon = this._addons.remove(name);   // remove addon from cache
         } else {
-            addon = Addon.load(path);          // load addon metadata
+            addon = Addon.load(container, path); // load addon metadata
         }
 
         try {
@@ -163,19 +163,28 @@ public class AddonControl
                 with_unlocked(path, false, () -> do_action(path, env, "teardown"));
             }
         } finally {
+            removeProxyMappings(addon);
             FileUtils.deleteTree(path);
         }
     }
 
     public void destroy() {
-        Map<String,String> env = Environ.loadAll(container);
-        valid_addons().map(Addon::getPath).forEach(path -> {
+        try {
+            Map<String,String> env = Environ.loadAll(container);
+            valid_addons().map(Addon::getPath).forEach(path -> {
+                try {
+                    with_unlocked(path, false, () -> do_action(path, env, "teardown"));
+                } catch (IOException ex) {
+                    // log and ignore
+                }
+            });
+        } finally {
             try {
-                with_unlocked(path, false, () -> do_action(path, env, "teardown"));
+                HttpProxy.getInstance().purge(container.getDomainName());
             } catch (IOException ex) {
                 // log and ignore
             }
-        });
+        }
     }
 
     public void start() throws IOException {
@@ -562,6 +571,24 @@ public class AddonControl
             container.removeEnvVar(endpoint.getPrivateIPName());
             container.removeEnvVar(endpoint.getPrivatePortName());
         });
+    }
+
+    public void addProxyMappings(Addon addon) throws IOException {
+        Map<String, String> mappings = addon.getProxyMappings();
+        if (!mappings.isEmpty()) {
+            HttpProxy.getInstance().addMappings(mappings);
+        }
+    }
+
+    public void removeProxyMappings(Addon addon) {
+        Map<String, String> mappings = addon.getProxyMappings();
+        if (!mappings.isEmpty()) {
+            try {
+                HttpProxy.getInstance().removeMappings(mappings.keySet());
+            } catch (IOException ex) {
+                ex.printStackTrace(); // FIXME
+            }
+        }
     }
 
     private void populateRepository(Path path, String url)

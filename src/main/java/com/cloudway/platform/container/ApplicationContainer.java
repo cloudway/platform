@@ -90,7 +90,7 @@ public class ApplicationContainer
             () -> new IllegalArgumentException("Not a cloudway guest: " + uuid));
 
         Path envdir = Paths.get(pwent.getHome(), ".env");
-        Map<String,String> env = Environ.load(envdir, "CLOUDWAY_APP{NAME,DNS,SIZE}*");
+        Map<String,String> env = Environ.load(envdir, "CLOUDWAY_APP_{NAME,DNS,SIZE}*");
 
         String appname  = env.get("CLOUDWAY_APP_NAME");
         String dns      = env.get("CLOUDWAY_APP_DNS");
@@ -300,14 +300,14 @@ public class ApplicationContainer
      */
     public ApplicationState getState() {
         try {
-            return ApplicationState.valueOf(FileUtils.chomp(state_file()));
+            return ApplicationState.valueOf(FileUtils.read(state_file()));
         } catch (Exception ex) {
             return ApplicationState.UNKNOWN;
         }
     }
 
     private Path state_file() {
-        return FileUtils.join(home_dir, "app", ".state");
+        return getAppDir().resolve(".state");
     }
 
     /**

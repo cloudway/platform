@@ -11,9 +11,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
 
 import com.cloudway.platform.common.AuthorizedKey;
 import com.cloudway.platform.common.Config;
@@ -28,6 +30,7 @@ import static org.junit.Assert.*;
 public class ContainerTest
 {
     private static String uuid;
+    private static String name;
     private static String capacity;
     private static String pubkey;
 
@@ -36,10 +39,11 @@ public class ContainerTest
     @BeforeClass
     public static void create() throws IOException {
         uuid = mkuuid();
+        name = mkappname();
         capacity = System.getProperty("container.size", "small");
         pubkey = loadPublicKey();
 
-        container = ApplicationContainer.create(uuid, "test", "demo", capacity);
+        container = ApplicationContainer.create(uuid, name, "demo", capacity);
         container.addAuthorizedKey("default", pubkey);
         installAndStart();
         container.tidy();
@@ -58,9 +62,9 @@ public class ContainerTest
     @Test
     public void info() throws IOException {
         assertEquals(uuid, container.getUuid());
-        assertEquals("test", container.getName());
+        assertEquals(name, container.getName());
         assertEquals("demo", container.getNamespace());
-        assertEquals("test-demo.cloudway.com", container.getDomainName());
+        assertEquals(name + "-demo.cloudway.com", container.getDomainName());
         assertEquals(capacity, container.getCapacity());
         assertEquals("/opt/cloudway/bin/cwsh", container.getShell());
         assertEquals(Config.VAR_DIR.resolve(uuid), container.getHomeDir());
@@ -132,6 +136,15 @@ public class ContainerTest
         while (str.length() < 16)
             str = "0" + str;
         return str;
+    }
+
+    private static String mkappname() {
+        Collection<ApplicationContainer> all = ApplicationContainer.all();
+        return IntStream.range(0, 1000)
+            .mapToObj(i -> "test" + (i == 0 ? "" : String.valueOf(i)))
+            .filter(n -> !all.stream().anyMatch(a -> n.equals(a.getName())))
+            .findAny()
+            .orElseThrow(() -> new RuntimeException("Too many application containers"));
     }
 
     private static <T> Consumer<T> log(IO.Consumer<T> action) {

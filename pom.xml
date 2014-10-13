@@ -22,6 +22,21 @@
       <artifactId>velocity</artifactId>
       <version>1.7</version>
     </dependency>
+    <dependency>
+      <groupId>castor</groupId>
+      <artifactId>castor</artifactId>
+      <version>0.9.5</version>
+    </dependency>
+    <dependency>
+      <groupId>xerces</groupId>
+      <artifactId>xerces</artifactId>
+      <version>2.3.0</version>
+    </dependency>
+    <dependency>
+      <groupId>jakarta-regexp</groupId>
+      <artifactId>jakarta-regexp</artifactId>
+      <version>1.4</version>
+    </dependency>
   </dependencies>
 
   <build>
@@ -33,6 +48,19 @@
           <source>1.8</source>
           <target>1.8</target>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>castor-maven-plugin</artifactId>
+        <version>1.0</version>
+        <executions>
+          <execution>
+            <id>generate-schema</id>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

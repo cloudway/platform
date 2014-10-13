@@ -1,0 +1,60 @@
+<?xml version="1.0" ?>
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="http://www.cloudway.com/platform/addon">
+
+<!-- ====================================================== -->
+<!-- This schema defines the cloudway add-on metadata.      -->
+<!-- ====================================================== -->
+
+  <xsd:element name="addon">
+    <xsd:annotation>
+      <xsd:documentation xml:lang="en">
+        The addon element is the root element of all addon metadata documents.
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:sequence>
+        <xsd:element name="name" type="xsd:string" />
+        <xsd:element name="display-name" type="xsd:string" />
+        <xsd:element name="description" type="xsd:string" minOccurs="0" />
+        <xsd:element name="version" type="xsd:string" />
+        <xsd:element name="vendor" type="xsd:string" />
+        <xsd:element name="addon-version" type="xsd:string" />
+        <xsd:element name="addon-vendor" type="xsd:string" />
+        <xsd:element name="category" type="categoryType" />
+        <xsd:element name="endpoint" type="endpointType"
+                     minOccurs="0" maxOccurs="unbounded" />
+      </xsd:sequence>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:simpleType name="categoryType">
+    <xsd:restriction base="xsd:token">
+      <xsd:enumeration value="Framework" />
+      <xsd:enumeration value="Service" />
+      <xsd:enumeration value="Component" />
+    </xsd:restriction>
+  </xsd:simpleType>
+
+  <xsd:simpleType name="env-nameType">
+    <xsd:restriction base="xsd:string">
+      <xsd:pattern value="[A-Z][A-Z_0-9]*" />
+    </xsd:restriction>
+  </xsd:simpleType>
+
+  <xsd:complexType name="endpointType">
+    <xsd:sequence>
+      <xsd:element name="private-ip-name" type="env-nameType" />
+      <xsd:element name="private-port-name" type="env-nameType" />
+      <xsd:element name="private-port" type="xsd:positiveInteger" />
+      <xsd:element name="public-port-name" type="env-nameType" minOccurs="0" />
+      <xsd:element name="proxy-mapping" type="proxy-mappingType"
+                   minOccurs="0" maxOccurs="unbounded" />
+    </xsd:sequence>
+  </xsd:complexType>
+
+  <xsd:complexType name="proxy-mappingType">
+    <xsd:attribute name="front-end" type="xsd:string" />
+    <xsd:attribute name="back-end" type="xsd:string" />
+  </xsd:complexType>
+</xsd:schema>
