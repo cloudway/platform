@@ -50,6 +50,11 @@ public class Environ
         env.put("PATH", collectPathElements(env, "PATH"));
         env.put("LD_LIBRARY_PATH", collectPathElements(env, "LD_LIBRARY_PATH"));
 
+        // Add system environments
+        env.putIfAbsent("CLOUDWAY_HOME", Config.HOME_DIR.toString());
+        env.putIfAbsent("JAVA_HOME", System.getProperty("java.home"));
+        env.putIfAbsent("CLOUDWAY_CLASSPATH", collectJavaClasspath());
+
         return env;
     }
 
@@ -67,14 +72,27 @@ public class Environ
         String system_path = env.get(var_name);
         if (system_path == null) {
             system_path = System.getenv(var_name);
-            if (system_path == null && "PATH".equals(var_name)) {
-                system_path = "/bin:/usr/bin:/usr/sbin";
+            if ("PATH".equals(var_name)) {
+                if (system_path == null)
+                    system_path = "/bin:/usr/bin:/usr/sbin";
+                system_path += ":" + Config.HOME_DIR.resolve("bin");
             }
         }
         if (system_path != null) {
             elements = Stream.concat(elements, Stream.of(system_path.split(File.pathSeparator)));
         }
+
         return elements.distinct().collect(Collectors.joining(File.pathSeparator));
+    }
+
+    private static String collectJavaClasspath() {
+        Path libdir = Config.HOME_DIR.resolve("lib");
+        PathMatcher matcher = libdir.getFileSystem().getPathMatcher("glob:*.jar");
+        try (Stream<Path> files = Files.find(libdir, 1, (f, a) -> matcher.matches(f.getFileName()))) {
+            return files.map(Path::toString).collect(Collectors.joining(File.pathSeparator));
+        } catch (IOException ex) {
+            return "";
+        }
     }
 
     /**

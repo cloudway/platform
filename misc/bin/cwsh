@@ -1,8 +1,70 @@
 #!/usr/bin/python -tt
 
-import sys, os
+import sys, os, glob, re
+
+env_re = re.compile('^[A-Z][A-Z_0-9]*$')
+basedir = os.path.dirname(os.path.dirname(sys.argv[0]))
+
+def load_env(dir):
+    for entry in glob.glob(os.path.expanduser(os.path.join(dir, '*'))):
+        if os.path.isdir(entry):
+            load_env(os.path.join(dir, entry))
+            continue
+
+        var_name = os.path.basename(entry)
+        if env_re.match(var_name) == None:
+            continue
+
+        with open(entry, 'r') as file:
+            contents = file.read().rstrip()
+            # remove null's which are illegal in environment variables
+            os.environ[var_name] = ''.join(contents.split('\0'))
+
+def load_env_all():
+    load_env('/etc/cloudway/env')
+    load_env('~/.env')
+    load_env('~/*/env')
+
+    os.environ['CLOUDWAY_HOME'] = basedir
+    os.environ['PATH'] = ':'.join(collect_path_elements(os.environ, 'PATH'))
+    os.environ['LD_LIBRARY_PATH'] = ':'.join(collect_path_elements(os.environ, 'LD_LIBRARY_PATH'))
+    os.environ['CLOUDWAY_CLASSPATH'] = collect_classpath()
+
+def collect_path_elements(env, var_name):
+    app_env = dict(env)
+    system_path = app_env[var_name] if var_name in app_env else False
+
+    # Remove all LD_LIBRARY_PATH_ELEMENTs to avoid conflict with PATH
+    if var_name == 'PATH':
+        regex = re.compile(r'_LD_LIBRARY_PATH_ELEMENT$')
+        for k in app_env.keys():
+            if regex.search(k):
+                app_env.pop(k)
+
+    elements = []
+    for name in app_env.keys():
+        regex = re.compile(r'CLOUDWAY_.*_%s_ELEMENT' % var_name)
+        if regex.search(name):
+            elements.append(app_env[name])
+
+    if system_path:
+        elements.append(system_path)
+
+    if var_name == 'PATH':
+        elements.append(os.path.join(basedir, 'bin'))
+
+    return elements
+
+def collect_classpath():
+    return ':'.join(glob.glob(os.path.join(basedir, 'lib', '*.jar')))
 
 if __name__ == '__main__':
+    load_env_all()
+
+    prog  = sys.argv[0]
+    cmd   = ['/bin/bash']
+    cmd_i = ['/bin/bash', '--init-file', '/etc/cloudway/bashrc', '-i']
+
     # Determine the command source
     #
     # There are two possible command sources:
@@ -12,10 +74,6 @@ if __name__ == '__main__':
     # 2) Authenticate with other means
     #    Get command and args from sys.argv
     #
-
-    prog = sys.argv[0]
-    cmd = ['/bin/bash', '--init-file', '/etc/cloudway/bashrc']
-
     orig_cmd = os.environ.get('SSH_ORIGINAL_COMMAND')
     if orig_cmd != None:
         # extract the command which was replaced by SSH auth key command
@@ -29,13 +87,13 @@ if __name__ == '__main__':
             # the final command in a single string
             if allargs[2] == prog:
                 # avoid recursion, drop to shell
-                cmd.append('-i')
+                cmd = cmd_i
             else:
                 cmd.append('-c')
                 cmd.append(allargs[2:])
         else:
             if len(allargs) == 1:
-                cmd.append('-i')
+                cmd = cmd_i
             else:
                 cmd.append('-c')
                 cmd.append(' '.join(allargs[1:]))
