@@ -12,12 +12,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Exec;
@@ -89,6 +91,10 @@ public class ApplicationContainer
         Passwd pwent = pwent(uuid).orElseThrow(
             () -> new IllegalArgumentException("Not a cloudway guest: " + uuid));
 
+        if (posix.getuid() != 0 && posix.getuid() != pwent.getUID()) {
+            throw new IllegalArgumentException("Access denied");
+        }
+
         Path envdir = Paths.get(pwent.getHome(), ".env");
         Map<String,String> env = Environ.load(envdir, "CLOUDWAY_APP_{NAME,DNS,SIZE}*");
 
@@ -108,7 +114,7 @@ public class ApplicationContainer
     }
 
     static Optional<Passwd> pwent(String uuid) {
-        Passwd pwent = posix.getpwnam(uuid);
+        Passwd pwent = posix.getpwnam(Objects.requireNonNull(uuid));
         if (pwent == null || !GECOS.equals(pwent.getGECOS())) {
             return Optional.empty();
         } else {
@@ -125,29 +131,36 @@ public class ApplicationContainer
      * for every cloudway guest in the system.
      */
     public static Collection<String> uuids() {
-        List<String> uuids = new ArrayList<>();
+        int uid = posix.getuid();
 
-        try {
-            for (Passwd pwent = posix.getpwent(); pwent != null; pwent = posix.getpwent()) {
-                if (GECOS.equals(pwent.getGECOS()) && Files.exists(Paths.get(pwent.getHome()))) {
-                    uuids.add(pwent.getLoginName());
-                }
+        if (uid != 0) {
+            Passwd pwent = posix.getpwuid(uid);
+            if (pwent != null && GECOS.equals(pwent.getGECOS()) && Files.exists(Paths.get(pwent.getHome()))) {
+                return Collections.singleton(pwent.getLoginName());
+            } else {
+                return Collections.emptyList();
             }
-        } finally {
-            posix.endpwent();
+        } else {
+            try {
+                List<String> uuids = new ArrayList<>();
+                for (Passwd pwent = posix.getpwent(); pwent != null; pwent = posix.getpwent()) {
+                    if (GECOS.equals(pwent.getGECOS()) && Files.exists(Paths.get(pwent.getHome()))) {
+                        uuids.add(pwent.getLoginName());
+                    }
+                }
+                return uuids;
+            } finally {
+                posix.endpwent();
+            }
         }
-
-        return uuids;
     }
 
     /**
      * Returns a Collection which provides a list of ApplicationContainer
      * objects for every cloudway guest in the system.
      */
-    public static Collection<ApplicationContainer> all() {
-        return uuids().stream()
-            .map(ApplicationContainer::fromUuid)
-            .collect(Collectors.toList());
+    public static Stream<ApplicationContainer> all() {
+        return uuids().stream().map(ApplicationContainer::fromUuid);
     }
 
     public String getUuid() {
@@ -214,18 +227,38 @@ public class ApplicationContainer
         return getAppDir().resolve("data");
     }
 
+    private static final Pattern RE_UUID = Pattern.compile("^[a-z0-9]+$");
+    private static final Pattern RE_NAME = Pattern.compile("^[a-z][a-z_0-9]*$");
+
     /**
      * Create a container.
      */
     public static ApplicationContainer create(String uuid, String name, String namespace, String capacity)
         throws IOException
     {
-        ApplicationContainer container =
-            new ApplicationContainer(Objects.requireNonNull(uuid),
-                                     Objects.requireNonNull(name),
-                                     Objects.requireNonNull(namespace),
-                                     Objects.requireNonNull(capacity),
-                                     null);
+        Objects.requireNonNull(uuid);
+        Objects.requireNonNull(name);
+        Objects.requireNonNull(namespace);
+        Objects.requireNonNull(capacity);
+
+        if (!RE_UUID.matcher(uuid).matches()) {
+            throw new IllegalArgumentException("Invalid UUID");
+        }
+        if (uuids().contains(uuid)) {
+            throw new IllegalStateException("Application container \"" + uuid + "\" already exists");
+        }
+
+        if (!RE_NAME.matcher(name).matches() || !RE_NAME.matcher(namespace).matches()) {
+            throw new IllegalArgumentException("The name and namespace can only contains " +
+                                               "lower case letters, digits, or underscore");
+        }
+
+        String fqdn = name + "-" + namespace + "." + DOMAIN;
+        if (all().anyMatch(c -> fqdn.equals(c.getDomainName()))) {
+            throw new IllegalStateException("Domain name \"" + fqdn + "\" already exists");
+        }
+
+        ApplicationContainer container = new ApplicationContainer(uuid, name, namespace, capacity, null);
         container.plugin.create();
         container.setState(ApplicationState.NEW);
         return container;
@@ -246,7 +279,10 @@ public class ApplicationContainer
      * Sets the application state to "started" and starts the guest.
      */
     public void start() throws IOException {
-        plugin.start();
+        if (posix.getuid() == 0) {
+            plugin.start();
+        }
+
         start_guest();
         setState(ApplicationState.STARTED);
     }
@@ -280,7 +316,7 @@ public class ApplicationContainer
         addons.stop();
 
         // force to stop all guest processes
-        if (force) {
+        if (force && posix.getuid() == 0) {
             plugin.stop(term_delay, unit);
         }
     }
@@ -292,7 +328,7 @@ public class ApplicationContainer
         Objects.requireNonNull(new_state);
         Path state_file = state_file();
         FileUtils.write(state_file, new_state.name());
-        plugin.setFileReadOnly(state_file);
+        plugin.setFileReadWrite(state_file);
     }
 
     /**
@@ -314,16 +350,6 @@ public class ApplicationContainer
      * Cleans up the guest, providing any installed addons with the
      * opportunity to perform their own cleanup operations via the
      * tidy hook.
-     *
-     * The generic guest-level cleanup flow is:
-     * * Stop the guest
-     * * Guest temp dir cleanup
-     * * Addon tidy hook executions
-     * * Git cleanup
-     * * Start the guest
-     *
-     * Raises an Exception if an internal error occurs, and ignores
-     * failed addon tidy hook executions.
      */
     public void tidy() throws IOException {
         boolean running = getState() == ApplicationState.STARTED;
@@ -332,12 +358,11 @@ public class ApplicationContainer
             stop_guest(false, 0, null);
         }
 
-        // Perform the guest- and addon- level tidy actions. At this point,
-        // the guest has been stopped; we'll attempt to start the guest
-        // no matter what tidy operations fail.
         try {
             // clear out the temp dir
-            FileUtils.emptyDirectory(home_dir.resolve(".tmp"));
+            if (posix.getuid() == 0) {
+                FileUtils.emptyDirectory(home_dir.resolve(".tmp"));
+            }
 
             // Delegate to addon control to perform addon-level tidy operations
             // for all installed addons.
@@ -355,14 +380,13 @@ public class ApplicationContainer
     /**
      * Install an add-on.
      *
-     * @param name the add-on name
      * @param source the add-on source, a directory or an archive file
-     * @param templateUrl the template URL used to populate repository
+     * @param repoUrl the URL used to populate repository
      */
-    public void install(String name, Path source, String templateUrl)
+    public void install(Path source, String repoUrl)
         throws IOException
     {
-        addons.install(name, source, templateUrl);
+        addons.install(source, repoUrl);
     }
 
     /**
@@ -372,6 +396,33 @@ public class ApplicationContainer
      */
     public void remove(String name) throws IOException {
         addons.remove(name);
+    }
+
+    /**
+     * Called by Git pre-receive hook.
+     */
+    public void pre_receive() throws IOException {
+        // TODO
+    }
+
+    /**
+     * Called by Git post-receive hook.
+     */
+    public void post_receive() throws IOException {
+        boolean running = getState() == ApplicationState.STARTED;
+
+        if (running) {
+            stop_guest(false, 0, null);
+        }
+
+        try {
+            ApplicationRepository repo = ApplicationRepository.newInstance(this);
+            repo.checkout(getRepoDir());
+        } finally {
+            if (running) {
+                start_guest();
+            }
+        }
     }
 
     /**

@@ -7,6 +7,7 @@
 package com.cloudway.platform.container;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -21,18 +22,23 @@ import com.cloudway.platform.common.util.FileUtils;
 public class Addon
 {
     private final ApplicationContainer container;
-    private final Path path;
+    private Path path;
+    private String shortName;
+    private String displayName;
     private AddonType type;
-    private final List<Endpoint> endpoints = new ArrayList<>();
+    private List<Endpoint> endpoints = new ArrayList<>();
     private Exception failure;
 
     public static boolean isAddonDirectory(Path dir) {
-        return Files.exists(FileUtils.join(dir, "metadata", "addon.xml"));
+        try {
+            return !Files.isHidden(dir) && Files.exists(FileUtils.join(dir, "metadata", "addon.xml"));
+        } catch (IOException ex) {
+            return false;
+        }
     }
 
     public static Addon load(ApplicationContainer container, Path path) {
         Addon addon = new Addon(container, path);
-        String shortName = addon.getName().toUpperCase();
         Map<String, String> env = Environ.loadAll(container);
 
         Path file = FileUtils.join(path, "metadata", "addon.xml");
@@ -41,12 +47,14 @@ public class Addon
                 (com.cloudway.platform.container.schema.addon.Addon)
                 com.cloudway.platform.container.schema.addon.Addon.unmarshal(reader);
 
+            addon.shortName = metadata.getName();
+            addon.displayName = metadata.getDisplayName();
             addon.type = AddonType.valueOf(metadata.getCategory().toUpperCase());
 
             Stream.of(metadata.getEndpoint()).forEach(ep -> {
                 Endpoint endpoint = new Endpoint(
-                    "CLOUDWAY_" + shortName + "_" + ep.getPrivateIpName(),
-                    "CLOUDWAY_" + shortName + "_" + ep.getPrivatePortName()
+                    ("CLOUDWAY_" + addon.shortName + "_" + ep.getPrivateIpName()).toUpperCase(),
+                    ("CLOUDWAY_" + addon.shortName + "_" + ep.getPrivatePortName()).toUpperCase()
                 );
                 endpoint.setPrivateIP(env.get(endpoint.getPrivateIPName()));
                 endpoint.setPrivatePort(ep.getPrivatePort());
@@ -70,8 +78,16 @@ public class Addon
         return path;
     }
 
+    public void setPath(Path path) {
+        this.path = path;
+    }
+
     public String getName() {
-        return path.getFileName().toString();
+        return shortName;
+    }
+
+    public String getDisplayName() {
+        return displayName;
     }
 
     public AddonType getType() {

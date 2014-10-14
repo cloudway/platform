@@ -84,25 +84,23 @@ public class AddonControl
             .findFirst();
     }
 
-    public void install(String name, Path source, String templateUrl)
+    public void install(Path source, String repo)
         throws IOException
     {
-        Map<String, Addon> addons = addons(); // may load already installed addons
-        Path target = container.getHomeDir().resolve(name);
+        Addon addon;
 
-        if (addons.containsKey(name) || Files.exists(target))
-            throw new IllegalStateException("Addon already installed: " + name);
-        if (getFrameworkAddon().isPresent())
-            throw new IllegalStateException("A framework addon already installed");
+        if (Files.isDirectory(source)) {
+            addon = installFromDirectory(source, true);
+        } else if (Files.isRegularFile(source)) {
+            addon = installFromArchive(source);
+        } else {
+            throw new IOException("Invalid addon file: " + source);
+        }
+
+        String name = addon.getName();
+        Path target = addon.getPath();
 
         try {
-            // copy source files into target
-            installFiles(source.toRealPath(), target);
-
-            // load addon metadata
-            Addon addon = Addon.load(container, target);
-            addon.validate();
-
             // add environment variables
             addAddonEnvVar(target, name + "_DIR", target.toString(), true);
             if (addon.getType() == AddonType.FRAMEWORK) {
@@ -126,12 +124,12 @@ public class AddonControl
 
             // initialize repository and proxy mappings for framework addon
             if (addon.getType() == AddonType.FRAMEWORK) {
-                populateRepository(target, templateUrl);
+                populateRepository(target, repo);
                 addProxyMappings(addon);
             }
 
             // put addon into cache
-            addons.put(name, addon);
+            addons().put(name, addon);
         } catch (IOException|RuntimeException|Error ex) {
             FileUtils.deleteTree(target);
             throw ex;
@@ -199,15 +197,49 @@ public class AddonControl
         control_all("tidy", false);
     }
 
-    private void installFiles(Path source, Path target)
+    private Addon installFromDirectory(Path source, boolean copy)
         throws IOException
     {
-        if (Files.isDirectory(source)) {
+        // load addon metadata from source directory
+        Addon addon = Addon.load(container, source);
+        addon.validate();
+
+        String name = addon.getName();
+        Path target = container.getHomeDir().resolve(name);
+
+        if (addons().containsKey(name) || Files.exists(target))
+            throw new IllegalStateException("Addon already installed: " + name);
+        if (addon.getType() == AddonType.FRAMEWORK && getFrameworkAddon().isPresent())
+            throw new IllegalStateException("A framework addon already installed");
+
+        // copy or move files from source to target
+        if (copy) {
             copydir(source, target);
         } else {
-            extract(source, target);
+            Files.move(source, target);
         }
+
         container.setFileTreeReadWrite(target);
+        addon.setPath(target);
+
+        return addon;
+    }
+
+    private Addon installFromArchive(Path source)
+        throws IOException
+    {
+        Path tmpdir = Files.createTempDirectory(container.getHomeDir().resolve(".tmp"), "tmp");
+        FileUtils.chmod(tmpdir, 0750);
+
+        try {
+            // extract archive into temporary directory and load addon from it
+            extract(source, tmpdir);
+            return installFromDirectory(tmpdir, false);
+        } finally {
+            if (Files.exists(tmpdir)) {
+                FileUtils.deleteTree(tmpdir);
+            }
+        }
     }
 
     private void copydir(Path source, Path target)
@@ -249,14 +281,13 @@ public class AddonControl
         throws IOException
     {
         String name = source.getFileName().toString();
-        FileUtils.mkdir(target);
 
         if (name.endsWith(".zip")) {
             Exec.args("unzip", "-d", target, source)
                 .silentIO()
                 .checkError()
                 .run();
-        } else if (name.endsWith(".tar.gz") && name.endsWith(".tgz")) {
+        } else if (name.endsWith(".tar.gz") || name.endsWith(".tgz")) {
             Exec.args("tar", "-C", target, "-xzpf", source)
                 .silentIO()
                 .checkError()

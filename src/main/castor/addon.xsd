@@ -14,7 +14,7 @@
     </xsd:annotation>
     <xsd:complexType>
       <xsd:sequence>
-        <xsd:element name="name" type="xsd:string" />
+        <xsd:element name="name" type="short-nameType" />
         <xsd:element name="display-name" type="xsd:string" />
         <xsd:element name="description" type="xsd:string" minOccurs="0" />
         <xsd:element name="version" type="xsd:string" />
@@ -27,6 +27,12 @@
       </xsd:sequence>
     </xsd:complexType>
   </xsd:element>
+
+  <xsd:simpleType name="short-nameType">
+    <xsd:restriction base="xsd:string">
+      <xsd:pattern value="[a-z][a-z0-9]*" />
+    </xsd:restriction>
+  </xsd:simpleType>
 
   <xsd:simpleType name="categoryType">
     <xsd:restriction base="xsd:token">

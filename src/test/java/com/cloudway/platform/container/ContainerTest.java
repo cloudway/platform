@@ -11,10 +11,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import com.cloudway.platform.common.AuthorizedKey;
@@ -54,7 +54,7 @@ public class ContainerTest
         boolean keep = Boolean.getBoolean("container.keep");
 
         // destroy all application containers
-        ApplicationContainer.all().stream()
+        ApplicationContainer.all()
             .filter(c -> !(keep && uuid.equals(c.getUuid())))
             .forEach(log(ApplicationContainer::destroy));
     }
@@ -111,15 +111,8 @@ public class ContainerTest
 
         if (source != null) {
             Path path = Paths.get(source).toAbsolutePath();
-            String name = path.getFileName().toString();
-            if (name.endsWith(".zip") || name.endsWith(".jar") || name.endsWith(".tar") || name.endsWith(".tgz")) {
-                name = name.substring(0, name.length() - 4);
-            } else if (name.endsWith(".tar.gz")) {
-                name = name.substring(0, name.length() - 7);
-            }
-
             assertEquals(ApplicationState.NEW, container.getState());
-            container.install(name, path, repo);
+            container.install(path, repo);
             assertEquals(ApplicationState.NEW, container.getState());
             container.start();
             assertEquals(ApplicationState.STARTED, container.getState());
@@ -139,7 +132,7 @@ public class ContainerTest
     }
 
     private static String mkappname() {
-        Collection<ApplicationContainer> all = ApplicationContainer.all();
+        List<ApplicationContainer> all = ApplicationContainer.all().collect(Collectors.toList());
         return IntStream.range(0, 1000)
             .mapToObj(i -> "test" + (i == 0 ? "" : String.valueOf(i)))
             .filter(n -> !all.stream().anyMatch(a -> n.equals(a.getName())))

@@ -457,8 +457,4 @@ public final class Exec
     private static void joinIt(Thread t) {
         try { t.join(); } catch (InterruptedException ex) {}
     }
-
-    public static void main(String args[]) throws IOException {
-        Exec.args(args).inheritIO().run();
-    }
 }

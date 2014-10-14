@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 import static java.lang.String.format;
 
+import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 
@@ -81,17 +82,15 @@ class GitRepository implements ApplicationRepository
      * Copy a file tree structure and build an application repository.
      */
     private void buildFromTemplate(Path template) throws IOException {
-        Path tmpdir = git_dir.resolve("template");
-        FileUtils.deleteTree(tmpdir);
-        FileUtils.copyTree(template, tmpdir);
+        Path tmp_dir = git_dir.resolve("template");
+        FileUtils.deleteTree(tmp_dir);
+        FileUtils.copyTree(template, tmp_dir);
 
         try {
-            Exec.args("/bin/sh", "-c", GIT_INIT)
-                .directory(tmpdir).silentIO().checkError().run();
-            Exec.args("/bin/sh", "-c", format(GIT_CLONE, "template", repo_name))
-                .directory(git_dir).silentIO().checkError().run();
+            exec(tmp_dir, "/bin/sh", "-c", format(GIT_INIT, ApplicationContainer.DOMAIN));
+            exec(git_dir, "/bin/sh", "-c", format(GIT_CLONE, "template", repo_name));
         } finally {
-            FileUtils.deleteTree(tmpdir);
+            FileUtils.deleteTree(tmp_dir);
         }
     }
 
@@ -126,8 +125,7 @@ class GitRepository implements ApplicationRepository
         String command = ref == null
                 ? format(GIT_CLONE,     url, repo_name)
                 : format(GIT_URL_CLONE, url, repo_name, ref);
-        Exec.args("/bin/sh", "-c", command)
-            .directory(git_dir).silentIO().checkError().run();
+        exec(git_dir, "/bin/sh", "-c", command);
         configure();
     }
 
@@ -137,34 +135,36 @@ class GitRepository implements ApplicationRepository
         }
 
         FileUtils.mkdir(repo_dir);
-        Exec.args("/bin/sh", "-c", GIT_INIT_BARE)
-            .directory(repo_dir).silentIO().checkError().run();
+        exec(repo_dir, "/bin/sh", "-c", GIT_INIT_BARE);
         configure();
     }
 
     public void checkout(Path target)
         throws IOException
     {
-        if (!exists()) {
-            return;
+        if (exists()) {
+            FileUtils.emptyDirectory(target);
+            execInContext(repo_dir, "/bin/sh", "-c", format(GIT_CHECKOUT, target));
         }
-
-        FileUtils.emptyDirectory(target);
-        container.join(Exec.args("/bin/sh", "-c", format(GIT_CHECKOUT, target)))
-                 .directory(repo_dir).silentIO().checkError().run();
     }
 
     public void tidy() throws IOException {
         if (exists()) {
-            container.join(Exec.args("git", "prune"))
-                     .directory(repo_dir).silentIO().checkError().run();
-            container.join(Exec.args("git", "gc", "--aggressive"))
-                     .directory(repo_dir).silentIO().checkError().run();
+            execInContext(repo_dir, "git", "prune");
+            execInContext(repo_dir, "git", "gc", "--aggressive");
         }
     }
 
     public void destroy() throws IOException {
         FileUtils.deleteTree(repo_dir);
+    }
+
+    private void exec(Path dir, String... args) throws IOException {
+        Exec.args(args).directory(dir).silentIO().checkError().run();
+    }
+
+    private void execInContext(Path dir, String... args) throws IOException {
+        container.join(Exec.args(args)).directory(dir).silentIO().checkError().run();
     }
 
     /**
@@ -176,8 +176,9 @@ class GitRepository implements ApplicationRepository
         FileUtils.write(container.getHomeDir().resolve(".gitconfig"), GIT_CONFIG);
 
         Path hooks = repo_dir.resolve("hooks");
-        addHook(hooks, "pre-receive", GIT_PRE_RECEIVE);
-        addHook(hooks, "post-receive", GIT_POST_RECEIVE);
+        String bin = Config.HOME_DIR.resolve("bin").toString();
+        addHook(hooks, "pre-receive",  format("%s/cwctl pre-receive%n",  bin));
+        addHook(hooks, "post-receive", format("%s/cwctl post-receive%n", bin));
         container.setFileTreeReadOnly(hooks);
     }
 
@@ -193,6 +194,8 @@ class GitRepository implements ApplicationRepository
         "set -xe;" +
         "git init;" +
         "git config core.logAllRefUpdates true;" +
+        "git config user.email \"guest@%1$s\"\n" +
+        "git config user.name \"Cloudway Guest\"\n" +
         "git add -f .;" +
         "git commit -a -m \"Creating template\";";
 
@@ -224,12 +227,7 @@ class GitRepository implements ApplicationRepository
 
     private static final String GIT_CONFIG =
         "[user]\n" +
-        "  name = Cloudway User\n" +
+        "  name = Cloudway Guest\n" +
         "[gc]\n" +
         "  auto = 100\n";
-
-    private static final String GIT_PRE_RECEIVE =
-        "echo placeholder for git pre-receive\n";
-    private static final String GIT_POST_RECEIVE =
-        "echo placeholder for git post-receive\n";
 }
