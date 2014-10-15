@@ -87,8 +87,7 @@ public class Environ
 
     private static String collectJavaClasspath() {
         Path libdir = Config.HOME_DIR.resolve("lib");
-        PathMatcher matcher = libdir.getFileSystem().getPathMatcher("glob:*.jar");
-        try (Stream<Path> files = Files.find(libdir, 1, (f, a) -> matcher.matches(f.getFileName()))) {
+        try (Stream<Path> files = FileUtils.find(libdir, 1, "*.jar")) {
             return files.map(Path::toString).collect(Collectors.joining(File.pathSeparator));
         } catch (IOException ex) {
             return "";

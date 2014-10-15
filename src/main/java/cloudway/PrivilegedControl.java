@@ -45,7 +45,7 @@ public class PrivilegedControl extends Control
                                   c.getUuid(), c.getName(), c.getDomainName());
             });
         } else {
-            command("info", args, this::showInfo);
+            command("info", args, false, this::showInfo);
         }
     }
 
@@ -60,21 +60,21 @@ public class PrivilegedControl extends Control
 
     @Command("Start application container(s)")
     public void start(String[] args) throws IOException {
-        command("start", args, ApplicationContainer::start);
+        command("start", args, true, ApplicationContainer::start);
     }
 
     @Command("Stop application container(s)")
     public void stop(String[] args) throws IOException {
-        command("stop", args, ApplicationContainer::stop);
+        command("stop", args, true, ApplicationContainer::stop);
     }
 
 
     @Command("Destroy application container(s)")
     public void destroy(String[] args) throws IOException {
-        command("destroy", args, ApplicationContainer::destroy);
+        command("destroy", args, true, ApplicationContainer::destroy);
     }
 
-    private void command(String name, String[] args, IO.Consumer<ApplicationContainer> action)
+    private void command(String name, String[] args, boolean parallel, IO.Consumer<ApplicationContainer> action)
         throws IOException
     {
         if (args.length == 0) {
@@ -83,7 +83,7 @@ public class PrivilegedControl extends Control
         }
 
         if (args.length == 1 && "all".equals(args[0])) {
-            IO.forEach(ApplicationContainer.all(), action);
+            IO.forEach(ApplicationContainer.all(parallel), action);
         } else {
             IO.forEach(Stream.of(args), key -> do_action(key, action));
         }

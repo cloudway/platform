@@ -25,10 +25,12 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
+import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ResourceLimits;
+import jnr.constants.platform.Signal;
 
 public class LinuxContainerPlugin extends UnixContainerPlugin
 {
@@ -260,7 +262,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
                     return;
                 } else {
                     try {
-                        Arrays.stream(pids).forEach(pid -> posix.kill(pid, 9));
+                        Arrays.stream(pids).forEach(pid -> Etc.kill(pid, Signal.SIGKILL));
                         cg.thaw();
                         Thread.sleep(100);
                         cg.freeze();
@@ -338,18 +340,20 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     }
 
     private static Path get_mountpoint(Path path) {
-        Path oldpath = path.toAbsolutePath();
-        long olddev = posix.lstat(oldpath.toString()).dev();
+        return Etc.do_posix(posix -> {
+            Path oldpath = path.toAbsolutePath();
+            long olddev = posix.lstat(oldpath.toString()).dev();
 
-        while (true) {
-            Path newpath = oldpath.getParent();
-            if (newpath == null || newpath.equals(oldpath) ||
-                olddev != posix.lstat(newpath.toString()).dev()) {
-                break;
+            while (true) {
+                Path newpath = oldpath.getParent();
+                if (newpath == null || newpath.equals(oldpath) ||
+                    olddev != posix.lstat(newpath.toString()).dev()) {
+                    break;
+                }
+                oldpath = newpath;
             }
-            oldpath = newpath;
-        }
-        return oldpath;
+            return oldpath;
+        });
     }
 
     // PAM resource limits
@@ -395,7 +399,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     // TODO: we can use a C program to perform the following process
     @Override
     public Exec join(Exec exec) throws IOException {
-        if (posix.getuid() != container.getUID()) {
+        if (Etc.getuid() != container.getUID()) {
             String cmd = exec.command().stream()
                 .map(arg -> arg.isEmpty() ? "''" :
                             arg.indexOf(' ') != -1 ? "\\\"" + arg + "\\\"" :

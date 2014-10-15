@@ -16,9 +16,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ContainerPlugin;
@@ -26,17 +29,14 @@ import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.AuthorizedKey;
-import jnr.posix.POSIX;
-import jnr.posix.POSIXFactory;
 
 /**
  * Generic UNIX container plugin.
  */
 public class UnixContainerPlugin extends ContainerPlugin
 {
-    protected static final POSIX posix = POSIXFactory.getPOSIX();
-
-    private static final Object create_lock = new Object();
+    private static final Path create_lock_file = Config.LOCK_DIR.resolve("create.lck");
+    private static final Lock create_lock = new ReentrantLock();
 
     public UnixContainerPlugin(ApplicationContainer container) {
         super(container);
@@ -47,13 +47,12 @@ public class UnixContainerPlugin extends ContainerPlugin
         Config config = Config.getDefault();
         int min_uid = config.getInt("GUEST_MIN_UID", 1000);
         int max_uid = config.getInt("GUEST_MAX_UID", 2000);
-        int uid;
 
         // Synchronized to prevent race condition on obtaining a UNIX user uid.
-        synchronized (create_lock) {
+        FileUtils.flock(create_lock_file, create_lock, () -> {
             // Determine next available user id
-            uid = IntStream.rangeClosed(min_uid, max_uid)
-                .filter(i -> posix.getpwuid(i) == null && posix.getgrgid(i) == null)
+            int uid = IntStream.rangeClosed(min_uid, max_uid)
+                .filter(i -> Etc.getpwuid(i) == null && Etc.getgrgid(i) == null)
                 .findFirst()
                 .getAsInt(); // XXX may throw NoSuchElementException
 
@@ -65,10 +64,10 @@ public class UnixContainerPlugin extends ContainerPlugin
                        ApplicationContainer.SHELL,
                        ApplicationContainer.GECOS,
                        config.get("GUEST_SUPPLEMENTARY_GROUPS"));
-        }
 
-        container.setUID(uid);
-        container.setGID(uid);
+            container.setUID(uid);
+            container.setGID(uid);
+        });
     }
 
     protected void createUser(String uuid, int uid, Path home, String skel, String shell, String gecos, String groups)

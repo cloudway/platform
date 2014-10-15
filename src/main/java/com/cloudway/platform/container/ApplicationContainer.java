@@ -22,11 +22,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
+import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
-import jnr.posix.POSIX;
-import jnr.posix.POSIXFactory;
-import jnr.posix.Passwd;
 
 public class ApplicationContainer
 {
@@ -40,8 +38,6 @@ public class ApplicationContainer
 
     private ContainerPlugin plugin;
     private AddonControl addons;
-
-    private static final POSIX posix = POSIXFactory.getPOSIX();
 
     public static final String GECOS, SHELL, DOMAIN;
     public static final String DEFAULT_CAPACITY;
@@ -62,17 +58,17 @@ public class ApplicationContainer
      * @param namespace the namespace used for proxy
      * @param pwent the passwd entry for the guest
      */
-    private ApplicationContainer(String uuid, String name, String namespace, String capacity, Passwd pwent) {
+    private ApplicationContainer(String uuid, String name, String namespace, String capacity, Etc.PASSWD pwent) {
         this.uuid = uuid;
         this.name = name;
         this.namespace = namespace;
         this.capacity = capacity != null ? capacity : DEFAULT_CAPACITY;
 
         if (pwent != null) {
-            this.uid = (int)pwent.getUID();
-            this.gid = (int)pwent.getGID();
-            this.home_dir = Paths.get(pwent.getHome());
-            this.shell = pwent.getShell();
+            this.uid = pwent.pw_uid;
+            this.gid = pwent.pw_gid;
+            this.home_dir = Paths.get(pwent.pw_dir);
+            this.shell = pwent.pw_shell;
         } else {
             this.home_dir = Config.VAR_DIR.resolve(uuid);
             this.shell = SHELL;
@@ -88,14 +84,14 @@ public class ApplicationContainer
      * @param uuid the guest uuid
      */
     public static ApplicationContainer fromUuid(String uuid) {
-        Passwd pwent = pwent(uuid).orElseThrow(
+        Etc.PASSWD pwent = pwent(uuid).orElseThrow(
             () -> new IllegalArgumentException("Not a cloudway guest: " + uuid));
 
-        if (posix.getuid() != 0 && posix.getuid() != pwent.getUID()) {
+        if (Etc.getuid() != 0 && Etc.getuid() != pwent.pw_uid) {
             throw new IllegalArgumentException("Access denied");
         }
 
-        Path envdir = Paths.get(pwent.getHome(), ".env");
+        Path envdir = Paths.get(pwent.pw_dir, ".env");
         Map<String,String> env = Environ.load(envdir, "CLOUDWAY_APP_{NAME,DNS,SIZE}*");
 
         String appname  = env.get("CLOUDWAY_APP_NAME");
@@ -113,9 +109,9 @@ public class ApplicationContainer
         return new ApplicationContainer(uuid, appname, namespace, capacity, pwent);
     }
 
-    static Optional<Passwd> pwent(String uuid) {
-        Passwd pwent = posix.getpwnam(Objects.requireNonNull(uuid));
-        if (pwent == null || !GECOS.equals(pwent.getGECOS())) {
+    static Optional<Etc.PASSWD> pwent(String uuid) {
+        Etc.PASSWD pwent = Etc.getpwnam(Objects.requireNonNull(uuid));
+        if (pwent == null || !GECOS.equals(pwent.pw_gecos)) {
             return Optional.empty();
         } else {
             return Optional.of(pwent);
@@ -131,36 +127,41 @@ public class ApplicationContainer
      * for every cloudway guest in the system.
      */
     public static Collection<String> uuids() {
-        int uid = posix.getuid();
+        int uid = Etc.getuid();
 
         if (uid != 0) {
-            Passwd pwent = posix.getpwuid(uid);
-            if (pwent != null && GECOS.equals(pwent.getGECOS()) && Files.exists(Paths.get(pwent.getHome()))) {
-                return Collections.singleton(pwent.getLoginName());
+            Etc.PASSWD pw = Etc.getpwuid(uid);
+            if (pw != null && GECOS.equals(pw.pw_gecos) && Files.exists(Paths.get(pw.pw_dir))) {
+                return Collections.singleton(pw.pw_name);
             } else {
                 return Collections.emptyList();
             }
         } else {
-            try {
-                List<String> uuids = new ArrayList<>();
-                for (Passwd pwent = posix.getpwent(); pwent != null; pwent = posix.getpwent()) {
-                    if (GECOS.equals(pwent.getGECOS()) && Files.exists(Paths.get(pwent.getHome()))) {
-                        uuids.add(pwent.getLoginName());
-                    }
+            List<String> uuids = new ArrayList<>();
+            Etc.getpwent(pw -> {
+                if (GECOS.equals(pw.pw_gecos) && Files.exists(Paths.get(pw.pw_dir))) {
+                    uuids.add(pw.pw_name);
                 }
-                return uuids;
-            } finally {
-                posix.endpwent();
-            }
+            });
+            return uuids;
         }
     }
 
     /**
-     * Returns a Collection which provides a list of ApplicationContainer
+     * Returns a parallel Stream which provides a list of ApplicationContainer
+     * objects for every cloudway guest in the system.
+     */
+    public static Stream<ApplicationContainer> all(boolean parallel) {
+        Stream<String> uuids = parallel ? uuids().parallelStream() : uuids().stream();
+        return uuids.map(ApplicationContainer::fromUuid);
+    }
+
+    /**
+     * Returns a Stream which provides a list of ApplicationContainer
      * objects for every cloudway guest in the system.
      */
     public static Stream<ApplicationContainer> all() {
-        return uuids().stream().map(ApplicationContainer::fromUuid);
+        return all(false);
     }
 
     public String getUuid() {
@@ -279,7 +280,7 @@ public class ApplicationContainer
      * Sets the application state to "started" and starts the guest.
      */
     public void start() throws IOException {
-        if (posix.getuid() == 0) {
+        if (Etc.getuid() == 0) {
             plugin.start();
         }
 
@@ -316,7 +317,7 @@ public class ApplicationContainer
         addons.stop();
 
         // force to stop all guest processes
-        if (force && posix.getuid() == 0) {
+        if (force && Etc.getuid() == 0) {
             plugin.stop(term_delay, unit);
         }
     }
@@ -360,7 +361,7 @@ public class ApplicationContainer
 
         try {
             // clear out the temp dir
-            if (posix.getuid() == 0) {
+            if (Etc.getuid() == 0) {
                 FileUtils.emptyDirectory(home_dir.resolve(".tmp"));
             }
 

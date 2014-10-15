@@ -9,17 +9,15 @@ package com.cloudway.platform.container.plugin;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.cloudway.platform.common.Config;
+import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ResourceLimits;
-import jnr.posix.POSIX;
-import jnr.posix.POSIXFactory;
 
 public class TrafficControl
 {
@@ -31,8 +29,6 @@ public class TrafficControl
     private static final int tc_user_share;
     private static final int tc_user_limit;
     private static final int tc_user_quantum;
-
-    private static final POSIX posix = POSIXFactory.getPOSIX();
 
     static {
         Config config = Config.getDefault();
@@ -49,9 +45,9 @@ public class TrafficControl
         throws IOException
     {
         List<Integer> uids = ApplicationContainer.uuids().stream()
-            .map(posix::getpwnam)
+            .map(Etc::getpwnam)
             .filter(Objects::nonNull)
-            .mapToInt(pwent -> (int)pwent.getUID())
+            .mapToInt(pwent -> pwent.pw_uid)
             .boxed()
             .collect(Collectors.toList());
 

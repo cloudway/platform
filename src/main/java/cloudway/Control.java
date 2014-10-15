@@ -11,19 +11,16 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.stream.Stream;
 
-import jnr.posix.POSIX;
-import jnr.posix.POSIXFactory;
+import com.cloudway.platform.common.util.Etc;
 
 /**
  * Entry point for application actions.
  */
 public abstract class Control
 {
-    protected static POSIX posix = POSIXFactory.getPOSIX();
-
     public static void main(String args[]) {
         Control control;
-        if (posix.getuid() == 0) {
+        if (Etc.getuid() == 0) {
             control = new PrivilegedControl();
         } else {
             control = new UserControl();

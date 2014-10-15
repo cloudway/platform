@@ -12,7 +12,6 @@ import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import static java.nio.file.StandardCopyOption.*;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -24,14 +23,13 @@ import java.util.Set;
 import java.util.stream.Stream;
 import static java.util.Collections.*;
 import static java.util.stream.Collectors.*;
+import static java.nio.file.StandardCopyOption.*;
 
+import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.IO;
-import jnr.constants.platform.Signal;
-import jnr.posix.POSIX;
-import jnr.posix.POSIXFactory;
-
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.FileUtils;
+import jnr.constants.platform.Signal;
 
 public class Cgroup
 {
@@ -432,10 +430,9 @@ public class Cgroup
         });
 
         // reload cgrules.conf
-        POSIX posix = POSIXFactory.getPOSIX();
         try (Stream<Task> ps = processes()) {
             ps.filter(p -> "cgrulesengd".equals(p.name))
-              .forEach(p -> posix.kill(p.pid, Signal.SIGUSR2.intValue()));
+              .forEach(p -> Etc.kill(p.pid, Signal.SIGUSR2));
         }
     }
 

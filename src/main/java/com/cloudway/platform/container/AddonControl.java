@@ -340,8 +340,7 @@ public class AddonControl
         throws IOException
     {
         // TODO: The template file pattern may be configured in the addon metadata
-        PathMatcher matcher = path.getFileSystem().getPathMatcher("glob:*" + TEMPLATE_EXT);
-        return Files.find(path, Integer.MAX_VALUE, (p,a) -> matcher.matches(p.getFileName()));
+        return FileUtils.find(path, Integer.MAX_VALUE, "*" + TEMPLATE_EXT);
     }
 
     private String[] getSharedFiles(Path source)

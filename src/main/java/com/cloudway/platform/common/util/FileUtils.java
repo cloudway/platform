@@ -23,6 +23,7 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.UserPrincipalLookupService;
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.concurrent.locks.Lock;
 import java.util.stream.Stream;
 
 import static java.nio.file.FileVisitResult.*;
@@ -235,17 +236,26 @@ public class FileUtils
     }
 
     /**
-     * Create a file lock for the duration of the provided block.
+     * <p>Create a file lock for the duration of the provided block.</p>
      *
-     * @param file path including file to use for locking
+     * <p>A local lock is also used because file lock cannot be overlapped
+     * in a Java virtual machine.</p>
+     *
+     * @param lock_file path including file to use for locking
+     * @param local_lock lock used for multi-threaded locking
      * @param action the block to run
      */
-    public static void flock(Path file, IO.Runnable action)
+    public static void flock(Path lock_file, Lock local_lock, IO.Runnable action)
         throws IOException
     {
-        try (FileChannel channel = FileChannel.open(file, READ, WRITE, CREATE, TRUNCATE_EXISTING)) {
-            channel.lock();
+        mkdir(lock_file.getParent());
+
+        local_lock.lock();
+        try (FileChannel file = FileChannel.open(lock_file, READ, WRITE, CREATE, TRUNCATE_EXISTING)) {
+            file.lock();
             action.run();
+        } finally {
+            local_lock.unlock();
         }
     }
 }
