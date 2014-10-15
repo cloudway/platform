@@ -33,36 +33,55 @@ public class UserControl extends Control
         System.out.println("State: " + container.getState());
     }
 
-    @Command("Start the application container")
-    public void start(String[] args)
-        throws IOException
-    {
+    @Command("Start the application")
+    public void start(String[] args) throws IOException {
         getContainer().start();
     }
 
-    @Command("Stop the application container")
-    public void stop(String[] args)
-        throws IOException
-    {
+    @Command("Stop the application")
+    public void stop(String[] args) throws IOException {
         getContainer().stop();
     }
 
+    @Command("Restart the application")
+    public void restart(String[] args) throws IOException {
+        getContainer().restart();
+    }
+
     @Command("Cleanup application data")
-    public void tidy(String[] args)
-        throws IOException
-    {
+    public void tidy(String[] args) throws IOException {
         getContainer().tidy();
     }
 
-    public void pre_receive(String[] args)
-        throws IOException
-    {
+    @Command("Install add-on into application")
+    public void install(String[] args) throws IOException {
+        if (args.length < 1 || args.length > 2) {
+            System.err.println("usage: cwctl install source [repo]");
+            System.exit(1);
+            return;
+        }
+
+        String source = args[1];
+        String repo   = args.length > 1 ? args[1] : null;
+        install(getContainer(), source, repo);
+    }
+
+    @Command("Uninstall add-on from application")
+    public void uninstall(String[] args) throws IOException {
+        if (args.length != 1) {
+            System.err.println("usage: cwctl uninstall name");
+            System.exit(1);
+            return;
+        }
+
+        getContainer().remove(args[0]);
+    }
+
+    public void pre_receive(String[] args) throws IOException {
         getContainer().pre_receive();
     }
 
-    public void post_receive(String[] args)
-        throws IOException
-    {
+    public void post_receive(String[] args) throws IOException {
         getContainer().post_receive();
     }
 }

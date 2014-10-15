@@ -6,15 +6,22 @@
 
 package cloudway;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.stream.Stream;
 
+import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Etc;
+import com.cloudway.platform.common.util.FileUtils;
+import com.cloudway.platform.container.ApplicationContainer;
 
 /**
- * Entry point for application actions.
+ * Entry point for application control commands.
  */
 public abstract class Control
 {
@@ -85,5 +92,24 @@ public abstract class Control
             }
         });
         System.err.println();
+    }
+
+    protected void install(ApplicationContainer container, String source, String repo)
+        throws IOException
+    {
+        Path source_path;
+        if (source.indexOf('/') != -1) {
+            source_path = Paths.get(source).toAbsolutePath().normalize();
+        } else {
+            source_path = FileUtils.join(Config.VAR_DIR, ".addons", source);
+        }
+
+        if (!Files.exists(source_path)) {
+            System.err.print(source + ": No such file or directory");
+            System.exit(2);
+            return;
+        }
+
+        container.install(source_path, repo);
     }
 }

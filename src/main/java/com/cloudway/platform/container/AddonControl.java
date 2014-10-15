@@ -193,6 +193,10 @@ public class AddonControl
         control_all("stop", true);
     }
 
+    public void restart() throws IOException {
+        control_all("restart", true);
+    }
+
     public void tidy() throws IOException {
         control_all("tidy", false);
     }
@@ -639,7 +643,7 @@ public class AddonControl
         }
     }
 
-    private void control_all(String action, boolean enable_action_hooks)
+    public void control_all(String action, boolean enable_action_hooks)
         throws IOException
     {
         Map<String, String> env = Environ.loadAll(container);

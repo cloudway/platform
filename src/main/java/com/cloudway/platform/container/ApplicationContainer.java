@@ -148,20 +148,11 @@ public class ApplicationContainer
     }
 
     /**
-     * Returns a parallel Stream which provides a list of ApplicationContainer
-     * objects for every cloudway guest in the system.
-     */
-    public static Stream<ApplicationContainer> all(boolean parallel) {
-        Stream<String> uuids = parallel ? uuids().parallelStream() : uuids().stream();
-        return uuids.map(ApplicationContainer::fromUuid);
-    }
-
-    /**
      * Returns a Stream which provides a list of ApplicationContainer
      * objects for every cloudway guest in the system.
      */
     public static Stream<ApplicationContainer> all() {
-        return all(false);
+        return uuids().stream().map(ApplicationContainer::fromUuid);
     }
 
     public String getUuid() {
@@ -294,6 +285,17 @@ public class ApplicationContainer
     public void stop() throws IOException {
         setState(ApplicationState.STOPPED);
         stop_guest(true, 0, null);
+    }
+
+    /**
+     * Restart the application container.
+     */
+    public void restart() throws IOException {
+        if (getState() == ApplicationState.STARTED) {
+            addons.restart();
+        } else {
+            start();
+        }
     }
 
     /**

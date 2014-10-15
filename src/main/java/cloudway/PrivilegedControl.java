@@ -68,6 +68,10 @@ public class PrivilegedControl extends Control
         command("stop", args, true, ApplicationContainer::stop);
     }
 
+    @Command("Restart application container(s)")
+    public void restart(String[] args) throws IOException {
+        command("restart", args, true, ApplicationContainer::restart);
+    }
 
     @Command("Destroy application container(s)")
     public void destroy(String[] args) throws IOException {
@@ -83,7 +87,8 @@ public class PrivilegedControl extends Control
         }
 
         if (args.length == 1 && "all".equals(args[0])) {
-            IO.forEach(ApplicationContainer.all(parallel), action);
+            Stream<ApplicationContainer> stream = ApplicationContainer.all();
+            IO.forEach(parallel ? stream.parallel() : stream, action);
         } else {
             IO.forEach(Stream.of(args), key -> do_action(key, action));
         }
@@ -122,10 +127,30 @@ public class PrivilegedControl extends Control
         }
     }
 
+    @SuppressWarnings("all")
+    private static Option[] CREATE_OPTIONS = {
+        OptionBuilder.withArgName("capacity")
+                     .withDescription("Application capacity (small,medium,large)")
+                     .hasArg()
+                     .create('c'),
+        OptionBuilder.withArgName("keyfile")
+                     .withDescription("SSH public key file")
+                     .hasArg()
+                     .create("k"),
+        OptionBuilder.withArgName("add-on")
+                     .withDescription("Add-on source location")
+                     .hasArg()
+                     .create('s'),
+        OptionBuilder.withArgName("repository")
+                     .withDescription("Repository URL")
+                     .hasArg()
+                     .create('r')
+    };
+
     @Command("Create a new application container")
     public void create(String[] args) throws IOException {
         Options options = new Options();
-        Stream.of(OPTIONS).forEach(options::addOption);
+        Stream.of(CREATE_OPTIONS).forEach(options::addOption);
 
         CommandLine cmd;
         try {
@@ -153,61 +178,29 @@ public class PrivilegedControl extends Control
             return;
         }
 
+        String uuid        = mkuuid();
         String name        = matcher.group(1);
         String namespace   = matcher.group(2);
         String capacity    = cmd.getOptionValue("c", "small");
-        String keyfile     = cmd.getOptionValue("k");
+        String keyfile     = loadKeyFile(cmd.getOptionValue("k"));
         String source      = cmd.getOptionValue("s");
         String repo        = cmd.getOptionValue("r");
-
-        String uuid        = mkuuid();
-        String pubkey      = loadKeyFile(keyfile);
-        Path   source_path = null;
-
-        if (source != null) {
-            source_path = Paths.get(source).toAbsolutePath();
-            if (!Files.exists(source_path)) {
-                System.err.println(source + ": No such file or directory");
-                System.exit(2);
-                return;
-            }
-        }
 
         ApplicationContainer container =
             ApplicationContainer.create(uuid, name, namespace, capacity);
 
-        if (pubkey != null) {
-            container.addAuthorizedKey("default", pubkey);
+        if (keyfile != null) {
+            container.addAuthorizedKey("default", keyfile);
         }
 
-        if (source_path != null) {
-            container.install(source_path, repo);
+        if (source != null) {
+            install(container, source, repo);
             container.start();
         }
     }
 
-    @SuppressWarnings("all")
-    private static Option[] OPTIONS = {
-        OptionBuilder.withArgName("capacity")
-                     .withDescription("Application capacity (small,medium,large)")
-                     .hasArg()
-                     .create('c'),
-        OptionBuilder.withArgName("keyfile")
-                     .withDescription("SSH public key file")
-                     .hasArg()
-                     .create("k"),
-        OptionBuilder.withArgName("add-on")
-                     .withDescription("Add-on source location")
-                     .hasArg()
-                     .create('s'),
-        OptionBuilder.withArgName("repository")
-                     .withDescription("Repository URL")
-                     .hasArg()
-                     .create('r')
-    };
-
     private void printHelp(Options options) {
-        List<Option> order = Arrays.asList(OPTIONS);
+        List<Option> order = Arrays.asList(CREATE_OPTIONS);
         Comparator<Option> c = (o1,o2) -> order.indexOf(o1) - order.indexOf(o2);
 
         HelpFormatter formatter = new HelpFormatter();
@@ -246,5 +239,31 @@ public class PrivilegedControl extends Control
             System.exit(2);
             return null;
         }
+    }
+
+    @Command("Install add-on into application")
+    public void install(String args[]) throws IOException {
+        if (args.length < 2 || args.length > 3) {
+            System.err.println("usage: cwctl install uuid source [repo]");
+            System.exit(1);
+            return;
+        }
+
+        String uuid   = args[0];
+        String source = args[1];
+        String repo   = args.length > 2 ? args[2] : null;
+
+        do_action(uuid, container -> install(container, source, repo));
+    }
+
+    @Command("Uninstall add-on from application")
+    public void uninstall(String args[]) throws IOException {
+        if (args.length != 2) {
+            System.err.println("usage: cwctl uninstall uuid name");
+            System.exit(1);
+            return;
+        }
+
+        do_action(args[0], container -> container.remove(args[1]));
     }
 }
