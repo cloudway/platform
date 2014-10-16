@@ -43,7 +43,7 @@ import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
 
-import com.cloudway.platform.proxy.HttpProxy;
+import com.cloudway.platform.container.proxy.HttpProxy;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
 

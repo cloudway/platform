@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.proxy.apache;
+package com.cloudway.platform.container.proxy.apache;
 
 import java.io.BufferedWriter;
 import java.io.IOException;

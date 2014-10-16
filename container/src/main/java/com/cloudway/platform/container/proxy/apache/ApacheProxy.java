@@ -4,13 +4,13 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.proxy.apache;
+package com.cloudway.platform.container.proxy.apache;
 
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 
-import com.cloudway.platform.proxy.HttpProxy;
+import com.cloudway.platform.container.proxy.HttpProxy;
 
 public class ApacheProxy implements HttpProxy
 {
