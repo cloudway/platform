@@ -37,7 +37,7 @@ public interface HttpProxy
     void removeAlias(String name)
         throws IOException;
 
-    void idle(String fqdn, String uuid)
+    void idle(String fqdn, String id)
         throws IOException;
 
     boolean unidle(String fqdn)

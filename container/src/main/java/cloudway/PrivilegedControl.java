@@ -37,7 +37,7 @@ public class PrivilegedControl extends Control
     public void info(String[] args) throws IOException {
         if (args.length == 0) {
             ApplicationContainer.all().forEach(c -> {
-                System.out.printf("%-32s %-30s %s%n", c.getUuid(), c.getDomainName(), c.getState());
+                System.out.printf("%-32s %-30s %s%n", c.getId(), c.getDomainName(), c.getState());
             });
         } else {
             command("info", args, false, this::showInfo);
@@ -45,7 +45,7 @@ public class PrivilegedControl extends Control
     }
 
     private void showInfo(ApplicationContainer container) {
-        System.out.println("UUID:  " + container.getUuid());
+        System.out.println("ID:    " + container.getId());
         System.out.println("Name:  " + container.getName());
         System.out.println("DNS:   " + container.getDomainName());
         System.out.println("Size:  " + container.getCapacity());
@@ -81,7 +81,7 @@ public class PrivilegedControl extends Control
     @Command("Show current container status")
     public void status(String[] args) throws IOException {
         command("status", args, false, c -> {
-            System.out.printf("%s (%s):%n", c.getUuid(), c.getDomainName());
+            System.out.printf("%s (%s):%n", c.getId(), c.getDomainName());
             c.control("status", false);
             System.out.println();
         });
@@ -96,7 +96,7 @@ public class PrivilegedControl extends Control
         throws IOException
     {
         if (args.length == 0) {
-            System.err.println("usage: cwctl " + name + " [all | UUID...]");
+            System.err.println("usage: cwctl " + name + " [all | ID...]");
             System.exit(1);
         }
 
@@ -104,38 +104,38 @@ public class PrivilegedControl extends Control
             Stream<ApplicationContainer> stream = ApplicationContainer.all();
             IO.forEach(parallel ? stream.parallel() : stream, action);
         } else {
-            IO.forEach(Stream.of(args), key -> do_action(key, action));
+            IO.forEach(Stream.of(args), id -> do_action(id, action));
         }
     }
 
-    private void do_action(String key, IO.Consumer<ApplicationContainer> action)
+    private void do_action(String id, IO.Consumer<ApplicationContainer> action)
         throws IOException
     {
         ApplicationContainer container;
 
-        if (key.indexOf('.') != -1) {
+        if (id.indexOf('.') != -1) {
             // assume the key is a FQDN
             container = ApplicationContainer.all()
-                .filter(c -> key.equals(c.getDomainName()))
+                .filter(c -> id.equals(c.getDomainName()))
                 .findFirst()
                 .orElse(null);
-        } else if (key.indexOf('-') != -1) {
+        } else if (id.indexOf('-') != -1) {
             // assume the key is "name-namespace"
             container = ApplicationContainer.all()
-                .filter(c -> key.equals(c.getName() + "-" + c.getNamespace()))
+                .filter(c -> id.equals(c.getName() + "-" + c.getNamespace()))
                 .findFirst()
                 .orElse(null);
         } else {
-            // assume the key is an UUID
+            // assume the key is an application id
             try {
-                container = ApplicationContainer.fromUuid(key);
+                container = ApplicationContainer.fromId(id);
             } catch (Exception ex) {
                 container = null;
             }
         }
 
         if (container == null) {
-            System.err.println(key + ": not found");
+            System.err.println(id + ": not found");
         } else {
             action.accept(container);
         }
@@ -192,7 +192,7 @@ public class PrivilegedControl extends Control
             return;
         }
 
-        String uuid        = mkuuid();
+        String id          = mkuuid();
         String name        = matcher.group(1);
         String namespace   = matcher.group(2);
         String capacity    = cmd.getOptionValue("c", "small");
@@ -201,7 +201,7 @@ public class PrivilegedControl extends Control
         String repo        = cmd.getOptionValue("r");
 
         ApplicationContainer container =
-            ApplicationContainer.create(uuid, name, namespace, capacity);
+            ApplicationContainer.create(id, name, namespace, capacity);
 
         if (keyfile != null) {
             container.addAuthorizedKey("default", keyfile);
@@ -254,22 +254,22 @@ public class PrivilegedControl extends Control
     @Command("Install add-on into application")
     public void install(String args[]) throws IOException {
         if (args.length < 2 || args.length > 3) {
-            System.err.println("usage: cwctl install UUID SOURCE [REPO]");
+            System.err.println("usage: cwctl install ID SOURCE [REPO]");
             System.exit(1);
             return;
         }
 
-        String uuid   = args[0];
+        String id     = args[0];
         String source = args[1];
         String repo   = args.length > 2 ? args[2] : null;
 
-        do_action(uuid, container -> install(container, source, repo));
+        do_action(id, container -> install(container, source, repo));
     }
 
     @Command("Uninstall add-on from application")
     public void uninstall(String args[]) throws IOException {
         if (args.length != 2) {
-            System.err.println("usage: cwctl uninstall UUID NAME");
+            System.err.println("usage: cwctl uninstall ID NAME");
             System.exit(1);
             return;
         }
@@ -280,13 +280,13 @@ public class PrivilegedControl extends Control
     /** Convenient internal command to substitute container user. */
     public void su(String args[]) throws IOException {
         if (args.length == 0 || "all".equals(args[0])) {
-            System.err.println("usage cwctl su <uuid or domain name>");
+            System.err.println("usage cwctl su <id or domain name>");
             System.exit(1);
             return;
         }
 
         if (args.length == 1) {
-            do_action(args[0], container -> Exec.args("su", "-", container.getUuid()).run());
+            do_action(args[0], container -> Exec.args("su", "-", container.getId()).run());
         } else {
             do_action(args[0], container -> container.join(
                 Exec.args(Arrays.copyOfRange(args, 1, args.length))).run());
@@ -296,11 +296,11 @@ public class PrivilegedControl extends Control
     /** Convenient internal command to run ssh on specified container user. */
     public void ssh(String args[]) throws IOException {
         if (args.length != 1 || "all".equals(args[0])) {
-            System.err.println("usage cwctl su <uuid or domain name>");
+            System.err.println("usage cwctl su <id or domain name>");
             System.exit(1);
             return;
         }
 
-        do_action(args[0], container -> Exec.args("ssh", container.getUuid() + "@localhost").run());
+        do_action(args[0], container -> Exec.args("ssh", container.getId() + "@localhost").run());
     }
 }

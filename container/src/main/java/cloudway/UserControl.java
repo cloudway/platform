@@ -14,8 +14,8 @@ public class UserControl extends Control
 {
     private ApplicationContainer getContainer() {
         try {
-            String uuid = System.getenv("CLOUDWAY_APP_UUID");
-            return ApplicationContainer.fromUuid(uuid);
+            String id = System.getenv("CLOUDWAY_APP_ID");
+            return ApplicationContainer.fromId(id);
         } catch (Exception ex) {
             System.err.println("This program must run in a cloudway container.");
             System.exit(2);
@@ -26,7 +26,7 @@ public class UserControl extends Control
     @Command("Show application information")
     public void info(String[] args) {
         ApplicationContainer container = getContainer();
-        System.out.println("UUID:  " + container.getUuid());
+        System.out.println("ID:    " + container.getId());
         System.out.println("Name:  " + container.getName());
         System.out.println("DNS:   " + container.getDomainName());
         System.out.println("Size:  " + container.getCapacity());

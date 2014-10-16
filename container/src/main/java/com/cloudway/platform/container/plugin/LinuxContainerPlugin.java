@@ -221,7 +221,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         throws IOException
     {
         if (Cgroup.enabled) {
-            action.accept(new Cgroup(container.getUuid(), container.getUID()));
+            action.accept(new Cgroup(container.getId(), container.getUID()));
             return true;
         } else {
             return false;
@@ -237,7 +237,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
                 throw new IllegalArgumentException("Unknown cgroup profile: " + container.getCapacity());
             }
 
-            Cgroup cg = new Cgroup(container.getUuid(), container.getUID());
+            Cgroup cg = new Cgroup(container.getId(), container.getUID());
             action.accept(cg, cfg);
             return true;
         } else {
@@ -321,7 +321,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         }
 
         Exec.args("setquota",
-                  "-u", container.getUuid(),
+                  "-u", container.getId(),
                   0, maxblocks, 0, maxfiles,
                   "-a",
                   get_mountpoint(container.getHomeDir()))
@@ -332,7 +332,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     }
 
     private Optional<String[]> get_quota() throws IOException {
-        String out = Exec.args("quota", "-pw", container.getUuid()).silentIO().subst();
+        String out = Exec.args("quota", "-pw", container.getId()).silentIO().subst();
         return Arrays.stream(out.split("\n"))
             .filter(line -> line.matches("^.*/dev/.*"))
             .findFirst()
@@ -369,19 +369,19 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
 
     private void initPamLimits() throws IOException {
         ResourceLimits cfg = ResourceLimits.getInstance();
-        String uuid = container.getUuid();
+        String id = container.getId();
         String profile = container.getCapacity();
-        Path limits_file = Paths.get(PAM_LIMITS_DIR, PAM_LIMITS_ORDER + "-" + uuid + ".conf");
+        Path limits_file = Paths.get(PAM_LIMITS_DIR, PAM_LIMITS_ORDER + "-" + id + ".conf");
 
         try (BufferedWriter out = Files.newBufferedWriter(limits_file)) {
-            out.write("# PAM process limits for guest " + uuid + "\n");
+            out.write("# PAM process limits for guest " + id + "\n");
             IO.forEach(PAM_LIMITS_VARS, k -> {
                 String v = cfg.getProperty(profile, "limits." + k, null);
                 if (v != null) {
                     String limtype =
                         (PAM_SOFT_VARS.contains(k) && !"0".equals(v))
                             ? "soft" : "hard";
-                    out.write(String.join("\t", uuid, limtype, k, v));
+                    out.write(String.join("\t", id, limtype, k, v));
                     out.newLine();
                 }
             });
@@ -389,8 +389,8 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     }
 
     private void removePamLimits() throws IOException {
-        String uuid = container.getUuid();
-        Path limits_file = Paths.get(PAM_LIMITS_DIR, PAM_LIMITS_ORDER + "-" + uuid + ".conf");
+        String id = container.getId();
+        Path limits_file = Paths.get(PAM_LIMITS_DIR, PAM_LIMITS_ORDER + "-" + id + ".conf");
         Files.deleteIfExists(limits_file);
     }
 
@@ -416,7 +416,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
                 }
             }
 
-            exec.command("/sbin/runuser", "-s", "/bin/sh", container.getUuid(), "-c", cmd);
+            exec.command("/sbin/runuser", "-s", "/bin/sh", container.getId(), "-c", cmd);
         }
 
         return exec;

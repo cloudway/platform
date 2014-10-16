@@ -168,16 +168,16 @@ public class Cgroup
         }
     }
 
-    private final String uuid;
+    private final String user;
     private final int uid;
     private final Map<String, Path> cgpaths;
 
-    public Cgroup(String uuid, int uid) {
-        this.uuid = uuid;
-        this.uid = uid;
+    public Cgroup(String user, int uid) {
+        this.user = user;
+        this.uid  = uid;
 
         cgpaths = CG_PATHS.entrySet().stream().collect(
-            toMap(Map.Entry::getKey, e -> e.getValue().resolve(uuid)));
+            toMap(Map.Entry::getKey, e -> e.getValue().resolve(user)));
     }
 
 
@@ -239,7 +239,7 @@ public class Cgroup
     }
 
     /**
-     * Fetch parameters for a specific uuid, or a map of key=>value
+     * Fetch parameters for a specific user, or a map of key=>value
      * for all parameters for the application container.
      */
     public Map<String, Object> fetch(Set<String> keys) {
@@ -251,7 +251,7 @@ public class Cgroup
                 Path path = cgpaths.get(subsys);
 
                 if (path == null || !Files.exists(path)) {
-                    throw new RuntimeException("User does not exist in cgroups: " + uuid);
+                    throw new RuntimeException("User does not exist in cgroups: " + user);
                 }
 
                 try {
@@ -273,7 +273,7 @@ public class Cgroup
                 String subsys = param.substring(0, param.indexOf('.'));
                 Path path = cgpaths.get(subsys);
                 if (path == null || !Files.exists(path)) {
-                    throw new IOException("User does not exist in cgroups: " + uuid);
+                    throw new IOException("User does not exist in cgroups: " + user);
                 } else {
                     FileUtils.write(path.resolve(param), format_cgparam(val));
                 }
@@ -400,7 +400,7 @@ public class Cgroup
         IO.forEach(cgpaths, (subsys, path) -> {
             if (!Files.exists(path))
                 FileUtils.mkdir(path, 0755);
-            FileUtils.chown(path.resolve("tasks"), uuid, uuid);
+            FileUtils.chown(path.resolve("tasks"), user, user);
         });
     }
 
@@ -409,23 +409,23 @@ public class Cgroup
     }
 
     /**
-     * Update the cgrules.conf file. This removes the requested uuid
+     * Update the cgrules.conf file. This removes the requested user
      * and re-adds it at the end if a new path is provided.
      */
     private void update_cgrules(boolean recreate) throws IOException {
         overwrite_with_safe_swap(CGRULES, (in, out) -> {
             String line;
             while ((line = in.readLine()) != null) {
-                if (!line.startsWith(uuid)) {
+                if (!line.startsWith(user)) {
                     out.writeBytes(line);
                     out.write('\n');
                 }
             }
 
             if (recreate) {
-                out.writeBytes(uuid + '\t' +
+                out.writeBytes(user + '\t' +
                                String.join(",", CG_SUBSYSTEMS) + '\t' +
-                               CG_ROOT + '/' + uuid + '\n');
+                               CG_ROOT + '/' + user + '\n');
             }
         });
 
@@ -444,7 +444,7 @@ public class Cgroup
     private void update_cgconfig(Map<String,?> newcfg)
         throws IOException
     {
-        String prefix = "group " + CG_ROOT + "/" + uuid + " ";
+        String prefix = "group " + CG_ROOT + "/" + user + " ";
 
         overwrite_with_safe_swap(CGCONFIG, (in, out) -> {
             String line;

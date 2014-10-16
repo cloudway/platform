@@ -32,7 +32,7 @@ import static com.cloudway.platform.container.ApplicationState.*;
 
 public class ApplicationContainer
 {
-    private String uuid;
+    private String id;
     private String name;
     private String namespace;
     private String capacity;
@@ -57,13 +57,13 @@ public class ApplicationContainer
     /**
      * Construct a new ApplicationContainer.
      *
-     * @param uuid the UUID for the application container
+     * @param id the unique ID for the application container
      * @param name the name of the application container
      * @param namespace the namespace used for proxy
      * @param pwent the passwd entry for the guest
      */
-    private ApplicationContainer(String uuid, String name, String namespace, String capacity, Etc.PASSWD pwent) {
-        this.uuid = uuid;
+    private ApplicationContainer(String id, String name, String namespace, String capacity, Etc.PASSWD pwent) {
+        this.id = id;
         this.name = name;
         this.namespace = namespace;
         this.capacity = capacity != null ? capacity : DEFAULT_CAPACITY;
@@ -74,7 +74,7 @@ public class ApplicationContainer
             this.home_dir = Paths.get(pwent.pw_dir);
             this.shell = pwent.pw_shell;
         } else {
-            this.home_dir = Config.VAR_DIR.resolve(uuid);
+            this.home_dir = Config.VAR_DIR.resolve(id);
             this.shell = SHELL;
         }
 
@@ -83,13 +83,13 @@ public class ApplicationContainer
     }
 
     /**
-     * Return an ApplicationContainer object loaded from the guest uuid on the system.
+     * Return an ApplicationContainer object loaded from the container id on the system.
      *
-     * @param uuid the guest uuid
+     * @param id the container id
      */
-    public static ApplicationContainer fromUuid(String uuid) {
-        Etc.PASSWD pwent = pwent(uuid).orElseThrow(
-            () -> new IllegalArgumentException("Not a cloudway guest: " + uuid));
+    public static ApplicationContainer fromId(String id) {
+        Etc.PASSWD pwent = pwent(id).orElseThrow(
+            () -> new IllegalArgumentException("Not a cloudway guest: " + id));
 
         if (Etc.getuid() != 0 && Etc.getuid() != pwent.pw_uid) {
             throw new IllegalArgumentException("Access denied");
@@ -110,11 +110,11 @@ public class ApplicationContainer
             namespace = null;
         }
 
-        return new ApplicationContainer(uuid, appname, namespace, capacity, pwent);
+        return new ApplicationContainer(id, appname, namespace, capacity, pwent);
     }
 
-    static Optional<Etc.PASSWD> pwent(String uuid) {
-        Etc.PASSWD pwent = Etc.getpwnam(Objects.requireNonNull(uuid));
+    static Optional<Etc.PASSWD> pwent(String id) {
+        Etc.PASSWD pwent = Etc.getpwnam(Objects.requireNonNull(id));
         if (pwent == null || !GECOS.equals(pwent.pw_gecos)) {
             return Optional.empty();
         } else {
@@ -122,15 +122,15 @@ public class ApplicationContainer
         }
     }
 
-    public static boolean exists(String uuid) {
-        return pwent(uuid).isPresent();
+    public static boolean exists(String id) {
+        return pwent(id).isPresent();
     }
 
     /**
-     * Return a Collection which provides a list of uuids
+     * Return a Collection which provides a list of ids
      * for every cloudway guest in the system.
      */
-    public static Collection<String> uuids() {
+    public static Collection<String> ids() {
         int uid = Etc.getuid();
 
         if (uid != 0) {
@@ -141,13 +141,13 @@ public class ApplicationContainer
                 return Collections.emptyList();
             }
         } else {
-            List<String> uuids = new ArrayList<>();
+            List<String> ids = new ArrayList<>();
             Etc.getpwent(pw -> {
                 if (GECOS.equals(pw.pw_gecos) && Files.exists(Paths.get(pw.pw_dir))) {
-                    uuids.add(pw.pw_name);
+                    ids.add(pw.pw_name);
                 }
             });
-            return uuids;
+            return ids;
         }
     }
 
@@ -156,11 +156,11 @@ public class ApplicationContainer
      * objects for every cloudway guest in the system.
      */
     public static Stream<ApplicationContainer> all() {
-        return uuids().stream().map(ApplicationContainer::fromUuid);
+        return ids().stream().map(ApplicationContainer::fromId);
     }
 
-    public String getUuid() {
-        return uuid;
+    public String getId() {
+        return id;
     }
 
     public String getName() {
@@ -223,25 +223,25 @@ public class ApplicationContainer
         return getAppDir().resolve("data");
     }
 
-    private static final Pattern RE_UUID = Pattern.compile("^[a-z0-9]+$");
+    private static final Pattern RE_ID = Pattern.compile("^[a-z0-9]+$");
     private static final Pattern RE_NAME = Pattern.compile("^[a-z][a-z_0-9]*$");
 
     /**
      * Create a container.
      */
-    public static ApplicationContainer create(String uuid, String name, String namespace, String capacity)
+    public static ApplicationContainer create(String id, String name, String namespace, String capacity)
         throws IOException
     {
-        Objects.requireNonNull(uuid);
+        Objects.requireNonNull(id);
         Objects.requireNonNull(name);
         Objects.requireNonNull(namespace);
         Objects.requireNonNull(capacity);
 
-        if (!RE_UUID.matcher(uuid).matches()) {
-            throw new IllegalArgumentException("Invalid UUID");
+        if (!RE_ID.matcher(id).matches()) {
+            throw new IllegalArgumentException("Invalid container ID");
         }
-        if (uuids().contains(uuid)) {
-            throw new IllegalStateException("Application container \"" + uuid + "\" already exists");
+        if (ids().contains(id)) {
+            throw new IllegalStateException("Application container \"" + id + "\" already exists");
         }
 
         if (!RE_NAME.matcher(name).matches() || !RE_NAME.matcher(namespace).matches()) {
@@ -254,7 +254,7 @@ public class ApplicationContainer
             throw new IllegalStateException("Domain name \"" + fqdn + "\" already exists");
         }
 
-        ApplicationContainer container = new ApplicationContainer(uuid, name, namespace, capacity, null);
+        ApplicationContainer container = new ApplicationContainer(id, name, namespace, capacity, null);
         container.plugin.create();
         container.setState(NEW);
         return container;
@@ -327,7 +327,7 @@ public class ApplicationContainer
     public void idle() throws IOException {
         if (getState() != STOPPED) {
             stop_guest(true, 30, TimeUnit.SECONDS);
-            HttpProxy.getInstance().idle(getDomainName(), getUuid());
+            HttpProxy.getInstance().idle(getDomainName(), getId());
             setState(IDLE);
         }
     }

@@ -24,11 +24,11 @@ public class MacOSContainerPlugin extends UnixContainerPlugin
     }
 
     @Override
-    protected void createUser(String uuid, int uid, Path home, String skel, String shell, String gecos, String groups)
+    protected void createUser(String name, int uid, Path home, String skel, String shell, String gecos, String groups)
         throws IOException
     {
-        String grouppath = "/Groups/" + uuid;
-        String userpath = "/Users/" + uuid;
+        String grouppath = "/Groups/" + name;
+        String userpath = "/Users/" + name;
 
         String[][] commands = {
             {dscl, ".", "-create", grouppath},
@@ -66,9 +66,9 @@ public class MacOSContainerPlugin extends UnixContainerPlugin
 
     @Override
     protected void deleteUser() throws IOException {
-        String uuid = container.getUuid();
-        Exec.args(dscl, ".", "-delete", "/Users/" + uuid).silentIO().checkError().run();
-        Exec.args(dscl, ".", "-delete", "/Groups/" + uuid).silentIO().checkError().run();
+        String user = container.getId();
+        Exec.args(dscl, ".", "-delete", "/Users/" + user).silentIO().checkError().run();
+        Exec.args(dscl, ".", "-delete", "/Groups/" + user).silentIO().checkError().run();
         FileUtils.deleteTree(container.getHomeDir());
     }
 }

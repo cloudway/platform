@@ -54,8 +54,8 @@ public class AuthorizedKey
         this.comment = comment;
     }
 
-    public String getId(String uuid) {
-        String prefix = ID_PREFIX + uuid + "-";
+    public String getId(String id) {
+        String prefix = ID_PREFIX + id + "-";
         if (comment == null || !comment.startsWith(prefix)) {
             return null;
         } else {
@@ -63,8 +63,8 @@ public class AuthorizedKey
         }
     }
 
-    public void setId(String uuid, String id) {
-        this.comment = ID_PREFIX + uuid + "-" + id;
+    public void setId(String id, String name) {
+        this.comment = ID_PREFIX + id + "-" + name;
     }
 
     private static AuthorizedKey parsePublicKey(String key, String options) {

@@ -56,10 +56,10 @@ public class ApacheProxy implements HttpProxy
         aliases.writting(d -> d.remove(name));
     }
 
-    public void idle(String fqdn, String uuid)
+    public void idle(String fqdn, String id)
         throws IOException
     {
-        idles.writting(d -> d.put(fqdn, uuid));
+        idles.writting(d -> d.put(fqdn, id));
     }
 
     public boolean unidle(String fqdn)

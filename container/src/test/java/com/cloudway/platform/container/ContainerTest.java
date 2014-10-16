@@ -29,7 +29,7 @@ import static org.junit.Assert.*;
 
 public class ContainerTest
 {
-    private static String uuid;
+    private static String id;
     private static String name;
     private static String capacity;
     private static String pubkey;
@@ -38,12 +38,12 @@ public class ContainerTest
 
     @BeforeClass
     public static void create() throws IOException {
-        uuid = mkuuid();
+        id = mkuuid();
         name = mkappname();
         capacity = System.getProperty("container.size", "small");
         pubkey = loadPublicKey();
 
-        container = ApplicationContainer.create(uuid, name, "demo", capacity);
+        container = ApplicationContainer.create(id, name, "demo", capacity);
         container.addAuthorizedKey("default", pubkey);
         installAndStart();
         container.tidy();
@@ -55,19 +55,19 @@ public class ContainerTest
 
         // destroy all application containers
         ApplicationContainer.all()
-            .filter(c -> !(keep && uuid.equals(c.getUuid())))
+            .filter(c -> !(keep && id.equals(c.getId())))
             .forEach(log(ApplicationContainer::destroy));
     }
 
     @Test
     public void info() throws IOException {
-        assertEquals(uuid, container.getUuid());
+        assertEquals(id, container.getId());
         assertEquals(name, container.getName());
         assertEquals("demo", container.getNamespace());
         assertEquals(name + "-demo.cloudway.com", container.getDomainName());
         assertEquals(capacity, container.getCapacity());
         assertEquals("/opt/cloudway/bin/cwsh", container.getShell());
-        assertEquals(Config.VAR_DIR.resolve(uuid), container.getHomeDir());
+        assertEquals(Config.VAR_DIR.resolve(id), container.getHomeDir());
     }
 
     @Test
@@ -82,7 +82,7 @@ public class ContainerTest
     @Test
     public void runInContext() throws IOException {
         String who = container.join(Exec.args("whoami")).checkError().subst();
-        assertEquals(uuid, who);
+        assertEquals(id, who);
 
         if (Boolean.getBoolean("container.runshell")) {
             container.join(Exec.args("/bin/bash", "-i"))

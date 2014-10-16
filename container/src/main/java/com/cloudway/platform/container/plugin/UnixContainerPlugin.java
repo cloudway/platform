@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.IO;
@@ -55,7 +54,7 @@ public class UnixContainerPlugin extends ContainerPlugin
             int uid = next_uid(file, min_uid, max_uid);
 
             // Create operating system user
-            createUser(container.getUuid(),
+            createUser(container.getId(),
                        uid,
                        container.getHomeDir(),
                        config.get("GUEST_SKEL", Config.CONF_DIR.resolve("skel").toString()),
@@ -100,10 +99,10 @@ public class UnixContainerPlugin extends ContainerPlugin
         return uid;
     }
 
-    protected void createUser(String uuid, int uid, Path home, String skel, String shell, String gecos, String groups)
+    protected void createUser(String name, int uid, Path home, String skel, String shell, String gecos, String groups)
         throws IOException
     {
-        Exec.args("groupadd", "-g", uid, uuid).silentIO().checkError().run();
+        Exec.args("groupadd", "-g", uid, name).silentIO().checkError().run();
 
         Exec exec = Exec.args(
             "useradd",
@@ -114,7 +113,7 @@ public class UnixContainerPlugin extends ContainerPlugin
             "-c", gecos,
             "-m",
             "-k", skel,
-            uuid);
+            name);
         if (groups != null) {
             exec.command().add("-G");
             exec.command().add(groups);
@@ -124,7 +123,7 @@ public class UnixContainerPlugin extends ContainerPlugin
 
     @Override
     protected void deleteUser() throws IOException {
-        Exec.args("userdel", "-rf", container.getUuid()).silentIO().run();
+        Exec.args("userdel", "-rf", container.getId()).silentIO().run();
         FileUtils.deleteTree(container.getHomeDir());
     }
 
@@ -176,7 +175,7 @@ public class UnixContainerPlugin extends ContainerPlugin
         setFileReadOnly(homedir);
 
         // add environment variables
-        addEnvVar("APP_UUID", container.getUuid(), true);
+        addEnvVar("APP_ID",   container.getId(), true);
         addEnvVar("APP_NAME", container.getName(), true);
         addEnvVar("APP_DNS",  container.getDomainName(), true);
         addEnvVar("APP_SIZE", container.getCapacity(), true);
@@ -245,22 +244,22 @@ public class UnixContainerPlugin extends ContainerPlugin
     }
 
     @Override
-    public void addAuthorizedKey(String id, String key)
+    public void addAuthorizedKey(String name, String key)
         throws IOException
     {
         AuthorizedKey newkey = AuthorizedKey.parsePublicKey(key);
-        String uuid = container.getUuid();
+        String id = container.getId();
 
         try (RandomAccessFile file = new RandomAccessFile(authorizedKeysFile(), "rw")) {
             List<AuthorizedKey> keys = loadAuthorizedKeys(file);
             if (keys.stream()
-                    .filter(k -> id.equals(k.getId(uuid)) || newkey.getBits().equals(k.getBits()))
+                    .filter(k -> name.equals(k.getId(id)) || newkey.getBits().equals(k.getBits()))
                     .findAny()
                     .isPresent()) {
-                throw new IllegalArgumentException("Authorized key already exist: " + id);
+                throw new IllegalArgumentException("Authorized key already exist: " + name);
             }
 
-            newkey.setId(uuid, id);
+            newkey.setId(id, name);
             newkey.setOptions(String.format("command=\"%s\",no-X11-forwarding", container.getShell()));
             keys.add(newkey);
             saveAuthorizedKeys(file, keys);
@@ -284,11 +283,11 @@ public class UnixContainerPlugin extends ContainerPlugin
     public List<String> getAuthorizedKeys()
         throws IOException
     {
-        String uuid = container.getUuid();
+        String id = container.getId();
         try (RandomAccessFile file = new RandomAccessFile(authorizedKeysFile(), "r")) {
             // convert to public key string
             return loadAuthorizedKeys(file).stream()
-                .map(k -> k.getType() + " " + k.getBits() + " " + k.getId(uuid))
+                .map(k -> k.getType() + " " + k.getBits() + " " + k.getId(id))
                 .collect(Collectors.toList());
         }
     }
@@ -362,12 +361,12 @@ public class UnixContainerPlugin extends ContainerPlugin
 
     @Override
     public void setFileReadOnly(Path file) throws IOException {
-        FileUtils.chown(file, "root", container.getUuid());
+        FileUtils.chown(file, "root", container.getId());
     }
 
     @Override
     public void setFileReadWrite(Path file) throws IOException {
-        FileUtils.chown(file, container.getUuid(), container.getUuid());
+        FileUtils.chown(file, container.getId(), container.getId());
     }
 
     @Override
