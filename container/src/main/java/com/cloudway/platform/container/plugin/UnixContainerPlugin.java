@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -49,12 +51,8 @@ public class UnixContainerPlugin extends ContainerPlugin
         int max_uid = config.getInt("GUEST_MAX_UID", 2000);
 
         // Synchronized to prevent race condition on obtaining a UNIX user uid.
-        FileUtils.flock(create_lock_file, create_lock, () -> {
-            // Determine next available user id
-            int uid = IntStream.rangeClosed(min_uid, max_uid)
-                .filter(i -> Etc.getpwuid(i) == null && Etc.getgrgid(i) == null)
-                .findFirst()
-                .getAsInt(); // XXX may throw NoSuchElementException
+        FileUtils.flock(create_lock_file, create_lock, (file) -> {
+            int uid = next_uid(file, min_uid, max_uid);
 
             // Create operating system user
             createUser(container.getUuid(),
@@ -68,6 +66,38 @@ public class UnixContainerPlugin extends ContainerPlugin
             container.setUID(uid);
             container.setGID(uid);
         });
+    }
+
+    protected int next_uid(FileChannel file, int min_uid, int max_uid) throws IOException {
+        int uid = min_uid;
+
+        // Read last user id from seed file
+        ByteBuffer bb = ByteBuffer.allocate(4);
+        if (file.read(bb) == 4) {
+            bb.flip();
+            uid = bb.getInt();
+            if (uid < min_uid || uid > max_uid) {
+                uid = min_uid;
+            }
+        }
+
+        // Determine next available user id
+        for (int i = min_uid; i <= max_uid; i++) {
+            if (i > max_uid)
+                throw new IllegalStateException("Too many guest users");
+            if (Etc.getpwuid(uid) == null && Etc.getgrgid(uid) == null)
+                break;
+            if (++uid > max_uid)
+                uid = min_uid;
+        }
+
+        // Save next user id into seed file
+        bb.clear();
+        bb.putInt(uid + 1);
+        bb.flip();
+        file.position(0).write(bb);
+
+        return uid;
     }
 
     protected void createUser(String uuid, int uid, Path home, String skel, String shell, String gecos, String groups)

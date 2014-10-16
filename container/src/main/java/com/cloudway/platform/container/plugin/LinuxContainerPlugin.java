@@ -406,10 +406,6 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
                             arg)
                 .collect(Collectors.joining(" "));
 
-            if (Cgroup.enabled) {
-                cmd = "cgexec " + cmd;
-            }
-
             if (selinux_enabled) {
                 String current_context = SELinux.getcon();
                 String target_context = get_target_context();

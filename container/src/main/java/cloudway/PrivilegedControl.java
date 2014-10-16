@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -278,13 +279,18 @@ public class PrivilegedControl extends Control
 
     /** Convenient internal command to substitute container user. */
     public void su(String args[]) throws IOException {
-        if (args.length != 1 || "all".equals(args[0])) {
+        if (args.length == 0 || "all".equals(args[0])) {
             System.err.println("usage cwctl su <uuid or domain name>");
             System.exit(1);
             return;
         }
 
-        do_action(args[0], container -> Exec.args("su", "-", container.getUuid()).run());
+        if (args.length == 1) {
+            do_action(args[0], container -> Exec.args("su", "-", container.getUuid()).run());
+        } else {
+            do_action(args[0], container -> container.join(
+                Exec.args(Arrays.copyOfRange(args, 1, args.length))).run());
+        }
     }
 
     /** Convenient internal command to run ssh on specified container user. */

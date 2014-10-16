@@ -245,15 +245,15 @@ public class FileUtils
      * @param local_lock lock used for multi-threaded locking
      * @param action the block to run
      */
-    public static void flock(Path lock_file, Lock local_lock, IO.Runnable action)
+    public static void flock(Path lock_file, Lock local_lock, IO.Consumer<FileChannel> action)
         throws IOException
     {
         mkdir(lock_file.getParent());
 
         local_lock.lock();
-        try (FileChannel file = FileChannel.open(lock_file, READ, WRITE, CREATE, TRUNCATE_EXISTING)) {
+        try (FileChannel file = FileChannel.open(lock_file, READ, WRITE, CREATE)) {
             file.lock();
-            action.run();
+            action.accept(file);
         } finally {
             local_lock.unlock();
         }
