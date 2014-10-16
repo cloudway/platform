@@ -10,18 +10,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.ApplicationContainer;
-import com.cloudway.platform.container.ApplicationState;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -32,17 +29,14 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
 
+@SuppressWarnings("unused")
 public class PrivilegedControl extends Control
 {
     @Command("Show application information")
     public void info(String[] args) throws IOException {
         if (args.length == 0) {
-            System.out.printf(" %-32s %-16s %s%n", "UUID", "Name", "DNS");
-            System.out.printf("=============================================================================%n");
             ApplicationContainer.all().forEach(c -> {
-                System.out.printf("%c%-32s %-16s %s%n",
-                                  c.getState() == ApplicationState.STARTED ? '*' : ' ',
-                                  c.getUuid(), c.getName(), c.getDomainName());
+                System.out.printf("%-32s %-30s %s%n", c.getUuid(), c.getDomainName(), c.getState());
             });
         } else {
             command("info", args, false, this::showInfo);
@@ -73,6 +67,25 @@ public class PrivilegedControl extends Control
         command("restart", args, true, ApplicationContainer::restart);
     }
 
+    @Command("Idle application container(s)")
+    public void idle(String[] args) throws IOException {
+        command("idle", args, true, ApplicationContainer::idle);
+    }
+
+    @Command("Unidle application container(s)")
+    public void unidle(String[] args) throws IOException {
+        command("unidle", args, true, ApplicationContainer::unidle);
+    }
+
+    @Command("Show current container status")
+    public void status(String[] args) throws IOException {
+        command("status", args, false, c -> {
+            System.out.printf("%s (%s):%n", c.getUuid(), c.getDomainName());
+            c.control("status", false);
+            System.out.println();
+        });
+    }
+
     @Command("Destroy application container(s)")
     public void destroy(String[] args) throws IOException {
         command("destroy", args, true, ApplicationContainer::destroy);
@@ -82,7 +95,7 @@ public class PrivilegedControl extends Control
         throws IOException
     {
         if (args.length == 0) {
-            System.err.println("usage: cwctl " + name + " [all | uuid...]");
+            System.err.println("usage: cwctl " + name + " [all | UUID...]");
             System.exit(1);
         }
 
@@ -129,19 +142,19 @@ public class PrivilegedControl extends Control
 
     @SuppressWarnings("all")
     private static Option[] CREATE_OPTIONS = {
-        OptionBuilder.withArgName("capacity")
+        OptionBuilder.withArgName("SIZE")
                      .withDescription("Application capacity (small,medium,large)")
                      .hasArg()
                      .create('c'),
-        OptionBuilder.withArgName("keyfile")
+        OptionBuilder.withArgName("FILE")
                      .withDescription("SSH public key file")
                      .hasArg()
                      .create("k"),
-        OptionBuilder.withArgName("add-on")
+        OptionBuilder.withArgName("PATH")
                      .withDescription("Add-on source location")
                      .hasArg()
                      .create('s'),
-        OptionBuilder.withArgName("repository")
+        OptionBuilder.withArgName("URL")
                      .withDescription("Repository URL")
                      .hasArg()
                      .create('r')
@@ -200,12 +213,8 @@ public class PrivilegedControl extends Control
     }
 
     private void printHelp(Options options) {
-        List<Option> order = Arrays.asList(CREATE_OPTIONS);
-        Comparator<Option> c = (o1,o2) -> order.indexOf(o1) - order.indexOf(o2);
-
         HelpFormatter formatter = new HelpFormatter();
-        formatter.setOptionComparator(c);
-        formatter.printHelp("cwctl create [OPTION]... <name>-<namespace>", options);
+        formatter.printHelp("cwctl create [OPTION]... NAME-NAMESPACE", options);
     }
 
     private static String mkuuid() {
@@ -244,7 +253,7 @@ public class PrivilegedControl extends Control
     @Command("Install add-on into application")
     public void install(String args[]) throws IOException {
         if (args.length < 2 || args.length > 3) {
-            System.err.println("usage: cwctl install uuid source [repo]");
+            System.err.println("usage: cwctl install UUID SOURCE [REPO]");
             System.exit(1);
             return;
         }
@@ -259,11 +268,33 @@ public class PrivilegedControl extends Control
     @Command("Uninstall add-on from application")
     public void uninstall(String args[]) throws IOException {
         if (args.length != 2) {
-            System.err.println("usage: cwctl uninstall uuid name");
+            System.err.println("usage: cwctl uninstall UUID NAME");
             System.exit(1);
             return;
         }
 
         do_action(args[0], container -> container.remove(args[1]));
+    }
+
+    /** Convenient internal command to substitute container user. */
+    public void su(String args[]) throws IOException {
+        if (args.length != 1 || "all".equals(args[0])) {
+            System.err.println("usage cwctl su <uuid or domain name>");
+            System.exit(1);
+            return;
+        }
+
+        do_action(args[0], container -> Exec.args("su", "-", container.getUuid()).run());
+    }
+
+    /** Convenient internal command to run ssh on specified container user. */
+    public void ssh(String args[]) throws IOException {
+        if (args.length != 1 || "all".equals(args[0])) {
+            System.err.println("usage cwctl su <uuid or domain name>");
+            System.exit(1);
+            return;
+        }
+
+        do_action(args[0], container -> Exec.args("ssh", container.getUuid() + "@localhost").run());
     }
 }

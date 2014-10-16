@@ -7,6 +7,8 @@
 package com.cloudway.platform.container;
 
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -25,6 +27,8 @@ import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
+import com.cloudway.platform.container.proxy.HttpProxy;
+import static com.cloudway.platform.container.ApplicationState.*;
 
 public class ApplicationContainer
 {
@@ -252,7 +256,7 @@ public class ApplicationContainer
 
         ApplicationContainer container = new ApplicationContainer(uuid, name, namespace, capacity, null);
         container.plugin.create();
-        container.setState(ApplicationState.NEW);
+        container.setState(NEW);
         return container;
     }
 
@@ -271,19 +275,38 @@ public class ApplicationContainer
      * Sets the application state to "started" and starts the guest.
      */
     public void start() throws IOException {
-        if (Etc.getuid() == 0) {
-            plugin.start();
+        int uid = Etc.getuid();
+        ApplicationState state = getState();
+
+        if (uid != 0 && state == IDLE && HttpProxy.getInstance().isIdle(getDomainName())) {
+            try {
+                // contact proxy to activate container for unprivileged user
+                URL url = new URL("http://127.0.0.1/");
+                URLConnection con = url.openConnection();
+                con.setRequestProperty("X-Cloudway-Host", getDomainName());
+                con.getInputStream().close();
+            } catch (IOException ex) {
+                // log and ignore
+            }
+            return;
+        }
+
+        if (uid == 0) {
+            if (state != STARTED)
+                plugin.start();
+            if (state == IDLE)
+                HttpProxy.getInstance().unidle(getDomainName());
         }
 
         start_guest();
-        setState(ApplicationState.STARTED);
+        setState(STARTED);
     }
 
     /**
      * Sets the application state to "stopped" and stops the guest.
      */
     public void stop() throws IOException {
-        setState(ApplicationState.STOPPED);
+        setState(STOPPED);
         stop_guest(true, 0, null);
     }
 
@@ -291,7 +314,7 @@ public class ApplicationContainer
      * Restart the application container.
      */
     public void restart() throws IOException {
-        if (getState() == ApplicationState.STARTED) {
+        if (getState() == STARTED) {
             addons.restart();
         } else {
             start();
@@ -302,10 +325,34 @@ public class ApplicationContainer
      * Sets the application state to "idle" and stops the guest.
      */
     public void idle() throws IOException {
-        if (getState() != ApplicationState.STOPPED) {
+        if (getState() != STOPPED) {
             stop_guest(true, 30, TimeUnit.SECONDS);
-            setState(ApplicationState.IDLE);
+            HttpProxy.getInstance().idle(getDomainName(), getUuid());
+            setState(IDLE);
         }
+    }
+
+    /**
+     * Unidle the application. Must be called by privileged user.
+     */
+    public void unidle() throws IOException {
+        if (Etc.getuid() == 0) {
+            // make sure the container is really idled to prevent DoS attack
+            if (HttpProxy.getInstance().unidle(getDomainName())) {
+                plugin.start();
+                start_guest();
+                setState(STARTED);
+            }
+        }
+    }
+
+    /**
+     * Execute user defined control action.
+     */
+    public void control(String action, boolean enable_action_hooks)
+        throws IOException
+    {
+        addons.control_all(action, enable_action_hooks);
     }
 
     private void start_guest() throws IOException {
@@ -341,7 +388,7 @@ public class ApplicationContainer
         try {
             return ApplicationState.valueOf(FileUtils.read(state_file()));
         } catch (Exception ex) {
-            return ApplicationState.UNKNOWN;
+            return UNKNOWN;
         }
     }
 
@@ -355,7 +402,7 @@ public class ApplicationContainer
      * tidy hook.
      */
     public void tidy() throws IOException {
-        boolean running = getState() == ApplicationState.STARTED;
+        boolean running = getState() == STARTED;
 
         if (running) {
             stop_guest(false, 0, null);
@@ -412,7 +459,7 @@ public class ApplicationContainer
      * Called by Git post-receive hook.
      */
     public void post_receive() throws IOException {
-        boolean running = getState() == ApplicationState.STARTED;
+        boolean running = getState() == STARTED;
 
         if (running) {
             stop_guest(false, 0, null);

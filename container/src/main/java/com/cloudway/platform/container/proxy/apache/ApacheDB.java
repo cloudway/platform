@@ -9,11 +9,11 @@ package com.cloudway.platform.container.proxy.apache;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -39,6 +39,8 @@ public class ApacheDB
               .orElse("httxt2dbm");
 
     private String mapname;
+    private Map<String, String> map = new LinkedHashMap<>();
+    private long mtime = -1;
 
     public ApacheDB(String mapname) {
         this.mapname = mapname;
@@ -47,32 +49,40 @@ public class ApacheDB
     public synchronized void reading(Consumer<Map<String,String>> action)
         throws IOException
     {
-        Map<String, String> map = new LinkedHashMap<>();
-        load(map);
-        action.accept(map);
+        action.accept(load());
     }
 
     public synchronized void writting(Consumer<Map<String,String>> action)
         throws IOException
     {
-        Map<String, String> map = new LinkedHashMap<>();
-        load(map);
-        action.accept(map);
-        store(map);
+        Map<String, String> newmap = new LinkedHashMap<>(load());
+        action.accept(newmap);
+
+        if (!map.equals(newmap)) {
+            map = newmap;
+            store(newmap);
+        }
     }
 
-    private void load(Map<String,String> map) throws IOException {
+    private Map<String, String> load() throws IOException {
         Path file = BASEDIR.resolve(mapname + SUFFIX);
-        try (Stream<String> lines = Files.lines(file)) {
-            lines.forEach(line -> {
-                if (line.indexOf(' ') != -1) {
-                    String[] pair = line.split(" ");
-                    map.put(pair[0], pair[1]);
+        if (Files.exists(file)) {
+            long last_mtime = Files.getLastModifiedTime(file).to(TimeUnit.NANOSECONDS);
+            if (last_mtime != this.mtime) {
+                Map<String, String> newmap = new LinkedHashMap<>();
+                try (Stream<String> lines = Files.lines(file)) {
+                    lines.forEach(line -> {
+                        int i = line.indexOf(' ');
+                        if (i != -1) {
+                            newmap.put(line.substring(0, i), line.substring(i+1));
+                        }
+                    });
                 }
-            });
-        } catch (NoSuchFileException ex) {
-            // ok
+                this.map = newmap;
+                this.mtime = last_mtime;
+            }
         }
+        return map;
     }
 
     private void store(Map<String, String> map) throws IOException {
@@ -89,7 +99,7 @@ public class ApacheDB
 
         Path wd = Files.createTempDirectory(BASEDIR, mapname + ".db~");
         try {
-            Path tmpdb = wd.resolve("new.db");
+            Path tmpdb = wd.resolve("tmp.db");
             Exec.args(httxt2dbm, "-f", "DB", "-i", txt, "-o", tmpdb)
                 .silentIO().checkError().run();
             Files.move(tmpdb, dbm, REPLACE_EXISTING, ATOMIC_MOVE);

@@ -18,6 +18,7 @@ public class ApacheProxy implements HttpProxy
 
     private ApacheDB mappings = new ApacheDB("mappings");
     private ApacheDB aliases  = new ApacheDB("aliases");
+    private ApacheDB idles    = new ApacheDB("idles");
 
     public void addMapping(String path, String uri)
         throws IOException
@@ -55,6 +56,30 @@ public class ApacheProxy implements HttpProxy
         aliases.writting(d -> d.remove(name));
     }
 
+    public void idle(String fqdn, String uuid)
+        throws IOException
+    {
+        idles.writting(d -> d.put(fqdn, uuid));
+    }
+
+    public boolean unidle(String fqdn)
+        throws IOException
+    {
+        boolean holder[] = new boolean[1];
+        idles.writting(d -> holder[0] = d.remove(fqdn) != null);
+        return holder[0];
+    }
+
+    public boolean isIdle(String fqdn) {
+        try {
+            boolean holder[] = new boolean[1];
+            idles.reading(d -> holder[0] = d.containsKey(fqdn));
+            return holder[0];
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
     public void purge(String fqdn) throws IOException {
         mappings.writting(d -> d.keySet().removeIf(k -> {
             int i = k.indexOf('/');
@@ -64,5 +89,6 @@ public class ApacheProxy implements HttpProxy
         }));
 
         aliases.writting(d -> d.values().remove(fqdn));
+        idles.writting(d -> d.remove(fqdn));
     }
 }

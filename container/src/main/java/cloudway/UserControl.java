@@ -53,10 +53,15 @@ public class UserControl extends Control
         getContainer().tidy();
     }
 
+    @Command("Show current application status")
+    public void status(String[] args) throws IOException {
+        getContainer().control("status", false);
+    }
+
     @Command("Install add-on into application")
     public void install(String[] args) throws IOException {
         if (args.length < 1 || args.length > 2) {
-            System.err.println("usage: cwctl install source [repo]");
+            System.err.println("usage: cwctl install SOURCE [REPO]");
             System.exit(1);
             return;
         }
@@ -69,7 +74,7 @@ public class UserControl extends Control
     @Command("Uninstall add-on from application")
     public void uninstall(String[] args) throws IOException {
         if (args.length != 1) {
-            System.err.println("usage: cwctl uninstall name");
+            System.err.println("usage: cwctl uninstall NAME");
             System.exit(1);
             return;
         }

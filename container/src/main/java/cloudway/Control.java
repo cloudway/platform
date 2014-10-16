@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
@@ -81,16 +82,18 @@ public abstract class Control
     @Command("Show this help message")
     @SuppressWarnings("unused")
     public void help(String[] args) {
-        System.err.println("usage: cwctl command [args...]");
+        System.err.println("Usage: cwctl COMMAND [ARGS...]");
         System.err.println();
         System.err.println("COMMANDS:");
         System.err.println();
-        Stream.of(this.getClass().getMethods()).forEach(m -> {
-            Command description = m.getAnnotation(Command.class);
-            if (description != null) {
-                System.err.printf("  %-10s%s%n", m.getName(), description.value());
-            }
-        });
+        Stream.of(this.getClass().getMethods())
+            .sorted(Comparator.comparing(Method::getName))
+            .forEach(m -> {
+                Command description = m.getAnnotation(Command.class);
+                if (description != null) {
+                    System.err.printf("  %-12s%s%n", m.getName(), description.value());
+                }
+            });
         System.err.println();
     }
 

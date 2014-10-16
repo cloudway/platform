@@ -171,6 +171,7 @@ public class AddonControl
             Map<String,String> env = Environ.loadAll(container);
             valid_addons().map(Addon::getPath).forEach(path -> {
                 try {
+                    do_control(path, env, "stop", true);
                     with_unlocked(path, false, () -> do_action(path, env, "teardown"));
                 } catch (IOException ex) {
                     // log and ignore
