@@ -14,6 +14,9 @@ RewriteMap cloudway-mappings dbm=db:/var/lib/cloudway/.httpd/mappings.db
 RewriteMap cloudway-aliases  dbm=db:/var/lib/cloudway/.httpd/aliases.db
 RewriteMap cloudway-idles    dbm=db:/var/lib/cloudway/.httpd/idles.db
 
+# Forbidden template files
+RewriteRule \.cwt$ - [NS,F]
+
 # Set X-Client-IP to the node which contacted the proxy
 RewriteCond %{REMOTE_ADDR} ^(.*)$
 RewriteRule ^.*$ - [E=X_CLIENT_IP:%1]

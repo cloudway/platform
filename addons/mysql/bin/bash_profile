@@ -1,0 +1,19 @@
+function mysql {
+  hostopt="-h $CLOUDWAY_MYSQL_DB_HOST"
+  portopt="-P $CLOUDWAY_MYSQL_DB_PORT"
+  useropt="-u $CLOUDWAY_MYSQL_DB_USERNAME"
+  passopt="--password=$CLOUDWAY_MYSQL_DB_PASSWORD"
+
+  # Unset default value if it was provided to us.
+  for arg in $@; do
+    case "$arg" in
+      --host=*|-h)      unset hostopt ;;
+      --port=*|-P)      unset portopt ;;
+      --user=*|-u)      unset useropt ;;
+      --password=*|-p)  unset passopt ;;
+      *) ;;
+    esac
+  done
+
+  /usr/bin/mysql $hostopt $portopt $useropt $passopt "$@"
+}

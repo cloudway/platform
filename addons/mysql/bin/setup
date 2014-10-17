@@ -1,0 +1,71 @@
+#!/bin/bash -e
+
+function generate_username {
+  local DEFAULT_USERNAME='admin'
+  local DEFAULT_LEN=12
+  local DEFAULT_RANGE="a-np-zA-NP-Z1-9" # Alphanumeric except o,O,0
+
+  echo $(pad_string ${1-$DEFAULT_USERNAME} ${2-$DEFAULT_LEN} ${3-$DEFAULT_RANGE})
+}
+
+function generate_password {
+  local DEFAULT_LEN=12
+  local DEFAULT_RANGE="a-np-zA-NP-Z1-9-_" # Dash, underscore, Alphanumeric except o,O,0
+  local DEFAULT_IGNORE="^-"
+
+  echo $(random_string ${1-$DEFAULT_LEN} ${2-$DEFAULT_RANGE} ${3-$DEFAULT_IGNORE})
+}
+
+function random_string {
+  local DEFAULT_LEN=12
+  local DEFAULT_RANGE="a-zA-Z0-9"
+
+  local len=${1-$DEFAULT_LEN}
+  local range=${2-"${DEFAULT_RANGE}"}
+  local omit=${3-""}
+
+  local rnd=$(head -n 50 /dev/urandom | tr -dc $range | fold -w $len)
+  [ -n "${omit}" ] && rnd=$(echo "${rnd}" | grep -v "${omit}")
+  echo $(echo "${rnd}" | head -n1)
+}
+
+function pad_string {
+  local str=$1
+  local len=$2
+  local pattern=$3
+
+  local remain=$(( $len - ${#str} ))
+  if [ "$remain" -ge 1 ]; then
+    local rnstr=$(random_string $remain $pattern)
+    str="${str}${rnstr}"
+  fi
+  echo $str
+}
+
+function set_env {
+  echo "$2" > "$CLOUDWAY_MYSQL_DIR/env/$1"
+}
+
+mkdir -p $CLOUDWAY_MYSQL_DIR/{data,run}
+
+datadir="$CLOUDWAY_MYSQL_DIR/data"
+socket="$CLOUDWAY_MYSQL_DIR/run/mysql.sock"
+
+username=$(generate_username)
+password=$(generate_password)
+
+/usr/bin/mysql_install_db --datadir=${datadir} --skip-name-resolve --force > /dev/null 2>&1
+
+set_env CLOUDWAY_MYSQL_LOG_DIR     "$CLOUDWAY_LOG_DIR"
+set_env CLOUDWAY_MYSQL_DB_USERNAME "$username"
+set_env CLOUDWAY_MYSQL_DB_PASSWORD "$password"
+set_env CLOUDWAY_MYSQL_DB_URL      "mysql://$username:$password@$CLOUDWAY_MYSQL_DB_HOST:$CLOUDWAY_MYSQL_DB_PORT/"
+
+echo ""
+echo "MySQL database added. Please make note of these credentials:"
+echo ""
+echo "        User Name: $username"
+echo "         Password: $password"
+echo "    Database Name: $CLOUDWAY_APP_NAME"
+echo "   Connection URL: mysql://$CLOUDWAY_MYSQL_DB_HOST:$CLOUDWAY_MYSQL_DB_PORT/"
+echo ""

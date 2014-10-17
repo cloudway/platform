@@ -1,0 +1,145 @@
+#!/bin/bash -e
+
+HTTPD_CFG_FILE=$CLOUDWAY_PHP_DIR/etc/httpd/conf/httpd.conf
+HTTPD_CFG_DIR=$CLOUDWAY_PHP_DIR/etc/httpd/conf.d
+HTTPD_PASSENV_FILE=$HTTPD_CFG_DIR/passenv.conf
+HTTPD_PID_FILE=$CLOUDWAY_PHP_DIR/run/httpd.pid
+
+function apache {
+    /usr/sbin/httpd -C "Include $HTTPD_CFG_DIR/*.conf" -f $HTTPD_CFG_FILE -k $1 > /dev/null 2>&1
+}
+
+function start {
+    write_httpd_passenv
+    ensure_valid_httpd_process
+    apache start
+    ret=$?
+    [ "$ret" == "0" ] && wait_for_start
+    return $ret
+}
+
+function restart {
+    write_httpd_passenv
+    ensure_valid_httpd_process
+    apache restart
+    return $?
+}
+
+function reload {
+    write_httpd_passenv
+    ensure_valid_httpd_process
+    apache graceful
+    return $?
+}
+
+function stop {
+    ensure_valid_httpd_process
+    apache stop
+    wait_for_stop
+}
+
+function tidy {
+    rm -rf $CLOUDWAY_PHP_LOG_DIR/*
+    return 0
+}
+
+function status {
+    if curl "http://$CLOUDWAY_PHP_IP:$CLOUDWAY_PHP_PORT/server-status?auto" >/dev/null 2>&1; then
+        echo "Application is running"
+    else
+        echo "Application is either stopped or inaccessible"
+    fi
+}
+
+function write_httpd_passenv {
+    ( for key in $(env | cut -d= -f1); do
+        if [[ $key =~ ^[A-Z].* ]]; then
+            echo PassEnv $key
+        fi
+      done ) > $HTTPD_PASSENV_FILE
+}
+
+function ensure_valid_httpd_process {
+    local pidfile="$HTTPD_PID_FILE"
+    local cfgfile="$HTTPD_CFG_FILE"
+    ensure_valid_httpd_pid_file $pidfile $cfgfile
+    [ -n $pidfile ] && [ -f $pidfile ] && is_httpd_pid $(< $pidfile) && return 0
+    [ -n $pidfile ] && rm -f $pidfile
+    killall_matching_httpds $cfgfile
+}
+
+function ensure_valid_httpd_pid_file {
+    local pid_file="$1"
+    local cfg_file="$2"
+
+    local force_rebuild=""
+    local pid_contents=""
+    local pid_regex='^[1-9][0-9]+$'
+    local real_pid=""
+
+    if [ -e "$pid_file" ]; then
+        if ! [ -f "$pid_file" -a -O "$pid_file" -a -r "$pid_file" ]; then
+            force_rebuild="true"
+        else
+            # The pid file must contain one and only one number, nothing else or be blank
+            pid_contents=$(cat "$pid_file" 2>/dev/null || :)
+            if ! [[ "$pid_contents" =~ $pid_regex ]]; then
+                force_rebuild="true"
+            fi
+        fi
+    fi
+
+    if [ -n "$force_rebuild" ]; then
+        rm -rf "$pid_file"
+        if [ "$cfg_file" ]; then
+            real_pid=$(pgrep -o -u `id -u` -f -- "-f $cfg_file")
+            if [ -n "$real_pid" ]; then
+                echo "$real_pid" > "$pid_file"
+            fi
+        fi
+    fi
+}
+
+function killall_matching_httpds() {
+    [ -z "$1" ] && return 1
+    ps -u $(id -u) -o pid,command | grep "$1" | grep -v "grep" | \
+        awk '{ print $1 }' | xargs kill -9 >/dev/null 2>&1 || :
+}
+
+function is_httpd_pid {
+    ps -p "$1" 2>/dev/null  | grep httpd >/dev/null
+}
+
+function wait_for_start {
+    [ -f "$HTTPD_PID_FILE" ] && return 0
+    for i in {1..20}; do
+        sleep .5
+        [ -f "$HTTPD_PID_FILE" ] && break
+    done
+}
+
+function wait_for_stop {
+    if [ -f "$HTTPD_PID_FILE" ]; then
+        local pid=$(< $HTTPD_PID_FILE)
+        for i in {1..20}; do
+            if $(ps --pid $pid >/dev/null 2>&1); then
+                echo "Waiting for stop to finish"
+                sleep .5
+            else
+                break
+            fi
+        done
+    fi
+}
+
+case "$1" in
+    start)      echo "Starting PHP";    start ;;
+    stop)       echo "Stopping PHP";    stop ;;
+    restart)    echo "Restarting PHP";  restart ;;
+    reload)     echo "Reloading PHP";   reload ;;
+    status)     status ;;
+    tidy)       tidy ;;
+    *)          exit 0
+esac
+
+exit $?

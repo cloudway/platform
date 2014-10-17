@@ -1,0 +1,3 @@
+#!/bin/bash -ue
+
+rm -f $CLOUDWAY_HOME_DIR/.pearrc

@@ -1,0 +1,74 @@
+[mysqld]
+datadir=$CLOUDWAY_MYSQL_DIR/data
+socket=$CLOUDWAY_MYSQL_DIR/run/mysql.sock
+bind-address=$CLOUDWAY_MYSQL_DB_HOST
+
+skip-name-resolve
+symbolic-links=0
+
+key_buffer_size = 32M
+max_allowed_packet = 200M
+#if ($CLOUDWAY_MYSQL_TABLE_OPEN_CACHE)
+table_open_cache = $CLOUDWAY_MYSQL_TABLE_OPEN_CACHE
+#else
+table_open_cache = 4
+#end
+sort_buffer_size = 128K
+read_buffer_size = 8M
+read_rnd_buffer_size = 256K
+net_buffer_length = 2K
+thread_stack = 256K
+#if ($CLOUDWAY_MYSQL_LOWER_CASE_TABLE_NAMES)
+lower_case_table_names = $CLOUDWAY_MYSQL_LOWER_CASE_TABLE_NAMES
+#else
+lower_case_table_names = 0
+#end
+#if ($CLOUDWAY_MYSQL_MAX_CONNECTIONS)
+max_connections = $CLOUDWAY_MYSQL_MAX_CONNECTIONS
+#end
+#if ($CLOUDWAY_MYSQL_FT_MIN_WORD_LEN)
+ft_min_word_len = $CLOUDWAY_MYSQL_FT_MIN_WORD_LEN
+#end
+#if ($CLOUDWAY_MYSQL_FT_MAX_WORD_LEN)
+ft_max_word_len = $CLOUDWAY_MYSQL_FT_MAX_WORD_LEN
+#end
+
+#if ($CLOUDWAY_MYSQL_DEFAULT_STORAGE_ENGINE)
+default-storage-engine = $CLOUDWAY_MYSQL_DEFAULT_STORAGE_ENGINE
+#end
+myisam_sort_buffer_size = 2M
+
+#if ($CLOUDWAY_MYSQL_TIMEZONE)
+default-time-zone = $CLOUDWAY_MYSQL_TIMEZONE
+#end
+
+#INNODB
+innodb_buffer_pool_size = 32M
+innodb_additional_mem_pool_size = 2M
+innodb_log_file_size = 16M
+innodb_log_buffer_size = 16M
+innodb_flush_log_at_trx_commit = 1
+innodb_lock_wait_timeout = 50
+
+[mysqld_safe]
+pid-file=$CLOUDWAY_MYSQL_DIR/run/mysql.pid
+
+[mysqldump]
+quick
+max_allowed_packet = 16M
+
+[mysql]
+no-auto-rehash
+
+[myisamchk]
+key_buffer_size = 8M
+sort_buffer_size = 8M
+#if ($CLOUDWAY_MYSQL_FT_MIN_WORD_LEN)
+ft_min_word_len = $CLOUDWAY_MYSQL_FT_MIN_WORD_LEN
+#end
+#if ($CLOUDWAY_MYSQL_FT_MAX_WORD_LEN)
+ft_max_word_len = $CLOUDWAY_MYSQL_FT_MAX_WORD_LEN
+#end
+
+[mysqlhotcopy]
+interactive-timeout

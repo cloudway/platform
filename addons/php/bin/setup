@@ -1,0 +1,34 @@
+#!/bin/bash -eu
+
+if [[ -d /usr/lib64 ]]; then
+  _libdir=/usr/lib64
+else
+  _libdir=/usr/lib
+fi
+
+# Create/truncate Apache PassEnv configuration file
+touch $CLOUDWAY_PHP_DIR/etc/httpd/conf.d/passenv.conf
+
+# Create environment variables
+echo "$CLOUDWAY_PHP_DIR/logs" > "$CLOUDWAY_PHP_DIR/env/CLOUDWAY_PHP_LOG_DIR"
+echo "$CLOUDWAY_PHP_DIR/etc/php.ini" > "$CLOUDWAY_PHP_DIR/env/PHPRC"
+
+# Create additional directories required by PHP
+mkdir -p $CLOUDWAY_PHP_DIR/phplib/pear/{docs,ext,php,cache,cfg,data,download,temp,tests,www}
+mkdir -p $CLOUDWAY_PHP_DIR/{logs,run,tmp,sessions}
+
+rm -f $CLOUDWAY_PHP_DIR/modules $CLOUDWAY_PHP_DIR/etc/httpd/conf/magic
+ln -s ${_libdir}/httpd/modules $CLOUDWAY_PHP_DIR/modules
+ln -s /etc/httpd/conf/magic $CLOUDWAY_PHP_DIR/etc/httpd/conf/magic
+
+# Create a writable directory for Drush settings
+mkdir -p $CLOUDWAY_HOME_DIR/.drush
+
+# Pear setup
+if [ -x /usr/bin/pear ]; then
+  rm -f $CLOUDWAY_HOME_DIR/.pearrc
+  pear config-create "$CLOUDWAY_PHP_DIR"/phplib/pear/ "$CLOUDWAY_HOME_DIR"/.pearrc > /dev/null
+  pear -c "$CLOUDWAY_HOME_DIR"/.pearrc config-set php_ini "$CLOUDWAY_PHP_DIR"/etc/php.ini > /dev/null
+  pear -c "$CLOUDWAY_HOME_DIR"/.pearrc config-set auto_discover 1 > /dev/null
+  pear -c "$CLOUDWAY_HOME_DIR"/.pearrc config-get bin_dir > "$CLOUDWAY_PHP_DIR/env/CLOUDWAY_PHP_PATH_ELEMENT" > /dev/null
+fi

@@ -1,0 +1,18 @@
+<?xml version="1.0" ?>
+
+<addon>
+  <name>php</name>
+  <display-name>PHP 5.5</display-name>
+  <version>5.5</version>
+  <vendor>php.net</vendor>
+  <addon-version>1.0</addon-version>
+  <addon-vendor>cloudway</addon-vendor>
+  <category>Framework</category>
+
+  <endpoint>
+    <private-ip-name>IP</private-ip-name>
+    <private-port-name>PORT</private-port-name>
+    <private-port>8080</private-port>
+    <proxy-mapping front-end="" back-end="" />
+  </endpoint>
+</addon>

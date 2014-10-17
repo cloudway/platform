@@ -1,0 +1,20 @@
+ServerName "$CLOUDWAY_APP_DNS"
+ServerRoot "$CLOUDWAY_PHP_DIR"
+DocumentRoot "$CLOUDWAY_REPO_DIR/php"
+
+Listen $CLOUDWAY_PHP_IP:$CLOUDWAY_PHP_PORT
+User $CLOUDWAY_APP_ID
+Group $CLOUDWAY_APP_ID
+
+ErrorLog "|/usr/sbin/rotatelogs $CLOUDWAY_PHP_DIR/logs/error_log-%Y%m%d-%H%M%S-%Z 86400"
+CustomLog "|/usr/sbin/rotatelogs $CLOUDWAY_PHP_DIR/logs/access_log-%Y%m%d-%H%M%s-%Z 86400" combined
+
+<IfVersion >= 2.4>
+DefaultRuntimeDir "$CLOUDWAY_PHP_DIR/run"
+</IfVersion>
+
+<Directory "$CLOUDWAY_REPO_DIR/php">
+  AllowOverride All
+</Directory>
+
+php_value include_path ".:$CLOUDWAY_REPO_DIR/libs/:$CLOUDWAY_PHP_DIR/phplib/pear/pear/php/:/usr/share/pear/"
