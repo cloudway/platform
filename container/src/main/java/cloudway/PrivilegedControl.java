@@ -45,11 +45,11 @@ public class PrivilegedControl extends Control
     }
 
     private void showInfo(ApplicationContainer container) {
-        System.out.println("ID:    " + container.getId());
-        System.out.println("Name:  " + container.getName());
-        System.out.println("DNS:   " + container.getDomainName());
-        System.out.println("Size:  " + container.getCapacity());
-        System.out.println("State: " + container.getState());
+        System.out.println("ID:      " + container.getId());
+        System.out.println("Name:    " + container.getName());
+        System.out.println("DNS:     " + container.getDomainName());
+        System.out.println("Size:    " + container.getCapacity());
+        System.out.println("State:   " + container.getState());
         System.out.println();
     }
 
@@ -153,7 +153,7 @@ public class PrivilegedControl extends Control
                      .create("k"),
         OptionBuilder.withArgName("PATH")
                      .withDescription("Add-on source location")
-                     .hasArg()
+                     .hasArgs()
                      .create('s'),
         OptionBuilder.withArgName("URL")
                      .withDescription("Repository URL")
@@ -197,7 +197,7 @@ public class PrivilegedControl extends Control
         String namespace   = matcher.group(2);
         String capacity    = cmd.getOptionValue("c", "small");
         String keyfile     = loadKeyFile(cmd.getOptionValue("k"));
-        String source      = cmd.getOptionValue("s");
+        String sources[]   = cmd.getOptionValues("s");
         String repo        = cmd.getOptionValue("r");
 
         ApplicationContainer container =
@@ -207,8 +207,8 @@ public class PrivilegedControl extends Control
             container.addAuthorizedKey("default", keyfile);
         }
 
-        if (source != null) {
-            install(container, source, repo);
+        if (sources != null) {
+            IO.forEach(Stream.of(sources), source -> install(container, source, repo));
             container.start();
         }
     }

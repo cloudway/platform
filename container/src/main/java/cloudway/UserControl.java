@@ -7,6 +7,9 @@
 package cloudway;
 
 import java.io.IOException;
+import java.util.List;
+
+import com.cloudway.platform.container.Addon;
 import com.cloudway.platform.container.ApplicationContainer;
 
 @SuppressWarnings("unused")
@@ -26,11 +29,11 @@ public class UserControl extends Control
     @Command("Show application information")
     public void info(String[] args) {
         ApplicationContainer container = getContainer();
-        System.out.println("ID:    " + container.getId());
-        System.out.println("Name:  " + container.getName());
-        System.out.println("DNS:   " + container.getDomainName());
-        System.out.println("Size:  " + container.getCapacity());
-        System.out.println("State: " + container.getState());
+        System.out.println("ID:      " + container.getId());
+        System.out.println("Name:    " + container.getName());
+        System.out.println("DNS:     " + container.getDomainName());
+        System.out.println("Size:    " + container.getCapacity());
+        System.out.println("State:   " + container.getState());
     }
 
     @Command("Start the application")
@@ -80,6 +83,12 @@ public class UserControl extends Control
         }
 
         getContainer().remove(args[0]);
+    }
+
+    public void endpoints(String[] args) {
+        getContainer().getEndpoints().forEach(ep ->
+            System.out.printf("%-16s %-8s %s%n", ep.getPrivateIP(), ep.getPrivatePort(), ep.getInfo())
+        );
     }
 
     public void pre_receive(String[] args) throws IOException {

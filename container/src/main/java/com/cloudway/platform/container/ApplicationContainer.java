@@ -7,6 +7,8 @@
 package com.cloudway.platform.container;
 
 import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Files;
@@ -15,19 +17,25 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
+import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.proxy.HttpProxy;
+import org.apache.velocity.VelocityContext;
+import org.apache.velocity.app.VelocityEngine;
 import static com.cloudway.platform.container.ApplicationState.*;
 
 public class ApplicationContainer
@@ -175,6 +183,12 @@ public class ApplicationContainer
         return name + "-" + namespace + "." + DOMAIN;
     }
 
+    public List<Addon.Endpoint> getEndpoints() {
+        return addons.valid_addons()
+            .flatMap(a -> a.getEndpoints().stream())
+            .collect(Collectors.toList());
+    }
+
     public String getCapacity() {
         return capacity;
     }
@@ -298,6 +312,7 @@ public class ApplicationContainer
                 HttpProxy.getInstance().unidle(getDomainName());
         }
 
+        processTemplates();
         start_guest();
         setState(STARTED);
     }
@@ -315,6 +330,7 @@ public class ApplicationContainer
      */
     public void restart() throws IOException {
         if (getState() == STARTED) {
+            processTemplates();
             addons.restart();
         } else {
             start();
@@ -352,7 +368,7 @@ public class ApplicationContainer
     public void control(String action, boolean enable_action_hooks)
         throws IOException
     {
-        addons.control_all(action, enable_action_hooks);
+        addons.control_all(action, enable_action_hooks, false);
     }
 
     private void start_guest() throws IOException {
@@ -468,11 +484,61 @@ public class ApplicationContainer
         try {
             ApplicationRepository repo = ApplicationRepository.newInstance(this);
             repo.checkout(getRepoDir());
+            processTemplates();
         } finally {
             if (running) {
                 start_guest();
             }
         }
+    }
+
+    public static final String  TEMPLATE_EXT = ".cwt";
+    public static final Pattern TEMPLATE_RE = Pattern.compile("\\A\\.?(.*)\\.cwt\\Z");
+
+    public void processTemplates(Path path, Map<String,String> env, boolean securing)
+        throws IOException
+    {
+        HashMap<String,String> cfg = new HashMap<>();
+        Config config = Config.getDefault();
+        config.keys().forEach(key -> cfg.put(key, config.get(key)));
+
+        VelocityEngine ve = new VelocityEngine();
+        ve.init();
+
+        try (Stream<Path> files = Files.walk(path)) {
+            IO.forEach(files, input -> {
+                Path output;
+
+                // Derive output file name from input file name
+                //   foo.txt.cwt  => foo.txt
+                //   .foo.txt.cwt => foo.txt
+                String filename = input.getFileName().toString();
+                Matcher matcher = TEMPLATE_RE.matcher(filename);
+                if (matcher.matches()) {
+                    output = input.resolveSibling(matcher.group(1));
+                } else {
+                    return;
+                }
+
+                try (Reader reader = Files.newBufferedReader(input)) {
+                    try (Writer writer = Files.newBufferedWriter(output)) {
+                        VelocityContext vc = new VelocityContext();
+                        env.forEach(vc::put);
+                        vc.put("config", cfg.clone());
+                        ve.evaluate(vc, writer, filename, reader);
+                    }
+                }
+
+                if (securing) {
+                    setFileReadOnly(input);
+                    setFileReadWrite(output);
+                }
+            });
+        }
+    }
+
+    private void processTemplates() throws IOException {
+        processTemplates(getRepoDir(), Environ.loadAll(this), false);
     }
 
     /**

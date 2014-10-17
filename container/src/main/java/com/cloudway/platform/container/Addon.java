@@ -23,10 +23,13 @@ public class Addon
 {
     private final ApplicationContainer container;
     private Path path;
-    private String shortName;
-    private String displayName;
-    private AddonType type;
-    private List<Endpoint> endpoints = new ArrayList<>();
+
+    private String          shortName;
+    private String          displayName;
+    private String          version;
+    private AddonType       type;
+    private List<Endpoint>  endpoints = new ArrayList<>();
+
     private Exception failure;
 
     public static boolean isAddonDirectory(Path dir) {
@@ -47,12 +50,13 @@ public class Addon
                 (com.cloudway.platform.container.schema.addon.Addon)
                 com.cloudway.platform.container.schema.addon.Addon.unmarshal(reader);
 
-            addon.shortName = metadata.getName();
+            addon.shortName   = metadata.getName();
             addon.displayName = metadata.getDisplayName();
-            addon.type = AddonType.valueOf(metadata.getCategory().toUpperCase());
+            addon.version     = metadata.getVersion();
+            addon.type        = AddonType.valueOf(metadata.getCategory().toUpperCase());
 
             Stream.of(metadata.getEndpoint()).forEach(ep -> {
-                Endpoint endpoint = new Endpoint(
+                Endpoint endpoint = addon.new Endpoint(
                     ("CLOUDWAY_" + addon.shortName + "_" + ep.getPrivateIpName()).toUpperCase(),
                     ("CLOUDWAY_" + addon.shortName + "_" + ep.getPrivatePortName()).toUpperCase()
                 );
@@ -88,6 +92,10 @@ public class Addon
 
     public String getDisplayName() {
         return displayName;
+    }
+
+    public String getVersion() {
+        return version;
     }
 
     public AddonType getType() {
@@ -135,7 +143,7 @@ public class Addon
         }
     }
 
-    public static class Endpoint {
+    public class Endpoint {
         private String privateIPName;
         private String privatePortName;
         private String privateIP;
@@ -179,6 +187,13 @@ public class Addon
 
         Map<String, String> getProxyMappings() {
             return mappings == null ? Collections.emptyMap() : mappings;
+        }
+
+        public String getInfo() {
+            String prefix = "CLOUDWAY_" + Addon.this.getName() + "_";
+            return Addon.this.getDisplayName() + ", " +
+                getPrivateIPName().substring(prefix.length()) + ":" +
+                getPrivatePortName().substring(prefix.length());
         }
     }
 }

@@ -7,9 +7,7 @@
 package com.cloudway.platform.container;
 
 import java.io.IOException;
-import java.io.Reader;
 import java.io.UncheckedIOException;
-import java.io.Writer;
 import java.nio.file.FileSystem;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -37,15 +35,12 @@ import static java.util.stream.Collectors.toMap;
 import static java.nio.file.StandardCopyOption.*;
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 
-import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.AbstractFileVisitor;
+import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
-
 import com.cloudway.platform.container.proxy.HttpProxy;
-import org.apache.velocity.VelocityContext;
-import org.apache.velocity.app.VelocityEngine;
 
 public class AddonControl
 {
@@ -70,7 +65,7 @@ public class AddonControl
         return _addons;
     }
 
-    private Stream<Addon> valid_addons() {
+    public Stream<Addon> valid_addons() {
         return addons().values().stream().filter(Addon::isValid);
     }
 
@@ -103,6 +98,7 @@ public class AddonControl
         try {
             // add environment variables
             addAddonEnvVar(target, name + "_DIR", target.toString(), true);
+            addAddonEnvVar(target, name + "_VERSION", addon.getVersion(), true);
             if (addon.getType() == AddonType.FRAMEWORK) {
                 container.addEnvVar("FRAMEWORK", name);
                 container.addEnvVar("FRAMEWORK_DIR", target.toString());
@@ -113,14 +109,13 @@ public class AddonControl
 
             // run addon actions with files unlocked
             do_validate(target, () -> with_unlocked(target, true, () -> {
-                processTemplates(target);
+                processTemplates(target, null);
                 do_action(target, null, "setup");
             }));
 
             // securing addon directory
             container.setFileTreeReadOnly(target.resolve("metadata"));
             container.setFileTreeReadOnly(target.resolve("bin"));
-            container.setFileTreeReadOnly(target.resolve("env"));
 
             // initialize repository and proxy mappings for framework addon
             if (addon.getType() == AddonType.FRAMEWORK) {
@@ -156,7 +151,7 @@ public class AddonControl
                 deletePrivateEndpoints(addon);
 
                 // gracefully stop the addon
-                do_control(path, env, "stop", true);
+                do_action(path, env, "control", "stop");
                 with_unlocked(path, false, () -> do_action(path, env, "teardown"));
             }
         } finally {
@@ -171,7 +166,7 @@ public class AddonControl
             Map<String,String> env = Environ.loadAll(container);
             valid_addons().map(Addon::getPath).forEach(path -> {
                 try {
-                    do_control(path, env, "stop", true);
+                    do_action(path, env, "control", "stop");
                     with_unlocked(path, false, () -> do_action(path, env, "teardown"));
                 } catch (IOException ex) {
                     // log and ignore
@@ -187,19 +182,19 @@ public class AddonControl
     }
 
     public void start() throws IOException {
-        control_all("start", true);
+        control_all("start", true, true);
     }
 
     public void stop() throws IOException {
-        control_all("stop", true);
+        control_all("stop", true, false);
     }
 
     public void restart() throws IOException {
-        control_all("restart", true);
+        control_all("restart", true, true);
     }
 
     public void tidy() throws IOException {
-        control_all("tidy", false);
+        control_all("tidy", false, false);
     }
 
     private Addon installFromDirectory(Path source, boolean copy)
@@ -307,45 +302,10 @@ public class AddonControl
         }
     }
 
-    private static final String TEMPLATE_EXT = ".cwt";
-
-    private void processTemplates(Path path)
+    private void processTemplates(Path path, Map<String, String> env)
         throws IOException
     {
-        Map<String,String> env = getAddonEnv(path, null);
-
-        HashMap<String,String> cfg = new HashMap<>();
-        Config config = Config.getDefault();
-        config.keys().forEach(key -> cfg.put(key, config.get(key)));
-
-        VelocityEngine ve = new VelocityEngine();
-        ve.init();
-
-        try (Stream<Path> files = getTemplateFiles(path)) {
-            IO.forEach(files, input -> {
-                String filename = input.getFileName().toString();
-                filename = filename.substring(0, filename.length() - TEMPLATE_EXT.length());
-                Path output = input.resolveSibling(filename);
-
-                try (Reader reader = Files.newBufferedReader(input)) {
-                    try (Writer writer = Files.newBufferedWriter(output)) {
-                        VelocityContext vc = new VelocityContext();
-                        env.forEach(vc::put);
-                        vc.put("config", cfg.clone());
-                        ve.evaluate(vc, writer, filename, reader);
-                    }
-                }
-
-                Files.deleteIfExists(input);
-            });
-        }
-    }
-
-    private Stream<Path> getTemplateFiles(Path path)
-        throws IOException
-    {
-        // TODO: The template file pattern may be configured in the addon metadata
-        return FileUtils.find(path, Integer.MAX_VALUE, "*" + TEMPLATE_EXT);
+        container.processTemplates(path, getAddonEnv(path, env), Etc.getuid() == 0);
     }
 
     private String[] getSharedFiles(Path source)
@@ -422,7 +382,7 @@ public class AddonControl
     }
 
     private String makeRelative(Path target, String entry) {
-        if ((entry = entry.trim()).isEmpty()) {
+        if ((entry = entry.trim()).isEmpty() || entry.startsWith("#")) {
             return null;
         }
 
@@ -484,11 +444,21 @@ public class AddonControl
             Path path = home.resolve(entry);
             if (Files.exists(path)) {
                 container.setFileReadOnly(path);
+
+                // Remove template file if the generated file is locked,
+                // so the template will never process again.
+                if (Files.isRegularFile(path)) {
+                    String filename = path.getFileName().toString();
+                    String ext = ApplicationContainer.TEMPLATE_EXT;
+                    Files.deleteIfExists(path.resolveSibling(filename + ext));
+                    Files.deleteIfExists(path.resolveSibling("." + filename + ext));
+                }
             }
         });
 
         container.setFileReadOnly(home);
         container.setFileReadOnly(target);
+        container.setFileTreeReadOnly(target.resolve("env"));
     }
 
     private void do_unlock(Path target, Collection<String> entries)
@@ -510,6 +480,7 @@ public class AddonControl
 
         container.setFileReadWrite(home);
         container.setFileReadWrite(target);
+        container.setFileTreeReadWrite(target.resolve("env"));
     }
 
     private void do_validate(Path path, IO.Runnable action)
@@ -644,23 +615,23 @@ public class AddonControl
         }
     }
 
-    public void control_all(String action, boolean enable_action_hooks)
+    public void control_all(String action, boolean enable_action_hooks, boolean process_templates)
         throws IOException
     {
         Map<String, String> env = Environ.loadAll(container);
-        IO.forEach(valid_addons().map(Addon::getPath),
-            path -> do_control(path, env, action, enable_action_hooks));
-    }
 
-    private void do_control(Path path, Map<String,String> env, String action, boolean enable_action_hooks)
-        throws IOException
-    {
         if (enable_action_hooks) {
             do_action_hook("pre_" + action, env);
+        }
+
+        IO.forEach(valid_addons().map(Addon::getPath), path -> {
+            if (process_templates)
+                processTemplates(path, env);
             do_action(path, env, "control", action);
+        });
+
+        if (enable_action_hooks) {
             do_action_hook("post_" + action, env);
-        } else {
-            do_action(path, env, "control", action);
         }
     }
 
@@ -674,7 +645,6 @@ public class AddonControl
             container.join(exec)
                      .directory(path)
                      .environment(getAddonEnv(path, env))
-                     .checkError()
                      .run();
         }
     }
@@ -687,7 +657,6 @@ public class AddonControl
         if (Files.isExecutable(action_hook)) {
             container.join(Exec.args(action_hook))
                      .environment(env)
-                     .checkError()
                      .run();
         }
     }
