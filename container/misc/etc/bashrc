@@ -4,46 +4,10 @@ if [ -z "$PS1" ]; then
     return
 fi
 
-for f in ~/*; do
-    if [ -f $f/bin/bash_profile ]; then
-        source $f/bin/bash_profile
-    fi
+for d in ~/*; do
+    [ -f $d/bin/bash_profile ] && source $d/bin/bash_profile
 done
-
-function welcome {
-    if [ -n "$MOTD_FILE" -a -f "$MOTD_FILE" ]; then
-        cat $MOTD_FILE
-    else
-        echo 1>&2 '
-
-    Welcome to Cloudway shell
-
-    This shell will assist you in managing Cloudway applications.
-
-    !!! IMPORTANT !!! IMPORTANT !!! IMPORTANT !!!
-    Shell access is quite powerful and it is possible for you to
-    acidentally damage your application. Proceed with care!
-    If worse comes to worst, destroy your application with "cwc app delete"
-    and recreate it
-    !!! IMPORTANT !!! IMPORTANT !!! IMPORTANT !!!
-
-'
-    fi
-
-    # Quota returns nonzero if you are over limit
-    quota 2>&1 > /dev/null
-    if [ $? -ne 0 ]
-    then
-        echo "Your application is out of disk space; please run \"cwc app tidy $CLOUDWAY_APP_NAME\"" 1>&2
-    fi
-}
 
 export PS1="[$CLOUDWAY_APP_DNS \W] "
 export TMOUT=300
 export SHELL=/bin/bash
-welcome
-
-if [ -z $SSH_TTY ]; then
-    echo "WARNING: This ssh terminal was started without a tty." 1>&2
-    echo "         It is highly recommanded to login with ssh -t" 1>&2
-fi

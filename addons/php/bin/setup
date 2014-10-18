@@ -30,5 +30,5 @@ if [ -x /usr/bin/pear ]; then
   pear config-create "$CLOUDWAY_PHP_DIR"/phplib/pear/ "$CLOUDWAY_HOME_DIR"/.pearrc > /dev/null
   pear -c "$CLOUDWAY_HOME_DIR"/.pearrc config-set php_ini "$CLOUDWAY_PHP_DIR"/etc/php.ini > /dev/null
   pear -c "$CLOUDWAY_HOME_DIR"/.pearrc config-set auto_discover 1 > /dev/null
-  pear -c "$CLOUDWAY_HOME_DIR"/.pearrc config-get bin_dir > "$CLOUDWAY_PHP_DIR/env/CLOUDWAY_PHP_PATH_ELEMENT" > /dev/null
+  pear -c "$CLOUDWAY_HOME_DIR"/.pearrc config-get bin_dir > "$CLOUDWAY_PHP_DIR/env/CLOUDWAY_PHP_PATH_ELEMENT"
 fi

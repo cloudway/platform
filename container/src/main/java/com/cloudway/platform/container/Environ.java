@@ -8,6 +8,7 @@ package com.cloudway.platform.container;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,6 +16,7 @@ import java.nio.file.PathMatcher;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -31,8 +33,13 @@ public class Environ
      * Load the combined environments for a guest.
      */
     public static Map<String, String> loadAll(ApplicationContainer container) {
-        // Load system env vars
-        Map<String, String> env = load(Config.CONF_DIR.resolve("env"));
+        Map<String, String> env;
+
+        // Load user env vars
+        env = loadEnvFile(FileUtils.join(container.getRepoDir(), ".cloudway", "env"));
+
+        // Merge system env vars
+        env.putAll(load(Config.CONF_DIR.resolve("env")));
 
         // Merge application env vars
         env.putAll(load(container.getEnvDir()));
@@ -170,5 +177,21 @@ public class Environ
                 }
             }
         }
+    }
+
+    private static Map<String,String> loadEnvFile(Path file) {
+        Map<String,String> env = new HashMap<>();
+        if (Files.exists(file)) {
+            try (InputStream ins = Files.newInputStream(file)) {
+                Properties props = new Properties();
+                props.load(ins);
+                props.stringPropertyNames().stream()
+                    .filter(key -> VALID_ENV_KEY.matcher(key).matches())
+                    .forEach(key -> env.put(key, props.getProperty(key)));
+            } catch (IOException ex) {
+                // log and ignore
+            }
+        }
+        return env;
     }
 }

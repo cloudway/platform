@@ -2,8 +2,11 @@
 
 import sys, os, glob, re
 
-env_re = re.compile('^[A-Z][A-Z_0-9]*$')
-basedir = os.path.dirname(os.path.dirname(sys.argv[0]))
+BASEDIR = os.path.dirname(os.path.dirname(sys.argv[0]))
+
+ENV_VAR_RE  = re.compile(r'^[A-Z][A-Z_0-9]*$')
+ENV_LINE_RE = re.compile(r'^([A-Z][A-Z_0-9]*)\s*=\s*(.*)$')
+COMMENT_RE  = re.compile(r'#.*$')
 
 def load_env(dir):
     for entry in glob.glob(os.path.expanduser(os.path.join(dir, '*'))):
@@ -12,20 +15,33 @@ def load_env(dir):
             continue
 
         var_name = os.path.basename(entry)
-        if env_re.match(var_name) == None:
+        if ENV_VAR_RE.match(var_name) == None:
             continue
 
-        with open(entry, 'r') as file:
-            contents = file.read().rstrip()
+        with open(entry, 'r') as f:
+            contents = f.read().rstrip()
             # remove null's which are illegal in environment variables
             os.environ[var_name] = ''.join(contents.split('\0'))
 
+def load_env_file(file):
+    try:
+        with open(os.path.expanduser(file), 'r') as f:
+            for line in f:
+                # remove comments and leading and trailing white spaces
+                line = COMMENT_RE.sub("", line).strip()
+                m = ENV_LINE_RE.match(line)
+                if m != None:
+                    os.environ[m.group(1)] = m.group(2)
+    except:
+        return
+
 def load_env_all():
+    load_env_file('~/app/repo/.cloudway/env')
     load_env('/etc/cloudway/env')
     load_env('~/.env')
     load_env('~/*/env')
 
-    os.environ['CLOUDWAY_HOME'] = basedir
+    os.environ['CLOUDWAY_HOME'] = BASEDIR
     os.environ['PATH'] = ':'.join(collect_path_elements(os.environ, 'PATH'))
     os.environ['LD_LIBRARY_PATH'] = ':'.join(collect_path_elements(os.environ, 'LD_LIBRARY_PATH'))
     os.environ['CLOUDWAY_CLASSPATH'] = collect_classpath()
@@ -51,12 +67,12 @@ def collect_path_elements(env, var_name):
         elements.append(system_path)
 
     if var_name == 'PATH':
-        elements.append(os.path.join(basedir, 'bin'))
+        elements.append(os.path.join(BASEDIR, 'bin'))
 
     return elements
 
 def collect_classpath():
-    return ':'.join(glob.glob(os.path.join(basedir, 'lib', '*.jar')))
+    return ':'.join(glob.glob(os.path.join(BASEDIR, 'lib', '*.jar')))
 
 if __name__ == '__main__':
     load_env_all()
