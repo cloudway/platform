@@ -203,13 +203,18 @@ public class PrivilegedControl extends Control
         ApplicationContainer container =
             ApplicationContainer.create(id, name, namespace, capacity);
 
-        if (keyfile != null) {
-            container.addAuthorizedKey("default", keyfile);
-        }
+        try {
+            if (keyfile != null) {
+                container.addAuthorizedKey("default", keyfile);
+            }
 
-        if (sources != null) {
-            IO.forEach(Stream.of(sources), source -> install(container, source, repo));
-            container.start();
+            if (sources != null) {
+                IO.forEach(Stream.of(sources), source -> install(container, source, repo));
+                container.start();
+            }
+        } catch (IOException|RuntimeException ex) {
+            container.destroy();
+            throw ex;
         }
     }
 

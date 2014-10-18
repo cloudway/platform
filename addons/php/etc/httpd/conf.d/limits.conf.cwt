@@ -1,0 +1,7 @@
+#if ($CLOUDWAY_MEMORY_LIMIT)
+#evaluate("\#set (\$lim = $CLOUDWAY_MEMORY_LIMIT / 30)")
+<IfModule prefork.c>
+  ServerLimit $lim
+  MaxClients $lim
+</IfModule>
+#end

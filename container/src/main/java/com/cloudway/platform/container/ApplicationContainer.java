@@ -17,7 +17,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -498,10 +497,6 @@ public class ApplicationContainer
     public void processTemplates(Path path, Map<String,String> env, boolean securing)
         throws IOException
     {
-        HashMap<String,String> cfg = new HashMap<>();
-        Config config = Config.getDefault();
-        config.keys().forEach(key -> cfg.put(key, config.get(key)));
-
         VelocityEngine ve = new VelocityEngine();
         ve.init();
 
@@ -524,7 +519,6 @@ public class ApplicationContainer
                     try (Writer writer = Files.newBufferedWriter(output)) {
                         VelocityContext vc = new VelocityContext();
                         env.forEach(vc::put);
-                        vc.put("config", cfg.clone());
                         ve.evaluate(vc, writer, filename, reader);
                     }
                 }

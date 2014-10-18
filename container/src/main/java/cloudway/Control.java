@@ -6,6 +6,7 @@
 
 package cloudway;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -107,12 +108,10 @@ public abstract class Control
             source_path = FileUtils.join(Config.VAR_DIR, ".addons", source);
         }
 
-        if (!Files.exists(source_path)) {
-            System.err.print(source + ": No such file or directory");
-            System.exit(2);
-            return;
+        if (Files.exists(source_path)) {
+            container.install(source_path, repo);
+        } else {
+            throw new FileNotFoundException(source + ": No such file or directory");
         }
-
-        container.install(source_path, repo);
     }
 }

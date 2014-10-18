@@ -9,6 +9,7 @@ package com.cloudway.platform.container.plugin;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -18,8 +19,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.Set;
 import java.util.stream.Stream;
 import static java.util.Collections.*;
 import static java.util.stream.Collectors.*;
@@ -39,7 +40,6 @@ public class Cgroup
     public static final List<String> CG_SUBSYSTEMS;
     public static final String DEFAULT_CG_SUBSYSTEMS = "cpu,cpuacct,memory,net_cls,freezer";
 
-    public static final Map<String, String> CG_MOUNTS;
     public static final Map<String, Path>   CG_PATHS;
     public static final Map<String, Object> CG_PARAMETERS;
 
@@ -56,29 +56,24 @@ public class Cgroup
         CG_ROOT = config.get("CGROUP_ROOT", DEFAULT_CG_ROOT);
         CG_SUBSYSTEMS = Arrays.asList(config.get("CGROUP_SUBSYSTEMS", DEFAULT_CG_SUBSYSTEMS).split(","));
 
-        Map<String, String> mounts = new LinkedHashMap<>();
         Map<String, Path>   paths  = new LinkedHashMap<>();
         Map<String, Object> params = new LinkedHashMap<>();
 
         try {
-            init_cgmounts(mounts);
-            init_cgpaths(mounts, paths);
+            init_cgpaths(paths);
             init_cgparameters(paths, params);
         } catch (Exception ex) {
             // TODO: log warning
-            mounts.clear();
             paths.clear();
             params.clear();
         }
 
-        CG_MOUNTS = unmodifiableMap(mounts);
         CG_PATHS = unmodifiableMap(paths);
         CG_PARAMETERS = unmodifiableMap(params);
-
         enabled = !CG_PATHS.isEmpty();
     }
 
-    private static void init_cgmounts(Map<String, String> mounts)
+    private static void init_cgpaths(Map<String, Path> paths)
         throws IOException
     {
         try (Stream<String> lines = Files.lines(Paths.get("/proc/mounts"))) {
@@ -92,25 +87,21 @@ public class Cgroup
                 if (fs_vtype.equals("cgroup")) {
                     CG_SUBSYSTEMS.stream()
                         .filter(fs_mntopts::contains)
-                        .forEach(subsys -> mounts.put(subsys, fs_file));
+                        .forEach(subsys -> paths.put(subsys, root_cgpath(fs_file)));
                 }
             });
         }
     }
 
-    private static void init_cgpaths(Map<String, String> mounts, Map<String, Path> paths)
-        throws IOException
-    {
-        IO.forEach(mounts, (subsys, fs) -> paths.put(subsys, root_cgpath(fs)));
-    }
-
-    private static Path root_cgpath(String fs)
-        throws IOException
-    {
-        Path path = Paths.get(fs, CG_ROOT);
-        if (!Files.exists(path))
-            FileUtils.mkdir(path, 0755);
-        return path;
+    private static Path root_cgpath(String fs) {
+        try {
+            Path path = Paths.get(fs, CG_ROOT);
+            if (!Files.exists(path))
+                FileUtils.mkdir(path, 0755);
+            return path;
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
     }
 
     private static void init_cgparameters(Map<String, Path> paths, Map<String, Object> params)
@@ -239,31 +230,22 @@ public class Cgroup
     }
 
     /**
-     * Fetch parameters for a specific user, or a map of key=>value
-     * for all parameters for the application container.
+     * Fetch a parameter for a specific user.
      */
-    public Map<String, Object> fetch(Set<String> keys) {
-        Map<String,Object> vals = new LinkedHashMap<>();
+    public Optional<Object> fetch(String key) {
+        String subsys = key.substring(0, key.indexOf('.'));
+        Path path = cgpaths.get(subsys);
 
-        CG_PARAMETERS.forEach((param, defval) -> {
-            if (keys.contains(param)) {
-                String subsys = param.substring(0, param.indexOf('.'));
-                Path path = cgpaths.get(subsys);
+        if (path == null || !Files.exists(path)) {
+            return Optional.empty();
+        }
 
-                if (path == null || !Files.exists(path)) {
-                    throw new RuntimeException("User does not exist in cgroups: " + user);
-                }
-
-                try {
-                    String val = FileUtils.chomp(path.resolve(param));
-                    vals.put(param, parse_cgparam(val));
-                } catch (IOException ex) {
-                    throw new RuntimeException("Cgroup parameter not found: " + param);
-                }
-            }
-        });
-
-        return vals;
+        try {
+            String val = FileUtils.chomp(path.resolve(key));
+            return Optional.of(parse_cgparam(val));
+        } catch (IOException ex) {
+            throw new UncheckedIOException("Failed to read cgroup parameter: " + key, ex);
+        }
     }
 
     public void store(Map<String,Object> vals) throws IOException {

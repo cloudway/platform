@@ -247,6 +247,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
 
     private void cgcreate() throws IOException {
         cgcall(Cgroup::create);
+        cgcall(this::fetch_limits);
     }
 
     private void cgdelete() throws IOException {
@@ -280,6 +281,18 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
 
     private void cgrestore() throws IOException {
         cgcall(Cgroup::store);
+        cgcall(this::fetch_limits);
+    }
+
+    private void fetch_limits(Cgroup cg) {
+        try {
+            cg.fetch("memory.limit_in_bytes").ifPresent(val -> {
+                long mb = Long.parseLong((String)val) / (1024 * 1024);
+                container.addEnvVar("MEMORY_LIMIT", String.valueOf(mb));
+            });
+        } catch (RuntimeException ex) {
+            // ignored
+        }
     }
 
     private void startTrafficControl() throws IOException {
