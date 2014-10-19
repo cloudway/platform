@@ -7,6 +7,7 @@
 package com.cloudway.platform.container;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Reader;
 import java.io.Writer;
 import java.net.URL;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -33,9 +35,11 @@ import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.proxy.HttpProxy;
+import static com.cloudway.platform.container.ApplicationState.*;
+
+import com.cloudway.platform.container.velocity.Alt;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
-import static com.cloudway.platform.container.ApplicationState.*;
 
 public class ApplicationContainer
 {
@@ -498,34 +502,43 @@ public class ApplicationContainer
         throws IOException
     {
         VelocityEngine ve = new VelocityEngine();
-        ve.init();
+
+        // Configuring velocity engine.
+        Properties vconf = new Properties();
+        try (InputStream ins = getClass().getResourceAsStream("velocity.properties")) {
+            vconf.load(ins);
+        }
+
+        // Disallow access resources outside of template root.
+        vconf.setProperty("resource.loader", "file");
+        vconf.setProperty("file.resource.loader.path", path.toString());
+        ve.init(vconf);
+
+        // Create global context
+        VelocityContext vc = new VelocityContext(env);
+        vc.put("alt", new Alt());
 
         try (Stream<Path> files = Files.walk(path)) {
             IO.forEach(files, input -> {
-                Path output;
-
-                // Derive output file name from input file name
+                // Create output file name from input file name
                 //   foo.txt.cwt  => foo.txt
                 //   .foo.txt.cwt => foo.txt
                 String filename = input.getFileName().toString();
                 Matcher matcher = TEMPLATE_RE.matcher(filename);
+
                 if (matcher.matches()) {
-                    output = input.resolveSibling(matcher.group(1));
-                } else {
-                    return;
-                }
-
-                try (Reader reader = Files.newBufferedReader(input)) {
-                    try (Writer writer = Files.newBufferedWriter(output)) {
-                        VelocityContext vc = new VelocityContext();
-                        env.forEach(vc::put);
-                        ve.evaluate(vc, writer, filename, reader);
+                    Path output = input.resolveSibling(matcher.group(1));
+                    try (Reader reader = Files.newBufferedReader(input)) {
+                        try (Writer writer = Files.newBufferedWriter(output)) {
+                            VelocityContext outer = new VelocityContext(vc);
+                            ve.evaluate(outer, writer, filename, reader);
+                        }
                     }
-                }
 
-                if (securing) {
-                    setFileReadOnly(input);
-                    setFileReadWrite(output);
+                    if (securing) {
+                        setFileReadOnly(input);
+                        setFileReadWrite(output);
+                    }
                 }
             });
         }

@@ -128,14 +128,6 @@ public class Etc
         return posix.getgid();
     }
 
-    public static int setuid(int uid) {
-        return posix.setuid(uid);
-    }
-
-    public static int setgid(int gid) {
-        return posix.setgid(gid);
-    }
-
     public static int kill(int pid, Signal signal) {
         return posix.kill(pid, signal.intValue());
     }
