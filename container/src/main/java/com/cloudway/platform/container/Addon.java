@@ -63,7 +63,7 @@ public class Addon
                 endpoint.setPrivateIP(env.get(endpoint.getPrivateIPName()));
                 endpoint.setPrivatePort(ep.getPrivatePort());
                 Stream.of(ep.getProxyMapping()).forEach(map ->
-                    endpoint.addProxyMapping(map.getFrontEnd(), map.getBackEnd()));
+                    endpoint.addProxyMapping(map.getFrontend(), map.getBackend()));
                 addon.endpoints.add(endpoint);
             });
         } catch (Exception ex) {
@@ -120,11 +120,11 @@ public class Addon
         Map<String, String> mappings = new LinkedHashMap<>();
         endpoints.forEach(ep ->
             ep.getProxyMappings().forEach((f,b) ->
-                mappings.put(getFrontEndUri(f), getBackEndUri(ep, b))));
+                mappings.put(getFrontendUri(f), getBackendUri(ep, b))));
         return mappings;
     }
 
-    private String getFrontEndUri(String uri) {
+    private String getFrontendUri(String uri) {
         if (uri.endsWith("/"))
             uri = uri.substring(0, uri.length()-1);
         if (!uri.isEmpty() && !uri.startsWith("/"))
@@ -132,7 +132,7 @@ public class Addon
         return container.getDomainName() + uri;
     }
 
-    private String getBackEndUri(Endpoint ep, String uri) {
+    private String getBackendUri(Endpoint ep, String uri) {
         if (uri.startsWith("/") && uri.endsWith("/")) {
             uri = uri.substring(0, uri.length()-1);
         }

@@ -1,0 +1,11 @@
+etc/
+etc/httpd/
+etc/httpd/conf/
+etc/httpd/conf/*
+etc/httpd/conf.d/
+etc/httpd/conf.d/cloudway.conf
+etc/httpd/conf.d/php.conf
+etc/httpd/conf.d/phpmyadmin.conf
+etc/php.ini
+phpMyAdmin
+phpMyAdmin/*

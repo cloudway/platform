@@ -1,17 +1,17 @@
 <?xml version="1.0" ?>
 
 <addon>
-  <name>php</name>
-  <display-name>PHP 5.5</display-name>
-  <version>5.5</version>
-  <vendor>php.net</vendor>
+  <name>phpmyadmin</name>
+  <display-name>phpMyAdmin 4.0</display-name>
+  <version>4.0</version>
+  <vendor>Red Hat</vendor>
   <addon-version>1.0</addon-version>
   <addon-vendor>cloudway</addon-vendor>
-  <category>Framework</category>
+  <category>Component</category>
   <endpoint>
     <private-ip-name>IP</private-ip-name>
     <private-port-name>PORT</private-port-name>
     <private-port>8080</private-port>
-    <proxy-mapping frontend="/" backend="/" />
+    <proxy-mapping frontend="/phpmyadmin" backend="/phpmyadmin" />
   </endpoint>
 </addon>

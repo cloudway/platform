@@ -60,7 +60,7 @@
   </xsd:complexType>
 
   <xsd:complexType name="proxy-mappingType">
-    <xsd:attribute name="front-end" type="xsd:string" />
-    <xsd:attribute name="back-end" type="xsd:string" />
+    <xsd:attribute name="frontend" type="xsd:string" />
+    <xsd:attribute name="backend" type="xsd:string" />
   </xsd:complexType>
 </xsd:schema>

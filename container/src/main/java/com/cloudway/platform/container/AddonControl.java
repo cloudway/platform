@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -117,11 +116,14 @@ public class AddonControl
             container.setFileTreeReadOnly(target.resolve("metadata"));
             container.setFileTreeReadOnly(target.resolve("bin"));
 
-            // initialize repository and proxy mappings for framework addon
+            // initialize repository for framework addon
             if (addon.getType() == AddonType.FRAMEWORK) {
                 populateRepository(target, repo);
-                addProxyMappings(addon);
             }
+
+            // create proxy mappings
+            // TODO: make sure don't override application framework's proxy mappings
+            addProxyMappings(addon);
 
             // put addon into cache
             addons().put(name, addon);
@@ -327,29 +329,28 @@ public class AddonControl
 
     private static final Pattern GLOB_CHARS = Pattern.compile("[*?\\[\\]{}]");
     private static final Pattern PROTECTED_FILES = Pattern.compile("^\\.(ssh|tmp|env)");
+    private static final String[] DEFAULT_LOCKED_FILES = {"env/", "env/*"};
 
     private Collection<String> getLockedFiles(Path target)
         throws IOException
     {
         Path locked_files = FileUtils.join(target, "metadata", "locked_files");
-        if (!Files.exists(locked_files)) {
-            return Collections.emptyList();
-        }
 
         SortedSet<String> entries = new TreeSet<>();
         SortedSet<String> patterns = new TreeSet<>();
 
-        try (Stream<String> lines = Files.lines(locked_files)) {
-            lines.map(s -> makeRelative(target, s))
-                 .forEach(entry -> {
-                     if (entry != null) {
-                         if (GLOB_CHARS.matcher(entry).find()) {
-                             patterns.add(entry);
-                         } else {
-                             entries.add(entry);
-                         }
-                     }
-                 });
+        try (Stream<String> lines = Files.exists(locked_files) ? Files.lines(locked_files) : Stream.empty()) {
+            Stream.concat(lines, Stream.of(DEFAULT_LOCKED_FILES))
+                .map(s -> makeRelative(target, s))
+                .forEach(entry -> {
+                    if (entry != null) {
+                        if (GLOB_CHARS.matcher(entry).find()) {
+                            patterns.add(entry);
+                        } else {
+                            entries.add(entry);
+                        }
+                    }
+                });
         }
 
         if (!patterns.isEmpty()) {
@@ -458,7 +459,6 @@ public class AddonControl
 
         container.setFileReadOnly(home);
         container.setFileReadOnly(target);
-        container.setFileTreeReadOnly(target.resolve("env"));
     }
 
     private void do_unlock(Path target, Collection<String> entries)
@@ -480,7 +480,6 @@ public class AddonControl
 
         container.setFileReadWrite(home);
         container.setFileReadWrite(target);
-        container.setFileTreeReadWrite(target.resolve("env"));
     }
 
     private void do_validate(Path path, IO.Runnable action)

@@ -46,7 +46,7 @@ function set_env {
   echo "$2" > "$CLOUDWAY_MYSQL_DIR/env/$1"
 }
 
-mkdir -p $CLOUDWAY_MYSQL_DIR/{data,run}
+mkdir -p $CLOUDWAY_MYSQL_DIR/{data,run,logs}
 
 datadir="$CLOUDWAY_MYSQL_DIR/data"
 socket="$CLOUDWAY_MYSQL_DIR/run/mysql.sock"
@@ -56,9 +56,9 @@ password=$(generate_password)
 
 /usr/bin/mysql_install_db --datadir=${datadir} --skip-name-resolve --force > /dev/null 2>&1
 
-set_env CLOUDWAY_MYSQL_LOG_DIR     "$CLOUDWAY_LOG_DIR"
 set_env CLOUDWAY_MYSQL_DB_USERNAME "$username"
 set_env CLOUDWAY_MYSQL_DB_PASSWORD "$password"
+set_env CLOUDWAY_MYSQL_DB_SOCKET   "$socket"
 set_env CLOUDWAY_MYSQL_DB_URL      "mysql://$username:$password@$CLOUDWAY_MYSQL_DB_HOST:$CLOUDWAY_MYSQL_DB_PORT/"
 
 echo ""

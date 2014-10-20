@@ -40,8 +40,8 @@ function wait_for_start {
 function initdb {
   local username=$CLOUDWAY_MYSQL_DB_USERNAME
   local password=$CLOUDWAY_MYSQL_DB_PASSWORD
+  local socket=$CLOUDWAY_MYSQL_DB_SOCKET
   local dbname=$CLOUDWAY_APP_NAME
-  local socket=$CLOUDWAY_MYSQL_DIR/run/mysql.sock
 
   local sql=$(
     # create default database

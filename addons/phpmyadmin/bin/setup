@@ -1,0 +1,24 @@
+#!/bin/bash -e
+
+if [[ -d /usr/lib64 ]]; then
+  _libdir=/usr/lib64
+else
+  _libdir=/usr/lib
+fi
+
+# Create/truncate Apache PassEnv configuration file
+touch $CLOUDWAY_PHPMYADMIN_DIR/etc/httpd/conf.d/passenv.conf
+
+# Create necessary directories
+mkdir -p $CLOUDWAY_PHPMYADMIN_DIR/{logs,run,sessions,tmp,upload,save}
+
+ln -s ${_libdir}/httpd/modules ${CLOUDWAY_PHPMYADMIN_DIR}/modules
+ln -s /etc/httpd/conf/magic ${CLOUDWAY_PHPMYADMIN_DIR}/etc/httpd/conf/magic
+
+if [ -n "CLOUDWAY_MYSQL_DB_USERNAME" ]; then
+  echo "Please make note of these MySQL credentials:"
+  echo "  User Name: $CLOUDWAY_MYSQL_DB_USERNAME"
+  echo "  Password: $CLOUDWAY_MYSQL_DB_PASSWORD"
+fi
+
+echo "URL: http://$CLOUDWAY_APP_DNS/phpmyadmin/"

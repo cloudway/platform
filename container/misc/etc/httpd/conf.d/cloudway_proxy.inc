@@ -105,6 +105,6 @@ RewriteRule ^(.*)$ - [E=V_ROUTE:127.0.0.1/,E=V_MATCH_PATH:/]
 # Configure reverse proxy based on set variable
 ProxyPassReverse ${V_MATCH_PATH} http://${V_ROUTE} interpolate
 
-# Log custom format
-LogFormat "%h %{V_MATCH_HOST}e %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\" (%Dus) %X %{V_ROUTE}e%{V_PATH}e" cloudway
+# Log custom format for parsing
+LogFormat "%h %{V_MATCH_HOST}e %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\" %{V_ROUTE}e%{V_PATH}e" cloudway
 CustomLog logs/cloudway_log cloudway env=V_PATH

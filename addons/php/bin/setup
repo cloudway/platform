@@ -9,10 +9,6 @@ fi
 # Create/truncate Apache PassEnv configuration file
 touch $CLOUDWAY_PHP_DIR/etc/httpd/conf.d/passenv.conf
 
-# Create environment variables
-echo "$CLOUDWAY_PHP_DIR/logs" > "$CLOUDWAY_PHP_DIR/env/CLOUDWAY_PHP_LOG_DIR"
-echo "$CLOUDWAY_PHP_DIR/etc/php.ini" > "$CLOUDWAY_PHP_DIR/env/PHPRC"
-
 # Create additional directories required by PHP
 mkdir -p $CLOUDWAY_PHP_DIR/phplib/pear/{docs,ext,php,cache,cfg,data,download,temp,tests,www}
 mkdir -p $CLOUDWAY_PHP_DIR/{logs,run,tmp,sessions}
