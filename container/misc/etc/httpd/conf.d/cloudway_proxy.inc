@@ -108,3 +108,6 @@ ProxyPassReverse ${V_MATCH_PATH} http://${V_ROUTE} interpolate
 # Log custom format for parsing
 LogFormat "%h %{V_MATCH_HOST}e %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\" %{V_ROUTE}e%{V_PATH}e" cloudway
 CustomLog logs/cloudway_log cloudway env=V_PATH
+
+# Pipe output to auto idler
+CustomLog "|/opt/cloudway/sbin/cwautoidle" "%{V_MATCH_HOST}e" env=V_PATH

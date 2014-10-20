@@ -11,3 +11,6 @@ done
 export PS1="[$CLOUDWAY_APP_DNS \W] "
 export TMOUT=300
 export SHELL=/bin/bash
+
+# unidle the container
+[ -f ~/app/.state -a $(< ~/app/.state) == 'IDLE' ] && cwctl start > /dev/null

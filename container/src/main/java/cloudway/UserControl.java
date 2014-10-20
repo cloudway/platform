@@ -6,11 +6,9 @@
 
 package cloudway;
 
-import java.io.IOException;
-import java.util.List;
-
-import com.cloudway.platform.container.Addon;
 import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.NoSuchContainerException;
+import java.io.IOException;
 
 @SuppressWarnings("unused")
 public class UserControl extends Control
@@ -19,7 +17,7 @@ public class UserControl extends Control
         try {
             String id = System.getenv("CLOUDWAY_APP_ID");
             return ApplicationContainer.fromId(id);
-        } catch (Exception ex) {
+        } catch (NoSuchContainerException ex) {
             System.err.println("This program must run in a cloudway container.");
             System.exit(2);
             return null;

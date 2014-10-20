@@ -8,7 +8,7 @@ HTTPD_PASSENV_FILE=$HTTPD_CFG_DIR/passenv.conf
 HTTPD_PID_FILE=$CLOUDWAY_PHPMYADMIN_DIR/run/httpd.pid
 
 function apache {
-    /usr/sbin/httpd -C "Include $HTTPD_CFG_DIR/*.conf" -f $HTTPD_CFG_FILE -k $1
+    /usr/sbin/httpd -C "Include $HTTPD_CFG_DIR/*.conf" -f $HTTPD_CFG_FILE -k $1 > /dev/null 2>&1
 }
 
 function start {

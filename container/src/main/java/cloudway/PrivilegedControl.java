@@ -20,6 +20,7 @@ import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.NoSuchContainerException;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -78,6 +79,25 @@ public class PrivilegedControl extends Control
         command("unidle", args, true, ApplicationContainer::unidle);
     }
 
+    /* internal command used by oddjob */
+    public void privileged_unidle(String[] args)
+        throws IOException
+    {
+        String calling_user = System.getenv("ODDJOB_CALLING_USER");
+        if (calling_user == null || args.length != 0) {
+            System.err.println("Please send request to oddjob");
+            System.exit(2);
+        }
+
+        try {
+            ApplicationContainer container = ApplicationContainer.fromId(calling_user);
+            container.unidle();
+        } catch (NoSuchContainerException ex) {
+            System.err.println(calling_user + ": " + ex.getMessage());
+            System.exit(2);
+        }
+    }
+
     @Command("Show current container status")
     public void status(String[] args) throws IOException {
         command("status", args, false, c -> {
@@ -129,13 +149,16 @@ public class PrivilegedControl extends Control
             // assume the key is an application id
             try {
                 container = ApplicationContainer.fromId(id);
-            } catch (Exception ex) {
-                container = null;
+            } catch (NoSuchContainerException ex) {
+                System.err.println(id + ": " + ex.getMessage());
+                System.exit(2);
+                return;
             }
         }
 
         if (container == null) {
-            System.err.println(id + ": not found");
+            System.err.println(id + ": Not found");
+            System.exit(2);
         } else {
             action.accept(container);
         }
