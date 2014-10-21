@@ -205,7 +205,6 @@ public class Cgroup
             }
         });
 
-        cgcreate();
         update_cgconfig(newcfg);
         update_cgrules(true);
         store(to_store);
@@ -249,6 +248,9 @@ public class Cgroup
     }
 
     public void store(Map<String,Object> vals) throws IOException {
+        // recreate cgroup because it may lost during system boot
+        cgcreate();
+
         IO.forEach(CG_PARAMETERS, (param, val) -> {
             val = vals.get(param);
             if (val != null) {

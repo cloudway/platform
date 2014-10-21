@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package cloudway;
+package cloudway.worker;
 
 import java.io.IOException;
 import java.nio.file.Files;

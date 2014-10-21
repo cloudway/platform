@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package cloudway;
+package cloudway.worker;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

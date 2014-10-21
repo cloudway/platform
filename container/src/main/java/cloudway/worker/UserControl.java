@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package cloudway;
+package cloudway.worker;
 
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.NoSuchContainerException;

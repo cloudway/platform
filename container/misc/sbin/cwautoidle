@@ -18,7 +18,7 @@ def load_last_access_data():
         if id and dns:
             atime = read_datetime(os.path.join(entry, 'app', '.last_access'))
             state = read_file(os.path.join(entry, 'app', '.state'))
-            if atime == None:
+            if atime is None:
                 atime = datetime.now()
                 write_datetime(os.path.join(entry, 'app', '.last_access'), atime)
             last_access_data[dns] = {'id':id, 'atime':atime, 'state':state}
@@ -26,14 +26,17 @@ def load_last_access_data():
 def update_last_access_data(data):
     for dns, atime in data.iteritems():
         info = last_access_data.get(dns)
-        if info != None:
+        if info is not None:
             info['atime'] = atime
             write_datetime(os.path.join(BASE_DIR, info['id'], 'app', '.last_access'), atime)
 
 def idle_staled_apps():
+    apps = []
     for info in last_access_data.itervalues():
         if info['state'] == 'STARTED' and (datetime.now() - info['atime']).total_seconds() > STALE_TIME:
-            subprocess.call(['cwctl', 'idle', info['id']])
+            apps.append(info['id'])
+    if len(apps) != 0:
+        subprocess.call(['cwctl', 'idle'] + apps)
 
 def read_file(file):
     try:

@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# This shell script starts Cloudway workers
+#
+# chkconfig: 345 90 01
+#
+# description: Start Cloudway workers
+
+case "$1" in
+  start)
+    /opt/cloudway/sbin/cloudway-worker.sh startall
+    ;;
+  stop)
+    /opt/cloudway/sbin/cloudway-worker.sh stopall
+    ;;
+  restart|force-restart)
+    /opt/cloudway/sbin/cloudway-worker.sh restartall
+    ;;
+  reload)
+    ;;
+  staus)
+    # TODO
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|reload|status}"
+    exit 1
+esac
+
+exit $?

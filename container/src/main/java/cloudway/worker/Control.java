@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package cloudway;
+package cloudway.worker;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -50,9 +50,9 @@ public abstract class Control
 
         if (failure != null) {
             if (failure.getMessage() != null) {
-                System.err.println("command failure: " + failure);
+                System.err.println("Command failure: " + failure);
             } else {
-                System.err.println("command failure");
+                System.err.println("Command failure");
                 failure.printStackTrace();
             }
             System.exit(2);
@@ -72,7 +72,7 @@ public abstract class Control
         }
 
         if (action == null) {
-            System.err.println("invalid command. Use \"cwctl help\" for more information");
+            System.err.println("Invalid command. Use \"cwctl help\" for more information");
             System.exit(1);
             return null;
         }
