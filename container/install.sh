@@ -10,7 +10,7 @@ if [ -z "$INSTALL_DIR" -a $(id -u) -ne 0 ]; then
   BASE_DIR="$BASE_DIR" INSTALL_DIR="$INSTALL_DIR" exec sudo $0
 fi
 
-CLOUDWAY_HOME=${INSTALL_DIR}/opt/cloudway
+CLOUDWAY_HOME=${INSTALL_DIR}/usr/share/cloudway
 CLOUDWAY_CONF=${INSTALL_DIR}/etc/cloudway
 CLOUDWAY_DATA=${INSTALL_DIR}/var/lib/cloudway
 
@@ -32,43 +32,41 @@ ln -sf ${CLOUDWAY_HOME}/sbin/* ${INSTALL_DIR}/usr/sbin/
 # Install configuration files
 mkdir -p ${CLOUDWAY_CONF}
 cp -r ${BASE_DIR}/misc/conf/* ${CLOUDWAY_CONF}/
+mkdir -p ${CLOUDWAY_HOME}/conf
+ln -sf ${CLOUDWAY_CONF}/* ${CLOUDWAY_HOME}/conf/
 
 # Install addons
-mkdir -p ${CLOUDWAY_HOME}/libexec/addons
-cp -rp ${BASE_DIR}/../addons/* ${CLOUDWAY_HOME}/libexec/addons/
-chmod 0755 ${CLOUDWAY_HOME}/libexec/addons/*/bin/*
-ln -sf ${CLOUDWAY_HOME}/libexec/addons ${CLOUDWAY_DATA}/.addons
+mkdir -p ${CLOUDWAY_HOME}/addons
+cp -rp ${BASE_DIR}/../addons/* ${CLOUDWAY_HOME}/addons/
+chmod 0755 ${CLOUDWAY_HOME}/addons/*/bin/*
+mkdir -p ${CLOUDWAY_DATA}/.addons
+ln -sf ${CLOUDWAY_HOME}/addons/* ${CLOUDWAY_DATA}/.addons/
+
+# Install system configuration files
+mkdir -p ${INSTALL_DIR}/etc
+cp -r ${BASE_DIR}/misc/etc/* ${INSTALL_DIR}/etc/
+mkdir -p ${INSTALL_DIR}/var/www
+cp -r ${BASE_DIR}/misc/www/* ${INSTALL_DIR}/var/www/
 
 if [ -z "$INSTALL_DIR" ]; then
-  # Configure oddjob 
-  mkdir -p ${INSTALL_DIR}/etc/oddjobd.conf.d
-  cp ${BASE_DIR}/misc/etc/oddjob/oddjobd-cloudway.conf ${INSTALL_DIR}/etc/oddjobd.conf.d/
-  mkdir -p ${INSTALL_DIR}/etc/dbus-1/system.d
-  cp ${BASE_DIR}/misc/etc/oddjob/com.cloudway.oddjob.conf ${INSTALL_DIR}/etc/dbus-1/system.d/
-
-  if [ -x /usr/bin/systemctl ]; then
-    systemctl restart oddjobd.service || :
-  else
-    service oddjobd restart || :
-  fi
-
   # Configure system services
   if [ -x /usr/bin/systemctl ]; then
-    mkdir -p ${INSTALL_DIR}/etc/systemd/system
-    cp ${BASE_DIR}/misc/etc/services/* ${INSTALL_DIR}/etc/systemd/system/
-    systemctl enable cloudway-worker.service
+    systemctl enable cloudway-worker.service || :
+    systemctl enable oddjobd.service || :
+    systemctl enable cgred.service || :
+    systemctl enable cgconfig.service || :
+    systemctl restart oddjobd.service || :
+    systemctl restart cgred.service || :
   else
-    mkdir -p ${INSTALL_DIR}/etc/rc.d/init.d
-    cp ${BASE_DIR}/misc/etc/init.d/* ${INSTALL_DIR}/etc/rc.d/init.d/
-    /sbin/chkconfig --add cloudway-worker
+    chkconfig --add cloudway-worker || :
+    chkconfig --add oddjobd || :
+    chkconfig --add cgred || :
+    chkconfig --add cgconfig || :
+    service oddjobd restart || :
+    service cgred restart || :
   fi
 
   # Configure apache
-  mkdir -p ${INSTALL_DIR}/etc/httpd
-  cp -r ${BASE_DIR}/misc/etc/httpd/* ${INSTALL_DIR}/etc/httpd/
-  mkdir -p ${INSTALL_DIR}/var/www/html
-  cp -r ${BASE_DIR}/misc/www/html/* ${INSTALL_DIR}/var/www/html/
-
   function apachedb {
     local dbf=${CLOUDWAY_DATA}/.httpd/$1
     if [ ! -f $dbf.db ]; then

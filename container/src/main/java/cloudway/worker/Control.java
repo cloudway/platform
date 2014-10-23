@@ -27,6 +27,8 @@ import com.cloudway.platform.container.ApplicationContainer;
  */
 public abstract class Control
 {
+    protected static boolean verbose;
+
     public static void main(String args[]) {
         Control control;
         if (Etc.getuid() == 0) {
@@ -35,37 +37,19 @@ public abstract class Control
             control = new UserControl();
         }
 
-        Method action = getActionMethod(control.getClass(), args);
+        int i = 0;
+        if (args.length > 0 && args[0].equals("-v")) {
+            verbose = true;
+            i++;
+        }
+
+        Method action = null;
         Throwable failure = null;
 
-        try {
-            Object[] arguments = new Object[1];
-            arguments[0] = Arrays.copyOfRange(args, 1, args.length);
-            action.invoke(control, arguments);
-        } catch (InvocationTargetException ex) {
-            failure = ex.getCause();
-        } catch (Exception ex) {
-            failure = ex;
-        }
-
-        if (failure != null) {
-            if (failure.getMessage() != null) {
-                System.err.println("Command failure: " + failure);
-            } else {
-                System.err.println("Command failure");
-                failure.printStackTrace();
-            }
-            System.exit(2);
-        }
-    }
-
-    private static Method getActionMethod(Class<? extends Control> cls, String[] args) {
-        Method action = null;
-
-        if (args.length != 0) {
+        if (i < args.length) {
             try {
-                String command = args[0].replaceAll("-", "_");
-                action = cls.getMethod(command, String[].class);
+                String command = args[i].replaceAll("-", "_");
+                action = control.getClass().getMethod(command, String[].class);
             } catch (Exception ex) {
                 // fallthrough to report error
             }
@@ -74,10 +58,24 @@ public abstract class Control
         if (action == null) {
             System.err.println("Invalid command. Use \"cwctl help\" for more information");
             System.exit(1);
-            return null;
         }
 
-        return action;
+        try {
+            Object[] arguments = new Object[1];
+            arguments[0] = Arrays.copyOfRange(args, i+1, args.length);
+            action.invoke(control, arguments);
+        } catch (InvocationTargetException ex) {
+            failure = ex.getCause();
+        } catch (Exception ex) {
+            failure = ex;
+        }
+
+        if (failure != null) {
+            System.err.println("Command failure: " + failure);
+            if (verbose || failure.getMessage() == null)
+                failure.printStackTrace();
+            System.exit(2);
+        }
     }
 
     @Command("Show this help message")

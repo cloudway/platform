@@ -59,8 +59,8 @@ public class ApplicationContainer
 
     static {
         Config config = Config.getDefault();
-        GECOS = config.get("GUEST_GECOS", "Cloudway Guest");
-        SHELL = config.get("GUEST_SHELL", "/bin/bash");
+        GECOS = config.get("CLOUDWAY_GECOS", "Cloudway Guest");
+        SHELL = config.get("CLOUDWAY_SHELL", "/bin/bash");
         DOMAIN = config.get("CLOUDWAY_DOMAIN", "cloudway.local");
         DEFAULT_CAPACITY = config.get("DEFAULT_CAPACITY", "small");
     }
@@ -127,7 +127,11 @@ public class ApplicationContainer
     }
 
     static Optional<Etc.PASSWD> pwent(String id) {
-        Etc.PASSWD pwent = Etc.getpwnam(Objects.requireNonNull(id));
+        if (id == null) {
+            return Optional.empty();
+        }
+
+        Etc.PASSWD pwent = Etc.getpwnam(id);
         if (pwent == null || !GECOS.equals(pwent.pw_gecos)) {
             return Optional.empty();
         } else {

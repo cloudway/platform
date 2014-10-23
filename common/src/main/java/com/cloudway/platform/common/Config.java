@@ -30,9 +30,7 @@ public class Config
     public static final Path LOCK_DIR;
 
     private static final String HOME_DIR_KEY = "CLOUDWAY_HOME";
-    private static final String DEFAULT_HOME_DIR = "/opt/cloudway";
-    private static final String CONF_DIR_KEY = "CLOUDWAY_CONF";
-    private static final String DEFAULT_CONF_DIR = "/etc/cloudway";
+    private static final String DEFAULT_HOME_DIR = "/usr/share/cloudway";
     private static final String VAR_DIR_KEY = "CLOUDWAY_VAR_DIR";
     private static final String DEFAULT_VAR_DIR = "/var/lib/cloudway";
     private static final String LOG_DIR_KEY = "CLOUDWAY_LOCK_DIR";
@@ -40,9 +38,11 @@ public class Config
 
     static {
         HOME_DIR = Paths.get(getProperty(HOME_DIR_KEY, DEFAULT_HOME_DIR)).toAbsolutePath().normalize();
-        CONF_DIR = Paths.get(getProperty(CONF_DIR_KEY, DEFAULT_CONF_DIR)).toAbsolutePath().normalize();
-        VAR_DIR  = Paths.get(getProperty(VAR_DIR_KEY, DEFAULT_VAR_DIR)).toAbsolutePath().normalize();
-        LOG_DIR  = Paths.get(getProperty(LOG_DIR_KEY, DEFAULT_LOG_DIR)).toAbsolutePath().normalize();
+        CONF_DIR = HOME_DIR.resolve("conf");
+
+        Config config = getDefault();
+        VAR_DIR = Paths.get(config.get(VAR_DIR_KEY, DEFAULT_VAR_DIR));
+        LOG_DIR = Paths.get(config.get(LOG_DIR_KEY, DEFAULT_LOG_DIR));
         LOCK_DIR = VAR_DIR.resolve(".lock");
     }
 
@@ -58,7 +58,7 @@ public class Config
     }
 
     public static Config getDefault() {
-        return new Config("node.conf");
+        return new Config("container.conf");
     }
 
     public Config() {

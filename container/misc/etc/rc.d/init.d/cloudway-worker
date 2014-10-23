@@ -8,13 +8,13 @@
 
 case "$1" in
   start)
-    /opt/cloudway/sbin/cloudway-worker.sh startall
+    /usr/sbin/cloudway-worker.sh startall
     ;;
   stop)
-    /opt/cloudway/sbin/cloudway-worker.sh stopall
+    /usr/sbin/cloudway-worker.sh stopall
     ;;
   restart|force-restart)
-    /opt/cloudway/sbin/cloudway-worker.sh restartall
+    /usr/sbin/cloudway-worker.sh restartall
     ;;
   reload)
     ;;

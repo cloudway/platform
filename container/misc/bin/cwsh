@@ -2,7 +2,16 @@
 
 import sys, os, glob, re
 
-BASEDIR = os.path.dirname(os.path.dirname(sys.argv[0]))
+def real_dirname(file):
+    while os.path.islink(file):
+        link = os.readlink(file)
+        if link.startswith('/'):
+            file = link
+        else:
+            file = os.path.join(os.path.dirname(file), link)
+    return os.path.dirname(file)
+
+BASEDIR = os.path.dirname(real_dirname(sys.argv[0]))
 
 ENV_VAR_RE  = re.compile(r'^[A-Z][A-Z_0-9]*$')
 ENV_LINE_RE = re.compile(r'^([A-Z][A-Z_0-9]*)\s*=\s*(.*)$')
@@ -65,9 +74,6 @@ def collect_path_elements(env, var_name):
 
     if system_path:
         elements.append(system_path)
-
-    if var_name == 'PATH':
-        elements.append(os.path.join(BASEDIR, 'bin'))
 
     return elements
 

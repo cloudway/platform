@@ -12,6 +12,7 @@
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
@@ -65,22 +66,6 @@
           </execution>
         </executions>
       </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <version>2.9</version>
-        <executions>
-          <execution>
-            <phase>package</phase>
-            <goals>
-              <goal>copy-dependencies</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}/dependencies</outputDirectory>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
     </plugins>
   </build>
 
@@ -92,6 +77,23 @@
       </properties>
       <build>
         <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <version>2.9</version>
+            <executions>
+              <execution>
+                <phase>package</phase>
+                <goals>
+                  <goal>copy-dependencies</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}/dependencies</outputDirectory>
+                  <includeScope>runtime</includeScope>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-antrun-plugin</artifactId>
@@ -112,6 +114,129 @@
                 </configuration>
               </execution>
             </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>rpm</id>
+      <properties>
+        <cloudway.home>/usr/share/cloudway</cloudway.home>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>rpm-maven-plugin</artifactId>
+            <version>2.0</version>
+            <executions>
+              <execution>
+                <id>generate-rpm</id>
+                <goals>
+                  <goal>attached-rpm</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <group>Development/Languages</group>
+              <requires>
+                <require>java-1.8.0-openjdk</require>
+                <require>java-1.8.0-openjdk-devel</require>
+                <require>httpd</require>
+                <require>php</require>
+                <require>mod_ssl</require>
+                <require>oddjob</require>
+                <require>python</require>
+                <require>git</require>
+                <require>tar</require>
+                <require>lsof</require>
+                <require>quota</require>
+                <require>libcgroup-tools</require>
+                <require>libcgroup-pam</require>
+                <require>libselinux-python</require>
+                <!-- FIXME -->
+                <require>php-pear</require>
+                <require>mariadb-server</require>
+                <require>mariadb-devel</require>
+                <require>phpMyAdmin</require>
+              </requires>
+              <defaultFilemode>644</defaultFilemode>
+              <defaultDirmode>755</defaultDirmode>
+              <defaultUsername>root</defaultUsername>
+              <defaultGroupname>root</defaultGroupname>
+              <mappings>
+                <mapping>
+                  <directory>${cloudway.home}/lib</directory>
+                  <artifact/>
+                  <dependency/>
+                </mapping>
+                <mapping>
+                  <directory>${cloudway.home}/bin</directory>
+                  <filemode>755</filemode>
+                  <directoryIncluded>false</directoryIncluded>
+                  <sources>
+                    <source>
+                      <location>misc/bin</location>
+                    </source>
+                  </sources>
+                </mapping>
+                <mapping>
+                  <directory>${cloudway.home}/sbin</directory>
+                  <filemode>750</filemode>
+                  <directoryIncluded>false</directoryIncluded>
+                  <sources>
+                    <source>
+                      <location>misc/sbin</location>
+                    </source>
+                  </sources>
+                </mapping>
+                <mapping>
+                  <directory>/etc/cloudway</directory>
+                  <configuration>true</configuration>
+                  <sources>
+                    <source>
+                      <location>misc/conf</location>
+                    </source>
+                  </sources>
+                </mapping>
+                <mapping>
+                  <directory>/etc</directory>
+                  <configuration>true</configuration>
+                  <sources>
+                    <source>
+                      <location>misc/etc</location>
+                    </source>
+                  </sources>
+                </mapping>
+                <mapping>
+                  <directory>/var/www</directory>
+                  <directoryIncluded>false</directoryIncluded>
+                  <sources>
+                    <source>
+                      <location>misc/www</location>
+                    </source>
+                  </sources>
+                </mapping>
+                <mapping>
+                  <directory>${cloudway.home}/addons</directory>
+                  <sources>
+                    <source>
+                      <location>../addons</location>
+                    </source>
+                  </sources>
+                </mapping>
+              </mappings>
+              <postinstallScriptlet>
+                <scriptFile>src/main/scripts/post_install.sh</scriptFile>
+              </postinstallScriptlet>
+              <preremoveScriptlet>
+                <scriptFile>src/main/scripts/pre_remove.sh</scriptFile>
+              </preremoveScriptlet>
+              <postremoveScriptlet>
+                <script>rm -rf ${cloudway.home}</script>
+              </postremoveScriptlet>
+            </configuration>
           </plugin>
         </plugins>
       </build>

@@ -84,7 +84,7 @@ public class AddonControl
         Addon addon;
 
         if (Files.isDirectory(source)) {
-            addon = installFromDirectory(source, true);
+            addon = installFromDirectory(source.toRealPath(), true);
         } else if (Files.isRegularFile(source)) {
             addon = installFromArchive(source);
         } else {
