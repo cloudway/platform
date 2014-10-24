@@ -110,4 +110,4 @@ LogFormat "%h %{V_MATCH_HOST}e %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-A
 CustomLog logs/cloudway_log cloudway env=V_PATH
 
 # Pipe output to auto idler
-CustomLog "|/usr/sbin/cwautoidle" "%{V_MATCH_HOST}e" env=V_PATH
+CustomLog "|/usr/share/cloudway/libexec/cwautoidle.py" "%{V_MATCH_HOST}e" env=V_PATH

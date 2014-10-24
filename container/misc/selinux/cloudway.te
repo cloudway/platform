@@ -1,0 +1,524 @@
+policy_module(cloudway,1.0.0)
+
+gen_require(`
+    role system_r;
+')
+
+########################################
+#
+# Declarations
+#
+
+## Allow cloudway to access nfs file systems without labels
+gen_tunable(cloudway_use_nfs, false)
+
+# Attribute representing all cloudway processes
+attribute cloudway_domain;
+
+# Attribute representing all cloudway user processes (excludes apache processes)
+attribute cloudway_user_domain;
+
+# cloudway applications that can use the network.
+attribute cloudway_net_domain;
+
+# Attribute for all cloudway content
+attribute cloudway_file_type;
+
+# Type of cloudway initrc script
+type cloudway_initrc_t;
+type cloudway_initrc_exec_t;
+init_daemon_domain(cloudway_initrc_t, cloudway_initrc_exec_t)
+init_ranged_daemon_domain(cloudway_initrc_t, cloudway_initrc_exec_t, s0 - mcs_systemhigh)
+domain_obj_id_change_exemption(cloudway_initrc_t)
+optional_policy(`
+    oddjob_ranged_domain(cloudway_initrc_t, cloudway_initrc_exec_t, s0 - mcs_systemhigh)
+')
+
+type cloudway_initrc_tmp_t;
+files_tmp_file(cloudway_initrc_tmp_t)
+
+type cloudway_tmpfs_t;
+files_tmpfs_file(cloudway_tmpfs_t)
+
+type cloudway_tmp_t, cloudway_file_type;
+files_tmp_file(cloudway_tmp_t)
+files_mountpoint(cloudway_tmp_t)
+files_poly(cloudway_tmp_t)
+files_poly_parent(cloudway_tmp_t)
+
+type cloudway_var_lib_t, cloudway_file_type;
+userdom_user_home_content(cloudway_var_lib_t)
+files_poly(cloudway_var_lib_t)
+files_poly_parent(cloudway_var_lib_t)
+files_mountpoint(cloudway_var_lib_t)
+
+type cloudway_rw_file_t, cloudway_file_type;
+files_poly(cloudway_rw_file_t)
+files_poly_parent(cloudway_rw_file_t)
+
+type cloudway_log_t;
+logging_log_file(cloudway_log_t)
+
+type cloudway_port_t;
+corenet_port(cloudway_port_t)
+corenet_reserved_port(cloudway_port_t)
+
+type cloudway_cron_t;
+type cloudway_cron_exec_t;
+domain_type(cloudway_cron_t)
+domain_entry_file(cloudway_cron_t, cloudway_cron_exec_t)
+role system_r types cloudway_cron_t;
+optional_policy(`
+    cron_system_entry(cloudway_cron_t, cloudway_cron_exec_t)
+')
+
+type cloudway_cron_tmp_t, cloudway_file_type;
+files_tmp_file(cloudway_cron_tmp_t)
+
+#######################################################
+#
+# Template to create cloudway_t and cloudway_app_t
+#
+cloudway_service_domain_template(cloudway)
+
+#######################################################
+#
+# Cloudway initrc local policy
+#
+
+unconfined_domain_noaudit(cloudway_initrc_t)
+mcs_process_set_categories(cloudway_initrc_t)
+
+systemd_dbus_chat_logind(cloudway_initrc_t)
+
+manage_dirs_pattern(cloudway_initrc_t, cloudway_initrc_tmp_t, cloudway_initrc_tmp_t)
+manage_files_pattern(cloudway_initrc_t, cloudway_initrc_tmp_t, cloudway_initrc_tmp_t)
+manage_lnk_files_pattern(cloudway_initrc_t, cloudway_initrc_tmp_t, cloudway_initrc_tmp_t)
+files_tmp_filetrans(cloudway_initrc_t, cloudway_initrc_tmp_t, { file dir })
+
+manage_dirs_pattern(cloudway_initrc_t, cloudway_log_t, cloudway_log_t)
+manage_files_pattern(cloudway_initrc_t, cloudway_log_t, cloudway_log_t)
+logging_log_filetrans(cloudway_initrc_t, cloudway_log_t, { file dir })
+
+allow cloudway_initrc_t cloudway_domain:process { getattr getsched setsched transition signal signull sigkill };
+allow cloudway_domain cloudway_initrc_t:fd use;
+allow cloudway_domain cloudway_initrc_t:fifo_file rw_inherited_fifo_file_perms;
+allow cloudway_domain cloudway_initrc_t:process sigchld;
+dontaudit cloudway_domain cloudway_initrc_t:key view;
+dontaudit cloudway_domain cloudway_initrc_t:process signull;
+dontaudit cloudway_domain cloudway_initrc_t:socket_class_set { read write };
+
+init_domtrans_script(cloudway_initrc_t)
+init_initrc_domain(cloudway_initrc_t)
+
+#######################################################
+#
+# Policy for all cloudway domains
+#
+
+allow cloudway_domain self:process all_process_perms;
+allow cloudway_domain self:msg all_msg_perms;
+allow cloudway_domain self:msgq create_msgq_perms;
+allow cloudway_domain self:shm create_shm_perms;
+allow cloudway_domain self:sem create_sem_perms;
+dontaudit cloudway_domain self:dir write;
+dontaudit cloudway_domain self:rawip_socket create_socket_perms;
+
+dontaudit cloudway_t self:unix_stream_socket recvfrom;
+dontaudit cloudway_domain self:netlink_tcpdiag_socket create;
+dontaudit cloudway_domain self:netlink_route_socket nlmsg_write;
+allow cloudway_domain self:tcp_socket create_stream_socket_perms;
+allow cloudway_domain self:fifo_file manage_fifo_file_perms;
+allow cloudway_domain self:unix_stream_socket { create_stream_socket_perms connectto };
+allow cloudway_domain self:unix_dgram_socket { create_socket_perms sendto };
+dontaudit cloudway_domain self:netlink_audit_socket { create_socket_perms nlmsg_relay };
+
+manage_dirs_pattern(cloudway_domain, cloudway_rw_file_t, cloudway_rw_file_t)
+manage_files_pattern(cloudway_domain, cloudway_rw_file_t, cloudway_rw_file_t)
+manage_fifo_files_pattern(cloudway_domain, cloudway_rw_file_t, cloudway_rw_file_t)
+manage_sock_files_pattern(cloudway_domain, cloudway_rw_file_t, cloudway_rw_file_t)
+manage_lnk_files_pattern(cloudway_domain, cloudway_rw_file_t, cloudway_rw_file_t)
+allow cloudway_domain cloudway_rw_file_t:dir_file_class_set { relabelfrom relabelto };
+
+list_dirs_pattern(cloudway_domain, cloudway_file_type, cloudway_file_type)
+read_files_pattern(cloudway_domain, cloudway_file_type, cloudway_file_type)
+rw_fifo_files_pattern(cloudway_domain, cloudway_file_type, cloudway_file_type)
+rw_sock_files_pattern(cloudway_domain, cloudway_file_type, cloudway_file_type)
+read_lnk_files_pattern(cloudway_domain, cloudway_file_type, cloudway_file_type)
+allow cloudway_domain cloudway_file_type:file execmod;
+can_exec(cloudway_domain, cloudway_file_type)
+allow cloudway_domain cloudway_file_type:file entrypoint;
+# Allow users to execute files in their home dir
+allow cloudway_domain cloudway_file_type:file { execute execute_no_trans };
+
+# Dontaudit cloudway domains trying to search other cloudway domains directories,
+# this happens just when users are probing the system
+dontaudit cloudway_domain cloudway_file_type:dir search_dir_perms;
+
+manage_dirs_pattern(cloudway_domain, cloudway_tmpfs_t, cloudway_tmpfs_t)
+manage_files_pattern(cloudway_domain, cloudway_tmpfs_t, cloudway_tmpfs_t)
+manage_lnk_files_pattern(cloudway_domain, cloudway_tmpfs_t, cloudway_tmpfs_t)
+manage_sock_files_pattern(cloudway_domain, cloudway_tmpfs_t, cloudway_tmpfs_t)
+manage_fifo_files_pattern(cloudway_domain, cloudway_tmpfs_t, cloudway_tmpfs_t)
+fs_tmpfs_filetrans(cloudway_domain, cloudway_tmpfs_t, { dir file sock_file lnk_file fifo_file })
+can_exec(cloudway_domain, cloudway_tmpfs_t)
+
+manage_dirs_pattern(cloudway_domain, cloudway_tmp_t, cloudway_tmp_t)
+manage_fifo_files_pattern(cloudway_domain, cloudway_tmp_t, cloudway_tmp_t)
+manage_files_pattern(cloudway_domain, cloudway_tmp_t, cloudway_tmp_t)
+manage_lnk_files_pattern(cloudway_domain, cloudway_tmp_t, cloudway_tmp_t)
+manage_sock_files_pattern(cloudway_domain, cloudway_tmp_t, cloudway_tmp_t)
+files_tmp_filetrans(cloudway_domain, cloudway_tmp_t, { lnk_file file dir sock_file fifo_file })
+allow cloudway_domain cloudway_tmp_t:dir_file_class_set { relabelfrom relabelto };
+
+allow cloudway_domain cloudway_log_t:file { getattr append lock ioctl };
+
+allow cloudway_domain cloudway_initrc_t:tcp_socket getattr;
+
+dontaudit cloudway_domain cloudway_initrc_tmp_t:file append;
+dontaudit cloudway_domain cloudway_file_type:sock_file execute;
+
+kernel_dontaudit_search_network_state(cloudway_domain)
+kernel_dontaudit_list_all_proc(cloudway_domain)
+kernel_dontaudit_list_all_sysctls(cloudway_domain)
+kernel_dontaudit_request_load_module(cloudway_domain)
+kernel_read_network_state(cloudway_domain)
+kernel_get_sysvipc_info(cloudway_domain)
+
+corecmd_shell_entry_type(cloudway_domain)
+corecmd_bin_entry_type(cloudway_domain)
+corecmd_exec_all_executables(cloudway_domain)
+
+dev_read_sysfs(cloudway_domain)
+dev_read_rand(cloudway_domain)
+dev_read_urand(cloudway_domain)
+dev_dontaudit_append_rand(cloudway_domain)
+dev_dontaudit_write_urand(cloudway_domain)
+dev_dontaudit_getattr_all_blk_files(cloudway_domain)
+dev_dontaudit_getattr_all_chr_files(cloudway_domain)
+dev_dontaudit_all_access_check(cloudway_domain)
+
+domain_use_interactive_fds(cloudway_domain)
+domain_dontaudit_read_all_domains_state(cloudway_domain)
+
+files_read_var_lib_symlinks(cloudway_domain)
+
+fs_rw_hugetlbfs_files(cloudway_domain)
+fs_rw_anon_inodefs_files(cloudway_domain)
+fs_search_tmpfs(cloudway_domain)
+fs_getattr_all_fs(cloudway_domain)
+fs_dontaudit_getattr_all_fs(cloudway_domain)
+fs_list_inotifyfs(cloudway_domain)
+fs_dontaudit_list_auto_mountpoints(cloudway_domain)
+fs_dontaudit_list_tmpfs(cloudway_domain)
+storage_dontaudit_getattr_fixed_disk_dev(cloudway_domain)
+storage_getattr_fixed_disk_dev(cloudway_domain)
+fs_get_xattr_fs_quotas(cloudway_domain)
+fs_rw_inherited_tmpfs_files(cloudway_domain)
+fs_dontaudit_rw_anon_inodefs_files(cloudway_domain)
+
+dontaudit cloudway_domain file_type:dir read;
+files_dontaudit_list_home(cloudway_domain)
+files_dontaudit_search_all_pids(cloudway_domain)
+files_dontaudit_getattr_all_dirs(cloudway_domain)
+files_dontaudit_getattr_all_files(cloudway_domain)
+files_dontaudit_list_mnt(cloudway_domain)
+files_dontaudit_list_var(cloudway_domain)
+files_dontaudit_getattr_lost_found_dirs(cloudway_domain)
+files_dontaudit_search_all_mountpoints(cloudway_domain)
+files_dontaudit_search_spool(cloudway_domain)
+files_dontaudit_search_all_dirs(cloudway_domain)
+files_dontaudit_list_var(cloudway_domain)
+files_read_etc_files(cloudway_domain)
+files_exec_etc_files(cloudway_domain)
+files_read_usr_files(cloudway_domain)
+files_exec_usr_files(cloudway_domain)
+files_dontaudit_getattr_non_security_sockets(cloudway_domain)
+files_dontaudit_setattr_non_security_dirs(cloudway_domain)
+files_dontaudit_setattr_non_security_files(cloudway_domain)
+files_dontaudit_rw_inherited_locks(cloudway_domain)
+
+libs_exec_lib_files(cloudway_domain)
+libs_exec_ld_so(cloudway_domain)
+
+selinux_validate_context(cloudway_domain)
+
+logging_inherit_append_all_logs(cloudway_domain)
+
+init_dontaudit_read_utmp(cloudway_domain)
+
+miscfiles_read_localization(cloudway_domain)
+miscfiles_read_fonts(cloudway_domain)
+miscfiles_dontaudit_setattr_fonts_cache_dirs(cloudway_domain)
+
+mta_dontaudit_read_spool_symlinks(cloudway_domain)
+
+term_dontaudit_search_ptys(cloudway_domain)
+term_use_generic_ptys(cloudway_domain)
+term_dontaudit_getattr_generic_ptys(cloudway_domain)
+term_use_ptmx(cloudway_domain)
+
+userdom_use_inherited_user_ptys(cloudway_domain)
+userdom_dontaudit_search_admin_dir(cloudway_domain)
+
+application_exec(cloudway_domain)
+
+optional_policy(`
+    apache_exec_modules(cloudway_domain)
+    apache_list_modules(cloudway_domain)
+    apache_read_config(cloudway_domain)
+    apache_search_config(cloudway_domain)
+    apache_read_sys_content(cloudway_domain)
+    apache_exec_sys_script(cloudway_domain)
+    apache_entrypoint(cloudway_domain)
+    apache_dontaudit_read_log(cloudway_domain)
+')
+
+optional_policy(`
+    # cloudway cgi script policy
+    apache_content_template(cloudway)
+    domtrans_pattern(httpd_cloudway_script_t, cloudway_initrc_exec_t, cloudway_initrc_t)
+    optional_policy(`
+        dbus_system_bus_client(httpd_cloudway_script_t)
+        oddjob_dbus_chat(httpd_cloudway_script_t)
+        oddjob_dontaudit_rw_fifo_file(cloudway_domain)
+        auth_read_passwd(httpd_cloudway_script_t)
+        cloudway_manage_lib_files(httpd_cloudway_script_t)
+    ')
+')
+
+optional_policy(`
+    cron_role(system_r, cloudway_domain)
+')
+
+optional_policy(`
+    gpg_entry_type(cloudway_domain)
+')
+
+optional_policy(`
+    gen_require(`
+        type mysqld_t;
+    ')
+
+    mysql_search_db(cloudway_domain)
+    cloudway_search_lib(mysqld_t)
+')
+
+optional_policy(`
+    screen_exec(cloudway_domain)
+')
+
+optional_policy(`
+    udev_read_pid_files(cloudway_domain)
+')
+
+optional_policy(`
+    gen_require(`
+        type sshd_t;
+    ')
+
+    cloudway_dyntransition(sshd_t)
+    cloudway_transition(sshd_t)
+    cloudway_manage_tmp_files(sshd_t)
+    cloudway_manage_tmp_sockets(sshd_t)
+    cloudway_mounton_tmp(sshd_t)
+    cloudway_read_lib_files(sshd_t)
+
+    ssh_use_ptys(cloudway_domain)
+    ssh_getattr_user_home_dir(cloudway_domain)
+    ssh_dontaudit_search_user_home_dir(cloudway_domain)
+')
+
+optional_policy(`
+    gen_require(`
+        type httpd_t;
+    ')
+
+    cloudway_search_lib(httpd_t)
+    cloudway_initrc_signull(httpd_t)
+    cloudway_initrc_signal(httpd_t)
+')
+
+#######################################################
+#
+# Policy for cloudway user domain process
+#
+
+manage_dirs_pattern(cloudway_user_domain, cloudway_file_type, cloudway_file_type)
+manage_files_pattern(cloudway_user_domain, cloudway_file_type, cloudway_file_type)
+manage_fifo_files_pattern(cloudway_user_domain, cloudway_file_type, cloudway_file_type)
+manage_sock_files_pattern(cloudway_user_domain, cloudway_file_type, cloudway_file_type)
+manage_lnk_files_pattern(cloudway_user_domain, cloudway_file_type, cloudway_file_type)
+allow cloudway_user_domain cloudway_file_type:dir_file_class_set { relabelfrom relabelto };
+
+allow cloudway_user_domain cloudway_domain:process transition;
+allow cloudway_domain cloudway_user_domain:fd use;
+allow cloudway_domain cloudway_user_domain:fifo_file rw_inherited_fifo_file_perms;
+allow cloudway_domain cloudway_user_domain:process sigchld;
+dontaudit cloudway_domain cloudway_user_domain:key view;
+dontaudit cloudway_domain cloudway_user_domain:process signull;
+dontaudit cloudway_domain cloudway_user_domain:socket_class_set { read write };
+
+allow cloudway_user_domain cloudway_domain:process ptrace;
+
+mta_signal_user_agent(cloudway_user_domain)
+
+optional_policy(`
+    ssh_rw_tcp_sockets(cloudway_user_domain)
+')
+
+############################################################################
+#
+# Rules specific to cloudway_net_domains
+#
+
+allow cloudway_net_domain cloudway_port_t:tcp_socket { name_connect name_bind };
+allow cloudway_net_domain cloudway_port_t:udp_socket name_bind;
+
+corenet_tcp_connect_mssql_port(cloudway_net_domain)
+corenet_tcp_connect_mysqld_port(cloudway_net_domain)
+corenet_tcp_connect_postgresql_port(cloudway_net_domain)
+corenet_tcp_connect_git_port(cloudway_net_domain)
+corenet_tcp_connect_oracle_port(cloudway_net_domain)
+corenet_tcp_connect_flash_port(cloudway_net_domain)
+corenet_tcp_connect_http_port(cloudway_net_domain)
+corenet_tcp_connect_ftp_port(cloudway_net_domain)
+# These ports are the ephemeral ports needed for ftp
+corenet_tcp_connect_virt_migration_port(cloudway_net_domain)
+corenet_tcp_connect_ssh_port(cloudway_net_domain)
+corenet_tcp_connect_jacorb_port(cloudway_net_domain)
+corenet_tcp_connect_jboss_management_port(cloudway_net_domain)
+corenet_tcp_connect_jboss_debug_port(cloudway_net_domain)
+corenet_tcp_connect_jboss_messaging_port(cloudway_net_domain)
+corenet_tcp_connect_memcache_port(cloudway_net_domain)
+corenet_tcp_connect_http_cache_port(cloudway_net_domain)
+corenet_tcp_connect_amqp_port(cloudway_net_domain)
+corenet_tcp_connect_generic_port(cloudway_net_domain)
+corenet_tcp_connect_mongod_port(cloudway_net_domain)
+corenet_tcp_connect_munin_port(cloudway_net_domain)
+corenet_tcp_connect_pop_port(cloudway_net_domain)
+corenet_tcp_connect_pulseaudio_port(cloudway_net_domain)
+corenet_tcp_connect_smtp_port(cloudway_net_domain)
+corenet_tcp_connect_whois_port(cloudway_net_domain)
+corenet_udp_bind_generic_port(cloudway_net_domain)
+corenet_tcp_bind_http_cache_port(cloudway_domain)
+corenet_tcp_bind_jacorb_port(cloudway_net_domain)
+corenet_tcp_bind_jboss_management_port(cloudway_net_domain)
+corenet_tcp_bind_jboss_messaging_port(cloudway_net_domain)
+corenet_tcp_bind_jboss_debug_port(cloudway_net_domain)
+corenet_tcp_bind_mongod_port(cloudway_net_domain)
+corenet_tcp_bind_mysqld_port(cloudway_domain)
+corenet_tcp_bind_pulseaudio_port(cloudway_net_domain)
+corenet_tcp_bind_postgresql_port(cloudway_net_domain)
+
+############################################################################
+#
+# Rules specific to cloudway and cloudway_app_t
+#
+
+kernel_read_vm_sysctls(cloudway_t)
+kernel_read_vm_sysctls(cloudway_app_t)
+kernel_search_vm_sysctl(cloudway_t)
+kernel_search_vm_sysctl(cloudway_app_t)
+
+netutils_domtrans_ping(cloudway_t)
+netutils_kill_ping(cloudway_t)
+netutils_signal_ping(cloudway_t)
+
+cloudway_net_type(cloudway_app_t)
+cloudway_net_type(cloudway_t)
+
+optional_policy(`
+    postfix_rw_public_pipes(cloudway_t)
+    postfix_manage_spool_maildrop_files(cloudway_t)
+')
+
+########################################
+#
+# cloudway_cron local policy
+#
+
+allow cloudway_cron_t self:capability { dac_override net_admin sys_admin };
+allow cloudway_cron_t self:process signal_perms;
+allow cloudway_cron_t self:tcp_socket create_stream_socket_perms;
+allow cloudway_cron_t self:udp_socket create_socket_perms;
+allow cloudway_cron_t self:unix_dgram_socket create_socket_perms;
+allow cloudway_cron_t self:netlink_route_socket rw_netlink_socket_perms;
+
+append_files_pattern(cloudway_cron_t, cloudway_log_t, cloudway_log_t)
+manage_dirs_pattern(cloudway_cron_t, cloudway_cron_tmp_t, cloudway_cron_tmp_t)
+manage_fifo_files_pattern(cloudway_cron_t, cloudway_cron_tmp_t, cloudway_cron_tmp_t)
+manage_files_pattern(cloudway_cron_t, cloudway_cron_tmp_t, cloudway_cron_tmp_t)
+manage_lnk_files_pattern(cloudway_cron_t, cloudway_cron_tmp_t, cloudway_cron_tmp_t)
+manage_sock_files_pattern(cloudway_cron_t, cloudway_cron_tmp_t, cloudway_cron_tmp_t)
+files_tmp_filetrans(cloudway_cron_t, cloudway_cron_tmp_t, { lnk_file file dir sock_file fifo_file })
+
+cloudway_manage_lib_dirs(cloudway_cron_t)
+cloudway_manage_lib_files(cloudway_cron_t)
+
+kernel_search_network_sysctl(cloudway_cron_t)
+kernel_search_xen_state(cloudway_cron_t)
+kernel_read_network_state(cloudway_cron_t)
+kernel_read_system_state(cloudway_cron_t)
+
+files_dontaudit_search_all_mountpoints(cloudway_cron_t)
+
+corecmd_exec_bin(cloudway_cron_t)
+corecmd_exec_shell(cloudway_cron_t)
+
+dev_read_raw_memory(cloudway_cron_t)
+dev_read_urand(cloudway_cron_t)
+
+corenet_udp_bind_generic_node(cloudway_cron_t)
+corenet_udp_bind_generic_port(cloudway_cron_t)
+
+dev_getattr_fs(cloudway_cron_t)
+dev_list_sysfs(cloudway_cron_t)
+dev_read_sysfs(cloudway_cron_t)
+
+files_getattr_home_dir(cloudway_cron_t)
+files_manage_etc_files(cloudway_cron_t)
+
+fs_getattr_tmpfs_dirs(cloudway_cron_t)
+fs_getattr_all_fs(cloudway_cron_t)
+fs_list_hugetlbfs(cloudway_cron_t)
+fs_search_cgroup_dirs(cloudway_cron_t)
+
+seutil_domtrans_setfiles(cloudway_cron_t)
+
+term_getattr_pty_fs(cloudway_cron_t)
+term_search_ptys(cloudway_cron_t)
+
+auth_use_nsswitch(cloudway_cron_t)
+
+#miscfiles_read_generic_certs(cloudway_cron_t)
+miscfiles_read_hwdata(cloudway_cron_t)
+miscfiles_read_localization(cloudway_cron_t)
+
+sysnet_exec_ifconfig(cloudway_cron_t)
+sysnet_read_config(cloudway_cron_t)
+
+optional_policy(`
+    dmidecode_exec(cloudway_cron_t)
+')
+
+optional_policy(`
+    hostname_exec(cloudway_cron_t)
+')
+
+optional_policy(`
+    quota_read_db(cloudway_cron_t)
+')
+
+optional_policy(`
+    ssh_domtrans_keygen(cloudway_cron_t)
+    ssh_dontaudit_read_server_keys(cloudway_cron_t)
+')
+
+tunable_policy(`cloudway_use_nfs',`
+    fs_list_auto_mountpoints(cloudway_domain)
+    fs_manage_nfs_dirs(cloudway_domain)
+    fs_manage_nfs_files(cloudway_domain)
+    fs_manage_nfs_symlinks(cloudway_domain)
+    fs_exec_nfs_files(cloudway_domain)
+')

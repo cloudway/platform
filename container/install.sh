@@ -14,20 +14,34 @@ CLOUDWAY_HOME=${INSTALL_DIR}/usr/share/cloudway
 CLOUDWAY_CONF=${INSTALL_DIR}/etc/cloudway
 CLOUDWAY_DATA=${INSTALL_DIR}/var/lib/cloudway
 
+# Install SELinux policy module
+pushd ${BASE_DIR}/misc/selinux > /dev/null
+make -f /usr/share/selinux/devel/Makefile load clean
+popd > /dev/null
+
+/usr/sbin/setsebool -P httpd_unified=on httpd_can_network_connect=on httpd_can_network_relay=on \
+                       httpd_read_user_content=on httpd_enable_homedirs=on httpd_execmem=on \
+                       allow_polyinstantiation=on || :
+
 # Install jar files
 mkdir -p ${CLOUDWAY_HOME}/lib
 cp ${BASE_DIR}/target/*.jar ${CLOUDWAY_HOME}/lib/
 cp ${BASE_DIR}/target/dependencies/*.jar ${CLOUDWAY_HOME}/lib/
 
 # Install executable files
-mkdir -p ${CLOUDWAY_HOME}/{bin,sbin}
+mkdir -p ${CLOUDWAY_HOME}/bin
 cp ${BASE_DIR}/misc/bin/* ${CLOUDWAY_HOME}/bin/
-cp ${BASE_DIR}/misc/sbin/* ${CLOUDWAY_HOME}/sbin/
 chmod 0755 ${CLOUDWAY_HOME}/bin/*
-chmod 0750 ${CLOUDWAY_HOME}/sbin/*
-mkdir -p ${INSTALL_DIR}/usr/{bin,sbin}
+mkdir -p ${INSTALL_DIR}/usr/bin
 ln -sf ${CLOUDWAY_HOME}/bin/* ${INSTALL_DIR}/usr/bin/
-ln -sf ${CLOUDWAY_HOME}/sbin/* ${INSTALL_DIR}/usr/sbin/
+
+mkdir -p ${CLOUDWAY_HOME}/libexec
+cp ${BASE_DIR}/misc/libexec/* ${CLOUDWAY_HOME}/libexec/
+chmod 0755 ${CLOUDWAY_HOME}/libexec/*
+
+/sbin/restorecon /usr/share/cloudway/bin/cwctl || :
+/sbin/restorecon /usr/share/cloudway/libexec/cwunidle.sh || :
+/sbin/restorecon /usr/share/cloudway/libexec/cwautoidle.sh || :
 
 # Install configuration files
 mkdir -p ${CLOUDWAY_CONF}
@@ -51,14 +65,14 @@ cp -r ${BASE_DIR}/misc/www/* ${INSTALL_DIR}/var/www/
 if [ -z "$INSTALL_DIR" ]; then
   # Configure system services
   if [ -x /usr/bin/systemctl ]; then
-    systemctl enable cloudway-worker.service || :
+    systemctl enable cwadminctl.service || :
     systemctl enable oddjobd.service || :
     systemctl enable cgred.service || :
     systemctl enable cgconfig.service || :
     systemctl restart oddjobd.service || :
     systemctl restart cgred.service || :
   else
-    chkconfig --add cloudway-worker || :
+    chkconfig --add cwadminctl || :
     chkconfig --add oddjobd || :
     chkconfig --add cgred || :
     chkconfig --add cgconfig || :

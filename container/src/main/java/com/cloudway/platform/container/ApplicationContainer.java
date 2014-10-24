@@ -302,7 +302,15 @@ public class ApplicationContainer
         ApplicationState state = getState();
 
         if (uid != 0 && state == IDLE && HttpProxy.getInstance().isIdle(getDomainName())) {
-            privileged_unidle();
+            try {
+                // contact proxy to activate container for unprivileged user
+                URL url = new URL("http://127.0.0.1/");
+                URLConnection con = url.openConnection();
+                con.setRequestProperty("X-Cloudway-Host", getDomainName());
+                con.getInputStream().close();
+            } catch (IOException ex) {
+                // log and ignore
+            }
             return;
         }
 
@@ -316,33 +324,6 @@ public class ApplicationContainer
         processTemplates();
         start_guest();
         setState(STARTED);
-    }
-
-    private void privileged_unidle() throws IOException {
-        // Send request to oddjob to activate container
-        if (Files.isExecutable(Paths.get("/usr/bin/oddjob_request"))) {
-            try {
-                Exec.args("/usr/bin/oddjob_request",
-                          "-s", "com.cloudway.oddjob",
-                          "-o", "/com/cloudway/oddjob",
-                          "-i", "com.cloudway.oddjob.unidler",
-                          "privileged_unidle")
-                    .run();
-                return;
-            } catch (IOException ex) {
-                // oddjob not configured, try next activation method
-            }
-        }
-
-        // Contact proxy to activate container
-        try {
-            URL url = new URL("http://127.0.0.1/");
-            URLConnection con = url.openConnection();
-            con.setRequestProperty("X-Cloudway-Host", getDomainName());
-            con.getInputStream().close();
-        } catch (IOException ex) {
-            // log and ignore
-        }
     }
 
     /**

@@ -1,12 +1,8 @@
 <?php
 
-$SVC = "com.cloudway.oddjob";
-$OBJ = "/com/cloudway/oddjob";
-$ITF = "com.cloudway.oddjob.unidler";
-
 list($blank, $id, $blank) = split("/", $_SERVER["PATH_INFO"]);
 if (preg_match('/^[0-9a-fA-F]{24,32}$/', $id)) {
-    exec("/usr/bin/oddjob_request -s $SVC -o $OBJ -i $ITF unidle $id");
+    exec("/usr/share/cloudway/libexec/cwunidle.sh $id");
     sleep(2);
 
     $host = $_SERVER['HTTP_HOST'];

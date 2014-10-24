@@ -1,0 +1,13 @@
+[Unit]
+Description=Cloudway Admin Control
+
+[Service]
+Type=forking
+ExecStart=/usr/share/cloudway/libexec/cwadminctl.sh startall
+ExecStop=/usr/share/cloudway/libexec/cwadminctl.sh stopall
+ExecReload=/usr/share/cloudway/libexec/cwadminctl.sh restartall
+Restart=no
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

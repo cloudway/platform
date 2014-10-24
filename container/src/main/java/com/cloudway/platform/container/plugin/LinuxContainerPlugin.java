@@ -78,7 +78,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
 
     private static final String DEF_RUN_USER    = "unconfined_u";
     private static final String DEF_RUN_ROLE    = "system_r";
-    private static final String DEF_RUN_TYPE    = "unconfined_t"; // FIXME
+    private static final String DEF_RUN_TYPE    = "cloudway_t";
 
     private static final int DEF_MCS_SET_SIZE   = 1024;
     private static final int DEF_MCS_GROUP_SIZE = 2;

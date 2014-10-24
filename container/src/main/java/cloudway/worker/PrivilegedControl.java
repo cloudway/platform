@@ -79,25 +79,6 @@ public class PrivilegedControl extends Control
         command("unidle", args, true, ApplicationContainer::unidle);
     }
 
-    /* internal command used by oddjob */
-    public void privileged_unidle(String[] args)
-        throws IOException
-    {
-        String calling_user = System.getenv("ODDJOB_CALLING_USER");
-        if (calling_user == null || args.length != 0) {
-            System.err.println("Please send request to oddjob");
-            System.exit(2);
-        }
-
-        try {
-            ApplicationContainer container = ApplicationContainer.fromId(calling_user);
-            container.unidle();
-        } catch (NoSuchContainerException ex) {
-            System.err.println(calling_user + ": " + ex.getMessage());
-            System.exit(2);
-        }
-    }
-
     @Command("Show current container status")
     public void status(String[] args) throws IOException {
         command("status", args, false, c -> {

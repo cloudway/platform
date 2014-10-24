@@ -9,6 +9,7 @@ STALE_TIME = 240 * 86400    # 10 days
 DATE_TIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 
 last_access_data = {}
+debug = False
 
 def load_last_access_data():
     last_access_data.clear()
@@ -29,12 +30,14 @@ def update_last_access_data(data):
         if info is not None:
             info['atime'] = atime
             write_datetime(os.path.join(BASE_DIR, info['id'], 'app', '.last_access'), atime)
+            if debug: print >> sys.stderr, "updating last access time for %s" % info['id']
 
 def idle_staled_apps():
     apps = []
     for info in last_access_data.itervalues():
         if info['state'] == 'STARTED' and (datetime.now() - info['atime']).total_seconds() > STALE_TIME:
             apps.append(info['id'])
+            if debug: print >> sys.stderr, "Idling %s" % info['id']
     if len(apps) != 0:
         subprocess.call(['cwctl', 'idle'] + apps)
 

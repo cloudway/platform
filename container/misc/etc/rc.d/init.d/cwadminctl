@@ -8,13 +8,13 @@
 
 case "$1" in
   start)
-    /usr/sbin/cloudway-worker.sh startall
+    /usr/share/cloudway/libexec/cwadminctl.sh startall
     ;;
   stop)
-    /usr/sbin/cloudway-worker.sh stopall
+    /usr/share/cloudway/libexec/cwadminctl.sh stopall
     ;;
   restart|force-restart)
-    /usr/sbin/cloudway-worker.sh restartall
+    /usr/share/cloudway/libexec/cwadminctl.sh restartall
     ;;
   reload)
     ;;

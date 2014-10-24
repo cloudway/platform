@@ -16,9 +16,9 @@ import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ApplicationState;
 
-public class Admin
+public class AdminControl
 {
-    private static final String USAGE = "Usage: cloudway-worker {startall|stopall|restartall}";
+    private static final String USAGE = "Usage: cwadminctl {startall|stopall|restartall}";
 
     public static void main(String args[]) {
         if (Etc.getuid() != 0) {

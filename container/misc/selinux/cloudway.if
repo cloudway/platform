@@ -1,0 +1,531 @@
+## <summary> policy for cloudway </summary>
+
+## <summary>
+##   Execute cloudway service in the cloudway domain.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   The type of the process performing this action.
+##   </summary>
+## </param>
+#
+interface(`cloudway_initrc_domtrans',`
+    gen_require(`
+        type cloudway_initrc_t;
+        type cloudway_initrc_exec_t;
+    ')
+
+    domtrans_pattern($1, cloudway_initrc_exec_t, cloudway_initrc_t)
+')
+
+## <summary>
+##   Execute cloudway service in the cloudway domain.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   The type of the process performing this action.
+##   </summary>
+## </param>
+## <param name="role">
+##   <summary>
+##   Role access to this domain.
+##   </summary>
+## </param>
+#
+interface(`cloudway_initrc_run',`
+    gen_require(`
+        type cloudway_initrc_t;
+        type cloudway_initrc_exec_t;
+    ')
+
+    cloudway_initrc_domtrans($1)
+    role $2 types cloudway_initrc_t;
+')
+
+## <summary>
+##   Send a null signal to cloudway service.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_initrc_signull',`
+    gen_require(`
+        type cloudway_initrc_t;
+    ')
+
+    allow $1 cloudway_initrc_t:process signull;
+')
+
+## <summary>
+##   Send a signal to cloudway service.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_initrc_signal',`
+    gen_require(`
+        type cloudway_initrc_t;
+    ')
+
+    allow $1 cloudway_initrc_t:process signal;
+')
+
+## <summary>
+##   Allow the specified domain to read cloudway's log files.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+## <rolecap/>
+#
+interface(`cloudway_read_log',`
+    gen_require(`
+        type cloudway_log_t;
+    ')
+
+    logging_search_logs($1)
+    read_files_pattern($1, cloudway_log_t, cloudway_log_t)
+')
+
+## <summary>
+##   Allow the specified domain to append cloudway log files.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_append_log'`
+    gen_require(`
+        type cloudway_log_t;
+    ')
+
+    logging_search_logs($1)
+    append_files_pattern($1, cloudway_log_t, cloudway_log_t)
+')
+
+## <summary>
+##   Allow domain to manage cloudway log files.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_manage_log',`
+    gen_require(`
+        type cloudway_log_t;
+    ')
+
+    logging_search_logs($1)
+    manage_dirs_pattern($1, cloudway_log_t, cloudway_log_t)
+    manage_files_pattern($1, cloudway_log_t, cloudway_log_t)
+    manage_lnk_files_pattern($1, cloudway_log_t, cloudway_log_t)
+')
+
+## <summary>
+##   Getattr cloudway lib files.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_getattr_lib',`
+    gen_require(`
+        type cloudway_var_lib_t;
+    ')
+
+    getattr_files_pattern($1, cloudway_var_lib_t, cloudway_var_lib_t)
+    files_search_var_lib($1)
+')
+
+## <summary>
+##   Search cloudway lib directories.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_search_lib',`
+    gen_require(`
+        type cloudway_var_lib_t;
+    ')
+
+    search_dirs_pattern($1, cloudway_var_lib_t, cloudway_var_lib_t)
+    getattr_files_pattern($1, cloudway_var_lib_t, cloudway_var_lib_t)
+    files_search_var_lib($1)
+')
+
+## <summary>
+##   Read cloudway lib files.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_read_lib_files',`
+    gen_require(`
+        type cloudway_var_lib_t;
+    ')
+
+    files_search_var_lib($1)
+    list_dirs_pattern($1, cloudway_var_lib_t, cloudway_var_lib_t)
+    read_files_pattern($1, cloudway_var_lib_t, cloudway_var_lib_t)
+    read_lnk_files_pattern($1, cloudway_var_lib_t, cloudway_var_lib_t)
+')
+
+## <summary>
+##   Append cloudway lib files.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_append_lib_files',`
+    gen_require(`
+        type cloudway_var_lib_t;
+    ')
+
+    files_search_var_lib($1)
+    append_files_pattern($1, cloudway_var_lib_t, cloudway_var_lib_t)
+')
+
+## <summary>
+##   Manage cloudway lib files.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_manage_lib_files',`
+    gen_require(`
+        type cloudway_var_lib_t;
+    ')
+
+    files_search_var_lib($1)
+    manage_files_pattern($1, cloudway_var_lib_t, cloudway_var_lib_t)
+    manage_lnk_files_pattern($1, cloudway_var_lib_t, cloudway_var_lib_t)
+')
+
+## <summary>
+##   Manage cloudway lib directories.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_manage_lib_dirs',`
+    gen_require(`
+        type cloudway_var_lib_t;
+    ')
+
+    files_search_var_lib($1)
+    manage_dirs_pattern($1, cloudway_var_lib_t, cloudway_var_lib_t)
+')
+
+## <summary>
+##   Manage cloudway lib content.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_manage_content',`
+    gen_require(`
+        attribute cloudway_file_type;
+    ')
+
+    files_search_var_lib($1)
+    manage_dirs_pattern($1, cloudway_file_type, cloudway_file_type)
+    manage_files_pattern($1, cloudway_file_type, cloudway_file_type)
+    manage_lnk_files_pattern($1, cloudway_file_type, cloudway_file_type)
+    manage_sock_files_pattern($1, cloudway_file_type, cloudway_file_type)
+')
+
+## <summary>
+##   Create private objects in the cloudway lib directory.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+## <param name="private type">
+##   <summary>
+##   The type of the objects to be created.
+##   </summary>
+## </param>
+## <param name="object">
+##   <summary>
+##   The object class of the object being created.
+##   </summary>
+## </param>
+#
+interface(`cloudway_lib_filetrans',`
+    gen_require(`
+        type cloudway_var_lib_t;
+    ')
+
+    files_search_var_lib($1)
+    filetrans_pattern($1, cloudway_var_lib_t, $2, $3, $4)
+')
+
+## <summary>
+##   All of the rules required to administrate an cloudway environment.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+## <param name="role">
+##   <summary>
+##   Role allowed access.
+##   </summary>
+## </param>
+## <rolecap/>
+#
+interface(`cloudway_admin',`
+    gen_require(`
+        attribute cloudway_domain;
+        type cloudway_initrc_exec_t;
+        type cloudway_log_t;
+        type cloudway_var_lib_t;
+    ')
+
+    allow $1 cloudway_domain:process { ptrace signal_perms };
+    ps_process_pattern($1, cloudway_domain)
+
+    cloudway_initrc_domtrans($1)
+    domain_system_change_exemption($1)
+    role_transition $2 cloudway_initrc_exec_t system_r;
+    allow $2 system_r;
+
+    files_search_logs($1)
+    admin_pattern($1, cloudway_log_t)
+
+    files_search_var_lib($1)
+    admin_pattern($1, cloudway_var_lib_t)
+')
+
+## <summary>
+##   Make the specified type usable as a cloudway domain.
+## </summary>
+## <param name="domain_prefix">
+##   <summary>
+##   The prefix of the domain (e.g., cloudway is the prefix for cloudway_t).
+##   </summary>
+## </param>
+#
+template(`cloudway_service_domain_template',`
+    gen_require(`
+        attribute cloudway_domain;
+        attribute cloudway_user_domain;
+    ')
+
+    type $1_t;
+    typeattribute $1_t cloudway_domain, cloudway_user_domain;
+    domain_type($1_t)
+    role system_r types $1_t;
+    mcs_constrained($1_t)
+    domain_user_exemption_target($1_t)
+    auth_use_nsswitch($1_t)
+    domain_subj_id_change_exemption($1_t)
+    domain_obj_id_change_exemption($1_t)
+    domain_dyntrans_type($1_t)
+    kernel_read_system_state($1_t)
+    logging_send_syslog_msg($1_t)
+
+    type $1_app_t;
+    typeattribute $1_app_t cloudway_domain;
+    domain_type($1_app_t)
+    role system_r types $1_app_t;
+    mcs_constrained($1_app_t)
+    domain_user_exemption_target($1_app_t)
+    domain_obj_id_change_exemption($1_app_t)
+    domain_dyntrans_type($1_app_t)
+    auth_use_nsswitch($1_app_t)
+    kernel_read_system_state($1_app_t)
+    logging_send_syslog_msg($1_app_t)
+')
+
+## <summary>
+##   Make the specified type usable as a cloudway domain.
+## </summary>
+## <param type="type">
+##   <summary>
+##   Type to be used as a cloudway domain type.
+##   </summary>
+## </param>
+#
+template(`cloudway_net_type',`
+    gen_require(`
+        attribute cloudway_net_domain;
+    ')
+
+    typeattribute $1 cloudway_net_domain;
+')
+
+## <summary>
+##   Read and write inherited cloudway files.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_rw_inherited_content',`
+    gen_require(`
+        attribute cloudway_file_type;
+    ')
+
+    allow $1 cloudway_file_type:file rw_inherited_file_perms;
+')
+
+## <summary>
+##   Manage cloudway tmp files.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_manage_tmp_files',`
+    gen_require(`
+        type cloudway_tmp_t;
+    ')
+
+    manage_files_pattern($1, cloudway_tmp_t, cloudway_tmp_t)
+')
+
+## <summary>
+##   Manage cloudway tmp sockets.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_manage_tmp_sockets',`
+    gen_require(`
+        type cloudway_tmp_t;
+    ')
+
+    manage_sock_files_pattern($1, cloudway_tmp_t, cloudway_tmp_t)
+')
+
+## <summary>
+##   Mounton cloudway tmp directory.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_mounton_tmp',`
+    gen_require(`
+        type cloudway_tmp_t;
+    ')
+
+    allow $1 cloudway_tmp_t:dir mounton;
+')
+
+## <summary>
+##   Allow calling app to transition to a cloudway domain
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access
+##   </summary>
+## </param>
+## <rolecap/>
+#
+interface(`cloudway_transition',`
+    gen_require(`
+        attribute cloudway_user_domain;
+    ')
+
+    allow $1 cloudway_user_domain:process transition;
+    dontaudit $1 cloudway_user_domain:process { noatsecure siginh rlimitinh };
+    allow cloudway_user_domain $1:fd use;
+    allow cloudway_user_domain $1:fifo_file rw_inherited_fifo_file_perms;
+    allow cloudway_user_domain $1:process sigchld;
+    dontaudit $1 cloudway_user_domain:socket_class_set { read write };
+')
+
+## <summary>
+##   Allow calling app to transition to a cloudway domain
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed access
+##   </summary>
+## </param>
+## <rolecap/>
+#
+interface(`cloudway_dyntransition',`
+    gen_require(`
+        attribute cloudway_domain;
+        attribute cloudway_user_domain;
+    ')
+
+    allow $1 cloudway_user_domain:process dyntransition;
+    dontaudit cloudway_user_domain $1:key view;
+    allow cloudway_user_domain $1:unix_stream_socket { connectto rw_socket_perms };
+    allow cloudway_user_domain $1:unix_dgram_socket rw_socket_perms;
+    allow $1 cloudway_user_domain:process { rlimitinh signal };
+    dontaudit cloudway_domain $1:tcp_socket { read write getattr setopt getopt shutdown };
+')
+
+## <summary>
+##   Execute cloudway service in the cloudway domain, and
+##   allow the specified role the cloudway domain.
+## </summary>
+## <param name="domain">
+##   <summary>
+##   Domain allowed to transition.
+##   </summary>
+## </param>
+## <param name="role">
+##   <summary>
+##   Role allowed access.
+##   </summary>
+## </param>
+#
+interface(`cloudway_run',`
+    gen_require(`
+        type cloudway_initrc_exec_t;
+    ')
+
+    cloudway_initrc_domtrans($1)
+    role_transition $2 cloudway_initrc_exec_t system_r;
+    cloudway_transition($1)
+')

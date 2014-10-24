@@ -75,7 +75,7 @@ static int cloudway_domain(pam_handle_t *pamh, struct passwd *pw)
     context_t parsed_context;
     char *comp_context = "cloudway_var_lib_t";
     int selength;
-    int cmpval = 0;
+    int cmpval = -1;
 
     if (!pw->pw_uid)
         return 0;
@@ -118,16 +118,16 @@ pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char **argv)
         }
     }
 
-    if (debug) {
-        pam_syslog(pamh, LOG_NOTICE, "Open Session");
-    }
-
     if (close_session) {
         return PAM_SUCCESS;
     }
 
     if (is_selinux_enabled() <= 0) {
         return PAM_SUCCESS;
+    }
+
+    if (debug) {
+        pam_syslog(pamh, LOG_NOTICE, "Open Session");
     }
 
     if (pam_get_item(pamh, PAM_USER, &void_username) != PAM_SUCCESS || !void_username) {
@@ -190,12 +190,12 @@ pam_sm_close_session(pam_handle_t *pamh, int flags, int argc, const char **argv)
         }
     }
 
-    if (debug) {
-        pam_syslog(pamh, LOG_NOTICE, "Close session");
-    }
-
     if (open_session) {
         return PAM_SUCCESS;
+    }
+
+    if (debug) {
+        pam_syslog(pamh, LOG_NOTICE, "Close session");
     }
 
     if (setexeccon(prev_user_context)) {
@@ -205,7 +205,8 @@ pam_sm_close_session(pam_handle_t *pamh, int flags, int argc, const char **argv)
             status = PAM_AUTH_ERR;
         }
     } else if (debug) {
-        pam_syslog(pamh, LOG_NOTICE, "Executable context back to original");
+        pam_syslog(pamh, LOG_NOTICE, "Executable context back to original %s",
+                   prev_user_context ? prev_user_context : "");
     }
 
     if (prev_user_context) {

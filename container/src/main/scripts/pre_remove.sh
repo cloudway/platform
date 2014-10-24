@@ -6,14 +6,13 @@ function rmln {
 }
 
 rmln /usr/share/cloudway/bin /usr/bin
-rmln /usr/share/cloudway/sbin /usr/sbin
 rmln /usr/share/cloudway/addons /var/lib/cloudway/.addons
 
 # Remove system services
 if [ $1 -eq 0 ]; then
 %if 0%{?fedora} >= 16 || 0%{?rhel} >= 7
-  systemctl disable cloudway-worker.service
+  systemctl disable cwadminctl.service
 %else
-  chkconfig --del cloudway-worker
+  chkconfig --del cwadminctl
 %endif
 fi

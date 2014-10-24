@@ -6,9 +6,8 @@ fi
 homedir=${prefix}/usr/share/cloudway
 datadir=${prefix}/var/lib/cloudway
 
-mkdir -p ${prefix}/usr/{bin,sbin}
+mkdir -p ${prefix}/usr/bin
 ln -sf ${homedir}/bin/* ${prefix}/usr/bin/
-ln -sf ${homedir}/sbin/* ${prefix}/usr/sbin/
 
 mkdir -p ${homedir}/conf
 ln -sf /etc/cloudway/* ${homedir}/conf/
@@ -17,15 +16,24 @@ chmod 0755 ${homedir}/addons/*/bin/*
 mkdir -p ${datadir}/.addons
 ln -sf ${homedir}/addons/* ${datadir}/.addons/
 
+/usr/sbin/semodule -i /var/lib/selinux/packages/cloudway.pp.bz2 || :
+/usr/sbin/setsebool -P httpd_unified=on httpd_can_network_connect=on httpd_can_network_relay=on \
+                       httpd_read_user_content=on httpd_enable_homedirs=on httpd_execmem=on \
+                       allow_polyinstantiation=on || :
+
+/sbin/restorecon /usr/share/cloudway/bin/cwctl || :
+/sbin/restorecon /usr/share/cloudway/libexec/cwunidle.sh || :
+/sbin/restorecon /usr/share/cloudway/libexec/cwautoidle.sh || :
+
 if [ -z "$prefix" ]; then
 %if 0%{?fedora} >= 16 || 0%{?rhel} >= 7
-  systemctl enable cloudway-worker.service || :
+  systemctl enable cwadminctl.service || :
   systemctl enable oddjobd.service || :
   systemctl enable cgred.service || :
   systemctl restart oddjobd.service || :
   systemctl restart cgred.service || :
 %else
-  chkconfig --add cloudway-worker || :
+  chkconfig --add cwadminctl || :
   chkconfig --add oddjobd || :
   chkconfig --add cgred || :
   service oddjobd restart || :

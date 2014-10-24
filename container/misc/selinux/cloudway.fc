@@ -1,0 +1,8 @@
+/var/lib/cloudway(/.*)?             gen_context(system_u:object_r:cloudway_var_lib_t,s0)
+/var/lib/cloudway/.*/data(/.*)?     gen_context(system_u:object_r:cloudway_rw_file_t,s0)
+/var/lib/cloudway/.*/\.tmp(/.*)?    gen_context(system_u:object_r:cloudway_tmp_t,s0)
+/var/log/cloudway(/.*)?             gen_context(system_u:object_r:cloudway_log_t,s0)
+
+/usr/share/cloudway/bin/cwctl -- gen_context(system_u:object_r:cloudway_initrc_exec_t,s0)
+/usr/share/cloudway/libexec/cwunidle.* -- gen_context(unconfined_u:object_r:httpd_cloudway_script_exec_t,s0)
+/usr/share/cloudway/libexec/cwautoidle.* -- gen_context(unconfined_u:object_r:httpd_cloudway_script_exec_t,s0)
