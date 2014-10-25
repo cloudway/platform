@@ -12,10 +12,6 @@ ln -sf ${homedir}/bin/* ${prefix}/usr/bin/
 mkdir -p ${homedir}/conf
 ln -sf /etc/cloudway/* ${homedir}/conf/
 
-chmod 0755 ${homedir}/addons/*/bin/*
-mkdir -p ${datadir}/.addons
-ln -sf ${homedir}/addons/* ${datadir}/.addons/
-
 /usr/sbin/semodule -i /var/lib/selinux/packages/cloudway.pp.bz2 || :
 /usr/sbin/setsebool -P httpd_unified=on httpd_can_network_connect=on httpd_can_network_relay=on \
                        httpd_read_user_content=on httpd_enable_homedirs=on httpd_execmem=on \
@@ -23,7 +19,7 @@ ln -sf ${homedir}/addons/* ${datadir}/.addons/
 
 /sbin/restorecon /usr/share/cloudway/bin/cwctl || :
 /sbin/restorecon /usr/share/cloudway/libexec/cwunidle.sh || :
-/sbin/restorecon /usr/share/cloudway/libexec/cwautoidle.sh || :
+/sbin/restorecon /usr/share/cloudway/libexec/cwautoidle.py || :
 
 if [ -z "$prefix" ]; then
 %if 0%{?fedora} >= 16 || 0%{?rhel} >= 7

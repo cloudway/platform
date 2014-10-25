@@ -1,0 +1,73 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.cloudway</groupId>
+    <artifactId>cloudway-platform</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+  <artifactId>pam_cloudway</artifactId>
+  <name>Cloudway PAM module</name>
+  <packaging>so</packaging>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>native-maven-plugin</artifactId>
+        <version>1.0-alpha-8</version>
+        <extensions>true</extensions>
+        <configuration>
+          <compilerStartOptions>
+            <compilerStartOption>-D_GNU_SOURCE -DSHARED -fPIC -Wall -W -Wundef -Wshadow -Wmissing-noreturn -Wmissing-format-attribute -Wno-unused-parameter</compilerStartOption>
+          </compilerStartOptions>
+          <linkerStartOptions>
+            <linkerStartOption>-shared -Wl,-soname,pam_cloudway.so,-z,defs -lselinux -lpam</linkerStartOption>
+          </linkerStartOptions>
+          <sources>
+            <source>
+              <directory>src/main/native</directory>
+              <fileNames>
+                <fileName>pam_cloudway.c</fileName>
+              </fileNames>
+            </source>
+          </sources>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>rpm-maven-plugin</artifactId>
+        <version>2.0</version>
+        <executions>
+          <execution>
+            <id>generate-rpm</id>
+            <goals>
+              <goal>attached-rpm</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <group>System Environment/Base</group>
+          <needarch>x86_64</needarch>
+          <requires>
+            <require>attr</require>
+          </requires>
+          <mappings>
+            <mapping>
+              <directory>/lib64/security</directory>
+              <filemode>755</filemode>
+              <username>root</username>
+              <groupname>root</groupname>
+              <directoryIncluded>false</directoryIncluded>
+              <sources>
+                <source>
+                  <location>target/pam_cloudway.so</location>
+                </source>
+              </sources>
+            </mapping>
+          </mappings>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

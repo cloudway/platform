@@ -41,20 +41,13 @@ chmod 0755 ${CLOUDWAY_HOME}/libexec/*
 
 /sbin/restorecon /usr/share/cloudway/bin/cwctl || :
 /sbin/restorecon /usr/share/cloudway/libexec/cwunidle.sh || :
-/sbin/restorecon /usr/share/cloudway/libexec/cwautoidle.sh || :
+/sbin/restorecon /usr/share/cloudway/libexec/cwautoidle.py || :
 
 # Install configuration files
 mkdir -p ${CLOUDWAY_CONF}
 cp -r ${BASE_DIR}/misc/conf/* ${CLOUDWAY_CONF}/
 mkdir -p ${CLOUDWAY_HOME}/conf
 ln -sf ${CLOUDWAY_CONF}/* ${CLOUDWAY_HOME}/conf/
-
-# Install addons
-mkdir -p ${CLOUDWAY_HOME}/addons
-cp -rp ${BASE_DIR}/../addons/* ${CLOUDWAY_HOME}/addons/
-chmod 0755 ${CLOUDWAY_HOME}/addons/*/bin/*
-mkdir -p ${CLOUDWAY_DATA}/.addons
-ln -sf ${CLOUDWAY_HOME}/addons/* ${CLOUDWAY_DATA}/.addons/
 
 # Install system configuration files
 mkdir -p ${INSTALL_DIR}/etc

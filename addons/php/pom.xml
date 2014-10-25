@@ -1,0 +1,62 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.cloudway</groupId>
+    <artifactId>cloudway-platform</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+  <artifactId>cloudway-addon-php</artifactId>
+  <name>Cloudway PHP Add-on</name>
+  <packaging>rpm</packaging>
+
+  <properties>
+    <source.dir>src/main/rpm</source.dir>
+    <target.dir>/usr/share/cloudway/addons/php</target.dir>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>rpm-maven-plugin</artifactId>
+        <version>2.0</version>
+        <extensions>true</extensions>
+        <configuration>
+          <group>Network/Daemons</group>
+          <requires>
+            <require>cloudway-platform-container</require>
+            <require>php</require>
+            <require>php-pear</require>
+          </requires>
+          <autoProvides>false</autoProvides>
+          <autoRequires>false</autoRequires>
+          <defaultFilemode>644</defaultFilemode>
+          <defaultDirmode>755</defaultDirmode>
+          <defaultUsername>root</defaultUsername>
+          <defaultGroupname>root</defaultGroupname>
+          <mappings>
+            <mapping>
+              <directory>${target.dir}</directory>
+              <sources>
+                <source>
+                  <location>${source.dir}</location>
+                </source>
+              </sources>
+            </mapping>
+          </mappings>
+          <postinstallScriptlet>
+            <script>
+chmod 0755 ${target.dir}/bin/*
+mkdir -p /var/lib/cloudway/.addons
+ln -sf ${target.dir} /var/lib/cloudway/.addons/
+            </script>
+          </postinstallScriptlet>
+          <postremoveScriptlet>
+            <script>rm -f /var/lib/cloudway/.addons/php</script>
+          </postremoveScriptlet>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

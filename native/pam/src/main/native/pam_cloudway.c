@@ -50,7 +50,7 @@ static void get_mcs_level(int uid, security_context_t *con)
     }
 
     while (ord > tier) {
-        ord = ord - tier;
+        ord -= tier;
         tier -= 1;
     }
     tier = setsize - tier;

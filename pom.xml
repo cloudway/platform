@@ -21,6 +21,21 @@
     <module>container</module>
   </modules>
 
+  <profiles>
+    <profile>
+      <id>rpm</id>
+      <activation>
+        <os><name>Linux</name></os>
+      </activation>
+      <modules>
+        <module>native/pam</module>
+        <module>addons/php</module>
+        <module>addons/mysql</module>
+        <module>addons/phpmyadmin</module>
+      </modules>
+    </profile>
+  </profiles>
+
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>

@@ -121,6 +121,9 @@
 
     <profile>
       <id>rpm</id>
+      <activation>
+        <os><name>Linux</name></os>
+      </activation>
       <properties>
         <cloudway.home>/usr/share/cloudway</cloudway.home>
       </properties>
@@ -175,12 +178,10 @@
                 <require>libcgroup-tools</require>
                 <require>libcgroup-pam</require>
                 <require>libselinux-python</require>
-                <!-- FIXME -->
-                <require>php-pear</require>
-                <require>mariadb-server</require>
-                <require>mariadb-devel</require>
-                <require>phpMyAdmin</require>
+                <require>pam_cloudway</require>
               </requires>
+              <autoProvides>false</autoProvides>
+              <autoRequires>false</autoRequires>
               <defaultFilemode>644</defaultFilemode>
               <defaultDirmode>755</defaultDirmode>
               <defaultUsername>root</defaultUsername>
@@ -253,14 +254,6 @@
                   <sources>
                     <source>
                       <location>misc/selinux/cloudway.if</location>
-                    </source>
-                  </sources>
-                </mapping>
-                <mapping>
-                  <directory>${cloudway.home}/addons</directory>
-                  <sources>
-                    <source>
-                      <location>../addons</location>
                     </source>
                   </sources>
                 </mapping>
