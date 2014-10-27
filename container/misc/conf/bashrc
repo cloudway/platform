@@ -1,16 +1,20 @@
+[ -f /etc/bashrc ] && source /etc/bashrc
 [ -f ~/app/data/.bash_profile ] && source ~/app/data/.bash_profile
 
-if [ -z "$PS1" ]; then
-    return
-fi
-
-for d in ~/*; do
+# are we an interactive shell?
+if [ "$PS1" ]; then
+  for d in ~/*; do
     [ -f $d/bin/bash_profile ] && source $d/bin/bash_profile
-done
+  done
 
-export PS1="[$CLOUDWAY_APP_DNS \W] "
-export TMOUT=300
-export SHELL=/bin/bash
+  export PS1="[$CLOUDWAY_APP_DNS \W] "
+  export TMOUT=300
+  export SHELL=/bin/bash
 
-# unidle the container
-[ -f ~/app/.state -a $(< ~/app/.state) == 'IDLE' ] && cwctl start > /dev/null
+  if [ -f ~/app/.state -a $(< ~/app/.state) == 'IDLE' ]; then
+    echo ""
+    echo "*** Your application is temporarily idled. To keep it active,"
+    echo "*** access your application at http://${CLOUDWAY_APP_DNS}/"
+    echo ""
+  fi
+fi

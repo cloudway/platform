@@ -1,12 +1,7 @@
 # Remove symbolic links
-function rmln {
-  for f in $1/*; do
-    [ -h "$2/$(basename $f)" ] && rm "$2/$(basename $f)"
-  done
-}
-
-rmln /usr/share/cloudway/bin /usr/bin
-rmln /usr/share/cloudway/addons /var/lib/cloudway/.addons
+for f in /usr/share/cloudway/bin/*; do
+  [ -h "/usr/bin/$(basename $f)" ] && rm "/usr/bin/$(basename $f)"
+done
 
 # Remove system services
 if [ $1 -eq 0 ]; then

@@ -8,9 +8,7 @@ datadir=${prefix}/var/lib/cloudway
 
 mkdir -p ${prefix}/usr/bin
 ln -sf ${homedir}/bin/* ${prefix}/usr/bin/
-
-mkdir -p ${homedir}/conf
-ln -sf /etc/cloudway/* ${homedir}/conf/
+ln -snf /etc/cloudway ${homedir}/conf
 
 /usr/sbin/semodule -i /var/lib/selinux/packages/cloudway.pp.bz2 || :
 /usr/sbin/setsebool -P httpd_unified=on httpd_can_network_connect=on httpd_can_network_relay=on \

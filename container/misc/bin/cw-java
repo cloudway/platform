@@ -13,7 +13,7 @@ if [ -z "$CLOUDWAY_HOME" ]; then
 
   # need this for relative symlinks
   while [ -h "$PRG" ]; do
-    link=$(readlink $PRG)
+    link=$(readlink "$PRG")
     if expr "$link" : '/.*' > /dev/null; then
       PRG="$link"
     else
@@ -22,10 +22,11 @@ if [ -z "$CLOUDWAY_HOME" ]; then
   done
 
   # make it fully qualified
-  saveddir=$(pwd)
-  CLOUDWAY_HOME=$(dirname "$PRG")/..
-  CLOUDWAY_HOME=$(cd "$CLOUDWAY_HOME" && pwd)
-  cd "$saveddir"
+  CLOUDWAY_HOME=$(cd "$(dirname "$PRG")/.." && pwd)
+fi
+
+if [ -z "$JAVA_HOME" -a -x /usr/sbin/alternatives ]; then
+  JAVA_HOME=$(/usr/sbin/alternatives --list | grep '^java_sdk_1\.8\.0' | head -n 1 | awk '{print $3}')
 fi
 
 if [ -z "$JAVA_CMD" ]; then
@@ -43,7 +44,7 @@ fi
 
 if [ ! -x "$JAVACMD" ]; then
   echo "Error: JAVA_HOME is not defined correctly."
-  echo "  We cannot execute $JAVACMD"
+  echo "       Cannot execute $JAVACMD"
   exit 1
 fi
 

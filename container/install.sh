@@ -11,7 +11,6 @@ if [ -z "$INSTALL_DIR" -a $(id -u) -ne 0 ]; then
 fi
 
 CLOUDWAY_HOME=${INSTALL_DIR}/usr/share/cloudway
-CLOUDWAY_CONF=${INSTALL_DIR}/etc/cloudway
 CLOUDWAY_DATA=${INSTALL_DIR}/var/lib/cloudway
 
 # Install SELinux policy module
@@ -44,10 +43,9 @@ chmod 0755 ${CLOUDWAY_HOME}/libexec/*
 /sbin/restorecon /usr/share/cloudway/libexec/cwautoidle.py || :
 
 # Install configuration files
-mkdir -p ${CLOUDWAY_CONF}
-cp -r ${BASE_DIR}/misc/conf/* ${CLOUDWAY_CONF}/
-mkdir -p ${CLOUDWAY_HOME}/conf
-ln -sf ${CLOUDWAY_CONF}/* ${CLOUDWAY_HOME}/conf/
+mkdir -p ${INSTALL_DIR}/etc/cloudway
+cp -r ${BASE_DIR}/misc/conf/* ${INSTALL_DIR}/etc/cloudway/
+ln -snf ${INSTALL_DIR}/etc/cloudway ${CLOUDWAY_HOME}/conf
 
 # Install system configuration files
 mkdir -p ${INSTALL_DIR}/etc
