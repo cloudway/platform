@@ -8,9 +8,8 @@
   <addon-version>1.0</addon-version>
   <addon-vendor>cloudway</addon-vendor>
   <category>Service</category>
-
   <endpoint>
-    <private-ip-name>DB_HOST</private-ip-name>
+    <private-host-name>DB_HOST</private-host-name>
     <private-port-name>DB_PORT</private-port-name>
     <private-port>3306</private-port>
   </endpoint>

@@ -46,7 +46,7 @@ function tidy {
 }
 
 function status {
-    if curl "http://$CLOUDWAY_PHP_IP:$CLOUDWAY_PHP_PORT/server-status?auto" >/dev/null 2>&1; then
+    if curl "http://$CLOUDWAY_PHP_HOST:$CLOUDWAY_PHP_PORT/server-status?auto" >/dev/null 2>&1; then
         echo "PHP application is running"
     else
         echo "PHP application is either stopped or inaccessible"

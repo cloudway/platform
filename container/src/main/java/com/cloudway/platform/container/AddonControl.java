@@ -524,16 +524,16 @@ public class AddonControl
         Set<String> allocated_ips =
             valid_addons()
                 .flatMap(a -> a.getEndpoints().stream())
-                .map(a -> env.get(a.getPrivateIPName()))
+                .map(a -> env.get(a.getPrivateHostName()))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
         addon.getEndpoints().stream().forEach(endpoint -> {
-            String ip_name   = endpoint.getPrivateIPName();
+            String host_name = endpoint.getPrivateHostName();
             String port_name = endpoint.getPrivatePortName();
 
             // Reuse previously allocated IPs of the same name.
-            String ip = env.get(ip_name);
+            String ip = env.get(host_name);
             if (ip == null) {
                 // Find the next IP address available for the current guest user.
                 // The IP is assumed to be available only if IP is not already
@@ -544,13 +544,13 @@ public class AddonControl
                     .filter(a -> !allocated_ips.contains(a))
                     .findAny()
                     .orElseThrow(() -> new IllegalStateException(
-                        format("No IP was available for endpoint %s(%s)", ip_name, port_name)));
+                        format("No IP was available for endpoint %s(%s)", host_name, port_name)));
 
-                container.addEnvVar(ip_name, ip, false);
-                env.put(ip_name, ip);
+                container.addEnvVar(host_name, ip, false);
+                env.put(host_name, ip);
                 allocated_ips.add(ip);
             }
-            endpoint.setPrivateIP(ip);
+            endpoint.setPrivateHost(ip);
 
             String port = String.valueOf(endpoint.getPrivatePort());
             if (!env.containsKey(port_name)) {
@@ -561,9 +561,9 @@ public class AddonControl
 
         // Validate all the allocations to ensure they are not already bound.
         String failure = addon.getEndpoints().stream()
-            .filter(ep -> container.isAddressInUse(ep.getPrivateIP(), ep.getPrivatePort()))
-            .map(ep -> format("%s(%s)=%s(%d)", ep.getPrivateIPName(), ep.getPrivatePortName(),
-                                               ep.getPrivateIP(),     ep.getPrivatePort()))
+            .filter(ep -> container.isAddressInUse(ep.getPrivateHost(), ep.getPrivatePort()))
+            .map(ep -> format("%s(%s)=%s(%d)", ep.getPrivateHostName(), ep.getPrivatePortName(),
+                                               ep.getPrivateHost(),     ep.getPrivatePort()))
             .collect(Collectors.joining(", "));
 
         if (!failure.isEmpty()) {
@@ -573,7 +573,7 @@ public class AddonControl
 
     private void deletePrivateEndpoints(Addon addon) {
         addon.getEndpoints().forEach(endpoint -> {
-            container.removeEnvVar(endpoint.getPrivateIPName());
+            container.removeEnvVar(endpoint.getPrivateHostName());
             container.removeEnvVar(endpoint.getPrivatePortName());
         });
     }

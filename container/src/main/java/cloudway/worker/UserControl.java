@@ -85,7 +85,7 @@ public class UserControl extends Control
 
     public void endpoints(String[] args) {
         getContainer().getEndpoints().forEach(ep ->
-            System.out.printf("%-16s %-8s %s%n", ep.getPrivateIP(), ep.getPrivatePort(), ep.getInfo())
+            System.out.printf("%-16s %-8s %s%n", ep.getPrivateHost(), ep.getPrivatePort(), ep.getInfo())
         );
     }
 

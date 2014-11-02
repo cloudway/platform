@@ -46,7 +46,7 @@ function tidy {
 }
 
 function status {
-    if curl "http://$CLOUDWAY_PHPMYADMIN_IP:$CLOUDWAY_PHPMYADMIN_PORT/server-status?auto" >/dev/null 2>&1; then
+    if curl "http://$CLOUDWAY_PHPMYADMIN_HOST:$CLOUDWAY_PHPMYADMIN_PORT/server-status?auto" >/dev/null 2>&1; then
         echo "phpMyAdmin is running"
     else
         echo "phpMyAdmin is either stopped or inaccessible"

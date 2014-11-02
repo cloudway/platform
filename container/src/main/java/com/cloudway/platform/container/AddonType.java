@@ -6,9 +6,13 @@
 
 package com.cloudway.platform.container;
 
+import javax.xml.bind.annotation.XmlEnum;
+import javax.xml.bind.annotation.XmlEnumValue;
+
+@XmlEnum
 public enum AddonType
 {
-    FRAMEWORK,
-    SERVICE,
-    COMPONENT
+    @XmlEnumValue("Framework") FRAMEWORK,
+    @XmlEnumValue("Service")   SERVICE,
+    @XmlEnumValue("Component") COMPONENT
 }

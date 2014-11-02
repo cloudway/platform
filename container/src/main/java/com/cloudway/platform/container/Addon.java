@@ -6,7 +6,6 @@
 
 package com.cloudway.platform.container;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,7 +14,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 import com.cloudway.platform.common.util.FileUtils;
 
@@ -43,27 +41,25 @@ public class Addon
     public static Addon load(ApplicationContainer container, Path path) {
         Addon addon = new Addon(container, path);
         Map<String, String> env = Environ.loadAll(container);
-
         Path file = FileUtils.join(path, "metadata", "addon.xml");
-        try (BufferedReader reader = Files.newBufferedReader(file)) {
-            com.cloudway.platform.container.schema.addon.Addon metadata =
-                (com.cloudway.platform.container.schema.addon.Addon)
-                com.cloudway.platform.container.schema.addon.Addon.unmarshal(reader);
 
-            addon.shortName   = metadata.getName();
-            addon.displayName = metadata.getDisplayName();
-            addon.version     = metadata.getVersion();
-            addon.type        = AddonType.valueOf(metadata.getCategory().toUpperCase());
+        try {
+            MetaData.Addon metadata = MetaData.load(file);
 
-            Stream.of(metadata.getEndpoint()).forEach(ep -> {
+            addon.shortName   = metadata.name;
+            addon.displayName = metadata.displayName;
+            addon.version     = metadata.version;
+            addon.type        = metadata.category;
+
+            metadata.endpoints.stream().forEach(ep -> {
                 Endpoint endpoint = addon.new Endpoint(
-                    ("CLOUDWAY_" + addon.shortName + "_" + ep.getPrivateIpName()).toUpperCase(),
-                    ("CLOUDWAY_" + addon.shortName + "_" + ep.getPrivatePortName()).toUpperCase()
+                    ("CLOUDWAY_" + addon.shortName + "_" + ep.privateHostName).toUpperCase(),
+                    ("CLOUDWAY_" + addon.shortName + "_" + ep.privatePortName).toUpperCase()
                 );
-                endpoint.setPrivateIP(env.get(endpoint.getPrivateIPName()));
-                endpoint.setPrivatePort(ep.getPrivatePort());
-                Stream.of(ep.getProxyMapping()).forEach(map ->
-                    endpoint.addProxyMapping(map.getFrontend(), map.getBackend()));
+                endpoint.setPrivateHost(env.get(endpoint.getPrivateHostName()));
+                endpoint.setPrivatePort(ep.privatePort);
+                ep.proxyMappings.stream().forEach(map ->
+                    endpoint.addProxyMapping(map.frontend, map.backend));
                 addon.endpoints.add(endpoint);
             });
         } catch (Exception ex) {
@@ -137,38 +133,38 @@ public class Addon
             uri = uri.substring(0, uri.length()-1);
         }
         if (uri.isEmpty() || uri.startsWith("/")) {
-            return ep.getPrivateIP() + ":" + ep.getPrivatePort() + uri;
+            return ep.getPrivateHost() + ":" + ep.getPrivatePort() + uri;
         } else {
             return uri; // GONE, FORBIDDEN, REDIRECT:/url, etc
         }
     }
 
     public class Endpoint {
-        private String privateIPName;
+        private String privateHostName;
         private String privatePortName;
-        private String privateIP;
+        private String privateHost;
         private int    privatePort;
         private Map<String,String> mappings;
 
-        Endpoint(String privateIPName, String privatePortName) {
-            this.privateIPName   = privateIPName;
+        Endpoint(String privateHostName, String privatePortName) {
+            this.privateHostName = privateHostName;
             this.privatePortName = privatePortName;
         }
 
-        public String getPrivateIPName() {
-            return privateIPName;
+        public String getPrivateHostName() {
+            return privateHostName;
         }
 
         public String getPrivatePortName() {
             return privatePortName;
         }
 
-        public String getPrivateIP() {
-            return privateIP;
+        public String getPrivateHost() {
+            return privateHost;
         }
 
-        public void setPrivateIP(String ip) {
-            this.privateIP = ip;
+        public void setPrivateHost(String host) {
+            this.privateHost = host;
         }
 
         public int getPrivatePort() {
@@ -192,7 +188,7 @@ public class Addon
         public String getInfo() {
             String prefix = "CLOUDWAY_" + Addon.this.getName() + "_";
             return Addon.this.getDisplayName() + ", " +
-                getPrivateIPName().substring(prefix.length()) + ":" +
+                getPrivateHostName().substring(prefix.length()) + ":" +
                 getPrivatePortName().substring(prefix.length());
         }
     }
