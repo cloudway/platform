@@ -10,25 +10,19 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 
+import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.proxy.apache.ApacheProxy;
 
-@SuppressWarnings("unused")
 public interface HttpProxy
 {
     static HttpProxy getInstance() {
         return ApacheProxy.INSTANCE; // FIXME
     }
 
-    void addMapping(String path, String uri)
+    void addMappings(ApplicationContainer container, Collection<ProxyMapping> mappings)
         throws IOException;
 
-    void addMappings(Map<String, String> mappings)
-        throws IOException;
-
-    void removeMapping(String path)
-        throws IOException;
-
-    void removeMappings(Collection<String> paths)
+    void removeMappings(ApplicationContainer container, Collection<ProxyMapping> mappings)
         throws IOException;
 
     void addAlias(String name, String fqdn)
@@ -37,14 +31,14 @@ public interface HttpProxy
     void removeAlias(String name)
         throws IOException;
 
-    void idle(String fqdn, String id)
+    void idle(ApplicationContainer container)
         throws IOException;
 
-    boolean unidle(String fqdn)
+    boolean unidle(ApplicationContainer container)
         throws IOException;
 
-    boolean isIdle(String fqdn);
+    boolean isIdle(ApplicationContainer container);
 
-    void purge(String fqdn)
+    void purge(ApplicationContainer container)
         throws IOException;
 }

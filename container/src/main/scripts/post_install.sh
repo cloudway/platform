@@ -43,6 +43,10 @@ if [ -z "$prefix" ]; then
   }
 
   mkdir -p ${datadir}/.httpd
+  chown root:apache ${datadir}/.httpd
+  chmod 0750 ${datadir}/.httpd
+
+  touch ${datadir}/.httpd/containers.txt
   apachedb mappings
   apachedb aliases
   apachedb idles

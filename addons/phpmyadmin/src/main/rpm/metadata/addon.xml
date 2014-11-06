@@ -12,6 +12,9 @@
     <private-host-name>HOST</private-host-name>
     <private-port-name>PORT</private-port-name>
     <private-port>8080</private-port>
-    <proxy-mapping frontend="/phpmyadmin" backend="/phpmyadmin" />
+    <proxy-mapping>
+      <frontend>/phpmyadmin</frontend>
+      <backend>/phpmyadmin</backend>
+    </proxy-mapping>
   </endpoint>
 </addon>

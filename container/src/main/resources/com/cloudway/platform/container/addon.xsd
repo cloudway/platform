@@ -36,8 +36,11 @@
   </xs:complexType>
 
   <xs:complexType name="proxy-mapping-type">
-    <xs:attribute name="frontend" type="xs:string" use="required"/>
-    <xs:attribute name="backend" type="xs:string" use="required"/>
+    <xs:sequence>
+      <xs:element name="frontend" type="xs:string"/>
+      <xs:element name="backend" type="xs:string"/>
+      <xs:element name="protocols" type="protocols-type" minOccurs="0"/>
+    </xs:sequence>
   </xs:complexType>
 
   <xs:simpleType name="short-name-type">
@@ -57,6 +60,12 @@
       <xs:enumeration value="Framework" />
       <xs:enumeration value="Service" />
       <xs:enumeration value="Component" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="protocols-type">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-z][a-z0-9]*(,[a-z][a-z0-9]*)*"/>
     </xs:restriction>
   </xs:simpleType>
 </xs:schema>

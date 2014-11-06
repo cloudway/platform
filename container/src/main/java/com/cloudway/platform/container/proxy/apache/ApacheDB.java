@@ -39,11 +39,18 @@ public class ApacheDB
               .orElse("httxt2dbm");
 
     private String mapname;
+    private boolean nodbm;
+
     private Map<String, String> map = new LinkedHashMap<>();
     private long mtime = -1;
 
-    public ApacheDB(String mapname) {
+    public ApacheDB(String mapname, boolean nodbm) {
         this.mapname = mapname;
+        this.nodbm = nodbm;
+    }
+
+    public ApacheDB(String mapname) {
+        this(mapname, false);
     }
 
     public synchronized void reading(Consumer<Map<String,String>> action)
@@ -52,15 +59,18 @@ public class ApacheDB
         action.accept(load());
     }
 
-    public synchronized void writting(Consumer<Map<String,String>> action)
+    public synchronized boolean writting(Consumer<Map<String,String>> action)
         throws IOException
     {
         Map<String, String> newmap = new LinkedHashMap<>(load());
         action.accept(newmap);
 
-        if (!map.equals(newmap)) {
+        if (map.equals(newmap)) {
+            return false;
+        } else {
             map = newmap;
             store(newmap);
+            return true;
         }
     }
 
@@ -91,20 +101,21 @@ public class ApacheDB
         }
 
         Path txt = BASEDIR.resolve(mapname + SUFFIX);
-        Path dbm = BASEDIR.resolve(mapname + ".db");
-
         try (BufferedWriter f = Files.newBufferedWriter(txt, WRITE, CREATE, TRUNCATE_EXISTING)) {
             IO.forEach(map, (k,v) -> f.write(k + " " + v + "\n"));
         }
 
-        Path wd = Files.createTempDirectory(BASEDIR, mapname + ".db~");
-        try {
-            Path tmpdb = wd.resolve("tmp.db");
-            Exec.args(httxt2dbm, "-f", "DB", "-i", txt, "-o", tmpdb)
-                .silentIO().checkError().run();
-            Files.move(tmpdb, dbm, REPLACE_EXISTING, ATOMIC_MOVE);
-        } finally {
-            FileUtils.deleteTree(wd);
+        if (!nodbm) {
+            Path dbm = BASEDIR.resolve(mapname + ".db");
+            Path wd = Files.createTempDirectory(BASEDIR, mapname + ".db~");
+            try {
+                Path tmpdb = wd.resolve("tmp.db");
+                Exec.args(httxt2dbm, "-f", "DB", "-i", txt, "-o", tmpdb)
+                    .silentIO().checkError().run();
+                Files.move(tmpdb, dbm, REPLACE_EXISTING, ATOMIC_MOVE);
+            } finally {
+                FileUtils.deleteTree(wd);
+            }
         }
     }
 }

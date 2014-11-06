@@ -15,29 +15,28 @@ def load_last_access_data():
     last_access_data.clear()
     for entry in glob.glob(os.path.join(BASE_DIR, '*')):
         id  = read_file(os.path.join(entry, '.env', 'CLOUDWAY_APP_ID'))
-        dns = read_file(os.path.join(entry, '.env', 'CLOUDWAY_APP_DNS'))
-        if id and dns:
+        if id is not None:
             atime = read_datetime(os.path.join(entry, 'app', '.last_access'))
             state = read_file(os.path.join(entry, 'app', '.state'))
             if atime is None:
                 atime = datetime.now()
                 write_datetime(os.path.join(entry, 'app', '.last_access'), atime)
-            last_access_data[dns] = {'id':id, 'atime':atime, 'state':state}
+            last_access_data[id] = {'atime':atime, 'state':state}
 
 def update_last_access_data(data):
-    for dns, atime in data.iteritems():
-        info = last_access_data.get(dns)
+    for id, atime in data.iteritems():
+        info = last_access_data.get(id)
         if info is not None:
             info['atime'] = atime
-            write_datetime(os.path.join(BASE_DIR, info['id'], 'app', '.last_access'), atime)
-            if debug: print >> sys.stderr, "updating last access time for %s" % info['id']
+            write_datetime(os.path.join(BASE_DIR, id, 'app', '.last_access'), atime)
+            if debug: print >> sys.stderr, "updating last access time for %s" % id
 
 def idle_staled_apps():
     apps = []
-    for info in last_access_data.itervalues():
+    for id, info in last_access_data.iteritems():
         if info['state'] == 'STARTED' and (datetime.now() - info['atime']).total_seconds() > STALE_TIME:
-            apps.append(info['id'])
-            if debug: print >> sys.stderr, "Idling %s" % info['id']
+            apps.append(id)
+            if debug: print >> sys.stderr, "Idling %s" % id
     if len(apps) != 0:
         subprocess.call(['cwctl', 'idle'] + apps)
 

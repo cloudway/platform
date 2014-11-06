@@ -339,6 +339,10 @@ optional_policy(`
     cloudway_initrc_signal(httpd_t)
 ')
 
+optional_policy(`
+    rpm_read_db(cloudway_domain)
+')
+
 #######################################################
 #
 # Policy for cloudway user domain process

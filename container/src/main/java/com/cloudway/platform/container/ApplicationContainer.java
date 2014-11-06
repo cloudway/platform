@@ -272,11 +272,6 @@ public class ApplicationContainer
                                                "lower case letters, digits, or underscore");
         }
 
-        String fqdn = name + "-" + namespace + "." + DOMAIN;
-        if (all().anyMatch(c -> fqdn.equals(c.getDomainName()))) {
-            throw new IllegalStateException("Domain name \"" + fqdn + "\" already exists");
-        }
-
         ApplicationContainer container = new ApplicationContainer(id, name, namespace, capacity, null);
         container.plugin.create();
         container.setState(NEW);
@@ -301,12 +296,12 @@ public class ApplicationContainer
         int uid = Etc.getuid();
         ApplicationState state = getState();
 
-        if (uid != 0 && state == IDLE && HttpProxy.getInstance().isIdle(getDomainName())) {
+        if (uid != 0 && state == IDLE && HttpProxy.getInstance().isIdle(this)) {
             try {
                 // contact proxy to activate container for unprivileged user
                 URL url = new URL("http://127.0.0.1/");
                 URLConnection con = url.openConnection();
-                con.setRequestProperty("X-Cloudway-Host", getDomainName());
+                con.setRequestProperty("X-Container-Id", getId());
                 con.getInputStream().close();
             } catch (IOException ex) {
                 // log and ignore
@@ -318,7 +313,7 @@ public class ApplicationContainer
             if (state != STARTED)
                 plugin.start();
             if (state == IDLE)
-                HttpProxy.getInstance().unidle(getDomainName());
+                HttpProxy.getInstance().unidle(this);
         }
 
         processTemplates();
@@ -352,7 +347,7 @@ public class ApplicationContainer
     public void idle() throws IOException {
         if (getState() == STARTED) {
             stop_guest(true, 30, TimeUnit.SECONDS);
-            HttpProxy.getInstance().idle(getDomainName(), getId());
+            HttpProxy.getInstance().idle(this);
             setState(IDLE);
         }
     }
@@ -363,7 +358,7 @@ public class ApplicationContainer
     public void unidle() throws IOException {
         if (Etc.getuid() == 0) {
             // make sure the container is really idled to prevent DoS attack
-            if (HttpProxy.getInstance().unidle(getDomainName())) {
+            if (HttpProxy.getInstance().unidle(this)) {
                 plugin.start();
                 start_guest();
                 setState(STARTED);
@@ -541,10 +536,9 @@ public class ApplicationContainer
                         }
                     }
 
-                    if (securing) {
+                    if (securing)
                         setFileReadOnly(input);
-                        setFileReadWrite(output);
-                    }
+                    setFileReadWrite(output);
                 }
             });
         }

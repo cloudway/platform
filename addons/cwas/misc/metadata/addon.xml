@@ -12,6 +12,15 @@
     <private-host-name>HOST</private-host-name>
     <private-port-name>PORT</private-port-name>
     <private-port>8080</private-port>
-    <proxy-mapping frontend="/" backend="/" />
+    <proxy-mapping>
+      <frontend>/</frontend>
+      <backend>/</backend>
+      <protocols>ajp,http</protocols>
+    </proxy-mapping>
+    <proxy-mapping>
+      <frontend>/cloudway/mux</frontend>
+      <backend>/cloudway/mux</backend>
+      <protocols>ws</protocols>
+    </proxy-mapping>
   </endpoint>
 </addon>

@@ -81,6 +81,10 @@ if [ -z "$INSTALL_DIR" ]; then
   }
 
   mkdir -p ${CLOUDWAY_DATA}/.httpd
+  chown root:apache ${CLOUDWAY_DATA}/.httpd
+  chmod 0750 ${CLOUDWAY_DATA}/.httpd
+
+  touch ${CLOUDWAY_DATA}/.httpd/containers.txt
   apachedb mappings
   apachedb aliases
   apachedb idles

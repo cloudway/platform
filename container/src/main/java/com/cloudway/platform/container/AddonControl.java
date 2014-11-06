@@ -40,6 +40,7 @@ import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.proxy.HttpProxy;
+import com.cloudway.platform.container.proxy.ProxyMapping;
 
 public class AddonControl
 {
@@ -176,7 +177,7 @@ public class AddonControl
             });
         } finally {
             try {
-                HttpProxy.getInstance().purge(container.getDomainName());
+                HttpProxy.getInstance().purge(container);
             } catch (IOException ex) {
                 // log and ignore
             }
@@ -579,17 +580,17 @@ public class AddonControl
     }
 
     public void addProxyMappings(Addon addon) throws IOException {
-        Map<String, String> mappings = addon.getProxyMappings();
+        List<ProxyMapping> mappings = addon.getProxyMappings();
         if (!mappings.isEmpty()) {
-            HttpProxy.getInstance().addMappings(mappings);
+            HttpProxy.getInstance().addMappings(container, mappings);
         }
     }
 
     public void removeProxyMappings(Addon addon) {
-        Map<String, String> mappings = addon.getProxyMappings();
+        List<ProxyMapping> mappings = addon.getProxyMappings();
         if (!mappings.isEmpty()) {
             try {
-                HttpProxy.getInstance().removeMappings(mappings.keySet());
+                HttpProxy.getInstance().removeMappings(container, mappings);
             } catch (IOException ex) {
                 ex.printStackTrace(); // FIXME
             }

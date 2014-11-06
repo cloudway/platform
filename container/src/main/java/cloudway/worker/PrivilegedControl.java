@@ -10,10 +10,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.util.Exec;
@@ -112,24 +116,22 @@ public class PrivilegedControl extends Control
     private void do_action(String id, IO.Consumer<ApplicationContainer> action)
         throws IOException
     {
-        ApplicationContainer container;
+        List<ApplicationContainer> containers;
 
         if (id.indexOf('.') != -1) {
             // assume the key is a FQDN
-            container = ApplicationContainer.all()
+            containers = ApplicationContainer.all()
                 .filter(c -> id.equals(c.getDomainName()))
-                .findFirst()
-                .orElse(null);
+                .collect(Collectors.toList());
         } else if (id.indexOf('-') != -1) {
             // assume the key is "name-namespace"
-            container = ApplicationContainer.all()
+            containers = ApplicationContainer.all()
                 .filter(c -> id.equals(c.getName() + "-" + c.getNamespace()))
-                .findFirst()
-                .orElse(null);
+                .collect(Collectors.toList());
         } else {
             // assume the key is an application id
             try {
-                container = ApplicationContainer.fromId(id);
+                containers = Collections.singletonList(ApplicationContainer.fromId(id));
             } catch (NoSuchContainerException ex) {
                 System.err.println(id + ": " + ex.getMessage());
                 System.exit(2);
@@ -137,11 +139,11 @@ public class PrivilegedControl extends Control
             }
         }
 
-        if (container == null) {
+        if (containers.isEmpty()) {
             System.err.println(id + ": Not found");
             System.exit(2);
         } else {
-            action.accept(container);
+            IO.forEach(containers, action);
         }
     }
 
@@ -151,6 +153,10 @@ public class PrivilegedControl extends Control
                      .withDescription("Application capacity (small,medium,large)")
                      .hasArg()
                      .create('c'),
+        OptionBuilder.withArgName("SCALE")
+                     .withDescription("Application scaling")
+                     .hasArg()
+                     .create('s'),
         OptionBuilder.withArgName("FILE")
                      .withDescription("SSH public key file")
                      .hasArg()
@@ -158,7 +164,7 @@ public class PrivilegedControl extends Control
         OptionBuilder.withArgName("PATH")
                      .withDescription("Add-on source location")
                      .hasArgs()
-                     .create('s'),
+                     .create('a'),
         OptionBuilder.withArgName("URL")
                      .withDescription("Repository URL")
                      .hasArg()
@@ -196,28 +202,33 @@ public class PrivilegedControl extends Control
             return;
         }
 
-        String id          = mkuuid();
         String name        = matcher.group(1);
         String namespace   = matcher.group(2);
         String capacity    = cmd.getOptionValue("c", "small");
+        int    scale       = getScaling(name, namespace, cmd.getOptionValue("s"));
         String keyfile     = loadKeyFile(cmd.getOptionValue("k"));
-        String sources[]   = cmd.getOptionValues("s");
+        String sources[]   = cmd.getOptionValues("a");
         String repo        = cmd.getOptionValue("r");
 
-        ApplicationContainer container =
-            ApplicationContainer.create(id, name, namespace, capacity);
+        List<ApplicationContainer> containers = new ArrayList<>(scale);
 
         try {
-            if (keyfile != null) {
-                container.addAuthorizedKey("default", keyfile);
-            }
+            for (int i = 0; i < scale; i++) {
+                ApplicationContainer container =
+                    ApplicationContainer.create(mkuuid(), name, namespace, capacity);
+                containers.add(container);
 
-            if (sources != null) {
-                IO.forEach(Stream.of(sources), source -> install(container, source, repo));
-                container.start();
+                if (keyfile != null) {
+                    container.addAuthorizedKey("default", keyfile);
+                }
+
+                if (sources != null) {
+                    IO.forEach(Stream.of(sources), source -> install(container, source, repo));
+                    container.start();
+                }
             }
-        } catch (IOException|RuntimeException ex) {
-            container.destroy();
+        } catch (IOException | RuntimeException ex) {
+            IO.forEach(containers, ApplicationContainer::destroy);
             throw ex;
         }
     }
@@ -237,6 +248,31 @@ public class PrivilegedControl extends Control
         while (str.length() < 16)
             str = "0" + str;
         return str;
+    }
+
+   private static int getScaling(String name, String namespace, String scale) {
+        int cc = 1;
+        if (scale != null) {
+            try {
+                cc = Integer.parseInt(scale);
+                if (cc <= 0) {
+                    throw new NumberFormatException();
+                }
+            } catch (NumberFormatException ex) {
+                System.err.println("Invalid scaling value, it must be an integer value greater than 0");
+                System.exit(1);
+            }
+        }
+
+        String fqdn = name + "-" + namespace + "." + ApplicationContainer.DOMAIN;
+        int n = (int)ApplicationContainer.all().filter(c -> fqdn.equals(c.getDomainName())).count();
+        if (cc <= n) {
+            System.err.println("Application containers already reached maximum scaling value. " +
+                               "(maximum scaling = " + cc + ", existing containers = " + n + ")");
+            System.exit(1);
+        }
+
+        return cc - n;
     }
 
     private static String loadKeyFile(String filename) {

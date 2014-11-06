@@ -13,7 +13,6 @@ import javax.xml.XMLConstants;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Unmarshaller;
-import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlType;
@@ -95,10 +94,13 @@ public class MetaData
     @XmlType
     public static class ProxyMapping
     {
-        @XmlAttribute
+        @XmlElement
         public String frontend;
 
-        @XmlAttribute
+        @XmlElement
         public String backend;
+
+        @XmlElement
+        public String protocols;
     }
 }

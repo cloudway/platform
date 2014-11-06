@@ -7,41 +7,100 @@
 package com.cloudway.platform.container.proxy.apache;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.Map;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.proxy.HttpProxy;
+import com.cloudway.platform.container.proxy.ProxyMapping;
 
 public class ApacheProxy implements HttpProxy
 {
     public static final ApacheProxy INSTANCE = new ApacheProxy();
 
-    private ApacheDB mappings = new ApacheDB("mappings");
-    private ApacheDB aliases  = new ApacheDB("aliases");
-    private ApacheDB idles    = new ApacheDB("idles");
+    private ApacheDB containers = new ApacheDB("containers", true);
+    private ApacheDB mappings   = new ApacheDB("mappings");
+    private ApacheDB aliases    = new ApacheDB("aliases");
+    private ApacheDB idles      = new ApacheDB("idles");
 
-    public void addMapping(String path, String uri)
+    private static final List<String> SUPPORTED_PROTOCOLS = Arrays.asList(
+        "http", "https", "ajp", "fcgi", "scgi", "ws", "wss");
+
+    public void addMappings(ApplicationContainer ac, Collection<ProxyMapping> map)
         throws IOException
     {
-        mappings.writting(d -> d.put(path, uri));
+        addContainer(ac);
+
+        mappings.writting(d -> map.forEach(pm -> {
+            if (SUPPORTED_PROTOCOLS.contains(pm.getProtocol())) {
+                d.putIfAbsent(ac.getId() + pm.getFrontend(), pm.getBackend());
+            }
+        }));
     }
 
-    public void addMappings(Map<String, String> m)
+    public void removeMappings(ApplicationContainer ac, Collection<ProxyMapping> map)
         throws IOException
     {
-        mappings.writting(d -> d.putAll(m));
+        mappings.writting(d -> map.stream()
+            .filter(x -> SUPPORTED_PROTOCOLS.contains(x.getProtocol()))
+            .map(pm -> ac.getId() + pm.getFrontend())
+            .sorted()
+            .distinct()
+            .forEach(d::remove));
     }
 
-    public void removeMapping(String path)
+    private void removeMappings(ApplicationContainer ac)
         throws IOException
     {
-        mappings.writting(d -> d.remove(path));
+        String id = ac.getId();
+        mappings.writting(d -> d.keySet().removeIf(k -> {
+            int i = k.indexOf('/');
+            if (i != -1)
+                k = k.substring(0, i);
+            return k.equals(id);
+        }));
     }
 
-    public void removeMappings(Collection<String> paths)
+    private void addContainer(ApplicationContainer ac)
         throws IOException
     {
-        mappings.writting(d -> d.keySet().removeAll(paths));
+        containers.writting(d ->
+            d.merge(ac.getDomainName(), ac.getId(), (oldValue, value) ->
+                oldValue.contains(value) ? oldValue : oldValue + "|" + value
+            ));
+    }
+
+    private void removeContainer(ApplicationContainer ac)
+        throws IOException
+    {
+        String fqdn = ac.getDomainName();
+        String id = ac.getId();
+        boolean removed[] = new boolean[1];
+
+        containers.writting(d -> {
+            String value = d.get(fqdn);
+            if (value != null && value.contains(id)) {
+                String newValue = Stream.of(value.split("\\|"))
+                    .filter(s -> !s.equals(id))
+                    .collect(Collectors.joining("|"));
+                if (newValue.isEmpty()) {
+                    d.remove(fqdn);
+                    removed[0] = true;
+                } else {
+                    d.put(fqdn, newValue);
+                }
+            }
+        });
+
+        // remove aliases if container is fully removed
+        if (removed[0]) {
+            aliases.writting(d -> d.values().remove(fqdn));
+        }
     }
 
     public void addAlias(String name, String fqdn)
@@ -56,39 +115,34 @@ public class ApacheProxy implements HttpProxy
         aliases.writting(d -> d.remove(name));
     }
 
-    public void idle(String fqdn, String id)
+    public void idle(ApplicationContainer ac)
         throws IOException
     {
-        idles.writting(d -> d.put(fqdn, id));
+        String time = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
+        idles.writting(d -> d.put(ac.getId(), time));
     }
 
-    public boolean unidle(String fqdn)
+    public boolean unidle(ApplicationContainer ac)
         throws IOException
     {
-        boolean holder[] = new boolean[1];
-        idles.writting(d -> holder[0] = d.remove(fqdn) != null);
-        return holder[0];
+        boolean cookie[] = new boolean[1];
+        idles.writting(d -> cookie[0] = d.remove(ac.getId()) != null);
+        return cookie[0];
     }
 
-    public boolean isIdle(String fqdn) {
+    public boolean isIdle(ApplicationContainer ac) {
         try {
-            boolean holder[] = new boolean[1];
-            idles.reading(d -> holder[0] = d.containsKey(fqdn));
-            return holder[0];
+            boolean cookie[] = new boolean[1];
+            idles.reading(d -> cookie[0] = d.containsKey(ac.getId()));
+            return cookie[0];
         } catch (IOException ex) {
             return false;
         }
     }
 
-    public void purge(String fqdn) throws IOException {
-        mappings.writting(d -> d.keySet().removeIf(k -> {
-            int i = k.indexOf('/');
-            if (i != -1)
-                k = k.substring(0, i);
-            return fqdn.equals(k);
-        }));
-
-        aliases.writting(d -> d.values().remove(fqdn));
-        idles.writting(d -> d.remove(fqdn));
+    public void purge(ApplicationContainer ac) throws IOException {
+        removeContainer(ac);
+        removeMappings(ac);
+        unidle(ac);
     }
 }

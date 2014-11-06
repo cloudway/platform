@@ -12,6 +12,9 @@
     <private-host-name>HOST</private-host-name>
     <private-port-name>PORT</private-port-name>
     <private-port>8080</private-port>
-    <proxy-mapping frontend="/" backend="/" />
+    <proxy-mapping>
+      <frontend>/</frontend>
+      <backend>/</backend>
+    </proxy-mapping>
   </endpoint>
 </addon>
