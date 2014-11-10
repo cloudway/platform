@@ -104,11 +104,22 @@ cloudway-faces-widget-${VERSION}.jar
 cloudway-jersey-core-${VERSION}.jar
 cloudway-jersey-media-${VERSION}.jar
 cloudway-jersey-ext-${VERSION}.jar
+cloudway-jersey-bean-validation-${VERSION}.jar
 cloudway-jersey-injection-${VERSION}.jar
+
 org.eclipse.persistence.moxy-2.5.0.jar
 org.eclipse.persistence.core-2.5.0.jar
 org.eclipse.persistence.asm-2.5.0.jar
 org.eclipse.persistence.antlr-2.5.0.jar
+
+# Tyrus WebSocket implementation
+javax.websocket-api-1.1.jar
+tyrus-spi-1.8.3.jar
+tyrus-core-1.8.3.jar
+tyrus-server-1.8.3.jar
+tyrus-client-1.8.3.jar
+tyrus-container-servlet-1.8.3.jar
+tyrus-container-jdk-client-1.8.3.jar
 
 # Application deployment
 cloudway-deploy-${VERSION}.jar
