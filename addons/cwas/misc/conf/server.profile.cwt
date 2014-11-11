@@ -120,6 +120,7 @@ tyrus-server-1.8.3.jar
 tyrus-client-1.8.3.jar
 tyrus-container-servlet-1.8.3.jar
 tyrus-container-jdk-client-1.8.3.jar
+tyrus-cloudway-ejb-${VERSION}.jar
 
 # Application deployment
 cloudway-deploy-${VERSION}.jar
