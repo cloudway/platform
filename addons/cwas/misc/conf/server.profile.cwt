@@ -79,6 +79,7 @@ cloudway-mq-server-${VERSION}.jar
 cloudway-mq-client-${VERSION}.jar
 
 # Application containers
+cloudway-cdi-${VERSION}.jar
 cloudway-ejb-${VERSION}.jar
 cloudway-jca-${VERSION}.jar
 #end
@@ -105,7 +106,6 @@ cloudway-jersey-core-${VERSION}.jar
 cloudway-jersey-media-${VERSION}.jar
 cloudway-jersey-ext-${VERSION}.jar
 cloudway-jersey-bean-validation-${VERSION}.jar
-cloudway-jersey-injection-${VERSION}.jar
 
 org.eclipse.persistence.moxy-2.5.0.jar
 org.eclipse.persistence.core-2.5.0.jar
@@ -120,7 +120,6 @@ tyrus-server-1.8.3.jar
 tyrus-client-1.8.3.jar
 tyrus-container-servlet-1.8.3.jar
 tyrus-container-jdk-client-1.8.3.jar
-tyrus-cloudway-ejb-${VERSION}.jar
 
 # Application deployment
 cloudway-deploy-${VERSION}.jar
