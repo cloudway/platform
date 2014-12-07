@@ -26,6 +26,15 @@ cloudway-service-${VERSION}.jar
 cloudway-common-${VERSION}.jar
 cloudway-store-je-${VERSION}.jar
 
+# Apache Commons
+commons-beanutils-1.8.3.jar
+commons-codec-1.10.jar
+commons-collections-3.2.1.jar
+commons-digester-1.8.1.jar
+commons-fileupload-1.2.2.jar
+commons-logging-1.1.3.jar
+commons-io-2.4.jar
+
 # Network connectivity
 cloudway-net-${VERSION}.jar
 cloudway-net-config-${VERSION}.jar
@@ -33,8 +42,6 @@ cloudway-net-config-${VERSION}.jar
 # HTTP service
 cloudway-http-${VERSION}.jar
 cloudway-http-config-${VERSION}.jar
-commons-fileupload-1.2.2.jar
-commons-io-2.4.jar
 
 #if (${JAVAEE_PROFILE} == 'minimal')
 # Enterprise services
@@ -94,12 +101,10 @@ cloudway-script-elite-${VERSION}.jar
 groovy-all-2.3.3.jar
 
 # JSF implementation
-cloudway-facelets-${VERSION}.jar
-cloudway-faces-core-${VERSION}.jar
-cloudway-faces-groovy-${VERSION}.jar
-cloudway-faces-chart-${VERSION}.jar
-cloudway-faces-layout-${VERSION}.jar
-cloudway-faces-widget-${VERSION}.jar
+cloudway-faces-api-${VERSION}.jar
+cloudway-faces-binding-${VERSION}.jar
+cloudway-faces-connector-${VERSION}.jar
+mojarra-2.2.8.jar
 
 # Jersey JAX-RS implementation
 cloudway-jersey-core-${VERSION}.jar
@@ -113,7 +118,6 @@ org.eclipse.persistence.asm-2.5.0.jar
 org.eclipse.persistence.antlr-2.5.0.jar
 
 # Tyrus WebSocket implementation
-cloudway-websocket-api-1.1.jar
 tyrus-spi-1.8.3.jar
 tyrus-core-1.8.3.jar
 tyrus-server-1.8.3.jar
