@@ -100,6 +100,9 @@ cloudway-script-registry-${VERSION}.jar
 cloudway-script-elite-${VERSION}.jar
 groovy-all-2.3.3.jar
 
+# Bean validation
+cloudway-validation-${VERSION}.jar
+
 # JSF implementation
 cloudway-faces-api-${VERSION}.jar
 cloudway-faces-binding-${VERSION}.jar
