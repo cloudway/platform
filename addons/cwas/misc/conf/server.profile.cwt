@@ -52,6 +52,7 @@ cloudway-transaction-local-${VERSION}.jar
 cloudway-security-useradmin-${VERSION}.jar
 cloudway-security-core-${VERSION}.jar
 cloudway-security-local-${VERSION}.jar
+cloudway-concurrency-${VERSION}.jar
 #else
 # Eenterprise services
 cloudway-corba-${VERSION}.jar
@@ -64,6 +65,7 @@ cloudway-security-useradmin-${VERSION}.jar
 cloudway-security-core-${VERSION}.jar
 cloudway-security-full-${VERSION}.jar
 cloudway-resource-${VERSION}.jar
+cloudway-concurrency-${VERSION}.jar
 
 # JDBC services
 cloudway-jdbc-${VERSION}.jar
