@@ -25,6 +25,7 @@ cloudway-util-${VERSION}.jar
 cloudway-service-${VERSION}.jar
 cloudway-common-${VERSION}.jar
 cloudway-store-je-${VERSION}.jar
+cloudway-cache-${VERSION}.jar
 
 # Apache Commons
 commons-beanutils-1.8.3.jar

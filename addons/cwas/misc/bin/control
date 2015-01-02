@@ -92,9 +92,8 @@ function reload {
     echo "Application is already stopped"
   else
     # Invoke REST API to restart the deployment service to reload the application
-    local url="http://${LISTEN}/cloudway/console/bundles/com.cloudway.server.deploy"
-    curl -s -u "$AUTH" -X POST "$url?action=stop" > /dev/null
-    curl -s -u "$AUTH" -X POST "$url?action=start" > /dev/null
+    local url="http://${LISTEN}/cloudway/api/deploy"
+    curl -s -u "$AUTH" -X POST "$url?action=reload" > /dev/null
   fi
 }
 
