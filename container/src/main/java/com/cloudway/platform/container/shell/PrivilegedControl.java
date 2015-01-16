@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package cloudway.worker;
+package com.cloudway.platform.container.shell;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,8 +21,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.FileUtils;
+import com.cloudway.platform.common.util.MoreFiles;
 import com.cloudway.platform.common.util.IO;
+import com.cloudway.platform.common.util.IOConsumer;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.NoSuchContainerException;
 
@@ -49,6 +50,7 @@ public class PrivilegedControl extends Control
         }
     }
 
+    @SuppressWarnings("MethodMayBeStatic")
     private void showInfo(ApplicationContainer container) {
         System.out.println("ID:      " + container.getId());
         System.out.println("Name:    " + container.getName());
@@ -97,7 +99,8 @@ public class PrivilegedControl extends Control
         command("destroy", args, true, ApplicationContainer::destroy);
     }
 
-    private void command(String name, String[] args, boolean parallel, IO.Consumer<ApplicationContainer> action)
+    private static void command(String name, String[] args, boolean parallel,
+                                IOConsumer<ApplicationContainer> action)
         throws IOException
     {
         if (args.length == 0) {
@@ -113,7 +116,7 @@ public class PrivilegedControl extends Control
         }
     }
 
-    private void do_action(String id, IO.Consumer<ApplicationContainer> action)
+    private static void do_action(String id, IOConsumer<ApplicationContainer> action)
         throws IOException
     {
         List<ApplicationContainer> containers;
@@ -147,8 +150,8 @@ public class PrivilegedControl extends Control
         }
     }
 
-    @SuppressWarnings("all")
-    private static Option[] CREATE_OPTIONS = {
+    @SuppressWarnings("AccessStaticViaInstance")
+    private static final Option[] CREATE_OPTIONS = {
         OptionBuilder.withArgName("SIZE")
                      .withDescription("Application capacity (small,medium,large)")
                      .hasArg()
@@ -233,7 +236,7 @@ public class PrivilegedControl extends Control
         }
     }
 
-    private void printHelp(Options options) {
+    private static void printHelp(Options options) {
         HelpFormatter formatter = new HelpFormatter();
         formatter.printHelp("cwctl create [OPTION]... NAME-NAMESPACE", options);
     }
@@ -288,7 +291,7 @@ public class PrivilegedControl extends Control
         }
 
         try {
-            return FileUtils.read(file);
+            return MoreFiles.readText(file);
         } catch (IOException ex) {
             System.err.println("failed to load public key file: " + ex.getMessage());
             System.exit(2);

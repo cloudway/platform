@@ -21,7 +21,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
+import com.google.common.io.ByteStreams;
 import static java.lang.ProcessBuilder.Redirect;
 
 @SuppressWarnings("unused")
@@ -336,7 +336,7 @@ public final class Exec
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         redirectOutputStream(out);
         run();
-        return FileUtils.chomp(out.toByteArray(), cs);
+        return MoreFiles.chomp(out.toByteArray(), cs);
     }
 
      /**
@@ -368,9 +368,9 @@ public final class Exec
     }
 
     private static class StreamPumper extends Thread {
-        private InputStream in;
-        private OutputStream out;
-        private boolean doneClose;
+        private final InputStream in;
+        private final OutputStream out;
+        private final boolean doneClose;
 
         StreamPumper(InputStream in, OutputStream out, boolean doneClose) {
             this.in = in;
@@ -380,20 +380,15 @@ public final class Exec
 
         @Override
         public void run() {
-            byte[] buf = new byte[1024];
-            int numRead;
-
             try {
-                while ((numRead = in.read(buf)) != -1) {
-                    out.write(buf, 0, numRead);
-                }
+                ByteStreams.copy(in, out);
             } catch (Exception ex) {
                 // log and ignore
             } finally {
                 if (doneClose) {
                     // We need to close the out, since some
                     // processes would just wait for the stream
-                    // to be closed before they process its conten,
+                    // to be closed before they process its content,
                     // and produce the output.
                     closeIt(out);
                 }
@@ -401,9 +396,7 @@ public final class Exec
         }
     }
 
-    private static void handleStreams(Process p, InputStream in, OutputStream out, OutputStream err)
-        throws IOException
-    {
+    private static void handleStreams(Process p, InputStream in, OutputStream out, OutputStream err) {
         InputStream pOut = null;
         InputStream pErr = null;
         OutputStream pIn = null;

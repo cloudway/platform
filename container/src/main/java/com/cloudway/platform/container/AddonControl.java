@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.Arrays;
@@ -25,22 +24,24 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-
-import static java.lang.String.format;
-import static java.util.stream.Collectors.toMap;
-import static java.nio.file.StandardCopyOption.*;
-import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 
 import com.cloudway.platform.common.util.AbstractFileVisitor;
 import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.FileUtils;
+import com.cloudway.platform.common.util.MoreFiles;
 import com.cloudway.platform.common.util.IO;
+import com.cloudway.platform.common.util.IOAction;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import com.cloudway.platform.container.proxy.ProxyMapping;
+
+import static java.lang.String.format;
+import static java.util.stream.Collectors.*;
+import static java.nio.file.StandardCopyOption.*;
+import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
+import static java.nio.file.Files.*;
+import static com.cloudway.platform.common.util.MoreFiles.*;
 
 public class AddonControl
 {
@@ -53,7 +54,7 @@ public class AddonControl
 
     public Map<String, Addon> addons() {
         if (_addons == null) {
-            try (Stream<Path> paths = Files.list(container.getHomeDir())) {
+            try (Stream<Path> paths = list(container.getHomeDir())) {
                 _addons = paths
                     .filter(Addon::isAddonDirectory)
                     .map(d -> Addon.load(container, d))
@@ -65,16 +66,16 @@ public class AddonControl
         return _addons;
     }
 
-    public Stream<Addon> valid_addons() {
+    public Stream<Addon> validAddons() {
         return addons().values().stream().filter(Addon::isValid);
     }
 
-    public Optional<Addon> getAddon(String name) {
+    public Optional<Addon> addon(String name) {
         return Optional.ofNullable(addons().get(name));
     }
 
     public Optional<Addon> getFrameworkAddon() {
-        return valid_addons()
+        return validAddons()
             .filter(a -> a.getType() == AddonType.FRAMEWORK)
             .findFirst();
     }
@@ -84,9 +85,9 @@ public class AddonControl
     {
         Addon addon;
 
-        if (Files.isDirectory(source)) {
+        if (isDirectory(source)) {
             addon = installFromDirectory(source.toRealPath(), true);
-        } else if (Files.isRegularFile(source)) {
+        } else if (isRegularFile(source)) {
             addon = installFromArchive(source);
         } else {
             throw new IOException("Invalid addon file: " + source);
@@ -129,14 +130,14 @@ public class AddonControl
             // put addon into cache
             addons().put(name, addon);
         } catch (IOException|RuntimeException|Error ex) {
-            FileUtils.deleteTree(target);
+            deleteFileTree(target);
             throw ex;
         }
     }
 
     public void remove(String name) throws IOException {
         Path path = container.getHomeDir().resolve(name);
-        if (!Files.exists(path)) {
+        if (!exists(path)) {
             return;
         }
 
@@ -160,14 +161,14 @@ public class AddonControl
         } finally {
             if (addon.isValid())
                 removeProxyMappings(addon);
-            FileUtils.deleteTree(path);
+            deleteFileTree(path);
         }
     }
 
     public void destroy() {
         try {
             Map<String,String> env = Environ.loadAll(container);
-            valid_addons().map(Addon::getPath).forEach(path -> {
+            validAddons().map(Addon::getPath).forEach(path -> {
                 try {
                     do_action(path, env, "control", "stop");
                     with_unlocked(path, false, () -> do_action(path, env, "teardown"));
@@ -204,43 +205,41 @@ public class AddonControl
         throws IOException
     {
         // load addon metadata from source directory
-        Addon addon = Addon.load(container, source);
-        addon.validate();
+        Addon meta = Addon.load(container, source);
+        meta.validate();
 
-        String name = addon.getName();
+        String name = meta.getName();
         Path target = container.getHomeDir().resolve(name);
 
-        if (addons().containsKey(name) || Files.exists(target))
+        if (addons().containsKey(name) || exists(target))
             throw new IllegalStateException("Addon already installed: " + name);
-        if (addon.getType() == AddonType.FRAMEWORK && getFrameworkAddon().isPresent())
+        if (meta.getType() == AddonType.FRAMEWORK && getFrameworkAddon().isPresent())
             throw new IllegalStateException("A framework addon already installed");
 
         // copy or move files from source to target
         if (copy) {
             copydir(source, target);
         } else {
-            Files.move(source, target);
+            move(source, target);
         }
 
         container.setFileTreeReadWrite(target);
-        addon.setPath(target);
-
-        return addon;
+        return meta.copyOf(target);
     }
 
     private Addon installFromArchive(Path source)
         throws IOException
     {
-        Path tmpdir = Files.createTempDirectory(container.getHomeDir().resolve(".tmp"), "tmp");
-        FileUtils.chmod(tmpdir, 0750);
+        Path tmpdir = createTempDirectory(container.getHomeDir().resolve(".tmp"), "tmp");
+        chmod(tmpdir, 0750);
 
         try {
             // extract archive into temporary directory and load addon from it
             extract(source, tmpdir);
             return installFromDirectory(tmpdir, false);
         } finally {
-            if (Files.exists(tmpdir)) {
-                FileUtils.deleteTree(tmpdir);
+            if (exists(tmpdir)) {
+                deleteFileTree(tmpdir);
             }
         }
     }
@@ -250,7 +249,7 @@ public class AddonControl
     {
         String[] sharedFiles = getSharedFiles(source);
         if (sharedFiles == null || sharedFiles.length == 0) {
-            FileUtils.copyTree(source, target);
+            copyFileTree(source, target);
             return;
         }
 
@@ -259,7 +258,7 @@ public class AddonControl
             .map(s -> fs.getPathMatcher("glob:" + s))
             .toArray(PathMatcher[]::new);
 
-        Files.walkFileTree(source, new AbstractFileVisitor()
+        walkFileTree(source, new AbstractFileVisitor()
         {
             @Override
             protected FileVisitResult visit(Path path) throws IOException {
@@ -267,12 +266,12 @@ public class AddonControl
                 Path targetPath = target.resolve(relativePath);
 
                 if (Stream.of(matchers).anyMatch(m -> m.matches(relativePath))) {
-                    Files.createSymbolicLink(targetPath, path);
-                    if (Files.isDirectory(path)) {
+                    createSymbolicLink(targetPath, path);
+                    if (isDirectory(path)) {
                         return FileVisitResult.SKIP_SUBTREE;
                     }
                 } else {
-                    Files.copy(path, targetPath, REPLACE_EXISTING, COPY_ATTRIBUTES, NOFOLLOW_LINKS);
+                    copy(path, targetPath, REPLACE_EXISTING, COPY_ATTRIBUTES, NOFOLLOW_LINKS);
                 }
 
                 return FileVisitResult.CONTINUE;
@@ -314,14 +313,14 @@ public class AddonControl
     private String[] getSharedFiles(Path source)
         throws IOException
     {
-        Path shared_files = FileUtils.join(source, "metadata", "shared_files");
-        if (Files.exists(shared_files)) {
-            try (Stream<String> lines = Files.lines(shared_files)) {
+        Path shared_files = MoreFiles.join(source, "metadata", "shared_files");
+        if (exists(shared_files)) {
+            try (Stream<String> lines = lines(shared_files)) {
                 return lines.map(String::trim)
                             .filter(s -> !s.isEmpty())
                             .toArray(String[]::new);
             }
-        } else if (Files.exists(source.resolve("share"))) {
+        } else if (exists(source.resolve("share"))) {
             return new String[]{"share"};
         } else {
             return null;
@@ -335,12 +334,12 @@ public class AddonControl
     private Collection<String> getLockedFiles(Path target)
         throws IOException
     {
-        Path locked_files = FileUtils.join(target, "metadata", "locked_files");
+        Path locked_files = MoreFiles.join(target, "metadata", "locked_files");
 
         SortedSet<String> entries = new TreeSet<>();
         SortedSet<String> patterns = new TreeSet<>();
 
-        try (Stream<String> lines = Files.exists(locked_files) ? Files.lines(locked_files) : Stream.empty()) {
+        try (Stream<String> lines = exists(locked_files) ? lines(locked_files) : Stream.empty()) {
             Stream.concat(lines, Stream.of(DEFAULT_LOCKED_FILES))
                 .map(s -> makeRelative(target, s))
                 .forEach(entry -> {
@@ -358,18 +357,18 @@ public class AddonControl
             Path home = container.getHomeDir();
             List<PathMatcher> matchers = patterns.stream()
                 .map(pattern -> home.getFileSystem().getPathMatcher("glob:" + pattern))
-                .collect(Collectors.toList());
+                .collect(toList());
 
-            Files.walkFileTree(home, new AbstractFileVisitor()
+            walkFileTree(home, new AbstractFileVisitor()
             {
                 @Override
-                protected FileVisitResult visit(Path path) throws IOException {
+                protected FileVisitResult visit(Path path) {
                     Path rel = home.relativize(path);
                     if (matchers.stream().anyMatch(m -> m.matches(rel))) {
                         entries.add(rel.toString());
                     }
 
-                    if (Files.isDirectory(path)) {
+                    if (isDirectory(path)) {
                         if (patterns.stream().noneMatch(p -> home.resolve(p).startsWith(path))) {
                             return FileVisitResult.SKIP_SUBTREE;
                         }
@@ -424,12 +423,12 @@ public class AddonControl
         return rel;
     }
 
-    private void with_unlocked(Path target, boolean relock, IO.Runnable action)
+    private void with_unlocked(Path target, boolean relock, IOAction action)
         throws IOException
     {
         do_unlock(target, getLockedFiles(target));
         try {
-            action.run();
+            action.perform();
         } finally {
             if (relock) {
                 do_lock(target, getLockedFiles(target));
@@ -444,16 +443,16 @@ public class AddonControl
 
         IO.forEach(entries, entry -> {
             Path path = home.resolve(entry);
-            if (Files.exists(path)) {
+            if (exists(path)) {
                 container.setFileReadOnly(path);
 
                 // Remove template file if the generated file is locked,
                 // so the template will never process again.
-                if (Files.isRegularFile(path)) {
+                if (isRegularFile(path)) {
                     String filename = path.getFileName().toString();
                     String ext = ApplicationContainer.TEMPLATE_EXT;
-                    Files.deleteIfExists(path.resolveSibling(filename + ext));
-                    Files.deleteIfExists(path.resolveSibling("." + filename + ext));
+                    deleteIfExists(path.resolveSibling(filename + ext));
+                    deleteIfExists(path.resolveSibling("." + filename + ext));
                 }
             }
         });
@@ -469,11 +468,11 @@ public class AddonControl
 
         IO.forEach(entries, entry -> {
             Path path = home.resolve(entry);
-            if (!Files.exists(path)) {
+            if (!exists(path)) {
                 if (entry.endsWith("/")) {
-                    FileUtils.mkdir(path, 0755);
+                    mkdir(path, 0755);
                 } else {
-                    FileUtils.touch(path, 0644);
+                    touch(path, 0644);
                 }
             }
             container.setFileReadWrite(path);
@@ -483,11 +482,11 @@ public class AddonControl
         container.setFileReadWrite(target);
     }
 
-    private void do_validate(Path path, IO.Runnable action)
+    private void do_validate(Path path, IOAction action)
         throws IOException
     {
         Set<String> before_run = listHomeDir();
-        action.run();
+        action.perform();
         Set<String> after_run = listHomeDir();
 
         after_run.removeAll(before_run);
@@ -507,10 +506,10 @@ public class AddonControl
     }
 
     private Set<String> listHomeDir() throws IOException {
-        try (Stream<Path> files = Files.list(container.getHomeDir())) {
+        try (Stream<Path> files = list(container.getHomeDir())) {
             return files.map(f -> f.getFileName().toString())
                         .filter(f -> !f.startsWith("."))
-                        .collect(Collectors.toSet());
+                        .collect(toSet());
         }
     }
 
@@ -523,11 +522,11 @@ public class AddonControl
 
         // Collect all existing endpoint IP allocations
         Set<String> allocated_ips =
-            valid_addons()
+            validAddons()
                 .flatMap(a -> a.getEndpoints().stream())
                 .map(a -> env.get(a.getPrivateHostName()))
                 .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+                .collect(toSet());
 
         addon.getEndpoints().stream().forEach(endpoint -> {
             String host_name = endpoint.getPrivateHostName();
@@ -565,7 +564,7 @@ public class AddonControl
             .filter(ep -> container.isAddressInUse(ep.getPrivateHost(), ep.getPrivatePort()))
             .map(ep -> format("%s(%s)=%s(%d)", ep.getPrivateHostName(), ep.getPrivatePortName(),
                                                ep.getPrivateHost(),     ep.getPrivatePort()))
-            .collect(Collectors.joining(", "));
+            .collect(joining(", "));
 
         if (!failure.isEmpty()) {
             throw new IllegalStateException("Failed to create the following endpoints: " + failure);
@@ -604,7 +603,7 @@ public class AddonControl
 
         if (url == null || url.isEmpty()) {
             repo.populateFromTemplate(path);
-        } else if (url.equals("empty")) {
+        } else if ("empty".equals(url)) {
             repo.populateEmpty();
         } else {
             repo.populateFromURL(url);
@@ -624,7 +623,7 @@ public class AddonControl
             do_action_hook("pre_" + action, env);
         }
 
-        IO.forEach(valid_addons().map(Addon::getPath), path -> {
+        IO.forEach(validAddons().map(Addon::getPath), path -> {
             if (process_templates)
                 processTemplates(path, env);
             do_action(path, env, "control", action);
@@ -638,8 +637,8 @@ public class AddonControl
     private void do_action(Path path, Map<String,String> env, String action, String... args)
         throws IOException
     {
-        Path executable = FileUtils.join(path, "bin", action);
-        if (Files.isExecutable(executable)) { // FIXME: log warning for unexecutable script
+        Path executable = MoreFiles.join(path, "bin", action);
+        if (isExecutable(executable)) { // FIXME: log warning for unexecutable script
             Exec exec = Exec.args(executable);
             exec.command().addAll(Arrays.asList(args));
             container.join(exec)
@@ -652,9 +651,9 @@ public class AddonControl
     private void do_action_hook(String action, Map<String,String> env)
         throws IOException
     {
-        Path hooks_dir = FileUtils.join(container.getRepoDir(), ".cloudway", "hooks");
+        Path hooks_dir = MoreFiles.join(container.getRepoDir(), ".cloudway", "hooks");
         Path action_hook = hooks_dir.resolve(action);
-        if (Files.isExecutable(action_hook)) {
+        if (isExecutable(action_hook)) {
             container.join(Exec.args(action_hook))
                      .environment(env)
                      .run();
@@ -665,13 +664,13 @@ public class AddonControl
         throws IOException
     {
         Path envdir = path.resolve("env");
-        if (!Files.exists(envdir)) {
-            FileUtils.mkdir(envdir);
+        if (!exists(envdir)) {
+            mkdir(envdir);
         }
 
         String filename = name.toUpperCase();
         if (prefix) filename = "CLOUDWAY_" + filename;
-        FileUtils.write(envdir.resolve(filename), value);
+        writeText(envdir.resolve(filename), value);
     }
 
     private Map<String, String> getAddonEnv(Path path, Map<String,String> app_env) {

@@ -13,23 +13,27 @@ import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 
 import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.IO;
+import com.cloudway.platform.common.util.MoreFiles;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ContainerPlugin;
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.AuthorizedKey;
+
+import static java.lang.String.format;
+import static java.nio.file.Files.*;
+import static com.cloudway.platform.common.util.MoreFiles.*;
+import static com.cloudway.platform.common.util.MoreCollectors.*;
 
 /**
  * Generic UNIX container plugin.
@@ -50,7 +54,7 @@ public class UnixContainerPlugin extends ContainerPlugin
         int max_uid = config.getInt("GUEST_MAX_UID", 2000);
 
         // Synchronized to prevent race condition on obtaining a UNIX user uid.
-        FileUtils.flock(create_lock_file, create_lock, (file) -> {
+        flock(create_lock_file, create_lock, (file) -> {
             int uid = next_uid(file, min_uid, max_uid);
 
             // Create operating system user
@@ -81,7 +85,7 @@ public class UnixContainerPlugin extends ContainerPlugin
         }
 
         // Determine next available user id
-        for (int i = min_uid; i <= max_uid; i++) {
+        for (int i = min_uid; ; i++) {
             if (i > max_uid)
                 throw new IllegalStateException("Too many guest users");
             if (Etc.getpwuid(uid) == null && Etc.getgrgid(uid) == null)
@@ -99,7 +103,7 @@ public class UnixContainerPlugin extends ContainerPlugin
         return uid;
     }
 
-    protected void createUser(String name, int uid, Path home, String skel, String shell, String gecos, String groups)
+    protected void createUser(String name, int uid, Path home, String skel, String shell, String gecos, Optional<String> groups)
         throws IOException
     {
         Exec.args("groupadd", "-g", uid, name).silentIO().checkError().run();
@@ -114,17 +118,17 @@ public class UnixContainerPlugin extends ContainerPlugin
             "-m",
             "-k", skel,
             name);
-        if (groups != null) {
+        groups.ifPresent(g -> {
             exec.command().add("-G");
-            exec.command().add(groups);
-        }
+            exec.command().add(g);
+        });
         exec.silentIO().checkError().run();
     }
 
     @Override
     protected void deleteUser() throws IOException {
         Exec.args("userdel", "-rf", container.getId()).silentIO().run();
-        FileUtils.deleteTree(container.getHomeDir());
+        deleteFileTree(container.getHomeDir());
     }
 
     @Override
@@ -134,34 +138,34 @@ public class UnixContainerPlugin extends ContainerPlugin
         Path homedir = container.getHomeDir();
 
         // Required for polyinstantiated tmp dirs to work
-        FileUtils.mkdir(homedir.resolve(".tmp"), 0000);
+        mkdir(homedir.resolve(".tmp"), 0000);
 
-        Path env_dir = FileUtils.mkdir(homedir.resolve(".env"), 0750);
+        Path env_dir = mkdir(homedir.resolve(".env"), 0750);
         setFileReadOnly(env_dir);
 
-        Path ssh_dir = FileUtils.mkdir(homedir.resolve(".ssh"), 0750);
+        Path ssh_dir = mkdir(homedir.resolve(".ssh"), 0750);
         setFileReadOnly(ssh_dir);
 
-        Path app_dir = FileUtils.mkdir(homedir.resolve("app"));
+        Path app_dir = mkdir(homedir.resolve("app"));
 
-        Path log_dir = FileUtils.mkdir(app_dir.resolve("logs"), 0750);
+        Path log_dir = mkdir(app_dir.resolve("logs"), 0750);
         addEnvVar("LOG_DIR", log_dir.toString(), true);
 
-        Path data_dir = FileUtils.mkdir(app_dir.resolve("data"));
+        Path data_dir = mkdir(app_dir.resolve("data"));
         addEnvVar("DATA_DIR", data_dir.toString(), true);
 
-        Path repo_dir = FileUtils.mkdir(app_dir.resolve("repo"));
+        Path repo_dir = mkdir(app_dir.resolve("repo"));
         addEnvVar("REPO_DIR", repo_dir.toString(), true);
 
         // setup shell environment
         addEnvVar("HISTFILE", data_dir.resolve(".bash_history").toString(), false);
         Path profile = data_dir.resolve(".bash_profile");
-        FileUtils.write(profile,
+        writeText(profile,
             "# Warning: Be careful with modification to this file,\n" +
             "#          Your changes may cause your application to fail\n");
         Path vimrc = data_dir.resolve(".vimrc");
-        FileUtils.write(vimrc, "set viminfo+=n" + data_dir.resolve(".viminfo"));
-        Files.createSymbolicLink(homedir.resolve(".vimrc"), vimrc);
+        writeText(vimrc, "set viminfo+=n" + data_dir.resolve(".viminfo"));
+        createSymbolicLink(homedir.resolve(".vimrc"), vimrc);
 
         // update all directory entries in ~/app
         setFileTreeReadWrite(app_dir);
@@ -171,7 +175,7 @@ public class UnixContainerPlugin extends ContainerPlugin
         generate_ssh_key();
 
         // finally set home directory's permission
-        FileUtils.chmod(homedir, 0750);
+        chmod(homedir, 0750);
         setFileReadOnly(homedir);
 
         // add environment variables
@@ -190,9 +194,9 @@ public class UnixContainerPlugin extends ContainerPlugin
         Path ssh_key     = ssh_dir.resolve("id_rsa");
         Path ssh_pub_key = ssh_dir.resolve("id_rsa.pub");
 
-        FileUtils.mkdir(ssh_dir, 0750);
-        FileUtils.touch(known_hosts, 0660);
-        FileUtils.touch(ssh_config, 0660);
+        mkdir(ssh_dir, 0750);
+        touch(known_hosts, 0660);
+        touch(ssh_config, 0660);
         setFileTreeReadWrite(ssh_dir);
 
         addEnvVar("APP_SSH_KEY", ssh_key.toString(), true);
@@ -212,12 +216,12 @@ public class UnixContainerPlugin extends ContainerPlugin
                  .checkError()
                  .run();
 
-        FileUtils.chmod(ssh_key, 0600);
-        FileUtils.chmod(ssh_pub_key, 0600);
+        chmod(ssh_key, 0600);
+        chmod(ssh_pub_key, 0600);
         setFileTreeReadWrite(ssh_dir);
     }
 
-    private List<AuthorizedKey> loadAuthorizedKeys(RandomAccessFile file)
+    private static List<AuthorizedKey> loadAuthorizedKeys(RandomAccessFile file)
         throws IOException
     {
         List<AuthorizedKey> keys = new ArrayList<>();
@@ -228,7 +232,7 @@ public class UnixContainerPlugin extends ContainerPlugin
         return keys;
     }
 
-    private void saveAuthorizedKeys(RandomAccessFile file, List<AuthorizedKey> keys)
+    private static void saveAuthorizedKeys(RandomAccessFile file, List<AuthorizedKey> keys)
         throws IOException
     {
         file.seek(0);
@@ -240,27 +244,29 @@ public class UnixContainerPlugin extends ContainerPlugin
     }
 
     private File authorizedKeysFile() {
-        return FileUtils.join(container.getHomeDir(), ".ssh", "authorized_keys").toFile();
+        return MoreFiles.join(container.getHomeDir(), ".ssh", "authorized_keys").toFile();
     }
 
     @Override
     public void addAuthorizedKey(String name, String key)
         throws IOException
     {
-        AuthorizedKey newkey = AuthorizedKey.parsePublicKey(key);
         String id = container.getId();
+        AuthorizedKey newkey = AuthorizedKey.parser()
+            .withId(id, name)
+            .withOptions(format("command=\"%s\",no-X11-forwarding", container.getShell()))
+            .parsePublicKey(key);
 
         try (RandomAccessFile file = new RandomAccessFile(authorizedKeysFile(), "rw")) {
             List<AuthorizedKey> keys = loadAuthorizedKeys(file);
             if (keys.stream()
-                    .filter(k -> name.equals(k.getId(id)) || newkey.getBits().equals(k.getBits()))
+                    .filter(k -> newkey.getComment().equals(k.getComment()) ||
+                                 newkey.getBits().equals(k.getBits()))
                     .findAny()
                     .isPresent()) {
                 throw new IllegalArgumentException("Authorized key already exist: " + name);
             }
 
-            newkey.setId(id, name);
-            newkey.setOptions(String.format("command=\"%s\",no-X11-forwarding", container.getShell()));
             keys.add(newkey);
             saveAuthorizedKeys(file, keys);
         }
@@ -283,12 +289,11 @@ public class UnixContainerPlugin extends ContainerPlugin
     public List<String> getAuthorizedKeys()
         throws IOException
     {
-        String id = container.getId();
         try (RandomAccessFile file = new RandomAccessFile(authorizedKeysFile(), "r")) {
             // convert to public key string
             return loadAuthorizedKeys(file).stream()
-                .map(k -> k.getType() + " " + k.getBits() + " " + k.getId(id))
-                .collect(Collectors.toList());
+                .map(k -> k.toPublicKey().toString())
+                .collect(toImmutableList());
         }
     }
 
@@ -361,12 +366,12 @@ public class UnixContainerPlugin extends ContainerPlugin
 
     @Override
     public void setFileReadOnly(Path file) throws IOException {
-        FileUtils.chown(file, "root", container.getId());
+        chown(file, "root", container.getId());
     }
 
     @Override
     public void setFileReadWrite(Path file) throws IOException {
-        FileUtils.chown(file, container.getId(), container.getId());
+        chown(file, container.getId(), container.getId());
     }
 
     @Override

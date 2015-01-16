@@ -22,7 +22,7 @@ function ishttpup {
     if /usr/sbin/lsof -P -n -i "@${LISTEN}" | grep "(LISTEN)" > /dev/null; then
       let ret=0
       # Ensure all applications are running
-      if curl -s -u "$AUTH" "http://${LISTEN}/cloudway/console/services.json" 2>/dev/null | grep 'com.cloudway.internal.deploy.J2EEDeployer' > /dev/null; then
+      if curl -s -u "$AUTH" "http://${LISTEN}/cloudway/console/services.json" 2>/dev/null | grep 'com.cloudway.internal.deploy.service.J2EEDeployer' > /dev/null; then
         return 0
       fi
     fi

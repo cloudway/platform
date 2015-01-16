@@ -14,8 +14,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import static com.google.common.base.Throwables.*;
 
-import com.cloudway.platform.common.util.FileUtils;
+import com.cloudway.platform.common.util.MoreFiles;
 import jnr.constants.platform.Errno;
 import jnr.ffi.LibraryLoader;
 import jnr.ffi.Pointer;
@@ -39,7 +40,7 @@ public final class SELinux
         }
     }
 
-    public static interface LibSELinux {
+    public interface LibSELinux {
         @IgnoreError int is_selinux_enabled();
 
         Context context_new(String context_str);
@@ -96,7 +97,7 @@ public final class SELinux
     {
         String filename = path.toString();
         String actual = lgetfilecon(filename);
-        String expected = matchpathcon(filename, FileUtils.getFileMode(path));
+        String expected = matchpathcon(filename, MoreFiles.getFileMode(path));
 
         Context expected_con = context_new(expected);
         try {
@@ -204,7 +205,7 @@ public final class SELinux
      * Note this must be the only access to the matchpathcon functions.
      * Otherwise, the library will seg fault.
      */
-    private static ExecutorService matchpathcon_executor = Executors.newSingleThreadExecutor(
+    private static final ExecutorService matchpathcon_executor = Executors.newSingleThreadExecutor(
         (Runnable r) -> {
             Thread t = new Thread(() -> {
                 lib.matchpathcon_init(null);
@@ -229,15 +230,9 @@ public final class SELinux
             throw new InterruptedIOException(ex.getMessage());
         } catch (ExecutionException ex) {
             Throwable cause = ex.getCause();
-            if (cause instanceof IOException) {
-                throw (IOException)cause;
-            } else if (cause instanceof RuntimeException) {
-                throw (RuntimeException)cause;
-            } else if (cause instanceof Error) {
-                throw (Error)cause;
-            } else {
-                throw new IOException(cause);
-            }
+            propagateIfInstanceOf(cause, IOException.class);
+            propagateIfPossible(cause);
+            throw new IOException(cause);
         }
     }
 

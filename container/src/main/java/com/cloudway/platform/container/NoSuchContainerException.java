@@ -10,7 +10,7 @@ public class NoSuchContainerException extends RuntimeException
 {
     private static final long serialVersionUID = -4964332477801076211L;
 
-    private String id;
+    private final String id;
 
     public NoSuchContainerException(String id, String message) {
         super(message);

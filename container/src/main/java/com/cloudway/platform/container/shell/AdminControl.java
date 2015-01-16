@@ -4,19 +4,19 @@
  * All rights reserved.
  */
 
-package cloudway.worker;
+package com.cloudway.platform.container.shell;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import com.cloudway.platform.common.util.Etc;
-import com.cloudway.platform.common.util.FileUtils;
+import com.cloudway.platform.common.util.MoreFiles;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ApplicationState;
 
-public class AdminControl
+public final class AdminControl
 {
     private static final String USAGE = "Usage: cwadminctl {startall|stopall|restartall}";
 
@@ -108,13 +108,13 @@ public class AdminControl
         throws IOException
     {
         if (shutdown) {
-            FileUtils.touch(getShutdownFile(ac), 0600);
+            MoreFiles.touch(getShutdownFile(ac), 0600);
         } else {
             Files.deleteIfExists(getShutdownFile(ac));
         }
     }
 
     private static Path getShutdownFile(ApplicationContainer ac) {
-        return FileUtils.join(ac.getHomeDir(), "app", ".shutdown");
+        return MoreFiles.join(ac.getHomeDir(), "app", ".shutdown");
     }
 }

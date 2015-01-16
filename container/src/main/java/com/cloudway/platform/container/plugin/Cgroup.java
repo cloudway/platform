@@ -10,34 +10,43 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.stream.Stream;
-import static java.util.Collections.*;
-import static java.util.stream.Collectors.*;
-import static java.nio.file.StandardCopyOption.*;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
+
+import jnr.constants.platform.Signal;
+import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.IO;
-import com.cloudway.platform.common.Config;
-import com.cloudway.platform.common.util.FileUtils;
-import jnr.constants.platform.Signal;
+import com.cloudway.platform.common.util.BiIOConsumer;
+import com.cloudway.platform.common.util.IOFunction;
+import com.cloudway.platform.common.util.MoreFiles;
+
+import static java.nio.file.StandardCopyOption.*;
+import static java.util.stream.Collectors.*;
+import static com.cloudway.platform.common.util.MoreCollectors.*;
+import static com.cloudway.platform.common.util.MoreFiles.*;
 
 public class Cgroup
 {
     public static final String CG_ROOT;
     public static final String DEFAULT_CG_ROOT = "/cloudway";
 
-    public static final List<String> CG_SUBSYSTEMS;
+    public static final Set<String> CG_SUBSYSTEMS;
     public static final String DEFAULT_CG_SUBSYSTEMS = "cpu,cpuacct,memory,net_cls,freezer";
 
     public static final Map<String, Path>   CG_PATHS;
@@ -54,72 +63,73 @@ public class Cgroup
     static {
         Config config = Config.getDefault();
         CG_ROOT = config.get("CGROUP_ROOT", DEFAULT_CG_ROOT);
-        CG_SUBSYSTEMS = Arrays.asList(config.get("CGROUP_SUBSYSTEMS", DEFAULT_CG_SUBSYSTEMS).split(","));
+        CG_SUBSYSTEMS = ImmutableSet.copyOf(config.get("CGROUP_SUBSYSTEMS", DEFAULT_CG_SUBSYSTEMS).split(","));
 
-        Map<String, Path>   paths  = new LinkedHashMap<>();
-        Map<String, Object> params = new LinkedHashMap<>();
+        Map<String,Path>   paths;
+        Map<String,Object> params;
 
         try {
-            init_cgpaths(paths);
-            init_cgparameters(paths, params);
+            paths  = init_cgpaths();
+            params = init_cgparameters(paths);
         } catch (Exception ex) {
             // TODO: log warning
-            paths.clear();
-            params.clear();
+            paths  = ImmutableMap.of();
+            params = ImmutableMap.of();
         }
 
-        CG_PATHS = unmodifiableMap(paths);
-        CG_PARAMETERS = unmodifiableMap(params);
+        CG_PATHS = paths;
+        CG_PARAMETERS = params;
         enabled = !CG_PATHS.isEmpty();
     }
 
-    private static void init_cgpaths(Map<String, Path> paths)
+    private static Map<String,Path> init_cgpaths()
         throws IOException
     {
-        try (Stream<String> lines = Files.lines(Paths.get("/proc/mounts"))) {
-            lines.forEach(line -> {
-                // fs_spec fs_file fs_vtype fs_mntopts fs_freq fs_passno
-                String[]     fs         = line.split("\\s+");
-                String       fs_file    = fs[1];
-                String       fs_vtype   = fs[2];
-                List<String> fs_mntopts = Arrays.asList(fs[3].split(","));
+        ImmutableMap.Builder<String, Path> builder = ImmutableMap.builder();
+        readLines(Paths.get("/proc/mounts"), StandardCharsets.ISO_8859_1, line -> {
+            // fs_spec fs_file fs_vtype fs_mntopts fs_freq fs_passno
+            String[] fs         = line.split("\\s+");
+            String   fs_file    = fs[1];
+            String   fs_vtype   = fs[2];
+            String   fs_mntopts = fs[3];
 
-                if (fs_vtype.equals("cgroup")) {
-                    CG_SUBSYSTEMS.stream()
-                        .filter(fs_mntopts::contains)
-                        .forEach(subsys -> paths.put(subsys, root_cgpath(fs_file)));
-                }
-            });
-        }
+            if ("cgroup".equals(fs_vtype)) {
+                Sets.intersection(CG_SUBSYSTEMS, ImmutableSet.copyOf(fs_mntopts.split(",")))
+                    .stream().forEach(subsys -> builder.put(subsys, root_cgpath(fs_file)));
+            }
+        });
+        return builder.build();
     }
 
     private static Path root_cgpath(String fs) {
         try {
             Path path = Paths.get(fs, CG_ROOT);
             if (!Files.exists(path))
-                FileUtils.mkdir(path, 0755);
+                mkdir(path, 0755);
             return path;
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
     }
 
-    private static void init_cgparameters(Map<String, Path> paths, Map<String, Object> params)
+    private static Map<String,Object> init_cgparameters(Map<String,Path> paths)
         throws IOException
     {
+        ImmutableMap.Builder<String,Object> builder = ImmutableMap.builder();
         IO.forEach(paths, (subsys, path) -> {
-            try (Stream<Path> files = FileUtils.find(path, 1, subsys + ".*")) {
+            try (Stream<Path> files = MoreFiles.find(path, 1, subsys + ".*")) {
                 files.sorted(Comparator.comparingInt(Cgroup::count_dots))
                      .forEach(file -> {
                          try {
-                             String pval = FileUtils.chomp(file);
-                             params.put(file.getFileName().toString(), parse_cgparam(pval));
+                             String pval = chomp(file);
+                             builder.put(file.getFileName().toString(), parse_cgparam(pval));
                          } catch (IOException ex) {
                              // ignore unreadable file
                          }
                      });
             }
         });
+        return builder.build();
     }
 
     private static int count_dots(Path path) {
@@ -137,14 +147,7 @@ public class Cgroup
         if (pval.indexOf('\n') == -1 && pval.indexOf(' ') == -1) {
             return pval;
         } else {
-            Map<String,String> pmap = new LinkedHashMap<>();
-            Arrays.stream(pval.split("\n")).forEach(line -> {
-                int i = line.indexOf(' ');
-                if (i > 0) {
-                    pmap.put(line.substring(0, i), line.substring(i+1));
-                }
-            });
-            return pmap;
+            return Arrays.stream(pval.split("\n")).collect(toImmutableSplittingMap(' '));
         }
     }
 
@@ -168,7 +171,7 @@ public class Cgroup
         this.uid  = uid;
 
         cgpaths = CG_PATHS.entrySet().stream().collect(
-            toMap(Map.Entry::getKey, e -> e.getValue().resolve(user)));
+            toImmutableMap(Map.Entry::getKey, e -> e.getValue().resolve(user)));
     }
 
 
@@ -212,11 +215,11 @@ public class Cgroup
     }
 
     private static Map<String,Object> pmap(Object... args) {
-        Map<String,Object> map = new LinkedHashMap<>();
+        ImmutableMap.Builder<String,Object> builder = ImmutableMap.builder();
         for (int i = 0; i < args.length; i += 2) {
-            map.put((String)args[i], args[i+1]);
+            builder.put((String)args[i], args[i+1]);
         }
-        return map;
+        return builder.build();
     }
 
     /**
@@ -240,7 +243,7 @@ public class Cgroup
         }
 
         try {
-            String val = FileUtils.chomp(path.resolve(key));
+            String val = chomp(path.resolve(key));
             return Optional.of(parse_cgparam(val));
         } catch (IOException ex) {
             throw new UncheckedIOException("Failed to read cgroup parameter: " + key, ex);
@@ -259,7 +262,7 @@ public class Cgroup
                 if (path == null || !Files.exists(path)) {
                     throw new IOException("User does not exist in cgroups: " + user);
                 } else {
-                    FileUtils.write(path.resolve(param), format_cgparam(val));
+                    writeText(path.resolve(param), format_cgparam(val));
                 }
             }
         });
@@ -284,7 +287,7 @@ public class Cgroup
                   .collect(joining("\n"));
 
             if (tasks.length() != 0) {
-                IO.forEach(cgpaths, (subsys, path) -> FileUtils.write(path.resolve("tasks"), tasks));
+                IO.forEach(cgpaths, (subsys, path) -> writeText(path.resolve("tasks"), tasks));
             }
         }
     }
@@ -295,7 +298,7 @@ public class Cgroup
     public int[] tasks() throws IOException {
         return IO.caught(() ->
             cgpaths.values().stream()
-                   .flatMap(IO.wrap((Path path) -> Files.lines(path.resolve("tasks"))))
+                   .flatMap(IOFunction.wrap((Path path) -> Files.lines(path.resolve("tasks"))))
                    .mapToInt(Integer::parseInt)
                    .distinct()
                    .toArray());
@@ -315,17 +318,17 @@ public class Cgroup
     }
 
     static Stream<Task> threads() throws IOException {
-        return processes().flatMap(IO.wrap((Task p) ->
+        return processes().flatMap(IOFunction.wrap((Task p) ->
             Files.list(Paths.get("/proc", String.valueOf(p.pid), "task"))
                  .filter(Cgroup::is_pid_file)
                  .map(file -> get_thread_info(p, file))));
     }
 
     private static Task read_process_info(Path file) {
-        try (Stream<String> lines = Files.lines(file.resolve("status"))) {
+        try {
             Task t = new Task();
             t.pid = Integer.parseInt(file.getFileName().toString());
-            lines.forEach(line -> {
+            readLines(file, StandardCharsets.ISO_8859_1, line -> {
                 int i = line.indexOf(':');
                 if (i != -1) {
                     String token = line.substring(0, i).trim();
@@ -383,8 +386,8 @@ public class Cgroup
     private void cgcreate() throws IOException {
         IO.forEach(cgpaths, (subsys, path) -> {
             if (!Files.exists(path))
-                FileUtils.mkdir(path, 0755);
-            FileUtils.chown(path.resolve("tasks"), user, user);
+                mkdir(path, 0755);
+            chown(path.resolve("tasks"), user, user);
         });
     }
 
@@ -467,7 +470,7 @@ public class Cgroup
     }
 
     private static void overwrite_with_safe_swap(Path file,
-            IO.BiConsumer<RandomAccessFile, RandomAccessFile> action)
+            BiIOConsumer<RandomAccessFile, RandomAccessFile> action)
         throws IOException
     {
         Path tempfile = file.resolveSibling(file.getFileName() + "~");

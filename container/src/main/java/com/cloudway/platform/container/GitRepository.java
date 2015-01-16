@@ -10,15 +10,17 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import com.google.common.collect.ImmutableSet;
 import static java.lang.String.format;
 
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.FileUtils;
+
+import static java.nio.file.Files.*;
+import static com.cloudway.platform.common.util.MoreFiles.*;
 
 /**
  * This class represents an application's Git repository.
@@ -44,15 +46,17 @@ class GitRepository implements ApplicationRepository
         this.repo_dir  = git_dir.resolve(repo_name);
 
         if (!Files.exists(git_dir)) {
-            FileUtils.mkdir(git_dir, 0750);
+            mkdir(git_dir, 0750);
             container.setFileReadOnly(git_dir);
         }
     }
 
+    @Override
     public boolean exists() {
-        return Files.isDirectory(repo_dir);
+        return isDirectory(repo_dir);
     }
 
+    @Override
     public void populateFromTemplate(Path basedir)
         throws IOException
     {
@@ -68,7 +72,7 @@ class GitRepository implements ApplicationRepository
         if (t.isPresent()) {
             Path template = t.get();
             if (template.toString().endsWith(".git")) {
-                FileUtils.copyTree(template, repo_dir);
+                copyFileTree(template, repo_dir);
             } else {
                 buildFromTemplate(template);
             }
@@ -83,20 +87,24 @@ class GitRepository implements ApplicationRepository
      */
     private void buildFromTemplate(Path template) throws IOException {
         Path tmp_dir = git_dir.resolve("template");
-        FileUtils.deleteTree(tmp_dir);
-        FileUtils.copyTree(template, tmp_dir);
+        deleteFileTree(tmp_dir);
+        copyFileTree(template, tmp_dir);
 
         try {
             exec(tmp_dir, "/bin/sh", "-c", format(GIT_INIT, ApplicationContainer.DOMAIN));
             exec(git_dir, "/bin/sh", "-c", format(GIT_CLONE, "template", repo_name));
         } finally {
-            FileUtils.deleteTree(tmp_dir);
+            deleteFileTree(tmp_dir);
         }
     }
 
-    private static List<String> ALLOWED_SCHEMES = Arrays.asList(
-        "git", "http", "https", "ftp", "ftps", "rsync");
+    private static final ImmutableSet<String> ALLOWED_SCHEMES =
+        ImmutableSet.of("git", "http", "https", "ftp", "ftps", "rsync");
 
+    private static final Pattern REF_PATTERN =
+        Pattern.compile("\\A[\\w\\d\\/\\-_\\.\\^~]+\\Z");
+
+    @Override
     public void populateFromURL(String url)
         throws IOException
     {
@@ -110,7 +118,7 @@ class GitRepository implements ApplicationRepository
         if (i != -1) {
             ref = url.substring(i+1);
             url = url.substring(0, i);
-            if (ref.isEmpty() || !ref.matches("\\A[\\w\\d\\/\\-_\\.\\^~]+\\Z")) {
+            if (ref.isEmpty() || !REF_PATTERN.matcher(ref).matches()) {
                 ref = null;
             }
         }
@@ -129,25 +137,28 @@ class GitRepository implements ApplicationRepository
         configure();
     }
 
+    @Override
     public void populateEmpty() throws IOException {
         if (exists()) {
             return;
         }
 
-        FileUtils.mkdir(repo_dir);
+        mkdir(repo_dir);
         exec(repo_dir, "/bin/sh", "-c", GIT_INIT_BARE);
         configure();
     }
 
+    @Override
     public void checkout(Path target)
         throws IOException
     {
         if (exists()) {
-            FileUtils.emptyDirectory(target);
+            emptyDirectory(target);
             execInContext(repo_dir, "/bin/sh", "-c", format(GIT_CHECKOUT, target));
         }
     }
 
+    @Override
     public void tidy() throws IOException {
         if (exists()) {
             execInContext(repo_dir, "git", "prune");
@@ -155,10 +166,12 @@ class GitRepository implements ApplicationRepository
         }
     }
 
+    @Override
     public void destroy() throws IOException {
-        FileUtils.deleteTree(repo_dir);
+        deleteFileTree(repo_dir);
     }
 
+    @SuppressWarnings("MethodMayBeStatic")
     private void exec(Path dir, String... args) throws IOException {
         Exec.args(args).directory(dir).silentIO().checkError().run();
     }
@@ -173,7 +186,7 @@ class GitRepository implements ApplicationRepository
     private void configure() throws IOException {
         container.setFileTreeReadWrite(repo_dir);
 
-        FileUtils.write(container.getHomeDir().resolve(".gitconfig"), GIT_CONFIG);
+        writeText(container.getHomeDir().resolve(".gitconfig"), GIT_CONFIG);
 
         Path hooks = repo_dir.resolve("hooks");
         String bin = Config.HOME_DIR.resolve("bin").toString();
@@ -182,12 +195,12 @@ class GitRepository implements ApplicationRepository
         container.setFileTreeReadOnly(hooks);
     }
 
-    private void addHook(Path hooks, String name, String contents)
+    private static void addHook(Path hooks, String name, String contents)
         throws IOException
     {
         Path file = hooks.resolve(name);
-        FileUtils.write(file, contents);
-        FileUtils.chmod(file, 0750);
+        writeText(file, contents);
+        chmod(file, 0750);
     }
 
     private static final String GIT_INIT =

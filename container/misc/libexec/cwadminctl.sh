@@ -1,2 +1,2 @@
 #!/bin/bash -e
-exec cw-java cloudway.worker.AdminControl "$@"
+exec cw-java com.cloudway.platform.container.shell.AdminControl "$@"

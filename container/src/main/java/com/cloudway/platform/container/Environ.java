@@ -23,10 +23,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
-import com.cloudway.platform.common.util.FileUtils;
+import com.cloudway.platform.common.util.MoreFiles;
 
-public class Environ
+public final class Environ
 {
+    private Environ() {}
+
     private static final Pattern VALID_ENV_KEY = Pattern.compile("\\A[A-Z_0-9]+\\Z");
 
     /**
@@ -36,7 +38,7 @@ public class Environ
         Map<String, String> env;
 
         // Load user env vars
-        env = loadEnvFile(FileUtils.join(container.getRepoDir(), ".cloudway", "env"));
+        env = loadEnvFile(MoreFiles.join(container.getRepoDir(), ".cloudway", "env"));
 
         // Merge system env vars
         env.putAll(load(Config.CONF_DIR.resolve("env")));
@@ -94,7 +96,7 @@ public class Environ
 
     private static String collectJavaClasspath() {
         Path libdir = Config.HOME_DIR.resolve("lib");
-        try (Stream<Path> files = FileUtils.find(libdir, 1, "*.jar")) {
+        try (Stream<Path> files = MoreFiles.find(libdir, 1, "*.jar")) {
             return files.map(Path::toString).collect(Collectors.joining(File.pathSeparator));
         } catch (IOException ex) {
             return "";
@@ -168,7 +170,7 @@ public class Environ
             String key = file.getFileName().toString();
             if (VALID_ENV_KEY.matcher(key).matches()) {
                 try {
-                    String val = FileUtils.chomp(file);
+                    String val = MoreFiles.chomp(file);
                     if (val.indexOf('\0') == -1) { // ignore illegal env vars
                         env.put(key, val);
                     }

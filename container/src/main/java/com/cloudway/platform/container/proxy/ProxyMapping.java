@@ -6,6 +6,8 @@
 
 package com.cloudway.platform.container.proxy;
 
+import com.google.common.base.MoreObjects;
+
 public class ProxyMapping
 {
     private final String frontend;
@@ -28,5 +30,13 @@ public class ProxyMapping
 
     public String getProtocol() {
         return protocol;
+    }
+
+    public String toString() {
+        return MoreObjects.toStringHelper(this)
+            .add("frontend", frontend)
+            .add("backend",  backend)
+            .add("protocol", protocol)
+            .toString();
     }
 }

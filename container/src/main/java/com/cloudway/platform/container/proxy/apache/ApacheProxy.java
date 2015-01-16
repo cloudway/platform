@@ -9,28 +9,29 @@ package com.cloudway.platform.container.proxy.apache;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import com.google.common.collect.ImmutableSet;
 
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import com.cloudway.platform.container.proxy.ProxyMapping;
 
-public class ApacheProxy implements HttpProxy
+public enum ApacheProxy implements HttpProxy
 {
-    public static final ApacheProxy INSTANCE = new ApacheProxy();
+    INSTANCE;
 
-    private ApacheDB containers = new ApacheDB("containers", true);
-    private ApacheDB mappings   = new ApacheDB("mappings");
-    private ApacheDB aliases    = new ApacheDB("aliases");
-    private ApacheDB idles      = new ApacheDB("idles");
+    private final ApacheDB containers = new ApacheDB("containers", true);
+    private final ApacheDB mappings   = new ApacheDB("mappings");
+    private final ApacheDB aliases    = new ApacheDB("aliases");
+    private final ApacheDB idles      = new ApacheDB("idles");
 
-    private static final List<String> SUPPORTED_PROTOCOLS = Arrays.asList(
+    private static final Set<String> SUPPORTED_PROTOCOLS = ImmutableSet.of(
         "http", "https", "ajp", "fcgi", "scgi", "ws", "wss");
 
+    @Override
     public void addMappings(ApplicationContainer ac, Collection<ProxyMapping> map)
         throws IOException
     {
@@ -43,6 +44,7 @@ public class ApacheProxy implements HttpProxy
         }));
     }
 
+    @Override
     public void removeMappings(ApplicationContainer ac, Collection<ProxyMapping> map)
         throws IOException
     {
@@ -103,18 +105,21 @@ public class ApacheProxy implements HttpProxy
         }
     }
 
+    @Override
     public void addAlias(String name, String fqdn)
         throws IOException
     {
         aliases.writting(d -> d.put(name, fqdn));
     }
 
+    @Override
     public void removeAlias(String name)
         throws IOException
     {
         aliases.writting(d -> d.remove(name));
     }
 
+    @Override
     public void idle(ApplicationContainer ac)
         throws IOException
     {
@@ -122,6 +127,7 @@ public class ApacheProxy implements HttpProxy
         idles.writting(d -> d.put(ac.getId(), time));
     }
 
+    @Override
     public boolean unidle(ApplicationContainer ac)
         throws IOException
     {
@@ -130,6 +136,7 @@ public class ApacheProxy implements HttpProxy
         return cookie[0];
     }
 
+    @Override
     public boolean isIdle(ApplicationContainer ac) {
         try {
             boolean cookie[] = new boolean[1];
@@ -140,6 +147,7 @@ public class ApacheProxy implements HttpProxy
         }
     }
 
+    @Override
     public void purge(ApplicationContainer ac) throws IOException {
         removeContainer(ac);
         removeMappings(ac);

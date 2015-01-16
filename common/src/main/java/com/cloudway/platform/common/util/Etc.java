@@ -17,8 +17,10 @@ import jnr.posix.POSIX;
 import jnr.posix.POSIXFactory;
 import jnr.posix.Passwd;
 
-public class Etc
+public final class Etc
 {
+    private Etc() {}
+
     public static final POSIX posix = POSIXFactory.getPOSIX();
 
     public static class PASSWD {

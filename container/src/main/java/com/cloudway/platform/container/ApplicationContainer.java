@@ -15,9 +15,7 @@ import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -26,13 +24,12 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import com.google.common.collect.ImmutableList;
 
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import static com.cloudway.platform.container.ApplicationState.*;
@@ -41,18 +38,21 @@ import com.cloudway.platform.container.velocity.Alt;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
 
+import static com.cloudway.platform.common.util.MoreCollectors.*;
+import static com.cloudway.platform.common.util.MoreFiles.*;
+
 public class ApplicationContainer
 {
-    private String id;
-    private String name;
-    private String namespace;
-    private String capacity;
-    private Path   home_dir;
-    private String shell;
-    private int    uid, gid;
+    private final String id;
+    private final String name;
+    private final String namespace;
+    private final String capacity;
+    private final Path   home_dir;
+    private final String shell;
+    private int          uid, gid;
 
-    private ContainerPlugin plugin;
-    private AddonControl addons;
+    private final ContainerPlugin plugin;
+    private final AddonControl addons;
 
     public static final String GECOS, SHELL, DOMAIN;
     public static final String DEFAULT_CAPACITY;
@@ -148,24 +148,22 @@ public class ApplicationContainer
      * for every cloudway guest in the system.
      */
     public static Collection<String> ids() {
+        ImmutableList.Builder<String> ids = ImmutableList.builder();
         int uid = Etc.getuid();
 
         if (uid != 0) {
             Etc.PASSWD pw = Etc.getpwuid(uid);
             if (pw != null && GECOS.equals(pw.pw_gecos) && Files.exists(Paths.get(pw.pw_dir))) {
-                return Collections.singleton(pw.pw_name);
-            } else {
-                return Collections.emptyList();
+                ids.add(pw.pw_name);
             }
         } else {
-            List<String> ids = new ArrayList<>();
             Etc.getpwent(pw -> {
                 if (GECOS.equals(pw.pw_gecos) && Files.exists(Paths.get(pw.pw_dir))) {
                     ids.add(pw.pw_name);
                 }
             });
-            return ids;
         }
+        return ids.build();
     }
 
     /**
@@ -193,9 +191,9 @@ public class ApplicationContainer
     }
 
     public List<Addon.Endpoint> getEndpoints() {
-        return addons.valid_addons()
+        return addons.validAddons()
             .flatMap(a -> a.getEndpoints().stream())
-            .collect(Collectors.toList());
+            .collect(toImmutableList());
     }
 
     public String getCapacity() {
@@ -397,7 +395,7 @@ public class ApplicationContainer
     public void setState(ApplicationState new_state) throws IOException {
         Objects.requireNonNull(new_state);
         Path state_file = state_file();
-        FileUtils.write(state_file, new_state.name());
+        writeText(state_file, new_state.name());
         plugin.setFileReadWrite(state_file);
     }
 
@@ -406,7 +404,7 @@ public class ApplicationContainer
      */
     public ApplicationState getState() {
         try {
-            return ApplicationState.valueOf(FileUtils.read(state_file()));
+            return ApplicationState.valueOf(readText(state_file()));
         } catch (Exception ex) {
             return UNKNOWN;
         }
@@ -431,7 +429,7 @@ public class ApplicationContainer
         try {
             // clear out the temp dir
             if (Etc.getuid() == 0) {
-                FileUtils.emptyDirectory(home_dir.resolve(".tmp"));
+                emptyDirectory(home_dir.resolve(".tmp"));
             }
 
             // Delegate to addon control to perform addon-level tidy operations
@@ -529,11 +527,10 @@ public class ApplicationContainer
 
                 if (matcher.matches()) {
                     Path output = input.resolveSibling(matcher.group(1));
-                    try (Reader reader = Files.newBufferedReader(input)) {
-                        try (Writer writer = Files.newBufferedWriter(output)) {
-                            VelocityContext outer = new VelocityContext(vc);
-                            ve.evaluate(outer, writer, filename, reader);
-                        }
+                    try (Reader reader = Files.newBufferedReader(input);
+                         Writer writer = Files.newBufferedWriter(output)) {
+                        VelocityContext outer = new VelocityContext(vc);
+                        ve.evaluate(outer, writer, filename, reader);
                     }
 
                     if (securing)

@@ -10,10 +10,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Optional;
 
 import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.FileUtils;
 import com.cloudway.platform.container.ApplicationContainer;
+import static com.cloudway.platform.common.util.MoreFiles.*;
 
 public class MacOSContainerPlugin extends UnixContainerPlugin
 {
@@ -24,7 +25,7 @@ public class MacOSContainerPlugin extends UnixContainerPlugin
     }
 
     @Override
-    protected void createUser(String name, int uid, Path home, String skel, String shell, String gecos, String groups)
+    protected void createUser(String name, int uid, Path home, String skel, String shell, String gecos, Optional<String> groups)
         throws IOException
     {
         String grouppath = "/Groups/" + name;
@@ -50,18 +51,18 @@ public class MacOSContainerPlugin extends UnixContainerPlugin
 
         // create home directory
         if (!Files.exists(home)) {
-            FileUtils.mkdir(home);
+            mkdir(home);
         }
 
         // copy skeleton directory
-        if (skel != null && Files.isDirectory(Paths.get(skel))) {
-            FileUtils.emptyDirectory(home);
-            FileUtils.copyTree(Paths.get(skel), home);
+        if (Files.isDirectory(Paths.get(skel))) {
+            emptyDirectory(home);
+            copyFileTree(Paths.get(skel), home);
         }
 
         // temporally set owner of home directory to root, will change
         // back when home directory populated
-        FileUtils.chown(home, "root", "wheel");
+        chown(home, "root", "wheel");
     }
 
     @Override
@@ -69,6 +70,6 @@ public class MacOSContainerPlugin extends UnixContainerPlugin
         String user = container.getId();
         Exec.args(dscl, ".", "-delete", "/Users/" + user).silentIO().checkError().run();
         Exec.args(dscl, ".", "-delete", "/Groups/" + user).silentIO().checkError().run();
-        FileUtils.deleteTree(container.getHomeDir());
+        deleteFileTree(container.getHomeDir());
     }
 }

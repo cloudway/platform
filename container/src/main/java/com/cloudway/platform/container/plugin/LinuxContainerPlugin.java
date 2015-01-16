@@ -12,22 +12,22 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import static java.util.stream.Collectors.*;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableTable;
 
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.IO;
+import com.cloudway.platform.common.util.IOConsumer;
+import com.cloudway.platform.common.util.BiIOConsumer;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ResourceLimits;
 import jnr.constants.platform.Signal;
@@ -49,24 +49,28 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
             initPamLimits();
         } catch (IOException ex) {
             // cleanup when container creation failed
-            nothrow(this::deleteUser);
-            nothrow(this::cgdelete);
-            nothrow(this::stopTrafficControl);
-            nothrow(this::removePamLimits);
+            nothrow(
+                this::deleteUser,
+                this::cgdelete,
+                this::stopTrafficControl,
+                this::removePamLimits
+            );
             throw ex;
         }
     }
 
     @Override
-    public void destroy() throws IOException {
-        nothrow(this::killProcs);
-        nothrow(this::cgfreeze);
-        nothrow(this::killProcs);
-        nothrow(this::deleteUser);
-        nothrow(this::cgunfreeze);
-        nothrow(this::cgdelete);
-        nothrow(this::stopTrafficControl);
-        nothrow(this::removePamLimits);
+    public void destroy() {
+        nothrow(
+            this::killProcs,
+            this::cgfreeze,
+            this::killProcs,
+            this::deleteUser,
+            this::cgunfreeze,
+            this::cgdelete,
+            this::stopTrafficControl,
+            this::removePamLimits
+        );
     }
 
     @Override
@@ -138,7 +142,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
                     .findFirst()            // an optional IntStream
                     .get()                  // an IntStream
                     .mapToObj(i -> "c" + i) // joining the IntStream
-                    .collect(Collectors.joining(","));
+                    .collect(joining(","));
                 return "s" + mls_num + ":" + mcs_label;
             }
         } else {
@@ -167,7 +171,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         set_mcs_label(file, get_mcs_label());
     }
 
-    private void set_mcs_label(Path path, String label)
+    private static void set_mcs_label(Path path, String label)
         throws IOException
     {
         if (selinux_enabled) {
@@ -177,47 +181,32 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
 
     // Cgroups
 
-    private static final Map<String, Map<String,Object>> cgprofiles;
-
-    static {
-        if (Cgroup.enabled) {
-            cgprofiles = load_cgprofiles();
-        } else {
-            cgprofiles = Collections.emptyMap();
-        }
-    }
-
     private static final String CG_KEY_PREFIX = "cgroup.";
 
-    private static Map<String, Map<String,Object>> load_cgprofiles() {
-        Map<String, Map<String,Object>> profiles = new HashMap<>();
+    private static final ImmutableTable<String, String, Object> cgprofiles =
+        Cgroup.enabled ? load_cgprofiles() : ImmutableTable.of();
+
+    private static ImmutableTable<String, String, Object> load_cgprofiles() {
+        ImmutableTable.Builder<String, String, Object> profiles = ImmutableTable.builder();
         ResourceLimits limits = ResourceLimits.getInstance();
 
         // make a uniform key set from all profiles
-        Set<String> keys = new HashSet<>();
-        limits.categoryKeys().forEach(p -> keys.addAll(limits.category(p).stringPropertyNames()));
-        keys.addAll(limits.stringPropertyNames());
-        keys.removeIf(k -> !k.startsWith(CG_KEY_PREFIX));
+        Set<String> keys = limits.keys()
+            .filter(k -> k.startsWith(CG_KEY_PREFIX))
+            .collect(toSet());
         keys.add("cgroup.freezer.state"); // used to restore freezer state
 
         // load configuration for each cgroup profiles
-        limits.categoryKeys().forEach(profile -> {
-            Map<String,Object> t = new LinkedHashMap<>();
-            profiles.put(profile, t);
-            keys.forEach(k -> {
-                String ck = k.substring(CG_KEY_PREFIX.length());
-                Object v = limits.getProperty(profile, k, null);
-                if (v == null)
-                    v = Cgroup.CG_PARAMETERS.get(ck);
-                if (v != null)
-                    t.put(ck, v);
-            });
-        });
+        limits.profiles().forEach(profile -> keys.forEach(key -> {
+            String ck = key.substring(CG_KEY_PREFIX.length());
+            limits.getProperty(profile, key, () -> Optional.ofNullable(Cgroup.CG_PARAMETERS.get(ck)))
+                  .ifPresent(v -> profiles.put(profile, ck, v));
+        }));
 
-        return Collections.unmodifiableMap(profiles);
+        return profiles.build();
     }
 
-    private boolean cgcall(IO.Consumer<Cgroup> action)
+    private boolean cgcall(IOConsumer<Cgroup> action)
         throws IOException
     {
         if (Cgroup.enabled) {
@@ -228,11 +217,11 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         }
     }
 
-    private boolean cgcall(IO.BiConsumer<Cgroup,Map<String,Object>> action)
+    private boolean cgcall(BiIOConsumer<Cgroup, Map<String,Object>> action)
         throws IOException
     {
         if (Cgroup.enabled) {
-            Map<String, Object> cfg = cgprofiles.get(container.getCapacity());
+            Map<String, Object> cfg = cgprofiles.rowMap().get(container.getCapacity());
             if (cfg == null) {
                 throw new IllegalArgumentException("Unknown cgroup profile: " + container.getCapacity());
             }
@@ -311,8 +300,8 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     private void initQuota() throws IOException {
         ResourceLimits limits = ResourceLimits.getInstance();
         String category = container.getCapacity();
-        set_quota(limits.getInt(category, "quota.blocks", DEFAULT_QUOTA_BLOCKS),
-                  limits.getInt(category, "quota.files", DEFAULT_QUOTA_FILES));
+        set_quota(limits.getIntProperty(category, "quota.blocks", DEFAULT_QUOTA_BLOCKS),
+                  limits.getIntProperty(category, "quota.files", DEFAULT_QUOTA_FILES));
     }
 
     private void set_quota(int maxblocks, int maxfiles)
@@ -372,39 +361,38 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     // PAM resource limits
 
     private static final String PAM_LIMITS_DIR = "/etc/security/limits.d";
-    private static final int PAM_LIMITS_ORDER = ResourceLimits.getInstance().getInt("limits.order", 85);
+    private static final int PAM_LIMITS_ORDER = ResourceLimits.getInstance().getGlobalProperty("limits.order", 85);
 
-    private static final List<String> PAM_LIMITS_VARS = Arrays.asList(
+    private Path pam_limits_file() {
+        return Paths.get(PAM_LIMITS_DIR, PAM_LIMITS_ORDER + "-" + container.getId() + ".conf");
+    }
+
+    private static final ImmutableList<String> PAM_LIMITS_VARS = ImmutableList.of(
         "core", "data", "fsize", "memlock", "nofile", "rss", "cpu", "nproc", "as",
         "maxlogins", "priority", "locks", "sigpending", "msgqueue", "nice", "rtprio"
     );
-    private static final List<String> PAM_SOFT_VARS = Arrays.asList("nproc");
+    private static final ImmutableList<String> PAM_SOFT_VARS = ImmutableList.of("nproc");
 
     private void initPamLimits() throws IOException {
         ResourceLimits cfg = ResourceLimits.getInstance();
         String id = container.getId();
         String profile = container.getCapacity();
-        Path limits_file = Paths.get(PAM_LIMITS_DIR, PAM_LIMITS_ORDER + "-" + id + ".conf");
 
-        try (BufferedWriter out = Files.newBufferedWriter(limits_file)) {
+        try (BufferedWriter out = Files.newBufferedWriter(pam_limits_file())) {
             out.write("# PAM process limits for guest " + id + "\n");
-            IO.forEach(PAM_LIMITS_VARS, k -> {
-                String v = cfg.getProperty(profile, "limits." + k, null);
-                if (v != null) {
+            IO.forEach(PAM_LIMITS_VARS, k ->
+                cfg.getProperty(profile, "limits." + k).ifPresent(IOConsumer.wrap(v -> {
                     String limtype =
-                        (PAM_SOFT_VARS.contains(k) && !"0".equals(v))
-                            ? "soft" : "hard";
+                        (PAM_SOFT_VARS.contains(k) && !"0".equals(v)) ? "soft" : "hard";
                     out.write(String.join("\t", id, limtype, k, v));
                     out.newLine();
-                }
-            });
+                }))
+            );
         }
     }
 
     private void removePamLimits() throws IOException {
-        String id = container.getId();
-        Path limits_file = Paths.get(PAM_LIMITS_DIR, PAM_LIMITS_ORDER + "-" + id + ".conf");
-        Files.deleteIfExists(limits_file);
+        Files.deleteIfExists(pam_limits_file());
     }
 
     // Switch context
@@ -417,7 +405,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
                 .map(arg -> arg.isEmpty() ? "''" :
                             arg.indexOf(' ') != -1 ? "\\\"" + arg + "\\\"" :
                             arg)
-                .collect(Collectors.joining(" "));
+                .collect(joining(" "));
 
             if (selinux_enabled) {
                 String current_context = SELinux.getcon();

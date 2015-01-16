@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package cloudway.worker;
+package com.cloudway.platform.container.shell;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -19,7 +19,7 @@ import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Etc;
-import com.cloudway.platform.common.util.FileUtils;
+import com.cloudway.platform.common.util.MoreFiles;
 import com.cloudway.platform.container.ApplicationContainer;
 
 /**
@@ -103,7 +103,7 @@ public abstract class Control
         if (source.indexOf('/') != -1) {
             source_path = Paths.get(source).toAbsolutePath().normalize();
         } else {
-            source_path = FileUtils.join(Config.VAR_DIR, ".addons", source);
+            source_path = MoreFiles.join(Config.VAR_DIR, ".addons", source);
         }
 
         if (Files.exists(source_path)) {

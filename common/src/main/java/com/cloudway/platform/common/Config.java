@@ -11,20 +11,51 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
+import java.util.Optional;
+import static java.util.Objects.requireNonNull;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+
+import com.cloudway.platform.common.util.Optionals;
 import com.cloudway.platform.common.util.ExtendedProperties;
 
 public class Config
 {
-    private final ExtendedProperties conf;
+    @SuppressWarnings("serial")
+    private static class Configuration extends ExtendedProperties {
+        long mtime;
+    }
 
-    private static final Map<Path, ExtendedProperties> conf_parsed = new HashMap<>();
-    private static final Map<Path, Long> conf_mtimes = new HashMap<>();
+    private static class ConfigurationLoader extends CacheLoader<Path, Configuration> {
+        @Override
+        public Configuration load(Path path) throws IOException {
+            try (InputStream in = Files.newInputStream(path)) {
+                Configuration conf = new Configuration();
+                conf.load(in);
+                conf.mtime = Files.getLastModifiedTime(path).toMillis();
+                return conf;
+            }
+        }
+
+        @Override
+        public ListenableFuture<Configuration> reload(Path path, Configuration conf) throws Exception {
+            long mtime = Files.getLastModifiedTime(path).toMillis();
+            if (mtime != conf.mtime) {
+                return super.reload(path, conf);
+            } else {
+                return Futures.immediateFuture(conf);
+            }
+        }
+    }
+
+    private final Configuration conf;
+
+    private static final LoadingCache<Path, Configuration> conf_cache =
+        CacheBuilder.newBuilder().build(new ConfigurationLoader());
 
     public static final Path HOME_DIR, CONF_DIR, VAR_DIR, LOG_DIR;
     public static final Path LOCK_DIR;
@@ -33,7 +64,7 @@ public class Config
     private static final String DEFAULT_HOME_DIR = "/usr/share/cloudway";
     private static final String VAR_DIR_KEY = "CLOUDWAY_VAR_DIR";
     private static final String DEFAULT_VAR_DIR = "/var/lib/cloudway";
-    private static final String LOG_DIR_KEY = "CLOUDWAY_LOCK_DIR";
+    private static final String LOG_DIR_KEY = "CLOUDWAY_LOG_DIR";
     private static final String DEFAULT_LOG_DIR = "/var/log/cloudway";
 
     static {
@@ -47,94 +78,41 @@ public class Config
     }
 
     private static String getProperty(String key, String defaultValue) {
-        String value = System.getProperty(key);
-        if (value == null) {
-            value = System.getenv(key);
-            if (value == null) {
-                value = defaultValue;
-            }
-        }
-        return value;
+        return Optionals.or(System.getProperty(key), () -> Optionals.or(System.getenv(key), defaultValue));
     }
 
     public static Config getDefault() {
         return new Config("container.conf");
     }
 
-    public Config() {
-        this(null, null);
-    }
-
     public Config(String name) {
-        this(CONF_DIR.resolve(name), null);
+        this(CONF_DIR.resolve(requireNonNull(name)));
     }
 
-    public Config(Path path, Properties defaults) {
-        if (path != null) {
-            synchronized (conf_parsed) {
-                try {
-                    long conf_mtime = Files.getLastModifiedTime(path).toMillis();
-                    if (!conf_parsed.containsKey(path) || conf_mtime != conf_mtimes.get(path)) {
-                        ExtendedProperties conf = new ExtendedProperties(defaults);
-                        try (InputStream in = Files.newInputStream(path)) {
-                            conf.load(in);
-                        }
-                        conf_parsed.put(path, conf);
-                        conf_mtimes.put(path, conf_mtime);
-                    }
-                    this.conf = conf_parsed.get(path);
-                } catch (IOException ex) {
-                    throw new IllegalArgumentException(
-                        String.format("Could not open config file %s: %s", path, ex.getMessage()));
-                }
-            }
-        } else {
-            this.conf = new ExtendedProperties(defaults);
-        }
+    public Config(Path path) {
+        conf_cache.refresh(requireNonNull(path));
+        this.conf = conf_cache.getUnchecked(path);
     }
 
-    public String get(String name) {
-        String value = System.getProperty(name);
-        if (value == null)
-            value = conf.getProperty(name);
-        return value;
+    public Optional<String> get(String name) {
+        Optional<String> val = Optional.ofNullable(System.getProperty(name));
+        return val.isPresent() ? val : conf.getOptionalProperty(name);
     }
 
     public String get(String name, String deflt) {
-        String value = System.getProperty(name);
-        if (value == null)
-            value = conf.getProperty(name, deflt);
-        return value;
+        return get(name).orElse(deflt);
     }
 
-    public boolean getBool(String name) {
-        return getBool(name, false);
-    }
-
-    public boolean getBool(String name, boolean deflt) {
-        String value = get(name);
-        return value != null ? Boolean.valueOf(value) : deflt;
-    }
-
-    public int getInt(String name) {
-        return getInt(name, -1);
+    public boolean getBoolean(String name, boolean deflt) {
+        return get(name).map(Boolean::valueOf).orElse(deflt);
     }
 
     public int getInt(String name, int deflt) {
-        String value = get(name);
-        return value != null ? Integer.parseInt(value) : deflt;
+        return get(name).flatMap(Optionals.of(Integer::parseInt)).orElse(deflt);
     }
 
-    public Collection<String> keys() {
-        return conf.stringPropertyNames();
-    }
-
-    public ExtendedProperties category(String name) {
-        return conf.category(name);
-    }
-
-    public Set<String> categoryKeys() {
-        return conf.categoryKeys();
+    public ExtendedProperties getProperties() {
+        return conf;
     }
 
     public String toString() {

@@ -6,13 +6,11 @@
 
 package com.cloudway.platform.container.plugin;
 
-import java.io.IOException;
-
 import jnr.constants.platform.Errno;
 import jnr.posix.POSIX;
 import jnr.posix.POSIXFactory;
 
-public class ExecHelper
+public final class ExecHelper
 {
     private static final POSIX posix = POSIXFactory.getPOSIX();
 
@@ -29,9 +27,7 @@ public class ExecHelper
         System.exit(-1);
     }
 
-    private static void execvp(String file, String[] argv)
-        throws IOException
-    {
+    private static void execvp(String file, String[] argv) {
         if (file.indexOf('/') != -1) {
             posix.execv(file, argv);
         } else {

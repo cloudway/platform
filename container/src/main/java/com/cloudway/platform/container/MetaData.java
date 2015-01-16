@@ -21,8 +21,10 @@ import javax.xml.validation.SchemaFactory;
 
 import org.xml.sax.SAXException;
 
-public class MetaData
+public final class MetaData
 {
+    private MetaData() {}
+
     private static JAXBContext jaxb;
     private static Schema schema;
 

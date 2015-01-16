@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package cloudway.worker;
+package com.cloudway.platform.container.shell;
 
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.NoSuchContainerException;
@@ -13,7 +13,7 @@ import java.io.IOException;
 @SuppressWarnings("unused")
 public class UserControl extends Control
 {
-    private ApplicationContainer getContainer() {
+    private static ApplicationContainer getContainer() {
         try {
             String id = System.getenv("CLOUDWAY_APP_ID");
             return ApplicationContainer.fromId(id);

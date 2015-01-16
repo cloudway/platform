@@ -17,15 +17,15 @@ public class StringConversionUberspector extends UberspectImpl
         throws Exception
     {
         if (obj instanceof String) {
-            if (methodName.equals("intValue") && args.length == 0) {
+            if ("intValue".equals(methodName) && args.length == 0) {
                 return new IntValueMethod();
             }
 
-            if (methodName.equals("longValue") && args.length == 0) {
+            if ("longValue".equals(methodName) && args.length == 0) {
                 return new LongValueMethod();
             }
 
-            if (methodName.equals("doubleValue") && args.length == 0) {
+            if ("doubleValue".equals(methodName) && args.length == 0) {
                 return new DoubleValueMethod();
             }
         }
@@ -34,54 +34,66 @@ public class StringConversionUberspector extends UberspectImpl
     }
 
     static class IntValueMethod implements VelMethod {
+        @Override
         public Object invoke(Object obj, Object[] actual) {
             return Integer.parseInt((String)obj);
         }
 
+        @Override
         public boolean isCacheable() {
             return true;
         }
 
+        @Override
         public String getMethodName() {
             return "intValue";
         }
 
+        @Override @SuppressWarnings("rawtypes")
         public Class getReturnType() {
             return int.class;
         }
     }
 
     static class LongValueMethod implements VelMethod {
+        @Override
         public Object invoke(Object obj, Object[] actual) {
             return Long.parseLong((String)obj);
         }
 
+        @Override
         public boolean isCacheable() {
             return true;
         }
 
+        @Override
         public String getMethodName() {
             return "longValue";
         }
 
+        @Override @SuppressWarnings("rawtypes")
         public Class getReturnType() {
             return long.class;
         }
     }
 
     static class DoubleValueMethod implements VelMethod {
+        @Override
         public Object invoke(Object obj, Object[] actual) {
             return Double.parseDouble((String)obj);
         }
 
+        @Override
         public boolean isCacheable() {
             return true;
         }
 
+        @Override
         public String getMethodName() {
             return "doubleValue";
         }
 
+        @Override @SuppressWarnings("rawtypes")
         public Class getReturnType() {
             return double.class;
         }

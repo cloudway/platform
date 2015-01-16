@@ -8,7 +8,6 @@ package com.cloudway.platform.container.proxy;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Map;
 
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.proxy.apache.ApacheProxy;

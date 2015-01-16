@@ -16,57 +16,25 @@ public final class IO
 {
     private IO() {}
 
-    // Function interface wrappers
-
-    @FunctionalInterface
-    public static interface Runnable {
-        void run() throws IOException;
-    }
-
-    public static java.lang.Runnable wrap(Runnable other) {
-        return () -> {
-            try {
-                other.run();
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-        };
-    }
-
-    public static void caught(Runnable action)
+    public static void caught(IOAction action)
         throws IOException
     {
         try {
-            action.run();
+            action.perform();
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
     }
 
-    public static void ignore(Runnable action) {
+    public static void ignore(IOAction action) {
         try {
-            action.run();
-        } catch (IOException|UncheckedIOException ex) {
+            action.perform();
+        } catch (IOException | UncheckedIOException ex) {
             // ignored
         }
     }
 
-    @FunctionalInterface
-    public static interface Supplier<T> {
-        T get() throws IOException;
-    }
-
-    public static <T> java.util.function.Supplier<T> wrap(Supplier<? extends T> other) {
-        return () -> {
-            try {
-                return other.get();
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-        };
-    }
-
-    public static <T> T caught(Supplier<? extends T> action)
+    public static <T> T caught(IOSupplier<? extends T> action)
         throws IOException
     {
         try {
@@ -76,7 +44,7 @@ public final class IO
         }
     }
 
-    public static <T> Optional<T> ignore(Supplier<? extends T> action) {
+    public static <T> Optional<T> ignore(IOSupplier<? extends T> action) {
         try {
             return Optional.ofNullable(action.get());
         } catch (IOException|UncheckedIOException ex) {
@@ -84,90 +52,31 @@ public final class IO
         }
     }
 
-    @FunctionalInterface
-    public static interface Function<T,R> {
-        R apply(T t) throws IOException;
-    }
-
-    public static <T,R> java.util.function.Function<T,R> wrap(Function<? super T, ? extends R> other) {
-        return (T t) -> {
-            try {
-                return other.apply(t);
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-        };
-    }
-
-    @FunctionalInterface
-    public static interface Consumer<T> {
-        void accept(T t) throws IOException;
-    }
-
-    public static <T> java.util.function.Consumer<T> wrap(Consumer<? super T> other) {
-        return (T t) -> {
-            try {
-                other.accept(t);
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-        };
-    }
-
-    @FunctionalInterface
-    public static interface BiConsumer<T, U> {
-        void accept(T t, U u) throws IOException;
-    }
-
-    public static <T, U> java.util.function.BiConsumer<T, U> wrap(BiConsumer<? super T, ? super U> other) {
-        return (T t, U u) -> {
-            try {
-                other.accept(t, u);
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-        };
-    }
-
-    public static interface Predicate<T> {
-        boolean test(T t) throws IOException;
-    }
-
-    public static <T> java.util.function.Predicate<T> wrap(Predicate<? super T> other) {
-        return (T t) -> {
-            try {
-                return other.test(t);
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-        };
-    }
-
-    public static <T> void forEach(Stream<T> stream, Consumer<? super T> action)
+    public static <T> void forEach(Stream<T> stream, IOConsumer<? super T> action)
         throws IOException
     {
         try {
-            stream.forEach(wrap(action));
+            stream.forEach(IOConsumer.wrap(action));
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
     }
 
-    public static <T> void forEach(Iterable<T> collection, Consumer<? super T> action)
+    public static <T> void forEach(Iterable<T> collection, IOConsumer<? super T> action)
         throws IOException
     {
         try {
-            collection.forEach(wrap(action));
+            collection.forEach(IOConsumer.wrap(action));
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
     }
 
-    public static<K,V> void forEach(Map<K,V> map, BiConsumer<? super K,? super V> action)
+    public static<K,V> void forEach(Map<K,V> map, BiIOConsumer<? super K,? super V> action)
         throws IOException
     {
         try {
-            map.forEach(wrap(action));
+            map.forEach(BiIOConsumer.wrap(action));
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }

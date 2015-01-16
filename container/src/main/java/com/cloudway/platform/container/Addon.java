@@ -9,83 +9,111 @@ package com.cloudway.platform.container;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.util.FileUtils;
+import com.cloudway.platform.common.util.MoreFiles;
 import com.cloudway.platform.container.proxy.ProxyMapping;
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
+
+import static com.cloudway.platform.common.util.MoreCollectors.*;
 
 public class Addon
 {
-    private Path            path;
-    private String          shortName;
-    private String          displayName;
-    private String          version;
-    private AddonType       type;
-    private List<Endpoint>  endpoints = new ArrayList<>();
-    private Exception       failure;
+    private final Path           path;
+    private final String         shortName;
+    private final String         displayName;
+    private final String         version;
+    private final AddonType      type;
+    private final List<Endpoint> endpoints;
+    private final Exception      failure;
+
+    private static Path metadataFile(Path dir) {
+        return MoreFiles.join(dir, "metadata", "addon.xml");
+    }
 
     public static boolean isAddonDirectory(Path dir) {
         try {
-            return !Files.isHidden(dir) && Files.exists(FileUtils.join(dir, "metadata", "addon.xml"));
+            return !Files.isHidden(dir) && Files.exists(metadataFile(dir));
         } catch (IOException ex) {
             return false;
         }
     }
 
     public static Addon load(ApplicationContainer container, Path path) {
-        return new Addon(container, path);
+        MetaData.Addon metadata = null;
+        Exception failure = null;
+        try {
+            metadata = MetaData.load(metadataFile(path));
+        } catch (Exception ex) {
+            failure = ex;
+        }
+        return new Addon(container, path, metadata, failure);
     }
 
-    private Addon(ApplicationContainer container, Path path) {
+    private Addon(ApplicationContainer container, Path path, MetaData.Addon metadata, Exception failure) {
         this.path = path;
+        this.failure = failure;
 
-        Map<String, String> env = Environ.loadAll(container);
-        Path file = FileUtils.join(path, "metadata", "addon.xml");
-
-        try {
-            MetaData.Addon metadata = MetaData.load(file);
-
+        if (metadata != null) {
             this.shortName   = metadata.name;
             this.displayName = metadata.displayName;
             this.version     = metadata.version;
             this.type        = metadata.category;
-
-            metadata.endpoints.stream().forEach(ep -> {
-                Endpoint endpoint = new Endpoint(
-                    ("CLOUDWAY_" + this.shortName + "_" + ep.privateHostName).toUpperCase(),
-                    ("CLOUDWAY_" + this.shortName + "_" + ep.privatePortName).toUpperCase()
-                );
-
-                endpoint.setPrivateHost(env.get(endpoint.getPrivateHostName()));
-                endpoint.setPrivatePort(ep.privatePort);
-
-                ep.proxyMappings.forEach(pm -> {
-                    if (pm.protocols == null || pm.protocols.isEmpty()) {
-                        endpoint.addProxyMapping(pm.frontend, pm.backend, "http");
-                    } else {
-                        Stream.of(pm.protocols.split(",")).forEach(protocol ->
-                            endpoint.addProxyMapping(pm.frontend, pm.backend, protocol));
-                    }
-                });
-
-                this.endpoints.add(endpoint);
-            });
-        } catch (Exception ex) {
-            this.failure = ex;
+            this.endpoints   = endpoints(container, metadata);
+        } else {
+            this.shortName   = null;
+            this.displayName = null;
+            this.version     = null;
+            this.type        = null;
+            this.endpoints   = ImmutableList.of();
         }
+    }
+
+    private Addon(Path path, Addon meta) {
+        this.path        = path;
+        this.shortName   = meta.shortName;
+        this.displayName = meta.displayName;
+        this.version     = meta.version;
+        this.type        = meta.type;
+        this.endpoints   = meta.endpoints;
+        this.failure     = meta.failure;
+    }
+
+    public Addon copyOf(Path path) {
+        return new Addon(path, this);
+    }
+
+    private ImmutableList<Endpoint> endpoints(ApplicationContainer container, MetaData.Addon metadata) {
+        Map<String, String> env = Environ.loadAll(container);
+
+        return metadata.endpoints.stream().map(ep -> {
+            Endpoint endpoint = new Endpoint(
+                ("CLOUDWAY_" + this.shortName + "_" + ep.privateHostName).toUpperCase(),
+                ("CLOUDWAY_" + this.shortName + "_" + ep.privatePortName).toUpperCase()
+            );
+
+            endpoint.setPrivateHost(env.get(endpoint.getPrivateHostName()));
+            endpoint.setPrivatePort(ep.privatePort);
+
+            endpoint.setProxyMappings(ep.proxyMappings.stream().flatMap(pm -> {
+                if (Strings.isNullOrEmpty(pm.protocols)) {
+                    return Stream.of(new ProxyMapping(pm.frontend, pm.backend, "http"));
+                } else {
+                    return Stream.of(pm.protocols.split(","))
+                        .map(protocol -> new ProxyMapping(pm.frontend, pm.backend, protocol));
+                }
+            }).collect(toImmutableList()));
+
+            return endpoint;
+        }).collect(toImmutableList());
     }
 
     public Path getPath() {
         return path;
-    }
-
-    public void setPath(Path path) {
-        this.path = path;
     }
 
     public String getName() {
@@ -115,14 +143,14 @@ public class Addon
     }
 
     public List<Endpoint> getEndpoints() {
-        return Collections.unmodifiableList(endpoints);
+        return endpoints;
     }
 
     public List<ProxyMapping> getProxyMappings() {
         return endpoints.stream().flatMap(ep ->
             ep.getProxyMappings().stream().map((ProxyMapping pm) ->
                 new ProxyMapping(getFrontendUri(pm), getBackendUri(ep, pm), pm.getProtocol())
-            )).collect(Collectors.toList());
+            )).collect(toImmutableList());
     }
 
     static String getFrontendUri(ProxyMapping pm) {
@@ -143,6 +171,24 @@ public class Addon
             return pm.getProtocol() + "://" + ep.getPrivateHost() + ":" + ep.getPrivatePort() + uri;
         } else {
             return uri; // GONE, FORBIDDEN, REDIRECT:/url, etc
+        }
+    }
+
+    public String toString() {
+        if (failure == null) {
+            return MoreObjects.toStringHelper(this)
+                .add("path",        path)
+                .add("shortName",   shortName)
+                .add("displayName", displayName)
+                .add("version",     version)
+                .add("type",        type)
+                .add("endpoints",   endpoints)
+                .toString();
+        } else {
+            return MoreObjects.toStringHelper(this)
+                .add("path",        path)
+                .add("failure",     failure)
+                .toString();
         }
     }
 
@@ -182,14 +228,12 @@ public class Addon
             this.privatePort = port;
         }
 
-        void addProxyMapping(String frontend, String backend, String protocol) {
-            if (mappings == null)
-                mappings = new ArrayList<>();
-            mappings.add(new ProxyMapping(frontend, backend, protocol));
+        List<ProxyMapping> getProxyMappings() {
+            return mappings;
         }
 
-        List<ProxyMapping> getProxyMappings() {
-            return mappings == null ? Collections.emptyList() : mappings;
+        void setProxyMappings(List<ProxyMapping> mappings) {
+            this.mappings = mappings;
         }
 
         public String getInfo() {
@@ -197,6 +241,16 @@ public class Addon
             return Addon.this.getDisplayName() + ", " +
                 getPrivateHostName().substring(prefix.length()) + ":" +
                 getPrivatePortName().substring(prefix.length());
+        }
+
+        public String toString() {
+            return MoreObjects.toStringHelper(this)
+                .add("privateHostName", privateHostName)
+                .add("privatePortName", privatePortName)
+                .add("privateHost",     privateHost)
+                .add("privatePort",     privatePort)
+                .add("mappings",        mappings)
+                .toString();
         }
     }
 }

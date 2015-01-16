@@ -18,7 +18,7 @@ import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.FileUtils;
+import com.cloudway.platform.common.util.MoreFiles;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.container.plugin.LinuxContainerPlugin;
 import com.cloudway.platform.container.plugin.MacOSContainerPlugin;
@@ -73,9 +73,7 @@ public abstract class ContainerPlugin
     /**
      * Destroys an application container stopping all processes and removing all files.
      */
-    public void destroy()
-        throws IOException
-    {
+    public void destroy() {
         nothrow(this::killProcs);
         nothrow(this::deleteUser);
     }
@@ -187,10 +185,8 @@ public abstract class ContainerPlugin
      */
     public void addEnvVar(String key, String value, boolean prefix) {
         try {
-            String filename = Objects.requireNonNull(key);
-            if (prefix) filename = "CLOUDWAY_" + filename;
-            Path file = container.getEnvDir().resolve(filename);
-            FileUtils.write(file, value);
+            Path file = envfile(key, prefix);
+            MoreFiles.writeText(file, value);
             setFileReadOnly(file);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
@@ -205,13 +201,17 @@ public abstract class ContainerPlugin
      */
     public void removeEnvVar(String key, boolean prefix) {
         try {
-            String filename = Objects.requireNonNull(key);
-            if (prefix) filename = "CLOUDWAY_" + filename;
-            Path file = container.getEnvDir().resolve(filename);
+            Path file = envfile(key, prefix);
             Files.deleteIfExists(file);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
+    }
+
+    private Path envfile(String key, boolean prefix) {
+        String filename = Objects.requireNonNull(key);
+        if (prefix) filename = "CLOUDWAY_" + filename;
+        return container.getEnvDir().resolve(filename);
     }
 
     /**
@@ -274,15 +274,19 @@ public abstract class ContainerPlugin
     }
 
     @FunctionalInterface
-    protected static interface ExceptionAction {
+    protected interface ExceptionAction {
         void run() throws Exception;
     }
 
-    protected static final void nothrow(ExceptionAction action) {
+    protected static void nothrow(ExceptionAction action) {
         try {
             action.run();
         } catch (Exception ex) {
             // log and ignore
         }
+    }
+
+    protected static void nothrow(ExceptionAction... actions) {
+        Stream.of(actions).forEach(ContainerPlugin::nothrow);
     }
 }
