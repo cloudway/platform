@@ -24,6 +24,8 @@ import java.util.stream.Stream;
 
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.MoreFiles;
+import static com.cloudway.platform.common.util.Predicates.*;
+import static com.cloudway.platform.common.util.StringPredicates.*;
 
 public final class Environ
 {
@@ -71,11 +73,11 @@ public final class Environ
         if ("PATH".equals(var_name)) {
             // Prevent conflict with the PATH variable
             env = new HashMap<>(env);
-            env.keySet().removeIf(key -> key.endsWith("_LD_LIBRARY_PATH_ELEMENT"));
+            env.keySet().removeIf(endsWith("_LD_LIBRARY_PATH_ELEMENT"));
         }
 
         Stream<String> elements = env.keySet().stream()
-           .filter(k -> k.startsWith("CLOUDWAY_") && k.endsWith("_" + var_name + "_ELEMENT"))
+           .filter(startsWith("CLOUDWAY_").and(endsWith("_" + var_name + "_ELEMENT")))
            .map(env::get);
 
         String system_path = env.get(var_name);
@@ -140,7 +142,7 @@ public final class Environ
         // find, read and load environment variables into a hash
         Map<String, String> env = new HashMap<>();
         try (Stream<Path> stream = Files.walk(dir)) {
-            stream.filter(file -> matcher.matches(file.getFileName()))
+            stream.filter(having(Path::getFileName, on(matcher::matches)))
                   .forEach(file -> readEnvFile(env, file));
         } catch (IOException ex) {
             // log and ignore
@@ -155,9 +157,9 @@ public final class Environ
      */
     public static Set<String> list(Path dir) {
         try (Stream<Path> stream = Files.walk(dir)) {
-            return stream.filter(f -> Files.isRegularFile(f) && Files.isReadable(f))
+            return stream.filter(both(Files::isRegularFile, Files::isReadable))
                          .map(f -> f.getFileName().toString())
-                         .filter(k -> VALID_ENV_KEY.matcher(k).matches())
+                         .filter(matches(VALID_ENV_KEY))
                          .collect(Collectors.toSet());
         } catch (IOException ex) {
             // log and ignore
@@ -188,7 +190,7 @@ public final class Environ
                 Properties props = new Properties();
                 props.load(ins);
                 props.stringPropertyNames().stream()
-                    .filter(key -> VALID_ENV_KEY.matcher(key).matches())
+                    .filter(matches(VALID_ENV_KEY))
                     .forEach(key -> env.put(key, props.getProperty(key)));
             } catch (IOException ex) {
                 // log and ignore

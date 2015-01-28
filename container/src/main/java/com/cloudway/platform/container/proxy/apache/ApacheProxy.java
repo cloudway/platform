@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableSet;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import com.cloudway.platform.container.proxy.ProxyMapping;
+import static com.cloudway.platform.common.util.Predicates.*;
 
 public enum ApacheProxy implements HttpProxy
 {
@@ -28,8 +29,8 @@ public enum ApacheProxy implements HttpProxy
     private final ApacheDB aliases    = new ApacheDB("aliases");
     private final ApacheDB idles      = new ApacheDB("idles");
 
-    private static final Set<String> SUPPORTED_PROTOCOLS = ImmutableSet.of(
-        "http", "https", "ajp", "fcgi", "scgi", "ws", "wss");
+    private static final Set<String> SUPPORTED_PROTOCOLS =
+        ImmutableSet.of("http", "https", "ajp", "fcgi", "scgi", "ws", "wss");
 
     @Override
     public void addMappings(ApplicationContainer ac, Collection<ProxyMapping> map)
@@ -37,11 +38,9 @@ public enum ApacheProxy implements HttpProxy
     {
         addContainer(ac);
 
-        mappings.writting(d -> map.forEach(pm -> {
-            if (SUPPORTED_PROTOCOLS.contains(pm.getProtocol())) {
-                d.putIfAbsent(ac.getId() + pm.getFrontend(), pm.getBackend());
-            }
-        }));
+        mappings.writting(d -> map.stream()
+            .filter(having(ProxyMapping::getProtocol, is(oneOf(SUPPORTED_PROTOCOLS))))
+            .forEach(pm -> d.putIfAbsent(ac.getId() + pm.getFrontend(), pm.getBackend())));
     }
 
     @Override
@@ -49,7 +48,7 @@ public enum ApacheProxy implements HttpProxy
         throws IOException
     {
         mappings.writting(d -> map.stream()
-            .filter(x -> SUPPORTED_PROTOCOLS.contains(x.getProtocol()))
+            .filter(having(ProxyMapping::getProtocol, is(oneOf(SUPPORTED_PROTOCOLS))))
             .map(pm -> ac.getId() + pm.getFrontend())
             .sorted()
             .distinct()
@@ -88,7 +87,7 @@ public enum ApacheProxy implements HttpProxy
             String value = d.get(fqdn);
             if (value != null && value.contains(id)) {
                 String newValue = Stream.of(value.split("\\|"))
-                    .filter(s -> !s.equals(id))
+                    .filter(not(id))
                     .collect(Collectors.joining("|"));
                 if (newValue.isEmpty()) {
                     d.remove(fqdn);

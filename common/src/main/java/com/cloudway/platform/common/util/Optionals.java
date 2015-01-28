@@ -9,6 +9,7 @@ package com.cloudway.platform.common.util;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 public final class Optionals
@@ -78,5 +79,31 @@ public final class Optionals
                 return Optional.empty();
             }
         };
+    }
+
+    /**
+     * Returns a predicate that evaluate to {@code true} if the optional being
+     * tested is {@link Optional#isPresent() presents} a value and the given
+     * predicate evaluate to {@code true} to the value.
+     */
+    public static <T> Predicate<Optional<T>> just(Predicate<? super T> p) {
+        return (Optional<T> opt) -> opt.map(p::test).orElse(false);
+    }
+
+    /**
+     * Returns a predicate that evaluate to {@code true} if the optional being
+     * tested is {@link Optional#isPresent() presents} a value and the value
+     * {@code equals()} to the given value.
+     */
+    public static <T> Predicate<Optional<T>> just(T value) {
+        return just(Predicate.isEqual(value));
+    }
+
+    /**
+     * Returns a predicate that evaluate to {@code true} if the optional being
+     * tested does not {@link Optional#isPresent() presents} a value.}
+     */
+    public static Predicate<Optional<?>> nothing() {
+        return (Optional<?> opt) -> !opt.isPresent();
     }
 }

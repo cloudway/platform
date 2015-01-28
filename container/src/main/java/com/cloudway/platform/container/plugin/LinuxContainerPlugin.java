@@ -17,7 +17,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
 import static java.util.stream.Collectors.*;
+import static com.cloudway.platform.common.util.StringPredicates.*;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableTable;
@@ -192,7 +194,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
 
         // make a uniform key set from all profiles
         Set<String> keys = limits.keys()
-            .filter(k -> k.startsWith(CG_KEY_PREFIX))
+            .filter(startsWith(CG_KEY_PREFIX))
             .collect(toSet());
         keys.add("cgroup.freezer.state"); // used to restore freezer state
 
@@ -279,7 +281,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
                 long mb = Long.parseLong((String)val) / (1024 * 1024);
                 container.addEnvVar("MEMORY_LIMIT", String.valueOf(mb));
             });
-        } catch (RuntimeException ex) {
+        } catch (Exception ex) {
             // ignored
         }
     }
@@ -336,7 +338,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
     private Optional<String[]> get_quota() throws IOException {
         String out = Exec.args("quota", "-pw", container.getId()).silentIO().subst();
         return Arrays.stream(out.split("\n"))
-            .filter(line -> line.matches("^.*/dev/.*"))
+            .filter(matches("^.*/dev/.*"))
             .findFirst()
             .map(line -> line.split("\\s+"));
     }

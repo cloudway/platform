@@ -36,6 +36,8 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
 
+import static com.cloudway.platform.common.util.Predicates.*;
+
 @SuppressWarnings("unused")
 public class PrivilegedControl extends Control
 {
@@ -124,12 +126,12 @@ public class PrivilegedControl extends Control
         if (id.indexOf('.') != -1) {
             // assume the key is a FQDN
             containers = ApplicationContainer.all()
-                .filter(c -> id.equals(c.getDomainName()))
+                .filter(having(c -> c.getDomainName(), is(id)))
                 .collect(Collectors.toList());
         } else if (id.indexOf('-') != -1) {
             // assume the key is "name-namespace"
             containers = ApplicationContainer.all()
-                .filter(c -> id.equals(c.getName() + "-" + c.getNamespace()))
+                .filter(having(c -> c.getName() + "-" + c.getNamespace(), is(id)))
                 .collect(Collectors.toList());
         } else {
             // assume the key is an application id
@@ -268,7 +270,7 @@ public class PrivilegedControl extends Control
         }
 
         String fqdn = name + "-" + namespace + "." + ApplicationContainer.DOMAIN;
-        int n = (int)ApplicationContainer.all().filter(c -> fqdn.equals(c.getDomainName())).count();
+        int n = (int)ApplicationContainer.all().filter(having(c -> c.getDomainName(), is(fqdn))).count();
         if (cc <= n) {
             System.err.println("Application containers already reached maximum scaling value. " +
                                "(maximum scaling = " + cc + ", existing containers = " + n + ")");

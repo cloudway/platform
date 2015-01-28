@@ -34,6 +34,7 @@ import static java.lang.String.format;
 import static java.nio.file.Files.*;
 import static com.cloudway.platform.common.util.MoreFiles.*;
 import static com.cloudway.platform.common.util.MoreCollectors.*;
+import static com.cloudway.platform.common.util.Predicates.*;
 
 /**
  * Generic UNIX container plugin.
@@ -259,11 +260,8 @@ public class UnixContainerPlugin extends ContainerPlugin
 
         try (RandomAccessFile file = new RandomAccessFile(authorizedKeysFile(), "rw")) {
             List<AuthorizedKey> keys = loadAuthorizedKeys(file);
-            if (keys.stream()
-                    .filter(k -> newkey.getComment().equals(k.getComment()) ||
-                                 newkey.getBits().equals(k.getBits()))
-                    .findAny()
-                    .isPresent()) {
+            if (keys.stream().anyMatch(k -> newkey.getComment().equals(k.getComment()) ||
+                                            newkey.getBits().equals(k.getBits()))) {
                 throw new IllegalArgumentException("Authorized key already exist: " + name);
             }
 
@@ -279,7 +277,7 @@ public class UnixContainerPlugin extends ContainerPlugin
         String keybits = AuthorizedKey.parsePublicKey(key).getBits();
         try (RandomAccessFile file = new RandomAccessFile(authorizedKeysFile(), "rw")) {
             List<AuthorizedKey> keys = loadAuthorizedKeys(file);
-            if (keys.removeIf(k -> keybits.equals(k.getBits()))) {
+            if (keys.removeIf(having(AuthorizedKey::getBits, is(keybits)))) {
                 saveAuthorizedKeys(file, keys);
             }
         }

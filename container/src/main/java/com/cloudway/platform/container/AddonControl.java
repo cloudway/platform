@@ -35,6 +35,7 @@ import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.common.util.IOAction;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import com.cloudway.platform.container.proxy.ProxyMapping;
+import static com.cloudway.platform.container.AddonType.FRAMEWORK;
 
 import static java.lang.String.format;
 import static java.util.stream.Collectors.*;
@@ -42,6 +43,8 @@ import static java.nio.file.StandardCopyOption.*;
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 import static java.nio.file.Files.*;
 import static com.cloudway.platform.common.util.MoreFiles.*;
+import static com.cloudway.platform.common.util.Predicates.*;
+import static com.cloudway.platform.common.util.StringPredicates.*;
 
 public class AddonControl
 {
@@ -75,9 +78,7 @@ public class AddonControl
     }
 
     public Optional<Addon> getFrameworkAddon() {
-        return validAddons()
-            .filter(a -> a.getType() == AddonType.FRAMEWORK)
-            .findFirst();
+        return validAddons().filter(having(Addon::getType, is(FRAMEWORK))).findFirst();
     }
 
     public void install(Path source, String repo)
@@ -100,7 +101,7 @@ public class AddonControl
             // add environment variables
             addAddonEnvVar(target, name + "_DIR", target.toString(), true);
             addAddonEnvVar(target, name + "_VERSION", addon.getVersion(), true);
-            if (addon.getType() == AddonType.FRAMEWORK) {
+            if (addon.getType() == FRAMEWORK) {
                 container.addEnvVar("FRAMEWORK", name);
                 container.addEnvVar("FRAMEWORK_DIR", target.toString());
             }
@@ -119,7 +120,7 @@ public class AddonControl
             container.setFileTreeReadOnly(target.resolve("bin"));
 
             // initialize repository for framework addon
-            if (addon.getType() == AddonType.FRAMEWORK) {
+            if (addon.getType() == FRAMEWORK) {
                 populateRepository(target, repo);
             }
 
@@ -213,7 +214,7 @@ public class AddonControl
 
         if (addons().containsKey(name) || exists(target))
             throw new IllegalStateException("Addon already installed: " + name);
-        if (meta.getType() == AddonType.FRAMEWORK && getFrameworkAddon().isPresent())
+        if (meta.getType() == FRAMEWORK && getFrameworkAddon().isPresent())
             throw new IllegalStateException("A framework addon already installed");
 
         // copy or move files from source to target
@@ -317,7 +318,7 @@ public class AddonControl
         if (exists(shared_files)) {
             try (Stream<String> lines = lines(shared_files)) {
                 return lines.map(String::trim)
-                            .filter(s -> !s.isEmpty())
+                            .filter(not(String::isEmpty))
                             .toArray(String[]::new);
             }
         } else if (exists(source.resolve("share"))) {
@@ -508,7 +509,7 @@ public class AddonControl
     private Set<String> listHomeDir() throws IOException {
         try (Stream<Path> files = list(container.getHomeDir())) {
             return files.map(f -> f.getFileName().toString())
-                        .filter(f -> !f.startsWith("."))
+                        .filter(not(startsWith(".")))
                         .collect(toSet());
         }
     }
@@ -541,7 +542,7 @@ public class AddonControl
                 // within the application
                 ip = IntStream.rangeClosed(1, 127)
                     .mapToObj(container::getIpAddress)
-                    .filter(a -> !allocated_ips.contains(a))
+                    .filter(not(in(allocated_ips)))
                     .findAny()
                     .orElseThrow(() -> new IllegalStateException(
                         format("No IP was available for endpoint %s(%s)", host_name, port_name)));
