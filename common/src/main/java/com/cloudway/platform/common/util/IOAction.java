@@ -13,30 +13,32 @@ import java.io.UncheckedIOException;
  * Represents an action that perform I/O operation.
  */
 @FunctionalInterface
-public interface IOAction
+public interface IOAction extends Runnable, ExceptionAction<IOException>
 {
     /**
-     * Performs the I/O operation
+     * Performs the I/O operation by wrapping {@link IOException} to
+     * an {@link UncheckedIOException}.
      *
-     * @throws IOException if a I/O error occurs
+     * @throws UncheckedIOException when an I/O error occurs
      */
-    void perform() throws IOException;
+    @Override
+    default void run() {
+        try {
+            perform();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
 
     /**
      * Wraps the I/O action into a regular action. If the I/O action throws
      * {@link IOException}, then the wrapped action wraps the IOException to
      * an {@link UncheckedIOException} and thrown.
      *
-     * @param other the I/O action
+     * @param action the I/O action
      * @return the regular action
      */
-    static Runnable wrap(IOAction other) {
-        return () -> {
-            try {
-                other.perform();
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-        };
+    static Runnable wrap(IOAction action) {
+        return action;
     }
 }

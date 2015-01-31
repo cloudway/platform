@@ -466,7 +466,7 @@ public final class MoreFiles
         asCharSource(file, charset).readLines(new LineProcessor<Void>() {
             @Override
             public boolean processLine(String line) throws IOException {
-                callback.accept(line);
+                callback.consume(line);
                 return true;
             }
 
@@ -526,7 +526,7 @@ public final class MoreFiles
         local_lock.lock();
         try (FileChannel file = FileChannel.open(lock_file, READ, WRITE, CREATE)) {
             file.lock();
-            action.accept(file);
+            action.consume(file);
         } finally {
             local_lock.unlock();
         }

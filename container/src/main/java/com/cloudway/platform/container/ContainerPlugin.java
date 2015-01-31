@@ -24,25 +24,20 @@ import com.cloudway.platform.container.plugin.LinuxContainerPlugin;
 import com.cloudway.platform.container.plugin.MacOSContainerPlugin;
 import com.cloudway.platform.container.plugin.UnixContainerPlugin;
 
+import jnr.ffi.Platform;
+import static jnr.ffi.Platform.OS.*;
+import static com.cloudway.platform.common.util.Predicates.*;
+import static com.cloudway.platform.common.util.Conditionals.*;
+
 public abstract class ContainerPlugin
 {
     public static ContainerPlugin newInstance(ApplicationContainer container) {
-        jnr.ffi.Platform platform = jnr.ffi.Platform.getNativePlatform();
-
-        switch (platform.getOS()) {
-        case LINUX:
-            return new LinuxContainerPlugin(container);
-
-        case DARWIN:
-            return new MacOSContainerPlugin(container);
-
-        default:
-            if (platform.isUnix()) {
-                return new UnixContainerPlugin(container);
-            } else {
-                throw new IllegalStateException("unsupported platform: " + platform.getName());
-            }
-        }
+        Platform platform = Platform.getNativePlatform();
+        return with().<ContainerPlugin>get()
+          .when(platform.getOS(), is(LINUX),  () -> new LinuxContainerPlugin(container))
+          .when(platform.getOS(), is(DARWIN), () -> new MacOSContainerPlugin(container))
+          .when(platform::isUnix,             () -> new UnixContainerPlugin(container))
+          .orElseThrow(() -> new IllegalStateException("unsupported platform: " + platform.getName()));
     }
 
     protected final ApplicationContainer container;

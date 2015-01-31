@@ -212,7 +212,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         throws IOException
     {
         if (Cgroup.enabled) {
-            action.accept(new Cgroup(container.getId(), container.getUID()));
+            action.consume(new Cgroup(container.getId(), container.getUID()));
             return true;
         } else {
             return false;
@@ -229,7 +229,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
             }
 
             Cgroup cg = new Cgroup(container.getId(), container.getUID());
-            action.accept(cg, cfg);
+            action.consume(cg, cfg);
             return true;
         } else {
             return false;

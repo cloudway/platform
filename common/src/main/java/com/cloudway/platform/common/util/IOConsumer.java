@@ -8,7 +8,6 @@ package com.cloudway.platform.common.util;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
@@ -20,31 +19,21 @@ import java.util.function.Consumer;
  * @see java.util.function.Consumer
  */
 @FunctionalInterface
-public interface IOConsumer<T>
+public interface IOConsumer<T> extends Consumer<T>, ExceptionConsumer<T, IOException>
 {
     /**
      * Performs this operation on the given argument.
      *
      * @param t the input argument
-     * @throws IOException if I/O error occurs
+     * @throws UncheckedIOException if I/O error occurs
      */
-    void accept(T t) throws IOException;
-
-    /**
-     * Returns a composed {@code IOConsumer} that performs, in sequence, this
-     * operation followed by the {@code after} operation. If performing either
-     * operation throws an exception, it is relayed to the caller of the
-     * composed operation.  If performing this operation throws an exception,
-     * the {@code after} operation will not be performed.
-     *
-     * @param after the operation to perform after this operation
-     * @return a composed {@code IOConsumer} that performs in sequence this
-     * operation followed by the {@code after} operation
-     * @throws NullPointerException if {@code after} is null
-     */
-    default IOConsumer<T> andThen(IOConsumer<? super T> after) {
-        Objects.requireNonNull(after);
-        return (T t) -> { accept(t); after.accept(t); };
+    @Override
+    default void accept(T t) {
+        try {
+            consume(t);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
     }
 
     /**
@@ -55,13 +44,8 @@ public interface IOConsumer<T>
      * @param other the I/O consumer
      * @return the regular consumer
      */
-    static <T> Consumer<T> wrap(IOConsumer<? super T> other) {
-        return (T t) -> {
-            try {
-                other.accept(t);
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-        };
+    @SuppressWarnings("unchecked")
+    static <T> Consumer<T> wrap(IOConsumer<T> other) {
+        return other;
     }
 }

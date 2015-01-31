@@ -17,15 +17,22 @@ import java.util.function.Supplier;
  * @see java.util.function.Supplier
  */
 @FunctionalInterface
-public interface IOSupplier<T>
+public interface IOSupplier<T> extends Supplier<T>, ExceptionSupplier<T, IOException>
 {
     /**
-     * Gets the result.
+     * Produce the result and wrap {@link IOException} to a {@link UncheckedIOException}.
      *
      * @return a result
-     * @throws IOException if I/O error occurs
+     * @throws UncheckedIOException if I/O error occurs
      */
-    T get() throws IOException;
+    @Override
+    default T get() {
+        try {
+            return produce();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
 
     /**
      * wraps an I/O supplier into a regular supplier. If the I/O supplier throws
@@ -35,13 +42,8 @@ public interface IOSupplier<T>
      * @param other the I/O supplier
      * @return the regular supplier
      */
-    static <T> Supplier<T> wrap(IOSupplier<? extends T> other) {
-        return () -> {
-            try {
-                return other.get();
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-        };
+    @SuppressWarnings("unchecked")
+    static <T> Supplier<T> wrap(IOSupplier<T> other) {
+        return other;
     }
 }

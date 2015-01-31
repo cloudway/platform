@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.Arrays;
@@ -84,15 +85,10 @@ public class AddonControl
     public void install(Path source, String repo)
         throws IOException
     {
-        Addon addon;
-
-        if (isDirectory(source)) {
-            addon = installFromDirectory(source.toRealPath(), true);
-        } else if (isRegularFile(source)) {
-            addon = installFromArchive(source);
-        } else {
-            throw new IOException("Invalid addon file: " + source);
-        }
+        Addon addon = IO.with(source).<Addon>get()
+          .when(Files::isDirectory,   () -> installFromDirectory(source.toRealPath(), true))
+          .when(Files::isRegularFile, () -> installFromArchive(source))
+          .orElseThrow(() -> new IOException("Invalid addon file: " + source));
 
         String name = addon.getName();
         Path target = addon.getPath();
@@ -280,29 +276,21 @@ public class AddonControl
         });
     }
 
-    private void extract(Path source, Path target)
+    private static void extract(Path source, Path target)
         throws IOException
     {
         String name = source.getFileName().toString();
-
-        if (name.endsWith(".zip")) {
-            Exec.args("unzip", "-d", target, source)
-                .silentIO()
-                .checkError()
-                .run();
-        } else if (name.endsWith(".tar.gz") || name.endsWith(".tgz")) {
-            Exec.args("tar", "-C", target, "-xzpf", source)
-                .silentIO()
-                .checkError()
-                .run();
-        } else if (name.endsWith(".tar")) {
-            Exec.args("tar", "-C", target, "-xpf", source)
-                .silentIO()
-                .checkError()
-                .run();
-        } else {
-            throw new IOException("Unsupported addon archive file: " + source);
-        }
+        IO.with(name).<Exec>get()
+          .when(endsWith(".zip"), () ->
+                Exec.args("unzip", "-d", target, source))
+          .when(endsWith(".tar.gz").or(endsWith(".tgz")), () ->
+                Exec.args("tar", "-C", target, "-xzpf", source))
+          .when(endsWith(".tar"), () ->
+                Exec.args("tar", "-C", target, "-xpf", source))
+          .orElseThrow(() -> new IOException("Unsupported addon archive file: " + source))
+          .silentIO()
+          .checkError()
+          .run();
     }
 
     private void processTemplates(Path path, Map<String, String> env)
@@ -602,13 +590,10 @@ public class AddonControl
     {
         ApplicationRepository repo = ApplicationRepository.newInstance(container);
 
-        if (url == null || url.isEmpty()) {
-            repo.populateFromTemplate(path);
-        } else if ("empty".equals(url)) {
-            repo.populateEmpty();
-        } else {
-            repo.populateFromURL(url);
-        }
+        IO.with(url)
+          .when(nullOrEmpty(), () -> repo.populateFromTemplate(path))
+          .when(is("empty"),   () -> repo.populateEmpty())
+          .otherwise(          () -> repo.populateFromURL(url));
 
         if (repo.exists()) {
             repo.checkout(container.getRepoDir());

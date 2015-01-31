@@ -41,6 +41,7 @@ import static java.util.stream.Collectors.*;
 import static com.cloudway.platform.common.util.MoreCollectors.*;
 import static com.cloudway.platform.common.util.MoreFiles.*;
 import static com.cloudway.platform.common.util.Predicates.*;
+import static com.cloudway.platform.common.util.Conditionals.*;
 
 public class Cgroup
 {
@@ -344,17 +345,10 @@ public class Cgroup
                 if (i != -1) {
                     String token = line.substring(0, i).trim();
                     String values = line.substring(i + 1).trim();
-                    switch (token) {
-                    case "Name":
-                        t.name = values;
-                        break;
-                    case "Uid":
-                        parse_uid(values).ifPresent(uid -> t.uid = uid);
-                        break;
-                    case "Gid":
-                        parse_uid(values).ifPresent(gid -> t.gid = gid);
-                        break;
-                    }
+                    with(token)
+                      .when("Name", () -> t.name = values)
+                      .when("Uid",  () -> parse_uid(values).ifPresent(uid -> t.uid = uid))
+                      .when("Gid",  () -> parse_uid(values).ifPresent(gid -> t.gid = gid));
                 }
             });
             return t;
@@ -494,7 +488,7 @@ public class Cgroup
         }
 
         try (RandomAccessFile out = new RandomAccessFile(tempfile.toFile(), "rw")) {
-            action.accept(in, out);
+            action.consume(in, out);
         } finally {
             in.close();
         }

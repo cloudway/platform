@@ -31,23 +31,14 @@ public final class AdminControl
         }
 
         try {
-            switch (args[0]) {
-            case "startall":
-                startall();
-                break;
-
-            case "stopall":
-                stopall();
-                break;
-
-            case "restartall":
-                restartall();
-                break;
-
-            default:
-                System.err.println(USAGE);
-                System.exit(1);
-            }
+            IO.with(args[0])
+              .when("startall",   AdminControl::startall)
+              .when("stopall",    AdminControl::stopall)
+              .when("restartall", AdminControl::restartall)
+              .otherwise(() -> {
+                  System.err.println(USAGE);
+                  System.exit(1);
+              });
         } catch (Exception ex) {
             System.err.println("Command failure");
             ex.printStackTrace();

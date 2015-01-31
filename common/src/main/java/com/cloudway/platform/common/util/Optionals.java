@@ -87,7 +87,7 @@ public final class Optionals
      * predicate evaluate to {@code true} to the value.
      */
     public static <T> Predicate<Optional<T>> just(Predicate<? super T> p) {
-        return (Optional<T> opt) -> opt.map(p::test).orElse(false);
+        return opt -> opt.isPresent() && p.test(opt.get());
     }
 
     /**
@@ -104,6 +104,50 @@ public final class Optionals
      * tested does not {@link Optional#isPresent() presents} a value.}
      */
     public static Predicate<Optional<?>> nothing() {
-        return (Optional<?> opt) -> !opt.isPresent();
+        return opt -> !opt.isPresent();
+    }
+
+    /**
+     * Returns a conditional case that evaluate to perform action on the optional
+     * being tested is {@link Optional#isPresent() presents} a value.
+     */
+    public static <T, R, X extends Throwable> ConditionCase<Optional<T>, R, X>
+    Just(ExceptionFunction<? super T, ? extends R, X> mapper) {
+        return opt -> opt.isPresent()
+            ? () -> mapper.evaluate(opt.get())
+            : null;
+    }
+
+    /**
+     * Returns a conditional case that evaluate to perform action of the giving
+     * inner conditional case, while the optional being tested is
+     * {@link Optional#isPresent() presents)} a value.
+     *
+     * <p>The following example illustrated a typical pattern matching usage
+     * case that deconstruct the element contained in an Optional. In this
+     * example the instance of a Tuple class contains two elements. The Tuple()
+     * method deconstruct it into arguments passed to a lambda expression.</p>
+     *
+     * <pre>
+     *     void test(Optional&lt;Tuple&gt; obj) {
+     *         with(obj)
+     *           .when(JustIn(Tuple((x, y) -> ...)));
+     *     }
+     * </pre>
+     */
+    public static <T, R, X extends Throwable> ConditionCase<Optional<T>, R, X>
+    JustIn(ConditionCase<? super T, ? extends R, X> mapper) {
+        return opt -> opt.isPresent()
+            ? mapper.evaluate(opt.get())
+            : null;
+    }
+
+    /**
+     * Returns a conditional case that evaluate to perform action on the optional
+     * being tested is not {@link Optional#isPresent() presents} a value.
+     */
+    public static <T, R, X extends Throwable> ConditionCase<Optional<T>, R, X>
+    Nothing(ExceptionSupplier<R, X> mapper) {
+        return opt -> opt.isPresent() ? null : mapper;
     }
 }

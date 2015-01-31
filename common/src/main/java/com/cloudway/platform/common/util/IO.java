@@ -38,7 +38,7 @@ public final class IO
         throws IOException
     {
         try {
-            return action.get();
+            return action.produce();
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
@@ -46,7 +46,7 @@ public final class IO
 
     public static <T> Optional<T> ignore(IOSupplier<? extends T> action) {
         try {
-            return Optional.ofNullable(action.get());
+            return Optional.ofNullable(action.produce());
         } catch (IOException|UncheckedIOException ex) {
             return Optional.empty();
         }
@@ -80,5 +80,13 @@ public final class IO
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
+    }
+
+    public static Conditionals.ActionConditional<IOException> with() {
+        return Conditionals.actionConditional();
+    }
+
+    public static <T> Conditionals.ActionSwitcher<T, IOException> with(T value) {
+        return Conditionals.actionSwitcher(value);
     }
 }

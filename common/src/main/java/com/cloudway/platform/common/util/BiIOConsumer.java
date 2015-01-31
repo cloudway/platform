@@ -8,7 +8,6 @@ package com.cloudway.platform.common.util;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Objects;
 import java.util.function.BiConsumer;
 
 /**
@@ -21,7 +20,7 @@ import java.util.function.BiConsumer;
  * @see java.util.function.BiConsumer
  */
 @FunctionalInterface
-public interface BiIOConsumer<T, U>
+public interface BiIOConsumer<T, U> extends BiConsumer<T, U>
 {
     /**
      * Performs this I/O operation on the given arguments.
@@ -30,27 +29,22 @@ public interface BiIOConsumer<T, U>
      * @param u the second input argument
      * @throws IOException if I/O error occurs
      */
-    void accept(T t, U u) throws IOException;
+    void consume(T t, U u) throws IOException;
 
     /**
-     * Returns a composed {@code IOBiConsumer} that performs, in sequence, this
-     * operation followed by the {@code after} operation. If performing either
-     * operation throws an exception, it is relayed to the caller of the
-     * composed operation.  If performing this operation throws an exception,
-     * the {@code after} operation will not be performed.
+     * Performs this I/O operation on the given arguments.
      *
-     * @param after the operation to perform after this operation
-     * @return a composed {@code IOBiConsumer} that performs in sequence this
-     * operation followed by the {@code after} operation
-     * @throws NullPointerException if {@code after} is null
+     * @param t the first input argument
+     * @param u the second input argument
+     * @throws UncheckedIOException if I/O error occurs
      */
-    default BiIOConsumer<T, U> andThen(BiIOConsumer<? super T, ? super U> after) {
-        Objects.requireNonNull(after);
-
-        return (l, r) -> {
-            accept(l, r);
-            after.accept(l, r);
-        };
+    @Override
+    default void accept(T t, U u) {
+        try {
+            consume(t, u);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
     }
 
     /**
@@ -61,13 +55,8 @@ public interface BiIOConsumer<T, U>
      * @param other the I/O consumer
      * @return the regular consumer
      */
-    static <T, U> BiConsumer<T,U> wrap(BiIOConsumer<? super T, ? super U> other) {
-        return (T t, U u) -> {
-            try {
-                other.accept(t, u);
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-        };
+    @SuppressWarnings("unchecked")
+    static <T, U> BiConsumer<T, U> wrap(BiIOConsumer<T, U> other) {
+        return other;
     }
 }
