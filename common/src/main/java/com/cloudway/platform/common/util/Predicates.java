@@ -208,6 +208,13 @@ public final class Predicates
     }
 
     /**
+     * Returns a predicate that always evaluate to {@code true}.
+     */
+    public static <T> Predicate<T> any() {
+        return t -> true;
+    }
+
+    /**
      * Returns a predicate that evaluate to {@code true} if the object being
      * tested {@code equals()} the given value or both are null.
      */

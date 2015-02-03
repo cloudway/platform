@@ -15,8 +15,6 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.*;
 import static com.cloudway.platform.common.util.StringPredicates.*;
@@ -29,7 +27,9 @@ import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.Exec;
 import com.cloudway.platform.common.util.IO;
 import com.cloudway.platform.common.util.IOConsumer;
-import com.cloudway.platform.common.util.BiIOConsumer;
+import com.cloudway.platform.common.util.IOBiConsumer;
+import com.cloudway.platform.common.util.IntSeq;
+import com.cloudway.platform.common.util.Seq;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ResourceLimits;
 import jnr.constants.platform.Signal;
@@ -140,11 +140,8 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
             } else {
                 // combination for large groups
                 String mcs_label = combination(set_size, 0, group_size)
-                    .skip(uid - (uid_offset + group_size - 1))
-                    .findFirst()            // an optional IntStream
-                    .get()                  // an IntStream
-                    .mapToObj(i -> "c" + i) // joining the IntStream
-                    .collect(joining(","));
+                    .drop(uid - (uid_offset + group_size - 1))
+                    .head().show(",c", "c", "");
                 return "s" + mls_num + ":" + mcs_label;
             }
         } else {
@@ -152,13 +149,12 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         }
     }
 
-    private static Stream<IntStream> combination(int n, int k, int m) {
-        if (m == 0) {
-            return Stream.of(IntStream.empty());
-        } else {
-            return IntStream.rangeClosed(k, n-m).boxed()
-                .flatMap(i -> combination(n, i+1, m-1).map(c -> IntStream.concat(IntStream.of(i), c)));
-        }
+    private static Seq<IntSeq> combination(int n, int k, int m) {
+        return m == 0
+            ? Seq.of(IntSeq.nil())
+            : IntSeq.rangeClosed(k, n - m).flatMapToObj(i ->
+              combination(n, i + 1, m - 1).map(c ->
+              IntSeq.cons(i, c)));
     }
 
     @Override
@@ -219,7 +215,7 @@ public class LinuxContainerPlugin extends UnixContainerPlugin
         }
     }
 
-    private boolean cgcall(BiIOConsumer<Cgroup, Map<String,Object>> action)
+    private boolean cgcall(IOBiConsumer<Cgroup, Map<String,Object>> action)
         throws IOException
     {
         if (Cgroup.enabled) {

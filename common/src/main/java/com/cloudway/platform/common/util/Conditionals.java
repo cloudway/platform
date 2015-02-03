@@ -9,8 +9,6 @@ package com.cloudway.platform.common.util;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -21,8 +19,8 @@ public final class Conditionals {
     /**
      * Create a chained fluent conditional execution.
      */
-    public static ActionConditional<RuntimeException> with() {
-        return actionConditional();
+    public static ActionBrancher<RuntimeException> with() {
+        return actionBrancher();
     }
 
     /**
@@ -33,10 +31,95 @@ public final class Conditionals {
     }
 
     /**
+     * Create a chained fluent conditional execution for evaluating on given values.
+     */
+    public static <T,U> BiActionSwitcher<T, U, RuntimeException> with(T t, U u) {
+        return biActionSwitcher(t, u);
+    }
+
+    /**
+     * Lift a conditional case to a predicate so it can be used in stream API.
+     *
+     * <p>For example:</p>
+     * <pre>
+     *     Stream.of(tuples).filter(with(Tuple((a,b) -> a==b));
+     * </pre>
+     */
+    public static <T> Predicate<T> with(ConditionCase<? super T, Boolean, RuntimeException> cond) {
+        return t -> cond.lift(t, false);
+    }
+
+    /**
+     * A placeholder that represents always true predicate.
+     */
+    @SuppressWarnings("JavacQuirks")
+    public static final Predicate<Object> _ = Predicates.any();
+
+    /**
+     * A conditional case that matches any argument and transform the argument
+     * into result with the given function.
+     *
+     * @param mapper transform input argument into result
+     */
+    public static <T, R, X extends Throwable>
+    ConditionCase<T, R, X> Any(ExceptionFunction<? super T, ? extends R, X> mapper) {
+        return t -> () -> mapper.evaluate(t);
+    }
+
+    /**
+     * A conditional case that matches any argument and produce result with the
+     * given supplier.
+     *
+     * @param supplier produces the result
+     */
+    @SuppressWarnings("unchecked")
+    public static <T, R, X extends Throwable>
+    ConditionCase<T, R, X> Any(ExceptionSupplier<? extends R, X> supplier) {
+        return t -> (ExceptionSupplier<R, X>)supplier;
+    }
+
+    /**
+     * Deconstruct nested pattern to get final result.
+     *
+     * <p>The following example illustrated a typical pattern matching use case
+     * that deconstruct the element contained in an {@code Optional} in which
+     * the {@code Optional} element is an instance of a {@code Tuple}. The
+     * {@code Tuple()} method deconstruct the tuple elements into arguments to
+     * a lambda expression.</p>
+     *
+     * <pre>
+     *     void test(Optional&lt;Tuple&gt; obj) {
+     *         with(obj)
+     *          .when(in(Just(Tuple((x, y) -> ...))));
+     *     }
+     * </pre>
+     *
+     * <p>The pseudo code of this method in haskell notation:</p>
+     * <pre>
+     *  in :: (T -> () -> () -> R) -> (T -> () -> R)
+     *  in f t = f t ()
+     * </pre>
+     */
+    public static <T, R, X extends Throwable> ConditionCase<T, R, X>
+    in(ConditionCase<T, ExceptionSupplier<R, X>, X> cond) {
+        return cond::lift;
+    }
+
+    /**
+     * A convenient conditional case that cast the argument into desired type.
+     * This method primarily used by another conditional case implementation.
+     */
+    public static <T, U, R, X extends Throwable> ConditionCase<T, R, X>
+    cast(Class<U> type, ConditionCase<? super U, R, X> mapper) {
+        return t -> type.isInstance(t) ? mapper.evaluate(type.cast(t)) : null;
+    }
+
+    /**
      * A sugar method that convert an action to a supplier so it can be used by
      * {@link ActionSwitcher#when(ConditionCase)}.
      */
-    public static <X extends Throwable> ExceptionSupplier<?, X> doing(ExceptionAction<X> action) {
+    public static <X extends Throwable> ExceptionSupplier<?, X>
+    doing(ExceptionAction<X> action) {
         return () -> {
             action.perform();
             return null;
@@ -47,7 +130,8 @@ public final class Conditionals {
      * A sugar method that convert an action to a supplier so it can be used by
      * {@link ActionSwitcher#when(ConditionCase)}.
      */
-    public static <T, X extends Throwable> ExceptionFunction<T, ?, X> doing(ExceptionConsumer<? super T, X> action) {
+    public static <T, X extends Throwable> ExceptionFunction<T, ?, X>
+    doing(ExceptionConsumer<? super T, X> action) {
         return t -> {
             action.consume(t);
             return null;
@@ -58,9 +142,10 @@ public final class Conditionals {
      * A sugar method that convert an action to a supplier so it can be used by
      * {@link ActionSwitcher#when(ConditionCase)}.
      */
-    public static <T, U> BiFunction<T, U, ?> doing(BiConsumer<? super T, ? super U> action) {
+    public static <T, U, X extends Throwable> ExceptionBiFunction<T, U, ?, X>
+    doing(ExceptionBiConsumer<? super T, ? super U, X> action) {
         return (t, u) -> {
-            action.accept(t, u);
+            action.consume(t, u);
             return null;
         };
     }
@@ -71,7 +156,7 @@ public final class Conditionals {
      * @param <A> the action performed by conditional execution
      * @param <X> the exception raised by action
      */
-    public interface Conditional<A, X extends Throwable, C extends Conditional<A,X,C>> {
+    public interface Brancher<A, X extends Throwable, B extends Brancher<A,X,B>> {
         /**
          * Execute a branch when the given condition is satisfied.
          *
@@ -80,8 +165,8 @@ public final class Conditionals {
          * @param action the action to perform
          */
         @SuppressWarnings("unchecked")
-        default C when(boolean test, A action) throws X {
-            return (C)this;
+        default B when(boolean test, A action) throws X {
+            return (B)this;
         }
 
         /**
@@ -91,35 +176,8 @@ public final class Conditionals {
          * @param action the action to perform
          */
         @SuppressWarnings("unchecked")
-        default C when(BooleanSupplier test, A action) throws X {
-            return (C)this;
-        }
-    }
-
-    /**
-     * The result of a conditional execution is performing an action.
-     *
-     * @param <X> the exception raised by action
-     */
-    public interface ActionConditional<X extends Throwable>
-        extends Conditional<ExceptionAction<X>, X, ActionConditional<X>>
-    {
-        /**
-         * Allowing actions in the conditional can throw arbitrary exceptions.
-         *
-         * @param <Y> the exception types that allowed to throw in actions
-         * @return the same conditional that just changing throws clause
-         */
-        @SuppressWarnings("unchecked")
-        default <Y extends Throwable> ActionConditional<Y> throwing() {
-            return (ActionConditional<Y>)this;
-        }
-
-        /**
-         * Convert an action conditional to a supplier conditional.
-         */
-        default <R> SupplierConditional<R,X> get() {
-            return supplierConditional();
+        default B when(BooleanSupplier test, A action) throws X {
+            return (B)this;
         }
 
         /**
@@ -131,9 +189,36 @@ public final class Conditionals {
          * {@code false}
          * @param action the action to perform
          */
-        default <T> ActionConditional<X> when(T value, Predicate<? super T> predicate,
-                                              ExceptionAction<X> action) throws X {
-            return this;
+        @SuppressWarnings("unchecked")
+        default <T> B when(T value, Predicate<? super T> predicate, A action) throws X {
+            return (B)this;
+        }
+    }
+
+    /**
+     * The result of a conditional execution is performing an action.
+     *
+     * @param <X> the exception raised by action
+     */
+    public interface ActionBrancher<X extends Throwable>
+        extends Brancher<ExceptionAction<X>, X, ActionBrancher<X>>
+    {
+        /**
+         * Allowing actions in the conditional can throw arbitrary exceptions.
+         *
+         * @param <Y> the exception types that allowed to throw in actions
+         * @return the same conditional that just changing throws clause
+         */
+        @SuppressWarnings("unchecked")
+        default <Y extends Throwable> ActionBrancher<Y> throwing() {
+            return (ActionBrancher<Y>)this;
+        }
+
+        /**
+         * Convert an action conditional to a supplier conditional.
+         */
+        default <R> SupplierBrancher<R,X> get() {
+            return supplierBrancher();
         }
 
         /**
@@ -164,8 +249,8 @@ public final class Conditionals {
      * @param <R> the type of conditional execution result
      * @param <X> the exception raised by supplier
      */
-    public interface SupplierConditional<R, X extends Throwable>
-        extends Conditional<ExceptionSupplier<? extends R, X>, X, SupplierConditional<R,X>>, ConditionalSupplier<R, X>
+    public interface SupplierBrancher<R, X extends Throwable>
+        extends Brancher<ExceptionSupplier<R, X>, X, SupplierBrancher<R, X>>, ConditionalSupplier<R, X>
     {
         /**
          * Allowing actions in the conditional can throw arbitrary exceptions.
@@ -174,35 +259,8 @@ public final class Conditionals {
          * @return the same conditional that just changing throws clause
          */
         @SuppressWarnings("unchecked")
-        default <Y extends Throwable> SupplierConditional<R, Y> throwing() {
-            return (SupplierConditional<R, Y>)this;
-        }
-
-        /**
-         * Execute a branch when the given condition is satisfied.
-         *
-         * @param value the value that will be evaluated by the given predicate
-         * @param predicate the predicate to evaluate, perform {@code action}
-         * if evaluated to {@code true}, no action is performed if evaluated to
-         * {@code false}
-         * @param supplier the action to perform
-         */
-        default <T> SupplierConditional<R, X> when(T value, Predicate<? super T> predicate,
-                                                   ExceptionSupplier<? extends R, X> supplier) throws X {
-            return this;
-        }
-
-        /**
-         * Execute a branch when the given condition is satisfied.
-         *
-         * @param value the value that will be evaluated by the given predicate
-         * @param predicate the predicate to evaluate, perform {@code action}
-         * if evaluated to {@code true}, no action is performed if evaluated to
-         * {@code false}
-         * @param result the result to return
-         */
-        default <T> SupplierConditional<R, X> when(T value, Predicate<? super T> predicate, R result) {
-            return this;
+        default <Y extends Throwable> SupplierBrancher<R, Y> throwing() {
+            return (SupplierBrancher<R, Y>)this;
         }
     }
 
@@ -302,35 +360,35 @@ public final class Conditionals {
     /**
      * The singleton implementation of action conditional execution.
      */
-    private static class ActionConditionalImpl<X extends Throwable>
-        implements ActionConditional<X>
+    private static class ActionBrancherImpl<X extends Throwable>
+        implements ActionBrancher<X>
     {
         @Override
-        public ActionConditional<X> when(boolean test, ExceptionAction<X> action)
+        public ActionBrancher<X> when(boolean test, ExceptionAction<X> action)
             throws X
         {
             if (test) {
                 action.perform();
-                return shortCircuitConditional();
+                return shortCircuitBrancher();
             }
             return this;
         }
 
         @Override
-        public ActionConditional<X> when(BooleanSupplier test, ExceptionAction<X> action) throws X {
+        public ActionBrancher<X> when(BooleanSupplier test, ExceptionAction<X> action) throws X {
             if (test.getAsBoolean()) {
                 action.perform();
-                return shortCircuitConditional();
+                return shortCircuitBrancher();
             }
             return this;
         }
 
         @Override
-        public <T> ActionConditional<X> when(T value, Predicate<? super T> predicate,
-                                             ExceptionAction<X> action) throws X {
+        public <T> ActionBrancher<X> when(T value, Predicate<? super T> predicate,
+                                          ExceptionAction<X> action) throws X {
             if (predicate.test(value)) {
                 action.perform();
-                return shortCircuitConditional();
+                return shortCircuitBrancher();
             }
             return this;
         }
@@ -349,45 +407,36 @@ public final class Conditionals {
     /**
      * The singleton implementation of supplier conditional execution.
      */
-    private static class SupplierConditionalImpl<R, X extends Throwable>
-        implements SupplierConditional<R, X>
+    private static class SupplierBrancherImpl<R, X extends Throwable>
+        implements SupplierBrancher<R, X>
     {
         @Override
-        public SupplierConditional<R, X> when(boolean test, ExceptionSupplier<? extends R, X> supplier)
+        public SupplierBrancher<R, X> when(boolean test, ExceptionSupplier<R, X> supplier)
             throws X
         {
             if (test) {
-                return new ResultConditional<>(supplier.produce());
+                return new ResultBrancher<>(supplier.produce());
             } else {
                 return this;
             }
         }
 
         @Override
-        public SupplierConditional<R, X> when(BooleanSupplier test, ExceptionSupplier<? extends R, X> supplier)
+        public SupplierBrancher<R, X> when(BooleanSupplier test, ExceptionSupplier<R, X> supplier)
             throws X
         {
             if (test.getAsBoolean()) {
-                return new ResultConditional<>(supplier.produce());
+                return new ResultBrancher<>(supplier.produce());
             } else {
                 return this;
             }
         }
 
         @Override
-        public <T> SupplierConditional<R, X> when(T value, Predicate<? super T> predicate,
-                                                  ExceptionSupplier<? extends R, X> supplier) throws X {
+        public <T> SupplierBrancher<R, X> when(T value, Predicate<? super T> predicate,
+                                               ExceptionSupplier<R, X> supplier) throws X {
             if (predicate.test(value)) {
-                return new ResultConditional<>(supplier.produce());
-            } else {
-                return this;
-            }
-        }
-
-        @Override
-        public <T> SupplierConditional<R, X> when(T value, Predicate<? super T> predicate, R result) {
-            if (predicate.test(value)) {
-                return new ResultConditional<>(result);
+                return new ResultBrancher<>(supplier.produce());
             } else {
                 return this;
             }
@@ -397,12 +446,12 @@ public final class Conditionals {
     /**
      * The supplier conditional execution that returns an concrete result.
      */
-    private static class ResultConditional<R, X extends Throwable>
-        implements SupplierConditional<R, X>, ResultSupplier<R, X>
+    private static class ResultBrancher<R, X extends Throwable>
+        implements SupplierBrancher<R, X>, ResultSupplier<R, X>
     {
         private final R result;
 
-        ResultConditional(R result) {
+        ResultBrancher(R result) {
             this.result = result;
         }
 
@@ -413,14 +462,14 @@ public final class Conditionals {
     }
 
     @SuppressWarnings("rawtypes")
-    private static final ActionConditional ACTION_CONDITIONAL = new ActionConditionalImpl<Throwable>();
+    private static final ActionBrancher ACTION_BRANCHER = new ActionBrancherImpl<Throwable>();
 
     /**
      * Package private factory method to create action conditional.
      */
     @SuppressWarnings("unchecked")
-    static <X extends Throwable> ActionConditional<X> actionConditional() {
-        return (ActionConditional<X>)ACTION_CONDITIONAL;
+    static <X extends Throwable> ActionBrancher<X> actionBrancher() {
+        return (ActionBrancher<X>)ACTION_BRANCHER;
     }
 
     /**
@@ -428,19 +477,19 @@ public final class Conditionals {
      * This is implemented as a singleton.
      */
     @SuppressWarnings("rawtypes")
-    private static final ActionConditional SHORT_CIRCUIT_CONDITIONAL = new ActionConditional() {};
+    private static final ActionBrancher SHORT_CIRCUIT_BRANCHER = new ActionBrancher() {};
 
     @SuppressWarnings({"unchecked", "MethodOnlyUsedFromInnerClass"})
-    private static <X extends Throwable> ActionConditional<X> shortCircuitConditional() {
-        return (ActionConditional<X>)SHORT_CIRCUIT_CONDITIONAL;
+    private static <X extends Throwable> ActionBrancher<X> shortCircuitBrancher() {
+        return (ActionBrancher<X>)SHORT_CIRCUIT_BRANCHER;
     }
 
     @SuppressWarnings("rawtypes")
-    private static final SupplierConditional SUPPLIER_CONDITIONAL = new SupplierConditionalImpl<>();
+    private static final SupplierBrancher SUPPLIER_BRANCHER = new SupplierBrancherImpl<>();
 
     @SuppressWarnings({"unchecked", "MethodOnlyUsedFromInnerClass"})
-    private static <R, X extends Throwable> SupplierConditional<R, X> supplierConditional() {
-        return (SupplierConditional<R, X>)SUPPLIER_CONDITIONAL;
+    private static <R, X extends Throwable> SupplierBrancher<R, X> supplierBrancher() {
+        return (SupplierBrancher<R, X>)SUPPLIER_BRANCHER;
     }
 
     /**
@@ -475,7 +524,7 @@ public final class Conditionals {
     }
 
     /**
-     * The result of a conditional execution is perform an action.
+     * The result of a conditional execution is performing an action.
      *
      * @param <T> the input type of value evaluation
      * @param <X> the exception raised by action
@@ -531,8 +580,7 @@ public final class Conditionals {
          * @param action the action that evaluating the value, the value passed
          * to this action will have the desired type
          */
-        default <V extends T> ActionSwitcher<T, X>
-        when(Class<V> type, ExceptionConsumer<? super V, X> action) throws X {
+        default <V> ActionSwitcher<T, X> when(Class<V> type, ExceptionConsumer<? super V, X> action) throws X {
             return this;
         }
 
@@ -559,7 +607,7 @@ public final class Conditionals {
      * @param <X> the exception raised by supplier
      */
     public interface SupplierSwitcher<T, R, X extends Throwable>
-        extends Switcher<T, ExceptionSupplier<? extends R, X>, X, SupplierSwitcher<T,R,X>>, ConditionalSupplier<R, X>
+        extends Switcher<T, ExceptionSupplier<R, X>, X, SupplierSwitcher<T,R,X>>, ConditionalSupplier<R, X>
     {
         /**
          * Allowing actions in the switcher can throw arbitrary exceptions.
@@ -626,7 +674,7 @@ public final class Conditionals {
          * @param converter the function that convert value to result, the value passed
          * to this function will have the desired type
          */
-        default <V extends T> SupplierSwitcher<T, R, X>
+        default <V> SupplierSwitcher<T, R, X>
         when(Class<V> type, ExceptionFunction<? super V, ? extends R, X> converter) throws X {
             return this;
         }
@@ -678,7 +726,7 @@ public final class Conditionals {
         }
 
         @Override
-        public <V extends T> ActionSwitcher<T, X> when(Class<V> type, ExceptionConsumer<? super V, X> action) throws X {
+        public <V> ActionSwitcher<T, X> when(Class<V> type, ExceptionConsumer<? super V, X> action) throws X {
             if (type.isInstance(value)) {
                 action.consume(type.cast(value));
                 return shortCircuitSwitcher();
@@ -710,7 +758,7 @@ public final class Conditionals {
         }
 
         @Override
-        public SupplierSwitcher<T, R, X> when(Predicate<? super T> p, ExceptionSupplier<? extends R, X> supplier)
+        public SupplierSwitcher<T, R, X> when(Predicate<? super T> p, ExceptionSupplier<R, X> supplier)
             throws X
         {
             if (p.test(value)) {
@@ -721,7 +769,7 @@ public final class Conditionals {
         }
 
         @Override
-        public SupplierSwitcher<T, R, X> when(T t, ExceptionSupplier<? extends R, X> supplier)
+        public SupplierSwitcher<T, R, X> when(T t, ExceptionSupplier<R, X> supplier)
             throws X
         {
             if (Objects.equals(t, value)) {
@@ -735,6 +783,8 @@ public final class Conditionals {
         public SupplierSwitcher<T, R, X> when(ConditionCase<? super T, ? extends R, X> branch)
             throws X
         {
+            // when :: (T -> () -> R) ->  (T -> R)
+            // when f t = f t ()
             ExceptionSupplier<? extends R, X> supplier = branch.evaluate(value);
             if (supplier != null) {
                 return new ResultSwitcher<>(supplier.produce());
@@ -744,7 +794,7 @@ public final class Conditionals {
         }
 
         @Override
-        public <V extends T> SupplierSwitcher<T, R, X>
+        public <V> SupplierSwitcher<T, R, X>
         when(Class<V> type, ExceptionFunction<? super V, ? extends R, X> converter) throws X {
             if (type.isInstance(value)) {
                 return new ResultSwitcher<>(converter.evaluate(type.cast(value)));
@@ -755,7 +805,7 @@ public final class Conditionals {
     }
 
     /**
-     * The supplier switcher that returns an concrete result.
+     * The supplier switcher that returns a concrete result.
      */
     private static class ResultSwitcher<T, R, X extends Throwable>
         implements SupplierSwitcher<T, R, X>, ResultSupplier<R, X>
@@ -788,5 +838,414 @@ public final class Conditionals {
     @SuppressWarnings({"unchecked", "MethodOnlyUsedFromInnerClass"})
     private static <T, X extends Throwable> ActionSwitcher<T,X> shortCircuitSwitcher() {
         return (ActionSwitcher<T,X>)SHORT_CIRCUIT_SWITCHER;
+    }
+
+    /**
+     * Helper class used to build conditional execution for evaluating on given pair
+     * of values.
+     *
+     * @param <T> the input type of first value
+     * @param <U> the input type of second value
+     * @param <A> the action performed by conditional execution
+     * @param <X> the exception type raised by action
+     */
+    public interface BiSwitcher<T, U, A, X extends Throwable, S extends BiSwitcher<T,U,A,X,S>> {
+        /**
+         * Execute an action when the give predicates are satisfied.
+         *
+         * @param p1 the predicate to evaluate on first argument
+         * @param p2 the predicate to evaluate on second argument
+         * @param action the action to perform
+         */
+        @SuppressWarnings("unchecked")
+        default S when(Predicate<? super T> p1, Predicate<? super U> p2, A action) throws X {
+            return (S)this;
+        }
+
+        /**
+         * Execute an action when both arguments are equals to the given
+         * constant values.
+         *
+         * @param v1 the value to be compared to first argument
+         * @param v2 the value to be compared to second argument
+         * @param action the action to perform
+         */
+        @SuppressWarnings("unchecked")
+        default S when(T v1, U v2, A action) throws X {
+            return (S)this;
+        }
+
+        /**
+         * Execute an action when first argument is satisfied to the given
+         * predicate, and the second argument is equals to the given constant
+         * value.
+         *
+         * @param p1 the predicate to evaluate on first argument
+         * @param v2 the const value to be compared to second argument
+         * @param action the action to perform
+         */
+        @SuppressWarnings("unchecked")
+        default S when(Predicate<? super T> p1, U v2, A action) throws X {
+            return (S)this;
+        }
+
+        /**
+         * Execute an action when first argument is equals to the given constant
+         * value, and the second argument is satisfied to the given predicate.
+         *
+         * @param v1 the const value to be compared to the first argument
+         * @param p2 the predicate to evaluate on second argument
+         * @param action the action to perform
+         */
+        @SuppressWarnings("unchecked")
+        default S when(T v1, Predicate<? super U> p2, A action) throws X {
+            return (S)this;
+        }
+    }
+
+    /**
+     * The result of a conditional execution is performing an action.
+     *
+     * @param <T> the input type of first argument
+     * @param <U> the input type of second argument
+     * @param <X> the exception type raised by action
+     */
+    public interface BiActionSwitcher<T, U, X extends Throwable>
+        extends BiSwitcher<T, U, ExceptionAction<X>, X, BiActionSwitcher<T, U, X>>
+    {
+        /**
+         * Allowing actions in the switcher can throw arbitrary exceptions.
+         *
+         * @param <Y> the exception type that allowed to throw in actions
+         * @return the same action switcher that just changing throw clause
+         */
+        @SuppressWarnings("unchecked")
+        default <Y extends Throwable> BiActionSwitcher<T, U, Y> throwing() {
+            return (BiActionSwitcher<T, U, Y>)this;
+        }
+
+        /**
+         * Convert an action switcher to a supplier switcher.
+         */
+        default <R> BiSupplierSwitcher<T, U, R, X> get() {
+            throw new IllegalStateException();
+        }
+
+        /**
+         * There is a common scenario that is to check runtime types for given
+         * arguments and explicitly cast it to the desired type. This method
+         * simplify this use case and make code more readable.
+         *
+         * @param c1 the desired type to check for first argument
+         * @param c2 the desired type to check for second argument
+         * @param action the action that evaluating the value, the values passed
+         * to this action will have the desired types.
+         */
+        default <T1, U1> BiActionSwitcher<T, U, X>
+        when(Class<T1> c1, Class<U1> c2, ExceptionBiConsumer<? super T1, ? super U1, X> action) throws X {
+            return this;
+        }
+
+        /**
+         * If both arguments have the same base type then this method checks on the
+         * desired type.
+         *
+         * @param c the desired type to check for both arguments
+         * @param action the action that to perform if both arguments have the desired
+         * type. The values passed to this action will have the desired type.
+         */
+        default <V> BiActionSwitcher<T, U, X>
+        when(Class<V> c, ExceptionBiConsumer<? super V, ? super V, X> action) throws X {
+            return when(c, c, action);
+        }
+
+        /**
+         * Evaluate the given function to get an action, and perform the action
+         * if it's not null.
+         *
+         * @param branch the function that map the input argument to an action
+         */
+        default BiActionSwitcher<T, U, X>
+        when(ConditionCase<? super T, ? extends ConditionCase<? super U, ?, X>, X> branch) throws X {
+            return this;
+        }
+
+        /**
+         * Execute the fall through action when all conditions are not satisfied.
+         */
+        default void otherwise(ExceptionAction<X> action) throws X {
+            // no-op
+        }
+
+        /**
+         * Throws exception when all conditions are not satisfied.
+         */
+        default <Y extends Throwable> void orElseThrow(Supplier<? extends Y> exceptionSupplier) throws Y {
+            // no-op
+        }
+    }
+
+    /**
+     * The result of a conditional execution is getting a value.
+     *
+     * @param <T> the type of first argument
+     * @param <U> the type of second argument
+     * @param <R> the type of result value
+     * @param <X> the exception type raised by supplier
+     */
+    public interface BiSupplierSwitcher<T, U, R, X extends Throwable>
+        extends BiSwitcher<T, U, ExceptionSupplier<R, X>, X, BiSupplierSwitcher<T,U,R,X>>, ConditionalSupplier<R, X>
+    {
+        /**
+         * Allowing actions in the switcher can throw arbitrary exception.
+         *
+         * @param <Y> the exception type that allowed to throw in actions
+         * @return the same action switcher that just changing throws clause
+         */
+        @SuppressWarnings("unchecked")
+        default <Y extends Throwable> BiSupplierSwitcher<T, U, R, Y> throwing() {
+            return (BiSupplierSwitcher<T, U, R, Y>)this;
+        }
+
+        /**
+         * There is a common scenario that is to check runtime types for given
+         * arguments and explicitly cast it to the desired type. This method
+         * simplify this use case and make code more readable.
+         *
+         * @param c1 the desired type to check for first argument
+         * @param c2 the desired type to check for second argument
+         * @param converter the function that convert values to result, the values passed
+         * to this function will have the desired types.
+         */
+        default <T1, U1> BiSupplierSwitcher<T, U, R, X>
+        when(Class<T1> c1, Class<U1> c2, ExceptionBiFunction<? super T1, ? super U1, ? extends R, X> converter) throws X {
+            return this;
+        }
+
+        /**
+         * If both arguments have the same base type then this method checks on the
+         * desired type.
+         *
+         * @param c the desired type to check for both arguments
+         * @param converter the function that convert values to result, the values passed
+         * to this function will have the desired types.
+         */
+        default <V> BiSupplierSwitcher<T, U, R, X>
+        when(Class<V> c, ExceptionBiFunction<? super V, ? super V, ? extends R, X> converter) throws X {
+            return when(c, c, converter);
+        }
+
+        /**
+         * Evaluate the given function to get a supplier, and evaluate the supplier
+         * if it's not null.
+         *
+         * @param branch the function that map the input argument to a supplier
+         */
+        default BiSupplierSwitcher<T, U, R, X>
+        when(ConditionCase<? super T, ? extends ConditionCase<? super U, ? extends R, X>, X> branch) throws X {
+            return this;
+        }
+    }
+
+    /**
+     * Implementation of action switcher on double arguments.
+     */
+    private static class BiActionSwitcherImpl<T, U, X extends Throwable>
+        implements BiActionSwitcher<T, U, X>
+    {
+        private final T left;
+        private final U right;
+
+        BiActionSwitcherImpl(T left, U right) {
+            this.left = left;
+            this.right = right;
+        }
+
+        @Override
+        public <R> BiSupplierSwitcher<T, U, R, X> get() {
+            return new BiSupplierSwitcherImpl<>(left, right);
+        }
+
+        @Override
+        public BiActionSwitcher<T, U, X>
+        when(Predicate<? super T> p1, Predicate<? super U> p2, ExceptionAction<X> action) throws X {
+            if (p1.test(left) && p2.test(right)) {
+                action.perform();
+                return shortCircuitBiSwitcher();
+            }
+            return this;
+        }
+
+        @Override
+        public BiActionSwitcher<T, U, X> when(T v1, U v2, ExceptionAction<X> action) throws X {
+            if (Objects.equals(v1, left) && Objects.equals(v2, right)) {
+                action.perform();
+                return shortCircuitBiSwitcher();
+            }
+            return this;
+        }
+
+        @Override
+        public BiActionSwitcher<T, U, X> when(Predicate<? super T> p1, U v2, ExceptionAction<X> action) throws X {
+            if (p1.test(left) && Objects.equals(v2, right)) {
+                action.perform();
+                return shortCircuitBiSwitcher();
+            }
+            return this;
+        }
+
+        @Override
+        public BiActionSwitcher<T, U, X> when(T v1, Predicate<? super U> p2, ExceptionAction<X> action) throws X {
+            if (Objects.equals(v1, left) && p2.test(right)) {
+                action.perform();
+                return shortCircuitBiSwitcher();
+            }
+            return this;
+        }
+
+        @Override
+        public <T1, U1> BiActionSwitcher<T, U, X>
+        when(Class<T1> c1, Class<U1> c2, ExceptionBiConsumer<? super T1, ? super U1, X> action) throws X {
+            if (c1.isInstance(left) && c2.isInstance(right)) {
+                action.consume(c1.cast(left), c2.cast(right));
+                return shortCircuitBiSwitcher();
+            }
+            return this;
+        }
+
+        @Override
+        public BiActionSwitcher<T, U, X>
+        when(ConditionCase<? super T, ? extends ConditionCase<? super U, ?, X>, X> branch) throws X {
+            ExceptionSupplier<? extends ConditionCase<? super U, ?, X>, X> alt = branch.evaluate(left);
+            if (alt != null) {
+                ExceptionSupplier<?, X> action = alt.produce().evaluate(right);
+                if (action != null) {
+                    action.produce();
+                    return shortCircuitBiSwitcher();
+                }
+            }
+            return this;
+        }
+
+        @Override
+        public void otherwise(ExceptionAction<X> action) throws X {
+            action.perform();
+        }
+
+        @Override
+        public <Y extends Throwable> void orElseThrow(Supplier<? extends Y> exceptionSupplier) throws Y {
+            throw exceptionSupplier.get();
+        }
+    }
+
+    /**
+     * The implementation of supplier switcher on double arguments.
+     */
+    private static class BiSupplierSwitcherImpl<T, U, R, X extends Throwable>
+        implements BiSupplierSwitcher<T, U, R, X>
+    {
+        private final T left;
+        private final U right;
+
+        BiSupplierSwitcherImpl(T left, U right) {
+            this.left = left;
+            this.right = right;
+        }
+
+        @Override
+        public BiSupplierSwitcher<T, U, R, X>
+        when(Predicate<? super T> p1, Predicate<? super U> p2, ExceptionSupplier<R, X> supplier) throws X {
+            if (p1.test(left) && p2.test(right)) {
+                return new ResultBiSwitcher<>(supplier.produce());
+            }
+            return this;
+        }
+
+        @Override
+        public BiSupplierSwitcher<T, U, R, X>
+        when(T v1, U v2, ExceptionSupplier<R, X> supplier) throws X {
+            if (Objects.equals(v1, left) && Objects.equals(v2, right)) {
+                return new ResultBiSwitcher<>(supplier.produce());
+            }
+            return this;
+        }
+
+        @Override
+        public BiSupplierSwitcher<T, U, R, X>
+        when(Predicate<? super T> p1, U v2, ExceptionSupplier<R, X> supplier) throws X {
+            if (p1.test(left) && Objects.equals(v2, right)) {
+                return new ResultBiSwitcher<>(supplier.produce());
+            }
+            return this;
+        }
+
+        @Override
+        public BiSupplierSwitcher<T, U, R, X>
+        when(T v1, Predicate<? super U> p2, ExceptionSupplier<R, X> supplier) throws X {
+            if (Objects.equals(v1, left) && p2.test(right)) {
+                return new ResultBiSwitcher<>(supplier.produce());
+            }
+            return this;
+        }
+
+        @Override
+        public <T1, U1> BiSupplierSwitcher<T, U, R, X>
+        when(Class<T1> c1, Class<U1> c2, ExceptionBiFunction<? super T1, ? super U1, ? extends R, X> converter) throws X {
+            if (c1.isInstance(left) && c2.isInstance(right)) {
+                return new ResultBiSwitcher<>(converter.evaluate(c1.cast(left), c2.cast(right)));
+            }
+            return this;
+        }
+
+        @Override
+        public BiSupplierSwitcher<T, U, R, X>
+        when(ConditionCase<? super T, ? extends ConditionCase<? super U, ? extends R, X>, X> branch) throws X {
+            // when :: (T -> () -> U -> () -> R) -> (T -> U -> R)
+            // when f t u = f t () u ()
+            ExceptionSupplier<? extends ConditionCase<? super U, ? extends R, X>, X> alt = branch.evaluate(left);
+            if (alt != null) {
+                ExceptionSupplier<? extends R, X> sup = alt.produce().evaluate(right);
+                if (sup != null) {
+                    return new ResultBiSwitcher<>(sup.produce());
+                }
+            }
+            return this;
+        }
+    }
+
+    /**
+     * The supplier switcher that returns a concrete result.
+     */
+    private static class ResultBiSwitcher<T, U, R, X extends Throwable>
+        implements BiSupplierSwitcher<T, U, R, X>, ResultSupplier<R, X>
+    {
+        private final R result;
+
+        ResultBiSwitcher(R result) {
+            this.result = result;
+        }
+
+        @Override
+        public R get() {
+            return result;
+        }
+    }
+
+    /**
+     * Package private factory method to create an action switcher with two arguments.
+     */
+    static <T, U, X extends Throwable> BiActionSwitcher<T, U, X> biActionSwitcher(T t, U u) {
+        return new BiActionSwitcherImpl<>(t, u);
+    }
+
+    /**
+     * A do-nothing switcher that short-circuited by previous condition.
+     */
+    @SuppressWarnings("rawtypes")
+    private static final BiActionSwitcher SHORT_CIRCUIT_BI_SWITCHER = new BiActionSwitcher() {};
+
+    @SuppressWarnings({"unchecked", "MethodOnlyUsedFromInnerClass"})
+    private static <T, U, X extends Throwable> BiActionSwitcher<T,U,X> shortCircuitBiSwitcher() {
+        return (BiActionSwitcher<T,U,X>)SHORT_CIRCUIT_BI_SWITCHER;
     }
 }

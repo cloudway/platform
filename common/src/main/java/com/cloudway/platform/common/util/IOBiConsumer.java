@@ -20,17 +20,8 @@ import java.util.function.BiConsumer;
  * @see java.util.function.BiConsumer
  */
 @FunctionalInterface
-public interface BiIOConsumer<T, U> extends BiConsumer<T, U>
+public interface IOBiConsumer<T, U> extends BiConsumer<T, U>, ExceptionBiConsumer<T, U, IOException>
 {
-    /**
-     * Performs this I/O operation on the given arguments.
-     *
-     * @param t the first input argument
-     * @param u the second input argument
-     * @throws IOException if I/O error occurs
-     */
-    void consume(T t, U u) throws IOException;
-
     /**
      * Performs this I/O operation on the given arguments.
      *
@@ -56,7 +47,7 @@ public interface BiIOConsumer<T, U> extends BiConsumer<T, U>
      * @return the regular consumer
      */
     @SuppressWarnings("unchecked")
-    static <T, U> BiConsumer<T, U> wrap(BiIOConsumer<T, U> other) {
+    static <T, U> BiConsumer<T, U> wrap(IOBiConsumer<T, U> other) {
         return other;
     }
 }

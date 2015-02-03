@@ -119,34 +119,10 @@ public final class Optionals
     }
 
     /**
-     * Returns a conditional case that evaluate to perform action of the giving
-     * inner conditional case, while the optional being tested is
-     * {@link Optional#isPresent() presents)} a value.
-     *
-     * <p>The following example illustrated a typical pattern matching usage
-     * case that deconstruct the element contained in an Optional. In this
-     * example the instance of a Tuple class contains two elements. The Tuple()
-     * method deconstruct it into arguments passed to a lambda expression.</p>
-     *
-     * <pre>
-     *     void test(Optional&lt;Tuple&gt; obj) {
-     *         with(obj)
-     *           .when(JustIn(Tuple((x, y) -> ...)));
-     *     }
-     * </pre>
-     */
-    public static <T, R, X extends Throwable> ConditionCase<Optional<T>, R, X>
-    JustIn(ConditionCase<? super T, ? extends R, X> mapper) {
-        return opt -> opt.isPresent()
-            ? mapper.evaluate(opt.get())
-            : null;
-    }
-
-    /**
      * Returns a conditional case that evaluate to perform action on the optional
      * being tested is not {@link Optional#isPresent() presents} a value.
      */
-    public static <T, R, X extends Throwable> ConditionCase<Optional<T>, R, X>
+    public static <R, X extends Throwable> ConditionCase<Optional<?>, R, X>
     Nothing(ExceptionSupplier<R, X> mapper) {
         return opt -> opt.isPresent() ? null : mapper;
     }

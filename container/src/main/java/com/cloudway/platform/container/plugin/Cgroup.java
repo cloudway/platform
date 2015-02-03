@@ -32,7 +32,7 @@ import jnr.constants.platform.Signal;
 import com.cloudway.platform.common.Config;
 import com.cloudway.platform.common.util.Etc;
 import com.cloudway.platform.common.util.IO;
-import com.cloudway.platform.common.util.BiIOConsumer;
+import com.cloudway.platform.common.util.IOBiConsumer;
 import com.cloudway.platform.common.util.IOFunction;
 import com.cloudway.platform.common.util.MoreFiles;
 
@@ -258,7 +258,7 @@ public class Cgroup
      */
     public Optional<Object> fetch(String key) throws IOException {
         String subsys = key.substring(0, key.indexOf('.'));
-        return IO.caught(() ->
+        return IO.produce(() ->
             cgpath(subsys)
                 .map(path -> path.resolve(key))
                 .map(IOFunction.wrap(MoreFiles::chomp))
@@ -308,7 +308,7 @@ public class Cgroup
      * List tasks in a cgroup.
      */
     public int[] tasks() throws IOException {
-        return IO.caught(() ->
+        return IO.produce(() ->
             cgpaths.values().stream()
                    .flatMap(IOFunction.wrap(path -> Files.lines(path.resolve("tasks"))))
                    .mapToInt(Integer::parseInt)
@@ -475,7 +475,7 @@ public class Cgroup
     }
 
     private static void overwrite_with_safe_swap(Path file,
-            BiIOConsumer<RandomAccessFile, RandomAccessFile> action)
+            IOBiConsumer<RandomAccessFile, RandomAccessFile> action)
         throws IOException
     {
         Path tempfile = file.resolveSibling(file.getFileName() + "~");

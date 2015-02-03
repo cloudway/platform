@@ -9,14 +9,13 @@ package com.cloudway.platform.common.util;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Stream;
 
 public final class IO
 {
     private IO() {}
 
-    public static void caught(IOAction action)
+    public static void perform(IOAction action)
         throws IOException
     {
         try {
@@ -26,29 +25,13 @@ public final class IO
         }
     }
 
-    public static void ignore(IOAction action) {
-        try {
-            action.perform();
-        } catch (IOException | UncheckedIOException ex) {
-            // ignored
-        }
-    }
-
-    public static <T> T caught(IOSupplier<? extends T> action)
+    public static <T> T produce(IOSupplier<? extends T> action)
         throws IOException
     {
         try {
             return action.produce();
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
-        }
-    }
-
-    public static <T> Optional<T> ignore(IOSupplier<? extends T> action) {
-        try {
-            return Optional.ofNullable(action.produce());
-        } catch (IOException|UncheckedIOException ex) {
-            return Optional.empty();
         }
     }
 
@@ -72,21 +55,25 @@ public final class IO
         }
     }
 
-    public static<K,V> void forEach(Map<K,V> map, BiIOConsumer<? super K,? super V> action)
+    public static<K,V> void forEach(Map<K,V> map, IOBiConsumer<? super K, ? super V> action)
         throws IOException
     {
         try {
-            map.forEach(BiIOConsumer.wrap(action));
+            map.forEach(IOBiConsumer.wrap(action));
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
     }
 
-    public static Conditionals.ActionConditional<IOException> with() {
-        return Conditionals.actionConditional();
+    public static Conditionals.ActionBrancher<IOException> with() {
+        return Conditionals.actionBrancher();
     }
 
     public static <T> Conditionals.ActionSwitcher<T, IOException> with(T value) {
         return Conditionals.actionSwitcher(value);
+    }
+
+    public static <T, U> Conditionals.BiActionSwitcher<T, U, IOException> with(T t, U u) {
+        return Conditionals.biActionSwitcher(t, u);
     }
 }
