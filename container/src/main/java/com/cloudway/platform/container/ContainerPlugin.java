@@ -16,17 +16,17 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.Config;
-import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.MoreFiles;
-import com.cloudway.platform.common.util.IO;
+import com.cloudway.platform.common.os.Config;
+import com.cloudway.platform.common.os.Exec;
+import com.cloudway.platform.common.io.MoreFiles;
+import com.cloudway.platform.common.io.IO;
 import com.cloudway.platform.container.plugin.LinuxContainerPlugin;
 import com.cloudway.platform.container.plugin.MacOSContainerPlugin;
 import com.cloudway.platform.container.plugin.UnixContainerPlugin;
 
 import jnr.ffi.Platform;
 import static jnr.ffi.Platform.OS.*;
-import static com.cloudway.platform.common.util.Predicates.*;
+import static com.cloudway.platform.common.util.function.Predicates.*;
 import static com.cloudway.platform.common.util.Conditionals.*;
 
 public abstract class ContainerPlugin

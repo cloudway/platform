@@ -20,10 +20,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.MoreFiles;
-import com.cloudway.platform.common.util.IO;
-import com.cloudway.platform.common.util.IOConsumer;
+import com.cloudway.platform.common.os.Exec;
+import com.cloudway.platform.common.io.MoreFiles;
+import com.cloudway.platform.common.io.IO;
+import com.cloudway.platform.common.io.IOConsumer;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.NoSuchContainerException;
 
@@ -36,7 +36,7 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
 
-import static com.cloudway.platform.common.util.Predicates.*;
+import static com.cloudway.platform.common.util.function.Predicates.*;
 
 @SuppressWarnings("unused")
 public class PrivilegedControl extends Control

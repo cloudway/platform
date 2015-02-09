@@ -22,10 +22,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.Config;
-import com.cloudway.platform.common.util.MoreFiles;
-import static com.cloudway.platform.common.util.Predicates.*;
-import static com.cloudway.platform.common.util.StringPredicates.*;
+import com.cloudway.platform.common.os.Config;
+import com.cloudway.platform.common.io.MoreFiles;
+import static com.cloudway.platform.common.util.function.Predicates.*;
+import static com.cloudway.platform.common.util.function.StringPredicates.*;
 
 public final class Environ
 {

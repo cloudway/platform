@@ -6,6 +6,9 @@
 
 package com.cloudway.platform.common.util;
 
+import com.cloudway.platform.common.util.function.ExceptionFunction;
+import com.cloudway.platform.common.util.function.ExceptionSupplier;
+
 /**
  * Synonym interface that represents a conditional case.
  *

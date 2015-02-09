@@ -4,11 +4,13 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.util;
+package com.cloudway.platform.common.io;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.function.BiConsumer;
+
+import com.cloudway.platform.common.util.function.ExceptionBiConsumer;
 
 /**
  * Represents an I/O operation that accepts two input arguments and returns no

@@ -12,6 +12,9 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.util.function.ExceptionFunction;
+import com.cloudway.platform.common.util.function.ExceptionSupplier;
+
 public final class Optionals
 {
     private Optionals() {}

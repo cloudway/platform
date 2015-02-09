@@ -16,11 +16,11 @@ import java.util.stream.Stream;
 import com.google.common.collect.ImmutableSet;
 import static java.lang.String.format;
 
-import com.cloudway.platform.common.Config;
-import com.cloudway.platform.common.util.Exec;
+import com.cloudway.platform.common.os.Config;
+import com.cloudway.platform.common.os.Exec;
 
 import static java.nio.file.Files.*;
-import static com.cloudway.platform.common.util.MoreFiles.*;
+import static com.cloudway.platform.common.io.MoreFiles.*;
 
 /**
  * This class represents an application's Git repository.

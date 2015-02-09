@@ -12,9 +12,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
 
-import com.cloudway.platform.common.util.Exec;
+import com.cloudway.platform.common.os.Exec;
 import com.cloudway.platform.container.ApplicationContainer;
-import static com.cloudway.platform.common.util.MoreFiles.*;
+import static com.cloudway.platform.common.io.MoreFiles.*;
 
 public class MacOSContainerPlugin extends UnixContainerPlugin
 {

@@ -21,6 +21,11 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 import com.google.common.collect.ImmutableMap;
 
+import com.cloudway.platform.common.util.function.ExceptionAction;
+import com.cloudway.platform.common.util.function.ExceptionBiFunction;
+import com.cloudway.platform.common.util.function.ExceptionFunction;
+import com.cloudway.platform.common.util.function.ExceptionSupplier;
+
 import static com.cloudway.platform.common.util.Conditionals.*;
 import static com.cloudway.platform.common.util.ListComprehension.*;
 import static com.cloudway.platform.common.util.Optionals.*;

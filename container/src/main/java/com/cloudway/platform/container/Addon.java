@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.util.MoreFiles;
+import com.cloudway.platform.common.io.MoreFiles;
 import com.cloudway.platform.container.proxy.ProxyMapping;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Strings;

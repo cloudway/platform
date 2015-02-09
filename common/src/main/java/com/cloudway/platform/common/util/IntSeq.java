@@ -18,6 +18,9 @@ import java.util.function.IntUnaryOperator;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.util.function.ExceptionBiFunction;
+import com.cloudway.platform.common.util.function.ExceptionSupplier;
+
 /**
  * A sequence of integer values
  */

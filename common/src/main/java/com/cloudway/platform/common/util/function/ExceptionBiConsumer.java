@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.util;
+package com.cloudway.platform.common.util.function;
 
 /**
  * Represents an operation that accepts two input arguments and returns no

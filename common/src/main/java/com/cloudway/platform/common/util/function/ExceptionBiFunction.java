@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.util;
+package com.cloudway.platform.common.util.function;
 
 /**
  * Represents a function that accepts two arguments and produces a result.

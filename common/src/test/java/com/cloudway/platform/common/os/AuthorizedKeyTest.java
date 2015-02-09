@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common;
+package com.cloudway.platform.common.os;
 
 import java.util.Optional;
 

@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.util;
+package com.cloudway.platform.common.os;
 
 import java.util.Objects;
 import java.util.concurrent.locks.Lock;

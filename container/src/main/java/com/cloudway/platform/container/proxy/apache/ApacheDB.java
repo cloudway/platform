@@ -19,12 +19,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import static java.nio.file.StandardCopyOption.*;
 
-import com.cloudway.platform.common.Config;
-import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.IO;
+import com.cloudway.platform.common.os.Config;
+import com.cloudway.platform.common.os.Exec;
+import com.cloudway.platform.common.io.IO;
 
 import static com.cloudway.platform.common.util.MoreCollectors.*;
-import static com.cloudway.platform.common.util.MoreFiles.*;
+import static com.cloudway.platform.common.io.MoreFiles.*;
 
 class ApacheDB
 {

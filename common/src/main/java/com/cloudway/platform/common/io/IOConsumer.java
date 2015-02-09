@@ -4,11 +4,13 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.util;
+package com.cloudway.platform.common.io;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.function.Consumer;
+
+import com.cloudway.platform.common.util.function.ExceptionConsumer;
 
 /**
  * Represents an I/O operation that accepts a single input argument and returns

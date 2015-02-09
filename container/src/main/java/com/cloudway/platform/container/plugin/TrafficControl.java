@@ -14,9 +14,9 @@ import java.util.Objects;
 import com.google.common.collect.Multimap;
 import static com.cloudway.platform.common.util.MoreCollectors.*;
 
-import com.cloudway.platform.common.Config;
-import com.cloudway.platform.common.util.Etc;
-import com.cloudway.platform.common.util.Exec;
+import com.cloudway.platform.common.os.Config;
+import com.cloudway.platform.common.os.Etc;
+import com.cloudway.platform.common.os.Exec;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ResourceLimits;
 

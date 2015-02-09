@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.util;
+package com.cloudway.platform.common.util.function;
 
 /**
  * Represents a supplier that may produce exception when supplying the result.

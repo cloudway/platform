@@ -4,11 +4,13 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.util;
+package com.cloudway.platform.common.io;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.function.Supplier;
+
+import com.cloudway.platform.common.util.function.ExceptionSupplier;
 
 /**
  * Represents a supplier that perform I/O operation.

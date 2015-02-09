@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.util;
+package com.cloudway.platform.common.util.function;
 
 import java.util.Arrays;
 import java.util.Collection;

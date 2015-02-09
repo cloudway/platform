@@ -4,12 +4,14 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.util;
+package com.cloudway.platform.common.io;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Map;
 import java.util.stream.Stream;
+
+import com.cloudway.platform.common.util.Conditionals;
 
 public final class IO
 {

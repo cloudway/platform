@@ -13,6 +13,14 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.util.function.ExceptionAction;
+import com.cloudway.platform.common.util.function.ExceptionBiConsumer;
+import com.cloudway.platform.common.util.function.ExceptionBiFunction;
+import com.cloudway.platform.common.util.function.ExceptionConsumer;
+import com.cloudway.platform.common.util.function.ExceptionFunction;
+import com.cloudway.platform.common.util.function.ExceptionSupplier;
+import com.cloudway.platform.common.util.function.Predicates;
+
 public final class Conditionals {
     private Conditionals() {}
 
@@ -465,10 +473,10 @@ public final class Conditionals {
     private static final ActionBrancher ACTION_BRANCHER = new ActionBrancherImpl<Throwable>();
 
     /**
-     * Package private factory method to create action conditional.
+     * Factory method to create action conditional.
      */
     @SuppressWarnings("unchecked")
-    static <X extends Throwable> ActionBrancher<X> actionBrancher() {
+    public static <X extends Throwable> ActionBrancher<X> actionBrancher() {
         return (ActionBrancher<X>)ACTION_BRANCHER;
     }
 
@@ -823,9 +831,9 @@ public final class Conditionals {
     }
 
     /**
-     * Package private factory method to create action switcher.
+     * Factory method to create action switcher.
      */
-    static <T, X extends Throwable> ActionSwitcher<T, X> actionSwitcher(T value) {
+    public static <T, X extends Throwable> ActionSwitcher<T, X> actionSwitcher(T value) {
         return new ActionSwitcherImpl<>(value);
     }
 
@@ -1232,9 +1240,9 @@ public final class Conditionals {
     }
 
     /**
-     * Package private factory method to create an action switcher with two arguments.
+     * Factory method to create an action switcher with two arguments.
      */
-    static <T, U, X extends Throwable> BiActionSwitcher<T, U, X> biActionSwitcher(T t, U u) {
+    public static <T, U, X extends Throwable> BiActionSwitcher<T, U, X> biActionSwitcher(T t, U u) {
         return new BiActionSwitcherImpl<>(t, u);
     }
 

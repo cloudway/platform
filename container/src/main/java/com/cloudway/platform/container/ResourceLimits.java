@@ -14,7 +14,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.Config;
+import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.util.ExtendedProperties;
 import com.cloudway.platform.common.util.Optionals;
 

@@ -4,11 +4,13 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.util;
+package com.cloudway.platform.common.io;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.function.Predicate;
+
+import com.cloudway.platform.common.util.function.ExceptionPredicate;
 
 /**
  * Represents a predicate (boolean-valued function) that performs I/O operation.

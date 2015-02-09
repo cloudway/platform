@@ -4,10 +4,12 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.util;
+package com.cloudway.platform.common.io;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+
+import com.cloudway.platform.common.util.function.ExceptionAction;
 
 /**
  * Represents an action that perform I/O operation.

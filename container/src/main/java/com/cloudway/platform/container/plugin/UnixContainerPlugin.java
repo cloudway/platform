@@ -21,20 +21,20 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import com.cloudway.platform.common.util.Etc;
-import com.cloudway.platform.common.util.IO;
-import com.cloudway.platform.common.util.MoreFiles;
+import com.cloudway.platform.common.os.AuthorizedKey;
+import com.cloudway.platform.common.os.Config;
+import com.cloudway.platform.common.os.Etc;
+import com.cloudway.platform.common.os.Exec;
+import com.cloudway.platform.common.io.IO;
+import com.cloudway.platform.common.io.MoreFiles;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ContainerPlugin;
-import com.cloudway.platform.common.Config;
-import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.AuthorizedKey;
 
 import static java.lang.String.format;
 import static java.nio.file.Files.*;
-import static com.cloudway.platform.common.util.MoreFiles.*;
+import static com.cloudway.platform.common.io.MoreFiles.*;
 import static com.cloudway.platform.common.util.MoreCollectors.*;
-import static com.cloudway.platform.common.util.Predicates.*;
+import static com.cloudway.platform.common.util.function.Predicates.*;
 
 /**
  * Generic UNIX container plugin.

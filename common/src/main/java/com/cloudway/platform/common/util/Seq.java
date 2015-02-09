@@ -18,6 +18,9 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
+import com.cloudway.platform.common.util.function.ExceptionBiFunction;
+import com.cloudway.platform.common.util.function.ExceptionSupplier;
+
 /**
  * A sequential, ordered, and potentially lazied list.
  *

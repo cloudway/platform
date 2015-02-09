@@ -18,7 +18,7 @@ import com.google.common.collect.ImmutableSet;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import com.cloudway.platform.container.proxy.ProxyMapping;
-import static com.cloudway.platform.common.util.Predicates.*;
+import static com.cloudway.platform.common.util.function.Predicates.*;
 
 public enum ApacheProxy implements HttpProxy
 {

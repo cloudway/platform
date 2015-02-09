@@ -16,7 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import static com.google.common.base.Throwables.*;
 
-import com.cloudway.platform.common.util.MoreFiles;
+import com.cloudway.platform.common.io.MoreFiles;
 import jnr.constants.platform.Errno;
 import jnr.ffi.LibraryLoader;
 import jnr.ffi.Pointer;

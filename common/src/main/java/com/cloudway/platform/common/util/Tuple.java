@@ -13,6 +13,9 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import com.cloudway.platform.common.util.function.ExceptionBiFunction;
+import com.cloudway.platform.common.util.function.ExceptionSupplier;
+
 /**
  * A tuple with two elements.
  */

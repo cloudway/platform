@@ -27,10 +27,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import com.google.common.collect.ImmutableList;
 
-import com.cloudway.platform.common.Config;
-import com.cloudway.platform.common.util.Etc;
-import com.cloudway.platform.common.util.Exec;
-import com.cloudway.platform.common.util.IO;
+import com.cloudway.platform.common.os.Config;
+import com.cloudway.platform.common.os.Etc;
+import com.cloudway.platform.common.os.Exec;
+import com.cloudway.platform.common.io.IO;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import static com.cloudway.platform.container.ApplicationState.*;
 
@@ -39,7 +39,7 @@ import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
 
 import static com.cloudway.platform.common.util.MoreCollectors.*;
-import static com.cloudway.platform.common.util.MoreFiles.*;
+import static com.cloudway.platform.common.io.MoreFiles.*;
 
 public class ApplicationContainer
 {
