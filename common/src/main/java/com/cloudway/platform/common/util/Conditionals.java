@@ -46,6 +46,65 @@ public final class Conditionals {
     }
 
     /**
+     * A shortcut for single condition pattern matching action.
+     *
+     * @param <T> the type of input argument
+     * @param value the input argument
+     * @param cond the pattern to be matched
+     */
+    public static <T> void do__(T value, ConditionCase<? super T, ?, RuntimeException> cond) {
+        ExceptionSupplier<?, RuntimeException> sup = cond.evaluate(value);
+        if (sup != null) {
+            sup.produce();
+        }
+    }
+
+    /**
+     * A shortcut for single condition pattern matching.
+     *
+     * @param <T> the type of input argument
+     * @param <R> the type of result
+     * @param value the input argument
+     * @param cond the pattern to be matched
+     * @return the result from the pattern matching
+     */
+    public static <T, R> R when(T value, ConditionCase<? super T, ? extends R, RuntimeException> cond) {
+        ExceptionSupplier<? extends R, RuntimeException> sup = cond.evaluate(value);
+        if (sup != null) {
+            return sup.produce();
+        } else {
+            throw new NoSuchElementException("No result present");
+        }
+    }
+
+    /**
+     * A shortcut for single condition pattern matching.
+     *
+     * @param <T> the type of input argument
+     * @param <R> the type of result
+     * @param value the input argument
+     * @param cond the pattern to be matched
+     * @param deflt the default value if pattern doesn't matches input argument
+     * @return the result from the pattern matching, or {@code deflt} if pattern
+     * doesn't matches input argument
+     */
+    public static <T, R> R when(T value, ConditionCase<? super T, ? extends R, RuntimeException> cond, R deflt) {
+        ExceptionSupplier<? extends R, RuntimeException> sup = cond.evaluate(value);
+        return sup != null ? sup.produce() : deflt;
+    }
+
+    /**
+     * A sugar method that surround a constant value to make code readable.
+     *
+     * @param <T> the type of constant value
+     * @param t a constant value
+     * @return the constant value
+     */
+    public static <T> T otherwise(T t) {
+        return t;
+    }
+
+    /**
      * Lift a conditional case to a predicate so it can be used in stream API.
      *
      * <p>For example:</p>
@@ -276,17 +335,17 @@ public final class Conditionals {
      * A mix-in interface used to get result from conditional execution. The
      * default implementation has no result to return.
      *
-     * @param <T> the type of conditional execution result
+     * @param <R> the type of conditional execution result
      * @param <X> the exception raised by supplier
      */
-    public interface ConditionalSupplier<T, X extends Throwable> extends Supplier<T> {
+    public interface ConditionalSupplier<R, X extends Throwable> extends Supplier<R> {
         /**
          * Returns the result of the conditional execution.
          *
          * @throws NoSuchElementException if no conditions satisfied.
          */
         @Override
-        default T get() {
+        default R get() {
             throw new NoSuchElementException("No result present");
         }
 
@@ -297,7 +356,7 @@ public final class Conditionals {
          * may be null
          * @return the result, if present, otherwise {@code other}
          */
-        default T orElse(T other) {
+        default R orElse(R other) {
             return other;
         }
 
@@ -309,7 +368,7 @@ public final class Conditionals {
          * is present
          * @return the result if present otherwise the result of {@code other.get()}
          */
-        default T orElseGet(ExceptionSupplier<? extends T, X> other) throws X {
+        default R orElseGet(ExceptionSupplier<? extends R, X> other) throws X {
             return other.produce();
         }
 
@@ -323,45 +382,79 @@ public final class Conditionals {
          * @return the present value
          * @throws Y if there is no value present
          */
-        default <Y extends Throwable> T orElseThrow(Supplier<? extends Y> exceptionSupplier) throws Y {
+        default <Y extends Throwable> R orElseThrow(Supplier<? extends Y> exceptionSupplier) throws Y {
             throw exceptionSupplier.get();
         }
 
         /**
          * Returns an optional to encapsulate result of execution.
          */
-        default Optional<T> asOptional() {
+        default Optional<R> asOptional() {
             return Optional.empty();
+        }
+
+        /**
+         * Returns a chained switcher with new value.
+         *
+         * @param <U> type of new value
+         * @param u the new value to be matched
+         * @return a new switcher that matching on new value
+         */
+        default <U> SupplierSwitcher<U, R, X> elseWith(U u) {
+            return new SupplierSwitcherImpl<>(u);
+        }
+
+        /**
+         * Returns a chained switcher with new values.
+         *
+         * @param <U> type of first new value
+         * @param <V> type of second new value
+         * @param u the first new value to be matched
+         * @param v the second new value to be matched
+         * @return a new switcher that matching on new values
+         */
+        default <U, V> BiSupplierSwitcher<U, V, R, X> elseWith(U u, V v) {
+            return new BiSupplierSwitcherImpl<>(u, v);
         }
     }
 
     /**
      * A mix-in interface that return an actual result from conditional execution.
      *
-     * @param <T> the type of conditional result
+     * @param <R> the type of conditional result
      * @param <X> the exception raised by supplier
      */
-    private interface ResultSupplier<T, X extends Throwable> extends ConditionalSupplier<T, X> {
-        @Override T get();
+    private interface ResultSupplier<R, X extends Throwable> extends ConditionalSupplier<R, X> {
+        @Override R get();
 
         @Override
-        default T orElse(T other) {
+        default R orElse(R other) {
             return get();
         }
 
         @Override
-        default T orElseGet(ExceptionSupplier<? extends T, X> other) {
+        default R orElseGet(ExceptionSupplier<? extends R, X> other) {
             return get();
         }
 
         @Override
-        default <Y extends Throwable> T orElseThrow(Supplier<? extends Y> exceptionSupplier) {
+        default <Y extends Throwable> R orElseThrow(Supplier<? extends Y> exceptionSupplier) {
             return get();
         }
 
         @Override
-        default Optional<T> asOptional() {
+        default Optional<R> asOptional() {
             return Optional.of(get());
+        }
+
+        @Override
+        default <U> SupplierSwitcher<U, R, X> elseWith(U u) {
+            return new ResultSwitcher<>(get());
+        }
+
+        @Override
+        default <U, V> BiSupplierSwitcher<U, V, R, X> elseWith(U u, V v) {
+            return new ResultBiSwitcher<>(get());
         }
     }
 

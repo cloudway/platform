@@ -11,16 +11,23 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import com.google.common.collect.ImmutableMap;
 
+import com.cloudway.platform.common.util.function.TriFunction;
 import com.cloudway.platform.common.util.function.ExceptionAction;
 import com.cloudway.platform.common.util.function.ExceptionBiFunction;
 import com.cloudway.platform.common.util.function.ExceptionFunction;
@@ -30,6 +37,7 @@ import static com.cloudway.platform.common.util.Conditionals.*;
 import static com.cloudway.platform.common.util.ListComprehension.*;
 import static com.cloudway.platform.common.util.Optionals.*;
 import static com.cloudway.platform.common.util.Tuple.Tuple;
+import static com.cloudway.platform.common.util.Seq.Seq;
 import static java.util.stream.Collectors.*;
 
 // @formatter:off
@@ -390,11 +398,6 @@ public class ConditionalTest
     }
 
     // ---------------------------------------------------------------------
-
-    @FunctionalInterface
-    interface TriFunction<T, U, V, R> {
-        R apply(T t, U u, V v);
-    }
 
     interface Expr {}
 
@@ -847,5 +850,385 @@ public class ConditionalTest
         assertEquals("1.0-2.0i", new Complex(1, -2).toString());
         assertEquals("1.0", new Complex(1, 0).toString());
         assertEquals("-2.0i", new Complex(0, -2).toString());
+    }
+
+    // ---------------------------------------------------------------------
+
+    static class TreeSet<T extends Comparable<T>> {
+        private enum Color { R, B }
+        private static final Color R = Color.R;
+        private static final Color B = Color.B;
+
+        // Algebra data type
+
+        private interface Tree<T> {
+            Color color();
+        }
+
+        private static class Empty<T> implements Tree<T> {
+            @Override
+            public Color color() {
+                return B;
+            }
+
+            public String toString() {
+                return "()";
+            }
+        }
+
+        private static class Node<T> implements Tree<T> {
+            final Color color;
+            final T value;
+            final Tree<T> left, right;
+
+            Node(Color color, Tree<T> left, T value, Tree<T> right) {
+                this.color = color;
+                this.value = value;
+                this.left = left;
+                this.right = right;
+            }
+
+            @Override
+            public Color color() {
+                return color;
+            }
+
+            public String toString() {
+                return "(" + value + " " + left + " " + right + ")";
+            }
+        }
+
+        // Constructors
+
+        @SuppressWarnings("rawtypes")
+        private static final Empty EMPTY = new Empty();
+
+        @SuppressWarnings("unchecked")
+        private static <T> Tree<T> Empty() {
+            return (Tree<T>)EMPTY;
+        }
+
+        private static <T> Tree<T> Node(Color color, Tree<T> left, T value, Tree<T> right) {
+            return new Node<>(color, left, value, right);
+        }
+
+        // Deconstructions
+
+        static <T, R, X extends Throwable> ConditionCase<Tree<T>, R, X>
+        Empty(ExceptionSupplier<R, X> action) {
+            return t -> (t instanceof Empty) ? action : null;
+        }
+
+        static <T, R, X extends Throwable> ConditionCase<Tree<T>, R, X>
+        Node(Function<Color, TriFunction<? super Tree<T>, ? super T, ? super Tree<T>, ? extends R>> mapper) {
+            return t -> {
+                if (t instanceof Node) {
+                    @SuppressWarnings("unchecked") Node<T> n = (Node)t;
+                    return () -> mapper.apply(n.color).apply(n.left, n.value, n.right);
+                }
+                return null;
+            };
+        }
+
+        static <T, R, X extends Throwable> ConditionCase<Tree<T>, R, X>
+        Node(TriFunction<? super Tree<T>, ? super T, ? super Tree<T>, ? extends R> mapper) {
+            return t -> {
+                if (t instanceof Node) {
+                    @SuppressWarnings("unchecked") Node<T> n = (Node)t;
+                    return () -> mapper.apply(n.left, n.value, n.right);
+                }
+                return null;
+            };
+        }
+
+        static <T, R, X extends Throwable> ConditionCase<Tree<T>, R, X>
+        Node(Color color, TriFunction<? super Tree<T>, ? super T, ? super Tree<T>, ? extends R> mapper) {
+            return t -> {
+                if (t instanceof Node && color == ((Node)t).color) {
+                    @SuppressWarnings("unchecked") Node<T> n = (Node)t;
+                    return () -> mapper.apply(n.left, n.value, n.right);
+                }
+                return null;
+            };
+        }
+
+        static <T, R, X extends Throwable> ConditionCase<Tree<T>, R, X>
+        Node(Color color, ConditionCase<Tree<T>, BiFunction<? super T, Tree<T>, ? extends R>, X> mapper) {
+            return t -> {
+                if (t instanceof Node && color == ((Node)t).color) {
+                    @SuppressWarnings("unchecked") Node<T> n = (Node)t;
+                    ExceptionSupplier<BiFunction<? super T, Tree<T>, ? extends R>, X> sup = mapper.evaluate(n.left);
+                    return sup != null ? () -> sup.produce().apply(n.value, n.right) : null;
+                }
+                return null;
+            };
+        }
+
+        static <T, R, X extends Throwable> ConditionCase<Tree<T>, R, X>
+        Node(Color color, BiFunction<Tree<T>, ? super T, ConditionCase<Tree<T>, R, X>> mapper) {
+            return  t -> {
+                if (t instanceof Node && color == ((Node)t).color) {
+                    @SuppressWarnings("unchecked") Node<T> n = (Node)t;
+                    return mapper.apply(n.left, n.value).evaluate(n.right);
+                }
+                return null;
+            };
+        }
+
+        // Operations
+
+        private static <T> Tree<T> make_black(Tree<T> t) {
+            return when(t, Node(R, (a, x, b) -> Node(B, a, x, b)), otherwise(t));
+        }
+
+        private static <T extends Comparable<T>> Tree<T> insert(Tree<T> t, T x) {
+            return with(t).<Tree<T>>get()
+                .when(Empty(() -> Node(R, t, x, t)))
+                .when(Node(c -> (a, y, b) -> {
+                    int cmp = x.compareTo(y);
+                    return cmp < 0 ? balance(c, insert(a, x), y, b) :
+                           cmp > 0 ? balance(c, a, y, insert(b, x))
+                                   : t;
+                })).get();
+        }
+
+        /**
+         * The implementation of level-two pattern matching is not supported well,
+         * so there are some tedious code in following. See the original code that
+         * is "more" readable.
+         *
+         * <p><pre>
+         *     balance :: Color -> (Tree t) -> t -> (Tree t) -> (Tree t)
+         *     balance B (Node R (Node R a x b) y c) z d =
+         *         Node R (Node B a x b) y (Node B c z d)
+         *     balance B (Node R a x (Node R b y c)) z d =
+         *         Node R (Node B a x b) y (Node B c z d)
+         *     balance B a x (Node R (Node R b y c) z d) =
+         *         Node R (Node B a x b) y (Node B c z d))
+         *     balance B a x (Node R b y (Node R c z d)) =
+         *         Node R (Node B a x b) y (Node B c z d))
+         *     balance = Node
+         * </pre></p>
+         */
+        private static <T> Tree<T> balance(Color color, Tree<T> left, T value, Tree<T> right) {
+            if (color == B) {
+                return with(left, right).<Tree<T>>get()
+                    .when(Node(R, Node(R, (a, x, b) -> (y, c) -> Any(d ->
+                          Node(R, Node(B, a, x, b), y, Node(B, c, value, d))))))
+                    .when(Node(R, (a, x) -> Node(R, (b, y, c) -> Any(d ->
+                          Node(R, Node(B, a, x, b), y, Node(B, c, value, d))))))
+                    .when(Any(a -> Node(R, Node(R, (b, y, c) -> (z, d) ->
+                          Node(R, Node(B, a, value, b), y, Node(B, c, z, d))))))
+                    .when(Any(a -> Node(R, (b, y) -> Node(R, (c, z, d) ->
+                          Node(R, Node(B, a, value, b), y, Node(B, c, z, d))))))
+                    .orElseGet(() -> Node(B, left, value, right));
+            } else {
+                return Node(color, left, value, right);
+            }
+        }
+
+        private static <T extends Comparable<T>> boolean member(Tree<T> t, T x) {
+            return when(t, Node((a, y, b) -> {
+                int cmp = x.compareTo(y);
+                return cmp < 0 ? member(a, x) :
+                       cmp > 0 ? member(b, x)
+                               : true;
+            }), otherwise(false));
+        }
+
+        private static <T> int card(Tree<T> t) {
+            return when(t, Node((a, x, b) -> 1 + card(a) + card(b)), otherwise(0));
+        }
+
+        // Traversal
+
+        public enum Traverser {
+            PRE_ORDER {
+                @Override
+                public <T> void walk(Tree<T> tree, Consumer<T> action) {
+                    do__(tree, Node((a, x, b) -> {
+                        walk(a, action);
+                        action.accept(x);
+                        walk(b, action);
+                        return null;
+                    }));
+                }
+            },
+
+            POST_ORDER {
+                @Override
+                public <T> void walk(Tree<T> tree, Consumer<T> action) {
+                    do__(tree, Node((a, x, b) -> {
+                        walk(b, action);
+                        action.accept(x);
+                        walk(a, action);
+                        return null;
+                    }));
+                }
+            },
+
+            BREADTH_FIRST {
+                @Override
+                public <T> void walk(Tree<T> tree, Consumer<T> action) {
+                    walk(Seq.of(tree), action);
+                }
+
+                // this is non-pure implementation
+                private <T> void walk(Seq<Tree<T>> queue, Consumer<T> action) {
+                    while (!queue.isEmpty()) {
+                        queue = when(queue, Seq((tree, remaining) ->
+                            when(tree, Node((a, x, b) -> {
+                                action.accept(x);
+                                return remaining.append(Seq.of(a, b));
+                            }), otherwise(remaining))));
+                    }
+                }
+            };
+
+            public abstract <T> void walk(Tree<T> tree, Consumer<T> action);
+        }
+
+        // TreeSet implementation
+
+        private Tree<T> root = Empty();
+
+        public void add(T x) {
+            root = make_black(insert(root, x));
+        }
+
+        public boolean contains(T x) {
+            return member(root, x);
+        }
+
+        public int size() {
+            return card(root);
+        }
+
+        public void forEach(Traverser traverser, Consumer<T> action) {
+            traverser.walk(root, action);
+        }
+
+        public void forEach(Consumer<T> action) {
+            forEach(Traverser.PRE_ORDER, action);
+        }
+
+        public <U> U reduce(Traverser traverser, U seed, BiFunction<U, ? super T, U> acc) {
+            class Reducer implements Consumer<T> {
+                U result = seed;
+                @Override public void accept(T x) {
+                    result = acc.apply(result, x);
+                }
+            };
+
+            Reducer reducer = new Reducer();
+            traverser.walk(root, reducer);
+            return reducer.result;
+        }
+
+        public <U> U reduce(U seed, BiFunction<U, ? super T, U> acc) {
+            return reduce(Traverser.PRE_ORDER, seed, acc);
+        }
+
+        public <A, R> R collect(Traverser traverser, Collector<T, A, R> collector) {
+            A container = collector.supplier().get();
+            BiConsumer<A, T> accumulator = collector.accumulator();
+            traverser.walk(root, x -> accumulator.accept(container, x));
+            return collector.finisher().apply(container);
+        }
+
+        public <R> R collect(Collector<T, ?, R> collector) {
+            return collect(Traverser.PRE_ORDER, collector);
+        }
+
+        public List<T> toList() {
+            return collect(Collectors.toList());
+        }
+
+        public String toString() {
+            return root.toString();
+        }
+
+        void check() {
+            // Verify the red-black tree.
+            //
+            // 1. The root node must be black
+            // 2. No red node can have a red child
+            // 3. Every path from root to an empty leaf node must contain the same
+            //    number of black nodes - the black height of the tree.
+            assertEquals(B, root.color());
+            check(root);
+        }
+
+        private int check(Tree<T> node) {
+            return when(node, Node(c -> (a, x, b) -> {
+                int lht = check(a);
+                int rht = check(b);
+                assertEquals(lht, rht);
+                assertFalse(c == R && (a.color() == R || b.color() == R));
+                return c == B ? lht + 1 : lht;
+            }), otherwise(0));
+        }
+    }
+
+    @Test
+    public void randomTreeTest() {
+        Random rnd = new Random();
+        testTree(IntStream.generate(() -> rnd.nextInt(1000)).limit(100).toArray());
+    }
+
+    @Test
+    public void ascendingSequenceTreeTest() {
+        testTree(IntStream.rangeClosed(1, 100).toArray());
+    }
+
+    @Test
+    public void descendingSequenceTreeTest() {
+        testTree(IntStream.rangeClosed(1, 100).map(i -> 101 - i).toArray());
+    }
+
+    private static void testTree(int[] source) {
+        TreeSet<Integer> set = buildTree(IntStream.of(source));
+        assertTrue(IntStream.of(source).allMatch(set::contains));
+        assertTrue(isSorted(set.collect(TreeSet.Traverser.PRE_ORDER, toList()), Comparator.naturalOrder()));
+        assertTrue(isSorted(set.collect(TreeSet.Traverser.POST_ORDER, toList()), Comparator.reverseOrder()));
+        assertEquals(distinct(source).count(), set.size());
+        assertEquals(distinct(source).sum(), (int)set.reduce(0, Integer::sum));
+        assertEquals(distinct(source).sum(), (int)set.collect(summingInt(i->i)));
+        assertEquals(set.toList(), buildTree(reverse(source)).toList());
+        assertEquals(set.toList(), buildTree(shuffle(source)).toList());
+    }
+
+    private static TreeSet<Integer> buildTree(IntStream stream) {
+        TreeSet<Integer> set = new TreeSet<>();
+        stream.forEach(x -> { set.add(x); set.check(); });
+        return set;
+    }
+
+    private static <T extends Comparable<T>> boolean isSorted(List<T> list, Comparator<T> cmp) {
+        if (!list.isEmpty()) {
+            T x = list.get(0);
+            for (int i = 1; i < list.size(); i++) {
+                T y = list.get(i);
+                if (cmp.compare(x, y) > 0)
+                    return false;
+                x = y;
+            }
+        }
+        return true;
+    }
+
+    private static IntStream reverse(int[] source) {
+        int len = source.length;
+        return IntStream.range(0, len).map(i -> source[len - i - 1]);
+    }
+
+    private static IntStream shuffle(int[] source) {
+        int len = source.length;
+        Random rnd = new Random();
+        return IntStream.generate(() -> rnd.nextInt(len)).distinct().limit(len).map(i -> source[i]);
+    }
+
+    private static IntStream distinct(int[] source) {
+        return IntStream.of(source).distinct();
     }
 }

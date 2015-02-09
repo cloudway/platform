@@ -258,7 +258,7 @@ public class FunctionalTest
             }
 
             private <T> boolean unique(Seq<T> s) {
-                return with(s).<Boolean>get().when(Seq.Seq((x, xs) -> xs.isEmpty())).orElse(false);
+                return when(s, Seq.Seq((__, xs) -> xs.isEmpty()), otherwise(false));
             }
 
             private boolean MrP_dont_know(int p) {
