@@ -314,13 +314,11 @@ final class IntSeqImpl {
         return cons(a.head(), () -> concat(a.tail(), b));
     }
 
-    static IntSeq cycle(IntSeq[] h, IntSeq n) {
-        IntSeq h0 = cons(n.head(), () -> {
+    static IntSeq cycle(Holder<IntSeq> h, IntSeq n) {
+        return cons(n.head(), () -> {
             IntSeq t = n.tail();
-            return t.isEmpty() ? h[0] : cycle(h, t);
+            return t.isEmpty() ? h.get() : cycle(h, t);
         });
-        if (h[0] == null) h[0] = h0;
-        return h0;
     }
 
     static IntSeq zip(IntSeq a, IntSeq b, IntBinaryOperator zipper) {

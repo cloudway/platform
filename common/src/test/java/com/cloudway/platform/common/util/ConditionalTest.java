@@ -1113,16 +1113,9 @@ public class ConditionalTest
         }
 
         public <U> U reduce(Traverser traverser, U seed, BiFunction<U, ? super T, U> acc) {
-            class Reducer implements Consumer<T> {
-                U result = seed;
-                @Override public void accept(T x) {
-                    result = acc.apply(result, x);
-                }
-            };
-
-            Reducer reducer = new Reducer();
-            traverser.walk(root, reducer);
-            return reducer.result;
+            Holder<U> result = new Holder<>(seed);
+            traverser.walk(root, x -> result.accumulateAndGet(x, acc));
+            return result.get();
         }
 
         public <U> U reduce(U seed, BiFunction<U, ? super T, U> acc) {

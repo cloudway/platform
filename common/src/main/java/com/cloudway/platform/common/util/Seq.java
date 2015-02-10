@@ -252,7 +252,13 @@ public interface Seq<T> extends Iterable<T>
      */
     @SuppressWarnings("unchecked")
     default Seq<T> cycle() {
-        return isEmpty() ? nil() : SeqImpl.cycle(new Seq[1], this);
+        if (isEmpty()) {
+            return nil();
+        } else {
+            Holder<Seq<T>> h = new Holder<>();
+            h.set(SeqImpl.cycle(h, this));
+            return h.get();
+        }
     }
 
     /**

@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import com.google.common.collect.ImmutableSet;
 
+import com.cloudway.platform.common.util.BooleanHolder;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import com.cloudway.platform.container.proxy.ProxyMapping;
@@ -81,7 +82,7 @@ public enum ApacheProxy implements HttpProxy
     {
         String fqdn = ac.getDomainName();
         String id = ac.getId();
-        boolean removed[] = new boolean[1];
+        BooleanHolder removed = new BooleanHolder();
 
         containers.writting(d -> {
             String value = d.get(fqdn);
@@ -91,7 +92,7 @@ public enum ApacheProxy implements HttpProxy
                     .collect(Collectors.joining("|"));
                 if (newValue.isEmpty()) {
                     d.remove(fqdn);
-                    removed[0] = true;
+                    removed.set(true);
                 } else {
                     d.put(fqdn, newValue);
                 }
@@ -99,7 +100,7 @@ public enum ApacheProxy implements HttpProxy
         });
 
         // remove aliases if container is fully removed
-        if (removed[0]) {
+        if (removed.get()) {
             aliases.writting(d -> d.values().remove(fqdn));
         }
     }
@@ -130,17 +131,17 @@ public enum ApacheProxy implements HttpProxy
     public boolean unidle(ApplicationContainer ac)
         throws IOException
     {
-        boolean cookie[] = new boolean[1];
-        idles.writting(d -> cookie[0] = d.remove(ac.getId()) != null);
-        return cookie[0];
+        BooleanHolder result = new BooleanHolder();
+        idles.writting(d -> result.set(d.remove(ac.getId()) != null));
+        return result.get();
     }
 
     @Override
     public boolean isIdle(ApplicationContainer ac) {
         try {
-            boolean cookie[] = new boolean[1];
-            idles.reading(d -> cookie[0] = d.containsKey(ac.getId()));
-            return cookie[0];
+            BooleanHolder result = new BooleanHolder();
+            idles.reading(d -> result.set(d.containsKey(ac.getId())));
+            return result.get();
         } catch (IOException ex) {
             return false;
         }

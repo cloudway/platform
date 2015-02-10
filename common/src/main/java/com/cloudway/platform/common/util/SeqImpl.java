@@ -172,13 +172,11 @@ final class SeqImpl {
         return cons(a.head(), () -> concat(a.tail(), b));
     }
 
-    static <T> Seq<T> cycle(Seq<T>[] h, Seq<T> n) {
-        Seq<T> h0 = cons(n.head(), () -> {
+    static <T> Seq<T> cycle(Holder<Seq<T>> h, Seq<T> n) {
+        return cons(n.head(), () -> {
             Seq<T> t = n.tail();
-            return t.isEmpty() ? h[0] : cycle(h, t);
+            return t.isEmpty() ? h.get() : cycle(h, t);
         });
-        if (h[0] == null) h[0] = h0;
-        return h0;
     }
 
     static <T, U, R> Seq<R>

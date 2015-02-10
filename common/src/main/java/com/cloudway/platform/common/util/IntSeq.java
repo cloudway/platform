@@ -271,7 +271,13 @@ public interface IntSeq
      * Repeat a list infinitely.
      */
     default IntSeq cycle() {
-        return isEmpty() ? nil() : IntSeqImpl.cycle(new IntSeq[1], this);
+        if (isEmpty()) {
+            return nil();
+        } else {
+            Holder<IntSeq> h = new Holder<>();
+            h.set(IntSeqImpl.cycle(h, this));
+            return h.get();
+        }
     }
 
     /**
