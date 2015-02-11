@@ -16,29 +16,33 @@ import java.util.stream.Stream;
 
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.util.ExtendedProperties;
-import com.cloudway.platform.common.util.Optionals;
+import com.cloudway.platform.common.fp.data.Optionals;
 
 public final class ResourceLimits
 {
-    private static final ResourceLimits INSTANCE = load();
+    static final class Default {
+        private Default() {}
 
-    private static ResourceLimits load() {
-        try (InputStream in = Files.newInputStream(Config.CONF_DIR.resolve("limits.conf"))) {
-            ExtendedProperties p = new ExtendedProperties();
-            p.load(in);
-            return new ResourceLimits(p);
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
+        static final ResourceLimits INSTANCE = load();
+
+        private static ResourceLimits load() {
+            try (InputStream in = Files.newInputStream(Config.CONF_DIR.resolve("limits.conf"))) {
+                ExtendedProperties p = new ExtendedProperties();
+                p.load(in);
+                return new ResourceLimits(p);
+            } catch (IOException ex) {
+                throw new UncheckedIOException(ex);
+            }
         }
     }
 
-    public static ResourceLimits getInstance() {
-        return INSTANCE;
+    public static ResourceLimits getDefault() {
+        return Default.INSTANCE;
     }
 
     private final ExtendedProperties limits;
 
-    private ResourceLimits(ExtendedProperties limits) {
+    public ResourceLimits(ExtendedProperties limits) {
         this.limits = limits;
     }
 

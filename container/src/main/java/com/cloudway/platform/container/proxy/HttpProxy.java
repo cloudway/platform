@@ -8,36 +8,86 @@ package com.cloudway.platform.container.proxy;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.function.Supplier;
 
 import com.cloudway.platform.container.ApplicationContainer;
-import com.cloudway.platform.container.proxy.apache.ApacheProxy;
+import com.cloudway.platform.container.proxy.apache.ApacheProxyUpdater;
 
-public interface HttpProxy
+/**
+ * The public interface for proxy mapping.
+ */
+public final class HttpProxy
 {
-    static HttpProxy getInstance() {
-        return ApacheProxy.INSTANCE; // FIXME
+    private static final Supplier<HttpProxyUpdater> DEFAULT_PROVIDER
+        = () -> ApacheProxyUpdater.INSTANCE;
+    private static Supplier<HttpProxyUpdater> _provider = DEFAULT_PROVIDER;
+
+    public static void setProvider(Supplier<HttpProxyUpdater> provider) {
+        _provider = provider != null ? provider : DEFAULT_PROVIDER;
     }
 
-    void addMappings(ApplicationContainer container, Collection<ProxyMapping> mappings)
-        throws IOException;
+    private static HttpProxyUpdater provider() {
+        return _provider.get();
+    }
 
-    void removeMappings(ApplicationContainer container, Collection<ProxyMapping> mappings)
-        throws IOException;
+    private HttpProxy() {}
 
-    void addAlias(String name, String fqdn)
-        throws IOException;
+    /**
+     * Add mappings from frontend URI to backend URI.
+     */
+    public static void addMappings(ApplicationContainer container, Collection<ProxyMapping> mappings)
+        throws IOException {
+        provider().addMappings(container, mappings);
+    }
 
-    void removeAlias(String name)
-        throws IOException;
+    /**
+     * Remove mappings from frontend URI to backend URI.
+     */
+    public static void removeMappings(ApplicationContainer container, Collection<ProxyMapping> mappings)
+        throws IOException {
+        provider().removeMappings(container, mappings);
+    }
 
-    void idle(ApplicationContainer container)
-        throws IOException;
+    /**
+     * Add an alias for the given name to a fully qualified domain name.
+     */
+    public static void addAlias(String name, String fqdn) throws IOException {
+        provider().addAlias(name, fqdn);
+    }
 
-    boolean unidle(ApplicationContainer container)
-        throws IOException;
+    /**
+     * Remove the alias of given name.
+     */
+    public static void removeAlias(String name) throws IOException {
+        provider().removeAlias(name);
+    }
 
-    boolean isIdle(ApplicationContainer container);
+    /**
+     * Make the application idle.  Activate the application when it's
+     * accessed from outside world.
+     */
+    public static void idle(ApplicationContainer container) throws IOException {
+        provider().idle(container);
+    }
 
-    void purge(ApplicationContainer container)
-        throws IOException;
+    /**
+     * Explicitly unidle an application.
+     */
+    public static boolean unidle(ApplicationContainer container) throws IOException {
+        return provider().unidle(container);
+    }
+
+    /**
+     * Check to see if the application is idle.
+     */
+    public static boolean isIdle(ApplicationContainer container) {
+        return provider().isIdle(container);
+    }
+
+    /**
+     * Remove all proxy information for the container.
+     */
+    public static void purge(ApplicationContainer container) throws IOException {
+        provider().purge(container);
+    }
 }

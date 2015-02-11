@@ -24,20 +24,25 @@ import java.util.function.Predicate;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 import com.google.common.collect.ImmutableMap;
 
-import com.cloudway.platform.common.util.function.TriFunction;
-import com.cloudway.platform.common.util.function.ExceptionAction;
-import com.cloudway.platform.common.util.function.ExceptionBiFunction;
-import com.cloudway.platform.common.util.function.ExceptionFunction;
-import com.cloudway.platform.common.util.function.ExceptionSupplier;
+import com.cloudway.platform.common.fp.control.ConditionCase;
+import com.cloudway.platform.common.fp.control.StateIO;
+import com.cloudway.platform.common.fp.data.Holder;
+import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.Tuple;
+import com.cloudway.platform.common.fp.data.Unit;
+import com.cloudway.platform.common.fp.function.TriFunction;
+import com.cloudway.platform.common.fp.function.ExceptionAction;
+import com.cloudway.platform.common.fp.function.ExceptionBiFunction;
+import com.cloudway.platform.common.fp.function.ExceptionFunction;
+import com.cloudway.platform.common.fp.function.ExceptionSupplier;
 
-import static com.cloudway.platform.common.util.Conditionals.*;
-import static com.cloudway.platform.common.util.ListComprehension.*;
-import static com.cloudway.platform.common.util.Optionals.*;
-import static com.cloudway.platform.common.util.Tuple.Tuple;
-import static com.cloudway.platform.common.util.Seq.Seq;
+import static com.cloudway.platform.common.fp.control.Comprehension.do_;
+import static com.cloudway.platform.common.fp.control.Conditionals.*;
+import static com.cloudway.platform.common.fp.data.Optionals.*;
+import static com.cloudway.platform.common.fp.data.Tuple.Tuple;
+import static com.cloudway.platform.common.fp.data.Seq.Seq;
 import static java.util.stream.Collectors.*;
 
 // @formatter:off
@@ -349,54 +354,6 @@ public class ConditionalTest
         assertTrue(c2.compare(t4, t3) < 0);
     }
 
-
-    // ----------------------------------------------------------------------
-
-    @Test
-    public void listComprehensionPatternMatchingOptionals() {
-        @SuppressWarnings("unchecked") Optional<String>[] source = new Optional[] {
-            Optional.of("hello"), Optional.empty(), Optional.of("world"), Optional.of("")
-        };
-        String result;
-
-        result = From(Stream.of(source), With(Just(x -> Where(!x.isEmpty(), Yield(x))))).build().collect(joining(", "));
-        assertEquals("hello, world", result);
-
-        result = From(Seq.of(source), With(Just(x -> Where(!x.isEmpty(), Yield(x))))).build().show(", ", "", "");
-        assertEquals("hello, world", result);
-
-        result = Stream.of(source).filter(with(Just(x -> !x.isEmpty()))).map(Optional::get).collect(joining(", "));
-        assertEquals("hello, world", result);
-    }
-
-    @Test
-    public void listComprehensionPatternMatchingTuples() {
-        @SuppressWarnings("unchecked") Tuple<String, Integer>[] source = new Tuple[] {
-            Tuple.of("a", 1), Tuple.of("b", 2), Tuple.of("c", 3)
-        };
-        String result;
-
-        result = From(Stream.of(source), With(Tuple((a, b) -> Yield(a + ":" + b)))).build().collect(joining(","));
-        assertEquals("a:1,b:2,c:3", result);
-
-        result = From(Seq.of(source), With(Tuple((a, b) -> Yield(a + ":" + b)))).build().show(",", "", "");
-        assertEquals("a:1,b:2,c:3", result);
-    }
-
-    @Test
-    public void listComprehensionPatternMatchingOptionalTuples() {
-        @SuppressWarnings("unchecked") Optional<Tuple<String,Integer>>[] source = new Optional[] {
-            Optional.of(Tuple.of("a", 1)), Optional.empty(), Optional.of(Tuple.of("c", 3))
-        };
-        String result;
-
-        result = From(Stream.of(source), With(in(Just(Tuple((a,b) -> Yield(a + ":" + b)))))).build().collect(joining(","));
-        assertEquals("a:1,c:3", result);
-
-        result = From(Seq.of(source), With(in(Just(Tuple((a,b) -> Yield(a + ":" + b)))))).build().show(",", "", "");
-        assertEquals("a:1,c:3", result);
-    }
-
     // ---------------------------------------------------------------------
 
     interface Expr {}
@@ -531,17 +488,17 @@ public class ConditionalTest
         return with(expr).<Expr>get()
             .when(BinOp(ConditionalTest::simplify, "+", (left, right) ->
                 with(left, right).<Expr>get()
-                    .when(Const(0), _, () -> right)
-                    .when(_, Const(0), () -> left)
+                    .when(Const(0), __, () -> right)
+                    .when(__, Const(0), () -> left)
                     .when(Const(l -> Const(r -> new Const(l + r))))
                     .orElseGet(() -> new BinOp("+", left, right))
             ))
             .when(BinOp(ConditionalTest::simplify, "*", (left, right) ->
                 with(left, right).<Expr>get()
-                    .when(Const(0), _, () -> new Const(0))
-                    .when(_, Const(0), () -> new Const(0))
-                    .when(Const(1), _, () -> right)
-                    .when(_, Const(1), () -> left)
+                    .when(Const(0), __, () -> left)
+                    .when(__, Const(0), () -> right)
+                    .when(Const(1), __, () -> right)
+                    .when(__, Const(1), () -> left)
                     .when(Const(l -> Const(r -> new Const(l * r))))
                     .orElseGet(() -> new BinOp("*", left, right))
             ))
@@ -649,14 +606,6 @@ public class ConditionalTest
             this.unit = unit;
             this.conv = conv;
             this.value = value;
-        }
-
-        public String getUnit() {
-            return unit;
-        }
-
-        public double getValue() {
-            return value;
         }
 
         private double convert(Number other) {
@@ -824,8 +773,8 @@ public class ConditionalTest
 
         public String toString() {
             return with(real, imag).<String>get()
-                .when(_, 0.0, () -> String.valueOf(real))
-                .when(0.0, _, () -> imag + "i")
+                .when(__, 0.0, () -> String.valueOf(real))
+                .when(0.0, __, () -> imag + "i")
                 .orElseGet(() -> real + (imag > 0 ? "+" : "") + imag + "i");
         }
     }
@@ -978,7 +927,7 @@ public class ConditionalTest
         // Operations
 
         private static <T> Tree<T> make_black(Tree<T> t) {
-            return when(t, Node(R, (a, x, b) -> Node(B, a, x, b)), otherwise(t));
+            return inCaseOf(t, Node(R, (a, x, b) -> Node(B, a, x, b)), otherwise(t));
         }
 
         private static <T extends Comparable<T>> Tree<T> insert(Tree<T> t, T x) {
@@ -1028,7 +977,7 @@ public class ConditionalTest
         }
 
         private static <T extends Comparable<T>> boolean member(Tree<T> t, T x) {
-            return when(t, Node((a, y, b) -> {
+            return inCaseOf(t, Node((a, y, b) -> {
                 int cmp = x.compareTo(y);
                 return cmp < 0 ? member(a, x) :
                        cmp > 0 ? member(b, x)
@@ -1037,7 +986,7 @@ public class ConditionalTest
         }
 
         private static <T> int card(Tree<T> t) {
-            return when(t, Node((a, x, b) -> 1 + card(a) + card(b)), otherwise(0));
+            return inCaseOf(t, Node((a, x, b) -> 1 + card(a) + card(b)), otherwise(0));
         }
 
         // Traversal
@@ -1070,18 +1019,20 @@ public class ConditionalTest
             BREADTH_FIRST {
                 @Override
                 public <T> void walk(Tree<T> tree, Consumer<T> action) {
-                    walk(Seq.of(tree), action);
+                    walk(action).run(Seq.of(tree)).runUncheckedIO();
                 }
 
-                // this is non-pure implementation
-                private <T> void walk(Seq<Tree<T>> queue, Consumer<T> action) {
-                    while (!queue.isEmpty()) {
-                        queue = when(queue, Seq((tree, remaining) ->
-                            when(tree, Node((a, x, b) -> {
-                                action.accept(x);
-                                return remaining.append(Seq.of(a, b));
-                            }), otherwise(remaining))));
-                    }
+                private <T> StateIO<Unit, Seq<Tree<T>>> walk(Consumer<T> action) {
+                    Holder<StateIO<Unit, Seq<Tree<T>>>> loop = new Holder<>();
+                    return loop.set(
+                      do_(StateIO.get(), queue ->
+                      do_(inCaseOf(queue, Seq((tree, remaining) ->
+                        do_(inCaseOf(tree, Node((a, x, b) ->
+                          do_(StateIO.action(() -> action.accept(x)),
+                          do_(StateIO.put(remaining.append(Seq.of(a, b)))))),
+                          otherwise(StateIO.put(remaining))),
+                        do_(loop.get()))),
+                        otherwise(StateIO.pure(Unit.U))))));
                 }
             };
 
@@ -1153,7 +1104,7 @@ public class ConditionalTest
         }
 
         private int check(Tree<T> node) {
-            return when(node, Node(c -> (a, x, b) -> {
+            return inCaseOf(node, Node(c -> (a, x, b) -> {
                 int lht = check(a);
                 int rht = check(b);
                 assertEquals(lht, rht);

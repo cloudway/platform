@@ -9,9 +9,9 @@ package com.cloudway.platform.common.os;
 import java.util.Optional;
 
 import org.junit.Test;
-import org.junit.internal.matchers.TypeSafeMatcher;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
+import org.hamcrest.TypeSafeMatcher;
 import static org.junit.Assert.assertThat;
 import static org.hamcrest.CoreMatchers.*;
 

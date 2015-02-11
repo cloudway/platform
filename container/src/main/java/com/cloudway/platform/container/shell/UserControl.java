@@ -80,7 +80,7 @@ public class UserControl extends Control
             return;
         }
 
-        getContainer().remove(args[0]);
+        getContainer().uninstall(args[0]);
     }
 
     public void endpoints(String[] args) {

@@ -10,18 +10,28 @@ import java.util.Objects;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.function.ExceptionFunction;
 import jnr.constants.platform.Signal;
-import jnr.posix.POSIX;
-import jnr.posix.POSIXFactory;
-import jnr.posix.Passwd;
+import jnr.posix.FileStat;
 
-public final class Etc
-{
+/**
+ * This class provides a subset of POSIX API in a portable manner.
+ */
+public final class Etc {
     private Etc() {}
 
-    public static final POSIX posix = POSIXFactory.getPOSIX();
+    private static final Supplier<Posix> DEFAULT_PROVIDER = () -> PosixImpl.INSTANCE;
+    private static Supplier<Posix> _provider = DEFAULT_PROVIDER;
+
+    public static void setPosixProvider(Supplier<Posix> provider) {
+        _provider = provider != null ? provider : DEFAULT_PROVIDER;
+    }
+
+    public static Posix provider() {
+        return _provider.get();
+    }
 
     public static class PASSWD {
         public final String   pw_name;    // user name
@@ -49,6 +59,24 @@ public final class Etc
             this.pw_dir    = pwent.getHome();
             this.pw_shell  = pwent.getShell();
         }
+
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (!(obj instanceof PASSWD))
+                return false;
+            PASSWD other = (PASSWD)obj;
+            return Objects.equals(pw_name, other.pw_name)
+                && Objects.equals(pw_passwd, other.pw_passwd)
+                && pw_uid == other.pw_uid && pw_gid == other.pw_gid
+                && Objects.equals(pw_gecos, other.pw_gecos)
+                && Objects.equals(pw_dir, other.pw_dir)
+                && Objects.equals(pw_shell, other.pw_shell);
+        }
+
+        public int hashCode() {
+            return Objects.hash(pw_name, pw_passwd, pw_uid, pw_gid, pw_gecos, pw_dir, pw_shell);
+        }
     }
 
     public static class GROUP {
@@ -71,75 +99,115 @@ public final class Etc
             this.gr_gid    = (int)grent.getGID();
             this.gr_mem    = grent.getMembers();
         }
+
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (!(obj instanceof GROUP))
+                return false;
+            GROUP other = (GROUP)obj;
+            return Objects.equals(gr_name, other.gr_name)
+                && Objects.equals(gr_passwd, other.gr_passwd)
+                && gr_gid == other.gr_gid
+                && Objects.deepEquals(gr_mem, other.gr_mem);
+        }
+
+        public int hashCode() {
+            return 31 * Objects.hash(gr_name, gr_passwd, gr_gid)
+                 + (gr_mem == null ? 0 : Objects.hash((Object[])gr_mem));
+        }
     }
 
-    // The following method must be synchronized because returned Passwd pointer is shared
-
-    private static final Lock pw_lock = new ReentrantLock();
-
+    /**
+     * Retrieve user information from user database.
+     *
+     * @param action the action to perform on every password entry
+     */
     public static void getpwent(Consumer<PASSWD> action) {
-        pw_lock.lock();
-        try {
-            for (Passwd pwent = posix.getpwent(); pwent != null; pwent = posix.getpwent()) {
-                action.accept(PASSWD.from(pwent));
-            }
-        } finally {
-            try {
-                posix.endpwent();
-            } finally {
-                pw_lock.unlock();
-            }
-        }
+        provider().getpwent(action);
     }
 
+    /**
+     * Search user database for a user ID.
+     *
+     * @param which the user ID to search
+     * @return a password entry if found, otherwise {@code null} if not found
+     */
     public static PASSWD getpwuid(int which) {
-        pw_lock.lock();
-        try {
-            return PASSWD.from(posix.getpwuid(which));
-        } finally {
-            pw_lock.unlock();
-        }
+        return provider().getpwuid(which);
     }
 
+    /**
+     * Search user database for a user name.
+     *
+     * @param which the user name to search
+     * @return a password entry if found, otherwise {@code null} if not found
+     */
     public static PASSWD getpwnam(String which) {
-        Objects.requireNonNull(which);
-        pw_lock.lock();
-        try {
-            return PASSWD.from(posix.getpwnam(which));
-        } finally {
-            pw_lock.unlock();
-        }
+        return provider().getpwnam(which);
     }
 
-    private static final Lock gr_lock = new ReentrantLock();
-
+    /**
+     * Search group database for a group ID.
+     *
+     * @param which the group ID to search
+     * @return a group entry if found, otherwise {@code null} if not found
+     */
     public static GROUP getgrgid(int which) {
-        gr_lock.lock();
-        try {
-            return GROUP.from(posix.getgrgid(which));
-        } finally {
-            gr_lock.unlock();
-        }
+        return provider().getgrgid(which);
     }
 
+    /**
+     * Get the real user ID.
+     *
+     * @return the real user ID
+     */
     public static int getuid() {
-        return posix.getuid();
+        return provider().getuid();
     }
 
+    /**
+     * Get the real group ID.
+     *
+     * @return the real group ID
+     */
     public static int getgid() {
-        return posix.getgid();
+        return provider().getgid();
     }
 
+    /**
+     * Send a signal to a process or a group of process.
+     *
+     * @param pid the process ID
+     * @param signal the signal number
+     * @return 0 if success, otherwise an error occurred
+     */
     public static int kill(int pid, Signal signal) {
-        return posix.kill(pid, signal.intValue());
+        return provider().kill(pid, signal);
+    }
+
+    /**
+     * Get file status.
+     *
+     * @param path the file name to obtain information
+     * @return the file status information
+     */
+    public static FileStat lstat(String path) {
+        return provider().lstat(path);
     }
 
     private static final Lock posix_lock = new ReentrantLock();
 
-    public static <R> R do_posix(Function<POSIX, R> action) {
+    /**
+     * Locks current thread and perform a destructive posix operation.
+     *
+     * @param action the action to perform
+     * @return the result from action
+     */
+    public static <R, X extends Throwable> R do_posix(ExceptionFunction<Posix, ? extends R, X> action) throws X {
         posix_lock.lock();
         try {
-            return action.apply(posix);
+            return action.evaluate(provider());
         } finally {
             posix_lock.unlock();
         }

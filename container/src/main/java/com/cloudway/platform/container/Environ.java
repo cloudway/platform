@@ -23,9 +23,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.os.Config;
-import com.cloudway.platform.common.io.MoreFiles;
-import static com.cloudway.platform.common.util.function.Predicates.*;
-import static com.cloudway.platform.common.util.function.StringPredicates.*;
+import com.cloudway.platform.common.util.MoreFiles;
+import static com.cloudway.platform.common.fp.control.Predicates.*;
+import static com.cloudway.platform.common.fp.control.StringPredicates.*;
 
 public final class Environ
 {

@@ -19,7 +19,6 @@ import java.util.stream.Stream;
 
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Etc;
-import com.cloudway.platform.common.io.MoreFiles;
 import com.cloudway.platform.container.ApplicationContainer;
 
 /**
@@ -103,7 +102,7 @@ public abstract class Control
         if (source.indexOf('/') != -1) {
             source_path = Paths.get(source).toAbsolutePath().normalize();
         } else {
-            source_path = MoreFiles.join(Config.VAR_DIR, ".addons", source);
+            source_path = Config.VAR_DIR.resolve(".addons", source);
         }
 
         if (Files.exists(source_path)) {

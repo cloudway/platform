@@ -8,7 +8,11 @@ package com.cloudway.platform.common.util;
 
 import java.math.BigInteger;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -19,9 +23,21 @@ import com.google.common.collect.ImmutableList;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-import static com.cloudway.platform.common.util.Conditionals.*;
-import static com.cloudway.platform.common.util.Tuple.Tuple;
-import static com.cloudway.platform.common.util.ListComprehension.*;
+import com.cloudway.platform.common.fp.data.Fn;
+import com.cloudway.platform.common.fp.control.Cont;
+import com.cloudway.platform.common.fp.control.MonadState;
+import com.cloudway.platform.common.fp.control.StateCont;
+import com.cloudway.platform.common.fp.control.Trampoline;
+import com.cloudway.platform.common.fp.data.IntSeq;
+import com.cloudway.platform.common.fp.data.Pair;
+import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.Unit;
+
+import static com.cloudway.platform.common.fp.control.Conditionals.*;
+import static com.cloudway.platform.common.fp.control.Trampoline.immediate;
+import static com.cloudway.platform.common.fp.control.Trampoline.suspend;
+import static com.cloudway.platform.common.fp.control.Comprehension.*;
+import static com.cloudway.platform.common.fp.data.Tuple.Tuple;
 
 // @formatter:off
 public class FunctionalTest
@@ -56,10 +72,10 @@ public class FunctionalTest
         protected Seq<IntSeq> scan(int n, int i) {
             return i == 0
                 ? Seq.of(IntSeq.nil())
-                : From(scan(n, i-1), qs ->
-                  From(IntSeq.rangeClosed(1, n),  q ->
-                  Where(safe(q, qs, 1),
-                  Yield(IntSeq.cons(q, qs))))).build();
+                : select.from(scan(n, i-1), qs ->
+                         from(IntSeq.rangeClosed(1, n),  q ->
+                         where(safe(q, qs, 1),
+                         yield(IntSeq.cons(q, qs)))));
         }
     }
 
@@ -72,22 +88,20 @@ public class FunctionalTest
         protected Stream<IntSeq> scan(int n, int i) {
             return i == 0
                 ? Stream.of(IntSeq.nil())
-                : From(scan(n, i-1), qs ->
-                  From(IntStream.rangeClosed(1, n),  q ->
-                  Where(safe(q, qs, 1),
-                  Yield(IntSeq.cons(q, qs))))).build();
+                : select.from(scan(n, i-1), qs ->
+                         from(IntStream.rangeClosed(1, n),  q ->
+                         where(safe(q, qs, 1),
+                         yield(IntSeq.cons(q, qs)))));
         }
     }
 
     @Test
     public void solveQueuesPuzzle() {
-        new QueuesSeq(8).solve().forEach(qs -> {
-            assertTrue(Queues.safe(qs.head(), qs.tail(), 8));
-        });
+        new QueuesSeq(8).solve().forEach(qs ->
+            assertTrue(Queues.safe(qs.head(), qs.tail(), 8)));
 
-        new QueuesStream(8).solve().forEach(qs -> {
-            assertTrue(Queues.safe(qs.head(), qs.tail(), 8));
-        });
+        new QueuesStream(8).solve().forEach(qs ->
+            assertTrue(Queues.safe(qs.head(), qs.tail(), 8)));
     }
 
     public static IntSeq qsort(IntSeq seq) {
@@ -97,8 +111,7 @@ public class FunctionalTest
                     qsort(xs.filter(y -> y < x)),
                     IntSeq.of(x),
                     qsort(xs.filter(y -> y >= x))
-            )))
-            .get();
+            ))).get();
     }
 
     @Test
@@ -109,7 +122,34 @@ public class FunctionalTest
 
         IntSeq sorted = qsort(IntSeq.of(data));
         Arrays.sort(data);
-        assertSeqEquals(data, sorted);
+        assertSeqEquals(data, sorted );
+    }
+
+    private static <T extends Comparable<T>> T max(T a, T b) {
+        return a.compareTo(b) > 0 ? a : b;
+    }
+
+    private static <T extends Comparable<T>> Optional<T> maximum(Seq<T> list) {
+        return with(list).<Optional<T>>get()
+            .when(Seq.Nil(Optional::empty))
+            .when(Seq.Single(Optional::of))
+            .when(Seq.Seq((x, y, ys) -> maximum(Seq.cons(max(x, y), ys))))
+            .get();
+    }
+
+    @Test
+    public void maximumTest() {
+        assertEquals(Optional.<String>empty(), maximum(Seq.<String>nil()));
+        assertEquals(Optional.of("apple"), maximum(Seq.of("apple")));
+        assertEquals(Optional.of("mango"), maximum(Seq.of("apple", "mango")));
+        assertEquals(Optional.of("mango"), maximum(Seq.of("mango", "apple")));
+
+        String[] fruits = { "apple", "mango", "orange" };
+        IntStream.range(0, fruits.length).forEach(i ->
+        IntStream.range(0, fruits.length).filter(j -> j != i).forEach(j ->
+        IntStream.range(0, fruits.length).filter(k -> k != i && k != j).forEach(k ->
+            assertEquals(Optional.of("orange"), maximum(Seq.of(fruits[i], fruits[j], fruits[k])))
+        )));
     }
 
     private static class Fibs {
@@ -133,25 +173,14 @@ public class FunctionalTest
     }
 
     private static class Primes {
-        private final IntSeq values = IntSeq.cons(2, more());
+        private final IntSeq primes = IntSeq.cons(2, () -> IntSeq.from(3).filter(this::sieve));
 
-        private Supplier<IntSeq> more() {
-            return () -> IntSeq.from(3).filter(n -> sieve(values, n));
-        }
-
-        private static boolean sieve(IntSeq xs, int n) {
-            do {
-                int x = xs.head();
-                if (x*x > n)
-                    return true;
-                if (n%x == 0)
-                    return false;
-                xs = xs.tail();
-            } while (true);
+        private boolean sieve(int n) {
+            return primes.takeWhile(x -> x * x <= n).allMatch(x -> n % x != 0);
         }
 
         public IntSeq values() {
-            return values;
+            return primes;
         }
     }
 
@@ -162,9 +191,8 @@ public class FunctionalTest
      * author Jeremy Gibbons <jeremy.gibbons@comlab.ox.ac.uk>.
      * http://web.comlab.ox.ac.uk/oucl/work/jeremy.gibbons/publications/spigot.pdf
      */
-    @SuppressWarnings("JavacQuirks")
     private static final class PI {
-        private static BigInteger _(long n) { return BigInteger.valueOf(n); }
+        private static BigInteger $(long n) { return BigInteger.valueOf(n); }
 
         // The original haskell program from paper:
         //
@@ -173,43 +201,43 @@ public class FunctionalTest
         //                in y : g(10*q*i*(2*i-1), 10*u*(q*(5*i-2)+r-y*t), t*u, i+1)
 
         public static IntSeq generate() {
-            return g(_(1), _(180), _(60), _(2));
+            return g($(1), $(180), $(60), $(2));
         }
 
         private static IntSeq g(BigInteger q, BigInteger r, BigInteger t, BigInteger i) {
-            BigInteger u = _(3).multiply(_(3).multiply(i).add(_(1))).multiply(_(3).multiply(i).add(_(2)));
-            BigInteger y = (q.multiply(_(27).multiply(i).subtract(_(12))).add(_(5).multiply(r))).divide(_(5).multiply(t));
+            BigInteger u = $(3).multiply($(3).multiply(i).add($(1))).multiply($(3).multiply(i).add($(2)));
+            BigInteger y = (q.multiply($(27).multiply(i).subtract($(12))).add($(5).multiply(r))).divide($(5).multiply(t));
             return IntSeq.cons(y.intValue(), () ->
-                g(_(10).multiply(q).multiply(i).multiply(_(2).multiply(i).subtract(_(1))),
-                  _(10).multiply(u).multiply(q.multiply(_(5).multiply(i).subtract(_(2))).add(r).subtract(y.multiply(t))),
+                g($(10).multiply(q).multiply(i).multiply($(2).multiply(i).subtract($(1))),
+                  $(10).multiply(u).multiply(q.multiply($(5).multiply(i).subtract($(2))).add(r).subtract(y.multiply(t))),
                   t.multiply(u),
-                  i.add(_(1))));
+                  i.add($(1))));
         }
     }
 
     @Test
     public void fibonacciTest() {
         int[] expected = {1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144};
-        assertSeqEquals(expected, new Fibs().values());
-        assertSeqEquals(expected, Fibs.generate());
+        assertSeqEquals(expected, new Fibs().values() );
+        assertSeqEquals(expected, Fibs.generate() );
     }
 
     @Test
     public void primeTest() {
         int[] expected = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29};
-        assertSeqEquals(expected, new Primes().values());
+        assertSeqEquals(expected, new Primes().values() );
     }
 
     @Test
     public void piTest() {
         int[] expected = {3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9};
-        assertSeqEquals(expected, PI.generate());
+        assertSeqEquals(expected, PI.generate() );
     }
 
-    private static void assertSeqEquals(int[] expected, IntSeq actual) {
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], actual.head());
-            actual = actual.tail();
+    private static void assertSeqEquals(int[] expected, IntSeq xs) {
+        for (int x : expected) {
+            assertEquals(x, xs.head());
+            xs = xs.tail();
         }
     }
 
@@ -244,21 +272,22 @@ public class FunctionalTest
             Puzzle(int low, int high) {
                 this.low = low;
                 this.high = high;
-                this.pairs = From(IntSeq.rangeClosed(low, high), a ->
-                             From(IntSeq.rangeClosed(a,   high), b ->
-                             Yield(Pair.make(a, b)))).build();
+                this.pairs = select.
+                             from(IntSeq.rangeClosed(low, high), a ->
+                             from(IntSeq.rangeClosed(a,   high), b ->
+                             yield(Pair.make(a, b))));
             }
 
             private Seq<Pair<Integer>> S(int s) {
-                return pairs.filter(with(Tuple((a,b) -> a+b == s)));
+                return pairs.filter(on(Tuple((a,b) -> a+b == s)));
             }
 
             private Seq<Pair<Integer>> P(int p) {
-                return pairs.filter(with(Tuple((a,b) -> a*b == p)));
+                return pairs.filter(on(Tuple((a,b) -> a*b == p)));
             }
 
             private <T> boolean unique(Seq<T> s) {
-                return when(s, Seq.Seq((__, xs) -> xs.isEmpty()), otherwise(false));
+                return with(s).<Boolean>get().when(Seq.Single(x -> true)).orElse(false);
             }
 
             private boolean MrP_dont_know(int p) {
@@ -266,25 +295,26 @@ public class FunctionalTest
             }
 
             private boolean MrS_knew_MrP_dont_know(int s) {
-                return S(s).allMatch(with(Tuple((a,b) -> MrP_dont_know(a*b))));
+                return S(s).allMatch(on(Tuple((a,b) -> MrP_dont_know(a*b))));
             }
 
             private boolean MrP_now_know(int p) {
-                return unique(P(p).filter(with(Tuple((a,b) -> MrS_knew_MrP_dont_know(a+b)))));
+                return unique(P(p).filter(on(Tuple((a,b) -> MrS_knew_MrP_dont_know(a+b)))));
             }
 
             private boolean MrS_now_know(int s) {
-                return unique(S(s).filter(with(Tuple((a,b) -> MrP_now_know(a*b)))));
+                return unique(S(s).filter(on(Tuple((a,b) -> MrP_now_know(a*b)))));
             }
 
             private Seq<Pair<Integer>> solve() {
-                return From(IntSeq.rangeClosed(low, high), x ->
-                       From(IntSeq.rangeClosed(x,   high), y ->
-                       Where(MrP_dont_know(x*y) &&
+                return select.
+                       from(IntSeq.rangeClosed(low, high), x ->
+                       from(IntSeq.rangeClosed(x,   high), y ->
+                       where(MrP_dont_know(x*y) &&
                              MrS_knew_MrP_dont_know(x+y) &&
                              MrP_now_know(x*y) &&
                              MrS_now_know(x+y),
-                       Yield(Pair.make(x, y))))).build();
+                       yield(Pair.make(x, y)))));
             }
         }
 
@@ -312,20 +342,19 @@ public class FunctionalTest
      */
     @Test
     public void MultipleDwelling() {
-        Seq<ImmutableList<Integer>> result =
-            From(IntSeq.rangeClosed(1, 5), baker ->
-            From(IntSeq.rangeClosed(1, 5), cooper ->
-            From(IntSeq.rangeClosed(1, 5), fletcher ->
-            From(IntSeq.rangeClosed(1, 5), miller ->
-            From(IntSeq.rangeClosed(1, 5), smith ->
-            Where(distinct(baker, cooper, fletcher, miller, smith) &&
+        Seq<ImmutableList<Integer>> result = select.
+            from(IntSeq.rangeClosed(1, 5), baker ->
+            from(IntSeq.rangeClosed(1, 5), cooper ->
+            from(IntSeq.rangeClosed(1, 5), fletcher ->
+            from(IntSeq.rangeClosed(1, 5), miller ->
+            from(IntSeq.rangeClosed(1, 5), smith ->
+            where(distinct(baker, cooper, fletcher, miller, smith) &&
                   baker != 5 && cooper != 1 &&
                   fletcher != 5 && fletcher != 1 &&
                   miller > cooper &&
                   Math.abs(smith - fletcher) != 1 &&
                   Math.abs(fletcher - cooper) != 1,
-            Yield(ImmutableList.of(baker, cooper, fletcher, miller, smith))))))))
-            .build();
+            yield(ImmutableList.of(baker, cooper, fletcher, miller, smith))))))));
 
         ImmutableList<Integer> expected = ImmutableList.of(3, 2, 4, 5, 1);
         assertEquals(expected, result.head());
@@ -413,5 +442,285 @@ public class FunctionalTest
             String label_stm = Combinations.STREAM.compute(i);
             assertEquals(label_seq, label_stm);
         });
+    }
+
+    // ----------------------------------------------------------------------
+
+    static final class TrampolineTest {
+        private TrampolineTest() {}
+
+        static Trampoline<BigInteger> factorial(int n) {
+            if (n <= 1) {
+                return immediate(BigInteger.ONE);
+            } else {
+                return suspend(() -> factorial(n - 1), x ->
+                       immediate(x.multiply(BigInteger.valueOf(n))));
+            }
+        }
+
+        static Trampoline<BigInteger> fibonacci(int n) {
+            if (n <= 2) {
+                return immediate(BigInteger.ONE);
+            } else {
+                return suspend(() -> fibonacci(n - 1), a ->
+                       suspend(() -> fibonacci(n - 2), b ->
+                       immediate(a.add(b))));
+            }
+        }
+
+        static Trampoline<BigInteger> fibzipper(int n) {
+            if (n <= 2) {
+                return immediate(BigInteger.ONE);
+            } else {
+                return Trampoline.zip(
+                       suspend(() -> fibzipper(n - 1)),
+                       suspend(() -> fibzipper(n - 2)),
+                       BigInteger::add);
+            }
+        }
+
+        static Trampoline<BigInteger> fibtailcall(int n) {
+            return fibtailcall(n, BigInteger.ONE, BigInteger.ONE);
+        }
+
+        private static Trampoline<BigInteger> fibtailcall(int n, BigInteger a, BigInteger b) {
+            return n <= 2
+                   ? immediate(b)
+                   : suspend(() -> fibtailcall(n - 1, b, a.add(b)));
+        }
+
+        // This is not a trampoline test case, just demonstrate to use memoization
+        // to improve performance
+        static BigInteger fibmemo(int n) {
+            Map<Integer, BigInteger> memo = new HashMap<>();
+            memo.put(1, BigInteger.ONE);
+            memo.put(2, BigInteger.ONE);
+            return _fibmemo(n).eval(memo);
+        }
+
+        private static MonadState<BigInteger, Map<Integer, BigInteger>> _fibmemo(int n) {
+            return do_(MonadState.get(), memo ->
+                       memo.containsKey(n)
+                       ? MonadState.pure(memo.get(n))
+                       : do_(_fibmemo(n - 1), (BigInteger a) ->
+                         do_(_fibmemo(n - 2), (BigInteger b) -> {
+                           BigInteger c = a.add(b);
+                           memo.put(n, c); // an efficient immutable map is needed
+                           return MonadState.pure(c);
+                         })));
+        }
+    }
+
+    @Test(timeout = 1000)
+    public void trampolineTest() {
+        assertEquals(BigInteger.valueOf(3628800), TrampolineTest.factorial(10).run());
+        assertEquals(BigInteger.valueOf(144), TrampolineTest.fibonacci(12).run());
+        assertEquals(BigInteger.valueOf(144), TrampolineTest.fibzipper(12).run());
+        assertEquals(BigInteger.valueOf(144), TrampolineTest.fibtailcall(12).run());
+        assertEquals(BigInteger.valueOf(144), TrampolineTest.fibmemo(12));
+
+        // tail call has constant stack usage and should not overflow
+        TrampolineTest.fibtailcall(10000).run();
+
+        // memoization should improve performance dramatically
+        TrampolineTest.fibmemo(1000);
+    }
+
+    // ----------------------------------------------------------------------
+
+    static final class CallCC {
+        private CallCC() {}
+
+        static Cont<String> ask(String name) {
+            return Cont.callCC(exit ->
+                do_(exit.escapeIf(name.isEmpty(), "You forget to tell me your name!"),
+                do_(exit.escapeIf(name.equals("martin"), "Welcome to earth, uncle martin"),
+                do_(Cont.yield("Welcome, " + name + "!")))));
+        }
+
+        static Cont<Double> harmsum(IntSeq nums) {
+            return Cont.callCC(exit ->
+                Cont.foldM(0.0, nums.boxed(), (r, x) -> do_(
+                    exit.escapeIf(x == 0, 0.0),
+                    Cont.yield(r + 1.0 / x))
+                ));
+        }
+    }
+
+    @Test
+    public void callCCTest() {
+        CallCC.ask("bob").exec(msg -> assertEquals("Welcome, bob!", msg));
+        CallCC.ask("").exec(msg -> assertEquals("You forget to tell me your name!", msg));
+
+        assertEquals("Welcome, bob!", CallCC.ask("bob").eval());
+        assertEquals("Welcome to earth, uncle martin", CallCC.ask("martin").eval());
+        assertEquals("You forget to tell me your name!", CallCC.ask("").eval());
+
+        double expected = IntSeq.of(1, 2, 3, 4).boxed().foldLeft(0.0, (Double r, Integer x) -> r + 1.0 / x);
+        double actual = CallCC.harmsum(IntSeq.of(1, 2, 3, 4)).eval();
+        assertTrue(Double.compare(expected, actual) == 0);
+        assertTrue(Double.compare(0.0, CallCC.harmsum(IntSeq.of(1, 2, 0, 4)).eval()) == 0);
+    }
+
+    // This implementation is ugly because it uses mutable state
+    static final class UglyCPS {
+        private Seq<Function<Integer, Unit>> queue = Seq.nil();
+        private Seq<String> log = Seq.nil();
+
+        public void go() {
+            Cont.reset(
+                do_(log("Welcome!"),
+                do_(ask("Please give me a number"), first ->
+                do_(ask("Please enter another number"), second ->
+                do_(log("The sum of your numbers is: " + (first + second))))))
+            ).eval();
+        }
+
+        private Cont<Integer> ask(String prompt) {
+            return Cont.shift((Function<Integer, Unit> k) -> {
+                queue = queue.append(k);
+                return log(prompt);
+            });
+        }
+
+        public void resume(int n) {
+            Function<Integer, Unit> k = queue.head();
+            queue = queue.tail();
+            log = Seq.nil();
+            k.apply(n);
+        }
+
+        private Cont<Unit> log(String message) {
+            return Cont.action(() -> log = log.append(message));
+        }
+
+        public Seq<String> getLog() {
+            return log;
+        }
+    }
+
+    @Test
+    public void resetShiftTest() {
+        UglyCPS cps = new UglyCPS();
+
+        cps.go();
+        assertSeqEquals(cps.getLog(), "Welcome!", "Please give me a number");
+
+        cps.resume(3);
+        assertSeqEquals(cps.getLog(), "Please enter another number");
+
+        cps.resume(5);
+        assertSeqEquals(cps.getLog(), "The sum of your numbers is: 8");
+    }
+
+    // This implementation is good because state transformation is transparency
+    static class GoodCPS {
+        private final Seq<Function<Integer, MonadState<Unit, GoodCPS>>> queue;
+        private final Seq<String> log;
+
+        public GoodCPS() {
+            this(Seq.nil(), Seq.nil());
+        }
+
+        private GoodCPS(Seq<Function<Integer, MonadState<Unit, GoodCPS>>> queue, Seq<String> log) {
+            this.queue = queue;
+            this.log = log;
+        }
+
+        public static GoodCPS go() {
+            return StateCont.reset(
+                do_(log("Welcome!"),
+                do_(ask("Please give me a number"), first ->
+                do_(ask("Please enter another number"), second ->
+                do_(log("The sum of your numbers is: " + (first + second))))))
+            ).eval().exec(new GoodCPS());
+        }
+
+        private static StateCont<Integer, GoodCPS> ask(String prompt) {
+            return StateCont.<Integer, Unit, GoodCPS>shift(k ->
+                do_(StateCont.modify(state -> state.save(k)),
+                do_(log(prompt))));
+        }
+
+        private static StateCont<Unit, GoodCPS> log(String message) {
+            return StateCont.modify(state -> state.addLog(message));
+        }
+
+        public GoodCPS resume(int n) {
+            return queue.head().apply(n).exec(new GoodCPS(queue.tail(), Seq.nil()));
+        }
+
+        public Seq<String> getLog() {
+            return log;
+        }
+
+        private GoodCPS save(Function<Integer, MonadState<Unit, GoodCPS>> f) {
+            return new GoodCPS(queue.append(f), log);
+        }
+
+        private GoodCPS addLog(String message) {
+            return new GoodCPS(queue, log.append(message));
+        }
+    }
+
+    @Test
+    public void resetShiftStateTest() {
+        GoodCPS cps = GoodCPS.go();
+        assertSeqEquals(cps.getLog(), "Welcome!", "Please give me a number");
+
+        cps = cps.resume(3);
+        assertSeqEquals(cps.getLog(), "Please enter another number");
+
+        cps = cps.resume(5);
+        assertSeqEquals(cps.getLog(), "The sum of your numbers is: 8");
+    }
+
+    // ----------------------------------------------------------------------
+
+    @Test
+    public void functionBindTest() {
+        Function<Integer, Integer> f = x -> x * 5;
+        Function<Integer, Integer> g = x -> x + 10;
+        Function<Integer, Integer> h = Fn.bind(f, x -> Fn.bind(g, y -> Fn.pure(x + y))); // x -> (x*5)+(x+10)
+        assertEquals(10, (int)h.apply(0));
+        assertEquals(16, (int)h.apply(1));
+        assertEquals(22, (int)h.apply(2));
+    }
+
+    @Test
+    public void functionMapTest() {
+        Function<Integer, Integer> f = x -> x * 5;
+        Function<Integer, Integer> g = x -> x + 10;
+        Function<Integer, Integer> h = Fn.map(f, g); // x->(x*5)+10
+        assertEquals(10, (int)h.apply(0));
+        assertEquals(15, (int)h.apply(1));
+        assertEquals(20, (int)h.apply(2));
+    }
+
+    @Test
+    public void functionZipTest() {
+        Function<Integer, Integer> f = x -> x * 5;
+        Function<Integer, Integer> g = x -> x + 10;
+        Function<Integer, Integer> h = Fn.zip(f, g, Integer::sum); // x->(x*5)+(x+10)
+        assertEquals(10, (int)h.apply(0));
+        assertEquals(16, (int)h.apply(1));
+        assertEquals(22, (int)h.apply(2));
+    }
+
+    @Test
+    public void functionFlatMTest() {
+        Seq<Function<Integer, Integer>> fs = Seq.of(x -> x * 5, x -> x + 10);
+        Function<Integer, Seq<Integer>> h = Fn.flatM(fs);
+        assertSeqEquals(h.apply(0), 0, 10);
+        assertSeqEquals(h.apply(1), 5, 11);
+        assertSeqEquals(h.apply(2), 10, 12);
+    }
+
+    private static <T> void assertSeqEquals(Seq<T> xs, Object... expected) {
+        for (Object x : expected) {
+            assertEquals(x, xs.head());
+            xs = xs.tail();
+        }
+        assertTrue(xs.isEmpty());
     }
 }

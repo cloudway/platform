@@ -8,20 +8,22 @@ package com.cloudway.platform.container;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import com.cloudway.platform.common.fp.io.IOFunction;
 
 /**
  * This interface represents an application's source code repository.
  */
 public interface ApplicationRepository
 {
+    static void setFactory(IOFunction<ApplicationContainer, ApplicationRepository> factory) {
+        Helper.setApplicationRepositoryFactory(factory);
+    }
+
     /**
      * Create a new instance of the application repository.
      */
-    static ApplicationRepository newInstance(ApplicationContainer container)
-        throws IOException
-    {
-        // TODO: may support source code control systems other than Git.
-        return new GitRepository(container);
+    static ApplicationRepository of(ApplicationContainer container) throws IOException {
+        return Helper.getApplicationRepository(container);
     }
 
     /**

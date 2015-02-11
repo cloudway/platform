@@ -21,12 +21,11 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import com.cloudway.platform.common.io.MoreFiles;
+import com.cloudway.platform.common.util.MoreFiles;
 import com.google.common.io.ByteStreams;
 import static java.lang.ProcessBuilder.Redirect;
 
-@SuppressWarnings("unused")
-public final class Exec
+public class Exec
 {
     private final ProcessBuilder builder;
 

@@ -14,16 +14,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Exec;
-import com.cloudway.platform.common.io.MoreFiles;
-import com.cloudway.platform.common.io.IO;
-import com.cloudway.platform.common.io.IOConsumer;
+import com.cloudway.platform.common.util.MoreFiles;
+import com.cloudway.platform.common.fp.io.IO;
+import com.cloudway.platform.common.fp.io.IOConsumer;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.NoSuchContainerException;
 
@@ -36,7 +36,8 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
 
-import static com.cloudway.platform.common.util.function.Predicates.*;
+import static com.cloudway.platform.common.fp.control.Predicates.*;
+import static com.cloudway.platform.container.ApplicationContainer.makeUUID;
 
 @SuppressWarnings("unused")
 public class PrivilegedControl extends Control
@@ -220,7 +221,7 @@ public class PrivilegedControl extends Control
         try {
             for (int i = 0; i < scale; i++) {
                 ApplicationContainer container =
-                    ApplicationContainer.create(mkuuid(), name, namespace, capacity);
+                    ApplicationContainer.create(makeUUID(), name, namespace, capacity);
                 containers.add(container);
 
                 if (keyfile != null) {
@@ -243,18 +244,6 @@ public class PrivilegedControl extends Control
         formatter.printHelp("cwctl create [OPTION]... NAME-NAMESPACE", options);
     }
 
-    private static String mkuuid() {
-        UUID uuid = UUID.randomUUID();
-        return digits(uuid.getLeastSignificantBits()) + digits(uuid.getLeastSignificantBits());
-    }
-
-    private static String digits(long val) {
-        String str = Long.toHexString(val);
-        while (str.length() < 16)
-            str = "0" + str;
-        return str;
-    }
-
    private static int getScaling(String name, String namespace, String scale) {
         int cc = 1;
         if (scale != null) {
@@ -269,7 +258,7 @@ public class PrivilegedControl extends Control
             }
         }
 
-        String fqdn = name + "-" + namespace + "." + ApplicationContainer.DOMAIN;
+        String fqdn = name + "-" + namespace + "." + Config.DOMAIN;
         int n = (int)ApplicationContainer.all().filter(having(c -> c.getDomainName(), is(fqdn))).count();
         if (cc <= n) {
             System.err.println("Application containers already reached maximum scaling value. " +
@@ -324,7 +313,7 @@ public class PrivilegedControl extends Control
             return;
         }
 
-        do_action(args[0], container -> container.remove(args[1]));
+        do_action(args[0], container -> container.uninstall(args[1]));
     }
 
     /** Convenient internal command to substitute container user. */

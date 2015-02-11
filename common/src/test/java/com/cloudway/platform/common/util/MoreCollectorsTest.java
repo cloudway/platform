@@ -7,10 +7,12 @@
 package com.cloudway.platform.common.util;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Random;
 import java.util.stream.Stream;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
@@ -91,4 +93,43 @@ public class MoreCollectorsTest
         map.entries().forEach(e -> assertEquals(e.getKey().intValue(), e.getValue().intValue() % 3));
         map.asMap().forEach((k, vs) -> vs.forEach(v -> assertEquals(k.intValue(), v.intValue() % 3)));
     }
+
+    @Test
+    public void splitStringsToMap() {
+        Map<String,String> actual = Stream.of("a:1", "b:2", "c:3").collect(toSplittingMap(':'));
+        Map<String,String> expected = ImmutableMap.of("a", "1", "b", "2", "c", "3");
+        assertEquals(expected, actual);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void splitStringsToMapWithDuplicateKey() {
+        Stream.of("a:1", "b:2", "c:3", "b:4").collect(toSplittingMap(':'));
+    }
+
+    @Test
+    public void splitStringsToMapWithIllegalEntry() {
+        Map<String,String> actual = Stream.of("a:1", "b", "c:3").collect(toSplittingMap(':'));
+        Map<String,String> expected = ImmutableMap.of("a", "1", "c", "3");
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void splitStringsToImmutableMap() {
+        Map<String,String> actual = Stream.of("a:1", "b:2", "c:3").collect(toImmutableSplittingMap(':'));
+        Map<String,String> expected = ImmutableMap.of("a", "1", "b", "2", "c", "3");
+        assertEquals(expected, actual);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void splitStringsToImmutableMapWithDuplicateKey() {
+        Stream.of("a:1", "b:2", "c:3", "b:4").collect(toImmutableSplittingMap(':'));
+    }
+
+    @Test
+    public void splitStringsToImmutableMapWithIllegalEntry() {
+        Map<String,String> actual = Stream.of("a:1", "b", "c:3").collect(toImmutableSplittingMap(':'));
+        Map<String,String> expected = ImmutableMap.of("a", "1", "c", "3");
+        assertEquals(expected, actual);
+    }
+
 }

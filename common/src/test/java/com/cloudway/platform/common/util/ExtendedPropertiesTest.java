@@ -241,4 +241,52 @@ public class ExtendedPropertiesTest
             throw new UncheckedIOException(ex);
         }
     }
+
+    @Test
+    public void getBooleanTest() throws IOException {
+        String data = String.join("\n",
+            "a = true",
+            "b = false",
+            "c = xxx",
+            "[X]",
+            "a = true",
+            "b = false",
+            "c = xxx"
+        );
+
+        ExtendedProperties p = new ExtendedProperties();
+        p.load(new StringReader(data));
+
+        assertEquals(true, p.getBooleanProperty("a", false));
+        assertEquals(true, p.getBooleanProperty("X", "a", false));
+        assertEquals(false, p.getBooleanProperty("b", true));
+        assertEquals(false, p.getBooleanProperty("X", "b", true));
+        assertEquals(false, p.getBooleanProperty("c", true));
+        assertEquals(false, p.getBooleanProperty("X", "c", true));
+        assertEquals(true, p.getBooleanProperty("d", true));
+        assertEquals(true, p.getBooleanProperty("X", "d", true));
+        assertEquals(true, p.getBooleanProperty("Y", "a", true));
+    }
+
+    @Test
+    public void getIntTest() throws IOException {
+        String data = String.join("\n",
+            "a = 11",
+            "b = xxx",
+            "[X]",
+            "a = 22",
+            "b = xxx"
+        );
+
+        ExtendedProperties p = new ExtendedProperties();
+        p.load(new StringReader(data));
+
+        assertEquals(11, p.getIntProperty("a", -1));
+        assertEquals(22, p.getIntProperty("X", "a", -1));
+        assertEquals(33, p.getIntProperty("b", 33));
+        assertEquals(44, p.getIntProperty("X", "b", 44));
+        assertEquals(55, p.getIntProperty("c", 55));
+        assertEquals(66, p.getIntProperty("X", "c", 66));
+        assertEquals(77, p.getIntProperty("Y", "a", 77));
+    }
 }

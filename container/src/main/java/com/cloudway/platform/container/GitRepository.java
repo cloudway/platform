@@ -20,7 +20,7 @@ import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Exec;
 
 import static java.nio.file.Files.*;
-import static com.cloudway.platform.common.io.MoreFiles.*;
+import static com.cloudway.platform.common.util.MoreFiles.*;
 
 /**
  * This class represents an application's Git repository.
@@ -91,7 +91,7 @@ class GitRepository implements ApplicationRepository
         copyFileTree(template, tmp_dir);
 
         try {
-            exec(tmp_dir, "/bin/sh", "-c", format(GIT_INIT, ApplicationContainer.DOMAIN));
+            exec(tmp_dir, "/bin/sh", "-c", format(GIT_INIT, Config.DOMAIN));
             exec(git_dir, "/bin/sh", "-c", format(GIT_CLONE, "template", repo_name));
         } finally {
             deleteFileTree(tmp_dir);
@@ -99,7 +99,7 @@ class GitRepository implements ApplicationRepository
     }
 
     private static final ImmutableSet<String> ALLOWED_SCHEMES =
-        ImmutableSet.of("git", "http", "https", "ftp", "ftps", "rsync");
+        ImmutableSet.of("git", "http", "https", "ftp", "ftps", "rsync", "file");
 
     private static final Pattern REF_PATTERN =
         Pattern.compile("\\A[\\w\\d\\/\\-_\\.\\^~]+\\Z");
@@ -173,7 +173,7 @@ class GitRepository implements ApplicationRepository
 
     @SuppressWarnings("MethodMayBeStatic")
     private void exec(Path dir, String... args) throws IOException {
-        Exec.args(args).directory(dir).silentIO().checkError().run();
+        container.exec(Exec.args(args)).directory(dir).silentIO().checkError().run();
     }
 
     private void execInContext(Path dir, String... args) throws IOException {

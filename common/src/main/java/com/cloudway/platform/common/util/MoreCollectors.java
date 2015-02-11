@@ -45,6 +45,19 @@ public final class MoreCollectors
     private MoreCollectors() {}
 
     /**
+     * Returns a merge function which always throws {@code IllegalStateException}.
+     * This can be used to enforce the assumption that the elements being collected
+     * are distinct.
+     *
+     * @param <T> the type of input arguments to the merge function
+     * @return a merge function which always throw {@code IllegalStateException}
+     */
+    @SuppressWarnings("unchecked")
+    private static <T> BinaryOperator<T> throwingMerger() {
+        return (u,v) -> { throw new IllegalStateException(String.format("Duplicate key %s", u)); };
+    }
+
+    /**
      * Returns a {@code Collector} that accumulates the input elements into a
      * new {@code ImmutableCollection}, in encounter order. The {@code ImmutableCollection}
      * is created by the provided builder factory.
@@ -59,7 +72,7 @@ public final class MoreCollectors
     @SuppressWarnings("unchecked")
     public static <T, B extends ImmutableCollection.Builder<T>, C extends ImmutableCollection<T>>
     Collector<T, B, C> toImmutableCollection(Supplier<B> builderSupplier) {
-        return Collector.of(builderSupplier, (b, t) -> b.add(t),
+        return Collector.of(builderSupplier, ImmutableCollection.Builder::add,
                             (l, r) -> (B)l.addAll(r.build()),
                             b -> (C)b.build());
     }
@@ -333,7 +346,7 @@ public final class MoreCollectors
      * @return a splitting map
      */
     public static Collector<String, ?, Map<String,String>> toSplittingMap(char c) {
-        return toSplittingMap(splitByChar(c), String::trim, String::trim, (u,v) -> v, HashMap::new);
+        return toSplittingMap(splitByChar(c), String::trim, String::trim, throwingMerger(), HashMap::new);
     }
 
     /**

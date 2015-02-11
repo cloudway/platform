@@ -13,13 +13,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.io.MoreFiles;
+import com.cloudway.platform.common.util.MoreFiles;
 import com.cloudway.platform.container.proxy.ProxyMapping;
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
+import static com.cloudway.platform.common.fp.control.Comprehension.*;
 import static com.cloudway.platform.common.util.MoreCollectors.*;
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class Addon
 {
@@ -43,7 +44,7 @@ public class Addon
         }
     }
 
-    public static Addon load(ApplicationContainer container, Path path) {
+    public static Addon load(Path path, Map<String,String> env) {
         MetaData.Addon metadata = null;
         Exception failure = null;
         try {
@@ -51,10 +52,10 @@ public class Addon
         } catch (Exception ex) {
             failure = ex;
         }
-        return new Addon(container, path, metadata, failure);
+        return new Addon(path, metadata, env, failure);
     }
 
-    private Addon(ApplicationContainer container, Path path, MetaData.Addon metadata, Exception failure) {
+    private Addon(Path path, MetaData.Addon metadata, Map<String,String> env, Exception failure) {
         this.path = path;
         this.failure = failure;
 
@@ -63,7 +64,7 @@ public class Addon
             this.displayName = metadata.displayName;
             this.version     = metadata.version;
             this.type        = metadata.category;
-            this.endpoints   = endpoints(container, metadata);
+            this.endpoints   = endpoints(metadata, env);
         } else {
             this.shortName   = null;
             this.displayName = null;
@@ -87,29 +88,31 @@ public class Addon
         return new Addon(path, this);
     }
 
-    private ImmutableList<Endpoint> endpoints(ApplicationContainer container, MetaData.Addon metadata) {
-        Map<String, String> env = Environ.loadAll(container);
-
+    private ImmutableList<Endpoint> endpoints(MetaData.Addon metadata, Map<String,String> env) {
+        // @formatter:off
         return metadata.endpoints.stream().map(ep -> {
-            Endpoint endpoint = new Endpoint(
-                ("CLOUDWAY_" + this.shortName + "_" + ep.privateHostName).toUpperCase(),
-                ("CLOUDWAY_" + this.shortName + "_" + ep.privatePortName).toUpperCase()
-            );
+            Endpoint endpoint = new Endpoint();
+            String env_prefix = "CLOUDWAY_" + shortName + "_";
 
+            endpoint.setPrivateHostName((env_prefix + ep.privateHostName).toUpperCase());
+            endpoint.setPrivatePortName((env_prefix + ep.privatePortName).toUpperCase());
             endpoint.setPrivateHost(env.get(endpoint.getPrivateHostName()));
             endpoint.setPrivatePort(ep.privatePort);
 
-            endpoint.setProxyMappings(ep.proxyMappings.stream().flatMap(pm -> {
-                if (Strings.isNullOrEmpty(pm.protocols)) {
-                    return Stream.of(new ProxyMapping(pm.frontend, pm.backend, "http"));
-                } else {
-                    return Stream.of(pm.protocols.split(","))
-                        .map(protocol -> new ProxyMapping(pm.frontend, pm.backend, protocol));
-                }
-            }).collect(toImmutableList()));
+            endpoint.setProxyMappings(select.
+                from(ep.proxyMappings, (MetaData.ProxyMapping pm) ->
+                from(split(pm.protocols), (String p) ->
+                yield(new ProxyMapping(pm.frontend, pm.backend, p))))
+                .collect(toImmutableList())
+            );
 
             return endpoint;
         }).collect(toImmutableList());
+        // @formatter:on
+    }
+
+    private static Stream<String> split(String protocols) {
+        return isNullOrEmpty(protocols) ? Stream.of("http") : Stream.of(protocols.split(","));
     }
 
     public Path getPath() {
@@ -199,17 +202,20 @@ public class Addon
         private int    privatePort;
         private List<ProxyMapping> mappings;
 
-        Endpoint(String privateHostName, String privatePortName) {
-            this.privateHostName = privateHostName;
-            this.privatePortName = privatePortName;
-        }
-
         public String getPrivateHostName() {
             return privateHostName;
         }
 
+        void setPrivateHostName(String privateHostName) {
+            this.privateHostName = privateHostName;
+        }
+
         public String getPrivatePortName() {
             return privatePortName;
+        }
+
+        void setPrivatePortName(String privatePortName) {
+            this.privatePortName = privatePortName;
         }
 
         public String getPrivateHost() {

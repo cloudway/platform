@@ -24,6 +24,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 
+import com.cloudway.platform.common.fp.data.Optionals;
+
 /**
  * The {@code ExtendedProperties} class represents a persistent set of
  * properties. This class is similar to {@link java.util.Properties}

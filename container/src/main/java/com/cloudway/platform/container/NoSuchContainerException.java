@@ -17,11 +17,6 @@ public class NoSuchContainerException extends RuntimeException
         this.id = id;
     }
 
-    public NoSuchContainerException(String id, String message, Throwable cause) {
-        super(message, cause);
-        this.id = id;
-    }
-
     public String getContainerId() {
         return id;
     }

@@ -6,6 +6,7 @@
 
 package com.cloudway.platform.container.proxy;
 
+import java.util.Objects;
 import com.google.common.base.MoreObjects;
 
 public class ProxyMapping
@@ -30,6 +31,21 @@ public class ProxyMapping
 
     public String getProtocol() {
         return protocol;
+    }
+
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (!(obj instanceof ProxyMapping))
+            return false;
+        ProxyMapping other = (ProxyMapping)obj;
+        return Objects.equals(frontend, other.frontend)
+            && Objects.equals(backend, other.backend)
+            && Objects.equals(protocol, other.protocol);
+    }
+
+    public int hashCode() {
+        return Objects.hash(frontend, backend, protocol);
     }
 
     public String toString() {
