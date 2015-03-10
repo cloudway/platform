@@ -8,8 +8,6 @@ package com.cloudway.platform.common.util;
 
 import java.math.BigInteger;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.function.Function;
@@ -30,6 +28,7 @@ import com.cloudway.platform.common.fp.control.StateCont;
 import com.cloudway.platform.common.fp.control.Trampoline;
 import com.cloudway.platform.common.fp.data.IntSeq;
 import com.cloudway.platform.common.fp.data.Pair;
+import com.cloudway.platform.common.fp.data.TreeMap;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
 
@@ -492,26 +491,32 @@ public class FunctionalTest
         // This is not a trampoline test case, just demonstrate to use memoization
         // to improve performance
         static BigInteger fibmemo(int n) {
-            Map<Integer, BigInteger> memo = new HashMap<>();
-            memo.put(1, BigInteger.ONE);
-            memo.put(2, BigInteger.ONE);
-            return _fibmemo(n).eval(memo);
+            TreeMap<Integer, BigInteger> memo = TreeMap.empty();
+            memo = memo.put(1, BigInteger.ONE).put(2, BigInteger.ONE);
+            return fibmemo_(n).eval(memo);
         }
 
-        private static MonadState<BigInteger, Map<Integer, BigInteger>> _fibmemo(int n) {
+        private static MonadState<BigInteger, TreeMap<Integer, BigInteger>> fibmemo_(int n) {
             return do_(MonadState.get(), memo ->
                        memo.containsKey(n)
                        ? MonadState.pure(memo.get(n))
-                       : do_(_fibmemo(n - 1), (BigInteger a) ->
-                         do_(_fibmemo(n - 2), (BigInteger b) -> {
-                           BigInteger c = a.add(b);
-                           memo.put(n, c); // an efficient immutable map is needed
-                           return MonadState.pure(c);
-                         })));
+                       : do_(fibmemo_(n - 1), (BigInteger a) ->
+                         do_(fibmemo_(n - 2), (BigInteger b) ->
+                         let(a.add(b), c ->
+                         do_(updateMemo(n, c),
+                         do_(MonadState.pure(c)))))));
+        }
+
+        private static MonadState<Unit, TreeMap<Integer, BigInteger>> updateMemo(int n, BigInteger c) {
+            return MonadState.modify(memo -> {
+                memo = memo.put(n, c);
+                assertTrue(memo.valid());
+                return memo;
+            });
         }
     }
 
-    @Test(timeout = 1000)
+    @Test(timeout = 10000)
     public void trampolineTest() {
         assertEquals(BigInteger.valueOf(3628800), TrampolineTest.factorial(10).run());
         assertEquals(BigInteger.valueOf(144), TrampolineTest.fibonacci(12).run());
@@ -523,7 +528,7 @@ public class FunctionalTest
         TrampolineTest.fibtailcall(10000).run();
 
         // memoization should improve performance dramatically
-        TrampolineTest.fibmemo(1000);
+        TrampolineTest.fibmemo(100);
     }
 
     // ----------------------------------------------------------------------
