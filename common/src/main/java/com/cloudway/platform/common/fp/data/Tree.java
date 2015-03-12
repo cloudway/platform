@@ -19,6 +19,8 @@ import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.function.TriFunction;
 import static com.cloudway.platform.common.fp.control.Comprehension.*;
+import static com.cloudway.platform.common.fp.control.Conditionals.*;
+import static com.cloudway.platform.common.fp.data.Tuple.Triple;
 
 /**
  * The underlying implementation for TreeMap and TreeSet.
@@ -460,60 +462,39 @@ final class Tree {
             return t;
         }
 
-        static class Split<K,V> {
-            boolean found;
-            Node<K,V> lt;
-            Node<K,V> gt;
-
-            Split(boolean found, Node<K, V> lt, Node<K, V> gt) {
-                this.found = found;
-                this.lt = lt;
-                this.gt = gt;
-            }
-
-            static <K,V> Split<K,V> of(boolean found, Node<K,V> lt, Node<K,V> gt) {
-                return new Split<>(found, lt, gt);
-            }
-        }
-
         /**
          * Performs a split and also returns whether the pivot element was found
-         * in the original set.
+         * in the original tree.
          */
-        static <K,V> Split<K,V> splitMember(Node<K,V> t, K x) {
+        static <K,V> Triple<V, Node<K,V>, Node<K,V>> splitMember(Node<K,V> t, K k) {
             if (t.isEmpty()) {
-                return Split.of(false, t, t);
+                return Tuple.of(null, t, t);
             } else {
                 Bin<K,V> b = (Bin<K,V>)t;
-                int cmp = b.tip.compare(x, b.key);
-                if (cmp < 0) {
-                    Split<K,V> sl = splitMember(b.left, x);
-                    Node<K,V> gt = b.link(sl.gt, b.right);
-                    return Split.of(sl.found, sl.lt, gt);
-                } else if (cmp > 0) {
-                    Split<K,V> sr = splitMember(b.right, x);
-                    Node<K,V> lt = b.link(b.left, sr.lt);
-                    return Split.of(sr.found, lt, sr.gt);
-                } else {
-                    return Split.of(true, b.left, b.right);
-                }
+                int cmp = b.tip.compare(k, b.key);
+                return cmp < 0 ? inCaseOf(splitMember(b.left, k), Triple((z, lt, gt) ->
+                                    Tuple.of(z, lt, b.link(gt, b.right)))) :
+                       cmp > 0 ? inCaseOf(splitMember(b.right, k), Triple((z, lt, gt) ->
+                                    Tuple.of(z, b.link(b.left, lt), gt)))
+                               : Tuple.of(b.value, b.left, b.right);
             }
         }
 
         /**
-         * Tells whether t1 is a subset of t2.
+         * Returns true if all keys in t1 are in t2, and p returns true when
+         * applied to their respective values.
          */
-        static <K,V> boolean isSubsetOf(Node<K,V> t1, Node<K,V> t2) {
+        static <K,V> boolean isSubsetOf(Node<K,V> t1, Node<K,V> t2, BiPredicate<? super V, ? super V> p) {
             if (t1.isEmpty()) {
                 return true;
             } else if (t2.isEmpty()) {
                 return false;
             } else {
                 Bin<K,V> t1b = (Bin<K,V>)t1;
-                Split<K,V> t2s = splitMember(t2, t1b.key);
-                return t2s.found
-                    && isSubsetOf(t1b.left, t2s.lt)
-                    && isSubsetOf(t1b.right, t2s.gt);
+                return inCaseOf(splitMember(t2, t1b.key), Triple((z, lt, gt) ->
+                    z != null && p.test(t1b.value, z) &&
+                    isSubsetOf(t1b.left, lt, p) &&
+                    isSubsetOf(t1b.right, gt, p)));
             }
         }
 
@@ -1017,6 +998,11 @@ final class Tree {
         }
 
         @Override
+        default boolean containsAll(TreeMap<K,V> m) {
+            return this.size() >= m.size() && Bin.isSubsetOf((Node<K,V>)m, this, Objects::equals);
+        }
+
+        @Override
         default TreeMap<K,V> putAll(TreeMap<K,V> m) {
             return (TreeMap<K,V>)Bin.union((Node<K,V>)m, this);
         }
@@ -1092,6 +1078,14 @@ final class Tree {
             return this == EMPTY_MAP ? EMPTY_SET : new SetTip<>(cmp);
         }
 
+        public boolean equals(Object obj) {
+            return (obj instanceof TreeMap) && ((TreeMap)obj).isEmpty();
+        }
+
+        public int hashCode() {
+            return 0;
+        }
+
         public String toString() {
             return "[]";
         }
@@ -1116,6 +1110,20 @@ final class Tree {
                                 toKeySet((MapNode<K,V>)b.left, tip),
                                 toKeySet((MapNode<K,V>)b.right, tip));
             }
+        }
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (!(obj instanceof TreeMap))
+                return false;
+            TreeMap other = (TreeMap)obj;
+            return this.size() == other.size() && containsAll(other);
+        }
+
+        public int hashCode() {
+            return System.identityHashCode(this); // FIXME
         }
 
         public String toString() {
@@ -1149,7 +1157,7 @@ final class Tree {
 
         @Override
         default boolean containsAll(TreeSet<E> s) {
-            return this.size() >= s.size() && Bin.isSubsetOf((Node<E,Unit>)s, this);
+            return this.size() >= s.size() && Bin.isSubsetOf((Node<E,Unit>)s, this, (x,y) -> true);
         }
 
         @Override

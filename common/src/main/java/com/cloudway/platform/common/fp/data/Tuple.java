@@ -16,6 +16,7 @@ import java.util.function.Predicate;
 import com.cloudway.platform.common.fp.function.ExceptionBiFunction;
 import com.cloudway.platform.common.fp.function.ExceptionSupplier;
 import com.cloudway.platform.common.fp.control.ConditionCase;
+import com.cloudway.platform.common.fp.function.ExceptionTriFunction;
 
 /**
  * A tuple with two elements.
@@ -46,6 +47,27 @@ public class Tuple<T, U> implements Serializable, Cloneable
      */
     public static <T, U> Tuple<T, U> of(T first, U second) {
         return new Tuple<>(first, second);
+    }
+
+    /**
+     * Construct a new Tuple with two elements of same type.
+     *
+     * @param first the first argument
+     * @param second the second argument
+     */
+    public static <T> Pair<T> pair(T first, T second) {
+        return new Pair<>(first, second);
+    }
+
+    /**
+     * Construct a new Tuple with three elements.
+     *
+     * @param a the first argument
+     * @param b the second argument
+     * @param c the third argument
+     */
+    public static <A, B, C> Triple<A, B, C> of(A a, B b, C c) {
+        return new Triple<>(a, b, c);
     }
 
     /**
@@ -131,7 +153,7 @@ public class Tuple<T, U> implements Serializable, Cloneable
     }
 
     public String toString() {
-        return "(" + first + ", " + second + ")";
+        return "(" + first + "," + second + ")";
     }
 
     public static <T extends Comparable<T>, U extends Comparable<U>>
@@ -223,5 +245,14 @@ public class Tuple<T, U> implements Serializable, Cloneable
         return t -> c1.isInstance(t.first()) && c2.isInstance(t.second())
             ? () -> mapper.evaluate(c1.cast(t.first()), c2.cast(t.second()))
             : null;
+    }
+
+    /**
+     * Returns a conditional case to deconstruct elements of a triple.
+     */
+    @SuppressWarnings("MethodNameSameAsClassName")
+    public static <A, B, C, R, X extends Throwable> ConditionCase<Triple<A, B, C>, R, X>
+    Triple(ExceptionTriFunction<A, B, C, R, X> mapper) {
+        return t -> () -> mapper.evaluate(t._1(), t._2(), t._3());
     }
 }

@@ -449,7 +449,7 @@ public interface IntSeq
      * Zip two lists into one list of integer tuples.
      */
     default Seq<Pair<Integer>> zip(IntSeq other) {
-        return zipToObj(other, Pair::make);
+        return zipToObj(other, Tuple::pair);
     }
 
     /**

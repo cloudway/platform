@@ -27,6 +27,7 @@ import com.cloudway.platform.common.fp.control.MonadState;
 import com.cloudway.platform.common.fp.control.StateCont;
 import com.cloudway.platform.common.fp.control.Trampoline;
 import com.cloudway.platform.common.fp.data.IntSeq;
+import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Pair;
 import com.cloudway.platform.common.fp.data.TreeMap;
 import com.cloudway.platform.common.fp.data.Seq;
@@ -274,7 +275,7 @@ public class FunctionalTest
                 this.pairs = select.
                              from(IntSeq.rangeClosed(low, high), a ->
                              from(IntSeq.rangeClosed(a,   high), b ->
-                             yield(Pair.make(a, b))));
+                             yield(Tuple.pair(a, b))));
             }
 
             private Seq<Pair<Integer>> S(int s) {
@@ -313,12 +314,12 @@ public class FunctionalTest
                              MrS_knew_MrP_dont_know(x+y) &&
                              MrP_now_know(x*y) &&
                              MrS_now_know(x+y),
-                       yield(Pair.make(x, y)))));
+                       yield(Tuple.pair(x, y)))));
             }
         }
 
         Pair<Integer> result = new Puzzle(2, 99).solve().head();
-        assertEquals(Pair.make(4, 13), result);
+        assertEquals(Tuple.pair(4, 13), result);
     }
 
     /**

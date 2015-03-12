@@ -249,6 +249,16 @@ public interface TreeMap<K, V> {
     // Bulk Operations
 
     /**
+     * Returns <tt>true</tt> if this map contains all of the mappings of the
+     * specified map.
+     *
+     * @param m map to be checked for containment in this map
+     * @return <tt>true</tt> if this map contains all of the elements of the
+     *         specified map
+     */
+    boolean containsAll(TreeMap<K,V> m);
+
+    /**
      * Unions all of the mappings from the specified map to this map.
      *
      * @param m mappings to be union in this map
