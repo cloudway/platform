@@ -316,7 +316,7 @@ public class TreeTest {
             expected = expected.put(String.valueOf(i), i * 2);
         }
 
-        assertEquals(expected, validate(tm.map((k, v) -> v * 2)));
+        assertEquals(expected, validate(tm.map(x -> x * 2)));
     }
 
     @Test
@@ -326,7 +326,7 @@ public class TreeTest {
             expected = expected.put(String.valueOf(i), i);
         }
 
-        assertEquals(expected, validate(tm.filter((k, v) -> v % 2 == 0)));
+        assertEquals(expected, validate(tm.filter(x -> x % 2 == 0)));
     }
 
     @Test

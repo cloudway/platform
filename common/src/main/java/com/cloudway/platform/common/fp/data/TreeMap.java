@@ -14,6 +14,7 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.function.TriFunction;
@@ -268,20 +269,42 @@ public interface TreeMap<K, V> {
 
     /**
      * Replaces each entry's value with the result of invoking the given
-     * function on that entry until all entries have been processed.
+     * function on that entry's value until all entries have been processed.
      *
-     * @param f the function to apply to each each
+     * @param f the function to apply to each entry value
      */
-    <R> TreeMap<K,R> map(BiFunction<? super K, ? super V, ? extends R> f);
+    default <R> TreeMap<K,R> map(Function<? super V, ? extends R> f) {
+        return mapKV((k, v) -> f.apply(v));
+    }
+
+    /**
+     * Replaces each entry's value with the result of invoking the given
+     * function on that entry's key and value until all entries have been
+     * processed.
+     *
+     * @param f the function to apply to each entry
+     */
+    <R> TreeMap<K,R> mapKV(BiFunction<? super K, ? super V, ? extends R> f);
 
     /**
      * Returns a map consisting of the mappings of this map that matches
      * the given predicate.
      *
-     * @param predicate a predicate to apply to each element to determine
-     * if it should be included
+     * @param predicate a predicate to apply to each map entry value to
+     * determine if it should be included
      */
-    TreeMap<K,V> filter(BiPredicate<? super K, ? super V> predicate);
+    default TreeMap<K,V> filter(Predicate<? super V> predicate) {
+        return filterKV((k, v) -> predicate.test(v));
+    }
+
+    /**
+     * Returns a map consisting of the mappings of this map that matches
+     * the given predicate.
+     *
+     * @param predicate a predicate to apply to each map entry key and value
+     * to determine if it should be included
+     */
+    TreeMap<K,V> filterKV(BiPredicate<? super K, ? super V> predicate);
 
     /**
      * Perform the given action for each entry in this map until all entries
@@ -290,7 +313,7 @@ public interface TreeMap<K, V> {
      * @param action an action to perform on each elements
      */
     default void forEach(BiConsumer<? super K, ? super V> action) {
-        foldLeftWithKey(Unit.U, (z, k, v) -> { action.accept(k, v); return z; });
+        foldLeftKV(Unit.U, (z, k, v) -> { action.accept(k, v); return z; });
     }
 
     // Views
@@ -308,7 +331,7 @@ public interface TreeMap<K, V> {
      * @return a list of the keys contained in this map
      */
     default Seq<K> keys() {
-        return foldRightWithKey(Seq.nil(), (k, v, ks) -> Seq.cons(k, ks));
+        return foldRightKV(Seq.nil(), (k, v, ks) -> Seq.cons(k, ks));
     }
 
     /**
@@ -326,7 +349,7 @@ public interface TreeMap<K, V> {
      * @return a list of the mappings contained in this map
      */
     default Seq<Tuple<K,V>> entries() {
-        return foldRightWithKey(Seq.nil(), (k, v, ts) -> Seq.cons(Tuple.of(k, v), ts));
+        return foldRightKV(Seq.nil(), (k, v, ts) -> Seq.cons(Tuple.of(k, v), ts));
     }
 
     // Folding
@@ -335,13 +358,15 @@ public interface TreeMap<K, V> {
      * Reduce the map elements using the accumulator function that accept
      * element value, from left to right.
      */
-    <R> R foldLeft(R seed, BiFunction<R, ? super V, R> accumulator);
+    default <R> R foldLeft(R seed, BiFunction<R, ? super V, R> accumulator) {
+        return foldLeftKV(seed, (z, k, v) -> accumulator.apply(z, v));
+    }
 
     /**
      * Reduce the map elements using the accumulator function that accept
      * element key and value, from left to right.
      */
-    <R> R foldLeftWithKey(R seed, TriFunction<R, ? super K, ? super V, R> accumulator);
+    <R> R foldLeftKV(R seed, TriFunction<R, ? super K, ? super V, R> accumulator);
 
     /**
      * Reduce the map elements using the accumulator function that accept
@@ -349,7 +374,9 @@ public interface TreeMap<K, V> {
      * accumulator accept a delay evaluation of reduced result instead of
      * a strict value.
      */
-    <R> R foldRight(R seed, BiFunction<? super V, Supplier<R>, R> accumulator);
+    default <R> R foldRight(R seed, BiFunction<? super V, Supplier<R>, R> accumulator) {
+        return foldRightKV(seed, (k, v, z) -> accumulator.apply(v, z));
+    }
 
     /**
      * Reduce the map elements using the accumulator function that accept
@@ -357,17 +384,21 @@ public interface TreeMap<K, V> {
      * so the accumulator accept a delay evaluation of reduced result instead
      * of a strict value.
      */
-    <R> R foldRightWithKey(R seed, TriFunction<? super K, ? super V, Supplier<R>, R> accumulator);
+    <R> R foldRightKV(R seed, TriFunction<? super K, ? super V, Supplier<R>, R> accumulator);
 
     /**
      * The strict version of {@link #foldRight(Object,BiFunction) foldRight}.
      */
-    <R> R foldRight_(R seed, BiFunction<? super V, R, R> accumulator);
+    default <R> R foldRight_(R seed, BiFunction<? super V, R, R> accumulator) {
+        return foldRightKV(seed, (k, v, z) -> accumulator.apply(v, z.get()));
+    }
 
     /**
-     * the strict version of {@link #foldRightWithKey(Object,TriFunction) foldRightWithKey}.
+     * the strict version of {@link #foldRightKV(Object,TriFunction) foldRightKV}.
      */
-    <R> R foldRightWithKey_(R seed, TriFunction<? super K, ? super V, R, R> accumulator);
+    default <R> R foldRightKV_(R seed, TriFunction<? super K, ? super V, R, R> accumulator) {
+        return foldRightKV(seed, (k, v, z) -> accumulator.apply(k, v, z.get()));
+    }
 
     // Debugging
 

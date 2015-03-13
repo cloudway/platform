@@ -691,7 +691,7 @@ final class Tree {
                     Bin<K,V> rb = (Bin<K,V>)r;
                     if (rb.size > DELTA * lb.size) {
                         if (rb.left.isEmpty() || rb.right.isEmpty()) {
-                            throw new IllegalStateException("Failure in PureMap.balance");
+                            throw new IllegalStateException("Failure in balance");
                         }
                         Bin<K,V> rlb = (Bin<K,V>)rb.left;
                         Bin<K,V> rrb = (Bin<K,V>)rb.right;
@@ -706,7 +706,7 @@ final class Tree {
                         }
                     } else if (lb.size > DELTA * rb.size) {
                         if (lb.left.isEmpty() || lb.right.isEmpty()) {
-                            throw new IllegalStateException("Failure in PureMap.balance");
+                            throw new IllegalStateException("Failure in balance");
                         }
                         Bin<K,V> llb = (Bin<K,V>)lb.left;
                         Bin<K,V> lrb = (Bin<K,V>)lb.right;
@@ -770,7 +770,7 @@ final class Tree {
                 Bin<K,V> rb = (Bin<K,V>)r;
                 if (lb.size > DELTA * rb.size) {
                     if (lb.left.isEmpty() || lb.right.isEmpty()) {
-                        throw new IllegalStateException("Failure in PureMap.balanceL");
+                        throw new IllegalStateException("Failure in balanceL");
                     }
                     Bin<K,V> llb = (Bin<K,V>)lb.left;
                     Bin<K,V> lrb = (Bin<K,V>)lb.right;
@@ -831,7 +831,7 @@ final class Tree {
                 Bin<K,V> rb = (Bin<K,V>)r;
                 if (rb.size > DELTA * lb.size) {
                     if (rb.left.isEmpty() || rb.right.isEmpty()) {
-                        throw new IllegalStateException("Failure in PureMap.balanceR");
+                        throw new IllegalStateException("Failure in balanceR");
                     }
                     Bin<K,V> rlb = (Bin<K,V>)rb.left;
                     Bin<K,V> rrb = (Bin<K,V>)rb.right;
@@ -1010,43 +1010,23 @@ final class Tree {
         }
 
         @Override
-        default <R> TreeMap<K,R> map(BiFunction<? super K, ? super V, ? extends R> f) {
+        default <R> TreeMap<K,R> mapKV(BiFunction<? super K, ? super V, ? extends R> f) {
             return (TreeMap<K,R>)__map(f);
         }
 
         @Override
-        default TreeMap<K,V> filter(BiPredicate<? super K, ? super V> p) {
+        default TreeMap<K,V> filterKV(BiPredicate<? super K, ? super V> p) {
             return (TreeMap<K,V>)__filter(p);
         }
 
         @Override
-        default <R> R foldLeft(R z, BiFunction<R, ? super V, R> f) {
-            return Bin.foldLeft(this, z, (r, k, v) -> f.apply(r, v));
-        }
-
-        @Override
-        default <R> R foldLeftWithKey(R z, TriFunction<R, ? super K, ? super V, R> f) {
+        default <R> R foldLeftKV(R z, TriFunction<R, ? super K, ? super V, R> f) {
             return Bin.foldLeft(this, z, f);
         }
 
         @Override
-        default <R> R foldRight(R z, BiFunction<? super V, Supplier<R>, R> f) {
-            return Bin.foldRight(this, z, (k, v, r) -> f.apply(v, r));
-        }
-
-        @Override
-        default <R> R foldRightWithKey(R z, TriFunction<? super K, ? super V, Supplier<R>, R> f) {
+        default <R> R foldRightKV(R z, TriFunction<? super K, ? super V, Supplier<R>, R> f) {
             return Bin.foldRight(this, z, f);
-        }
-
-        @Override
-        default <R> R foldRight_(R z, BiFunction<? super V, R, R> f) {
-            return Bin.foldRight(this, z, (k, v, r) -> f.apply(v, r.get()));
-        }
-
-        @Override
-        default <R> R foldRightWithKey_(R z, TriFunction<? super K, ? super V, R, R> f) {
-            return Bin.foldRight(this, z, (k, v, r) -> f.apply(k, v, r.get()));
         }
 
         @Override
@@ -1072,11 +1052,11 @@ final class Tree {
 
         @Override
         public TreeSet<K> keySet() {
-            return toSetTip();
+            return toKeySet();
         }
 
         @SuppressWarnings("unchecked")
-        final SetTip<K> toSetTip() {
+        final SetTip<K> toKeySet() {
             return this == EMPTY_MAP ? EMPTY_SET : new SetTip<>(cmp);
         }
 
@@ -1100,17 +1080,15 @@ final class Tree {
 
         @Override
         public TreeSet<K> keySet() {
-            return toKeySet(this, ((MapTip<K,V>)tip).toSetTip());
+            return toKeySet(this, ((MapTip<K,V>)tip).toKeySet());
         }
 
-        static <K,V> SetNode<K> toKeySet(MapNode<K,V> t, SetTip<K> tip) {
+        static <K,V> SetNode<K> toKeySet(Node<K,V> t, SetTip<K> st) {
             if (t.isEmpty()) {
-                return tip;
+                return st;
             } else {
-                MapBin<K,V> b = (MapBin<K,V>)t;
-                return tip.cons(b.size, b.key, Unit.U,
-                                toKeySet((MapNode<K,V>)b.left, tip),
-                                toKeySet((MapNode<K,V>)b.right, tip));
+                Bin<K,V> b = (Bin<K,V>)t;
+                return st.cons(b.size, b.key, Unit.U, toKeySet(b.left, st), toKeySet(b.right, st));
             }
         }
 
@@ -1129,8 +1107,8 @@ final class Tree {
         }
 
         public String toString() {
-            return foldLeftWithKey(new StringJoiner(", ", "[", "]"),
-                        (sj, k, a) -> sj.add("(" + k + "," + a + ")")).toString();
+            return foldLeftKV(new StringJoiner(", ", "[", "]"),
+                        (sj, k, v) -> sj.add("(" + k + "," + v + ")")).toString();
         }
     }
 
