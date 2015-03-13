@@ -21,6 +21,7 @@ import static org.junit.Assert.fail;
 
 import com.cloudway.platform.common.fp.data.IntSeq;
 import static com.cloudway.platform.common.fp.control.Conditionals.with;
+import static com.cloudway.platform.common.fp.data.IntSeq.IntCons;
 
 public class IntSequenceTest {
     @Test
@@ -75,7 +76,7 @@ public class IntSequenceTest {
     @Test
     public void patternMatchingOnLazySeqWillNotForceIfTailNotUsed() {
         IntSeq seq = IntSeq.cons(42, () -> { throw new ForceLazySeqException(); });
-        with(seq).when(IntSeq.Seq((x, xs) -> {
+        with(seq).when(IntCons((x, xs) -> {
             assertEquals(42, (int)x);
             return null;
         }));
@@ -84,7 +85,7 @@ public class IntSequenceTest {
     @Test(expected = ForceLazySeqException.class)
     public void patternMatchingOnLazySeqWillForceWhenTailUsed() {
         IntSeq seq = IntSeq.cons(42, () -> { throw new ForceLazySeqException(); });
-        with(seq).when(IntSeq.Seq((x, xs) -> {
+        with(seq).when(IntCons((x, xs) -> {
             xs.isEmpty();
             return null;
         }));

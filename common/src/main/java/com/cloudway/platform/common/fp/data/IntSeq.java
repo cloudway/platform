@@ -252,7 +252,7 @@ public interface IntSeq
      * Returns a predicate that evaluate to true if the list to be tested
      * is empty.
      */
-    static Predicate<IntSeq> Nil() {
+    static Predicate<IntSeq> IntNil() {
         return IntSeq::isEmpty;
     }
 
@@ -260,7 +260,7 @@ public interface IntSeq
      * Returns a conditional case that will be evaluated if the list is empty.
      */
     static <R, X extends Throwable> ConditionCase<IntSeq, R, X>
-    Nil(ExceptionSupplier<R, X> supplier) {
+    IntNil(ExceptionSupplier<R, X> supplier) {
         return t -> t.isEmpty() ? supplier : null;
     }
 
@@ -270,7 +270,7 @@ public interface IntSeq
      * arguments.
      */
     static <R, X extends Throwable> ConditionCase<IntSeq, R, X>
-    Seq(ExceptionBiFunction<Integer, IntSeq, ? extends R, X> mapper) {
+    IntCons(ExceptionBiFunction<Integer, IntSeq, ? extends R, X> mapper) {
         return s -> s.isEmpty()
             ? null
             : () -> mapper.evaluate(s.head(), IntSeqImpl.delay(s));
@@ -282,7 +282,7 @@ public interface IntSeq
      * and remaining elements as it's arguments.
      */
     static <R, X extends Throwable> ConditionCase<IntSeq, R, X>
-    Seq(ExceptionTriFunction<Integer, Integer, IntSeq, ? extends R, X> mapper) {
+    IntCons(ExceptionTriFunction<Integer, Integer, IntSeq, ? extends R, X> mapper) {
         return s -> !s.isEmpty() && !s.tail().isEmpty()
             ? () -> mapper.evaluate(s.head(), s.tail().head(), IntSeqImpl.delay(s.tail()))
             : null;
@@ -294,7 +294,7 @@ public interface IntSeq
      * it's arguments.
      */
     static <R, X extends Throwable> ConditionCase<IntSeq, R, X>
-    Single(ExceptionFunction<Integer, ? extends R, X> mapper) {
+    IntSingle(ExceptionFunction<Integer, ? extends R, X> mapper) {
         return s -> !s.isEmpty() && s.tail().isEmpty()
             ? () -> mapper.evaluate(s.head())
             : null;

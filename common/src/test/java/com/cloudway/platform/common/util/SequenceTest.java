@@ -24,6 +24,7 @@ import static org.junit.Assert.*;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
+import static com.cloudway.platform.common.fp.data.Seq.Cons;
 
 public class SequenceTest
 {
@@ -79,7 +80,7 @@ public class SequenceTest
     @Test
     public void patternMatchingOnLazySeqWillNotForceIfTailNotUsed() {
         Seq<Integer> seq = Seq.cons(42, () -> { throw new ForceLazySeqException(); });
-        with(seq).when(Seq.Seq((x, xs) -> {
+        with(seq).when(Cons((x, xs) -> {
             assertEquals(42, (int)x);
             return null;
         }));
@@ -88,7 +89,7 @@ public class SequenceTest
     @Test(expected = ForceLazySeqException.class)
     public void patternMatchingOnLazySeqWillForceWhenTailUsed() {
         Seq<Integer> seq = Seq.cons(42, () -> { throw new ForceLazySeqException(); });
-        with(seq).when(Seq.Seq((x, xs) -> {
+        with(seq).when(Cons((x, xs) -> {
             xs.isEmpty();
             return null;
         }));

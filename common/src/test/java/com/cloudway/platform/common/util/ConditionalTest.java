@@ -41,8 +41,8 @@ import com.cloudway.platform.common.fp.function.ExceptionSupplier;
 import static com.cloudway.platform.common.fp.control.Comprehension.do_;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
 import static com.cloudway.platform.common.fp.data.Optionals.*;
-import static com.cloudway.platform.common.fp.data.Tuple.Tuple;
-import static com.cloudway.platform.common.fp.data.Seq.Seq;
+import static com.cloudway.platform.common.fp.data.Seq.Cons;
+import static com.cloudway.platform.common.fp.data.Tuple.Tuple_;
 import static java.util.stream.Collectors.*;
 
 // @formatter:off
@@ -253,7 +253,7 @@ public class ConditionalTest
 
     private static String matchOptionalTuple(Optional<Tuple<String,String>> thing) {
         return with(thing).<String>get()
-            .when(in(Just(Tuple((x, y) -> x + y))))
+            .when(in(Just(Tuple_((x, y) -> x + y))))
             .orElse("Nothing");
     }
 
@@ -271,7 +271,7 @@ public class ConditionalTest
 
     private static int matchTuplePair(Tuple<Integer,Integer> x, Tuple<Integer,Integer> y) {
         return with(x, y).<Integer>get()
-            .when(Tuple((a, b) -> Tuple((c, d) -> (a+b) * (c+d))))
+            .when(Tuple_((a, b) -> Tuple_((c, d) -> (a+b) * (c+d))))
             .get();
     }
 
@@ -1026,7 +1026,7 @@ public class ConditionalTest
                     Holder<StateIO<Unit, Seq<Tree<T>>>> loop = new Holder<>();
                     return loop.set(
                       do_(StateIO.get(), queue ->
-                      do_(inCaseOf(queue, Seq((tree, remaining) ->
+                      do_(inCaseOf(queue, Cons((tree, remaining) ->
                         do_(inCaseOf(tree, Node((a, x, b) ->
                           do_(StateIO.action(() -> action.accept(x)),
                           do_(StateIO.put(remaining.append(Seq.of(a, b)))))),

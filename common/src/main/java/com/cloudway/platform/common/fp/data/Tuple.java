@@ -14,7 +14,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 import com.cloudway.platform.common.fp.function.ExceptionBiFunction;
-import com.cloudway.platform.common.fp.function.ExceptionSupplier;
 import com.cloudway.platform.common.fp.control.ConditionCase;
 import com.cloudway.platform.common.fp.function.ExceptionTriFunction;
 
@@ -193,66 +192,16 @@ public class Tuple<T, U> implements Serializable, Cloneable
      *     when(Tuple((m, v) -> m*v*v/2))
      * </pre>
      */
-    @SuppressWarnings("MethodNameSameAsClassName")
     public static <T, U, R, X extends Throwable> ConditionCase<Tuple<T, U>, R, X>
-    Tuple(ExceptionBiFunction<? super T, ? super U, ? extends R, X> mapper) {
+    Tuple_(ExceptionBiFunction<? super T, ? super U, ? extends R, X> mapper) {
         return t -> () -> mapper.evaluate(t.first(), t.second());
-    }
-
-    /**
-     * Returns a conditional case to deconstruct elements from a tuple and
-     * evaluate the given mapper function when both of elements satisfy the
-     * given predicates.
-     *
-     * <p>Usage:</p>
-     * <pre>
-     *     when(Tuple(massive(), highSpeed(), (m,v) -> new BlackHole(m,v))
-     * </pre>
-     */
-    @SuppressWarnings("MethodNameSameAsClassName")
-    public static <T, U, R, X extends Throwable> ConditionCase<Tuple<T, U>, R, X>
-    Tuple(Predicate<? super T> p1, Predicate<? super U> p2, ExceptionBiFunction<? super T, ? super U, ? extends R, X> mapper) {
-        return t -> p1.test(t.first()) && p2.test(t.second())
-            ? () -> mapper.evaluate(t.first(), t.second())
-            : null;
-    }
-
-    /**
-     * Returns a conditional case to deconstruct elements from a tuple and
-     * get result from the given supplier when both of elements satisfy the
-     * given predicates.
-     *
-     * <p>Usage:</p>
-     * <pre>
-     *     when(Tuple(massive(), highSpeed(), () -> new BlackHole())
-     * </pre>
-     */
-    @SuppressWarnings("MethodNameSameAsClassName")
-    public static <T, U, R, X extends Throwable> ConditionCase<Tuple<T, U>, R, X>
-    Tuple(Predicate<? super T> p1, Predicate<? super U> p2, ExceptionSupplier<R, X> supplier) {
-        return t -> p1.test(t.first()) && p2.test(t.second()) ? supplier : null;
-    }
-
-    /**
-     * Returns a conditional case to deconstruct elements from a tuple and
-     * evaluate the given mapper function when elements are instance of
-     * given types.  Elements are explicitly casted to the given type when
-     * evaluating the mapper function.
-     */
-    @SuppressWarnings("MethodNameSameAsClassName")
-    public static <T, U, T1, U1, R, X extends Throwable> ConditionCase<Tuple<T, U>, R, X>
-    Tuple(Class<T1> c1, Class<U1> c2, ExceptionBiFunction<? super T1, ? super U1, ? extends R, X> mapper) {
-        return t -> c1.isInstance(t.first()) && c2.isInstance(t.second())
-            ? () -> mapper.evaluate(c1.cast(t.first()), c2.cast(t.second()))
-            : null;
     }
 
     /**
      * Returns a conditional case to deconstruct elements of a triple.
      */
-    @SuppressWarnings("MethodNameSameAsClassName")
     public static <A, B, C, R, X extends Throwable> ConditionCase<Triple<A, B, C>, R, X>
-    Triple(ExceptionTriFunction<A, B, C, R, X> mapper) {
+    Triple_(ExceptionTriFunction<A, B, C, R, X> mapper) {
         return t -> () -> mapper.evaluate(t._1(), t._2(), t._3());
     }
 }

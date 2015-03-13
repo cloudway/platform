@@ -253,9 +253,8 @@ public interface Seq<T> extends Iterable<T>
      * empty. The mapper function will accept list head and tail as it's
      * arguments.
      */
-    @SuppressWarnings("MethodNameSameAsClassName")
     static <T, R, X extends Throwable> ConditionCase<Seq<T>, R, X>
-    Seq(ExceptionBiFunction<? super T, ? super Seq<T>, ? extends R, X> mapper) {
+    Cons(ExceptionBiFunction<? super T, ? super Seq<T>, ? extends R, X> mapper) {
         return s -> s.isEmpty()
             ? null
             : () -> mapper.evaluate(s.head(), SeqImpl.delay(s));
@@ -266,9 +265,8 @@ public interface Seq<T> extends Iterable<T>
      * at least two elements. The mapper function will accept first two elements
      * and remaining elements at it's arguments.
      */
-    @SuppressWarnings("MethodNameSameAsClassName")
     static <T, R, X extends Throwable> ConditionCase<Seq<T>, R, X>
-    Seq(ExceptionTriFunction<? super T, ? super T, ? super Seq<T>, ? extends R, X> mapper) {
+    Cons(ExceptionTriFunction<? super T, ? super T, ? super Seq<T>, ? extends R, X> mapper) {
         return s -> !s.isEmpty() && !s.tail().isEmpty()
             ? () -> mapper.evaluate(s.head(), s.tail().head(), SeqImpl.delay(s.tail()))
             : null;

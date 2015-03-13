@@ -20,7 +20,9 @@ import java.util.function.Supplier;
 import com.cloudway.platform.common.fp.function.TriFunction;
 import static com.cloudway.platform.common.fp.control.Comprehension.*;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
-import static com.cloudway.platform.common.fp.data.Tuple.Triple;
+import static com.cloudway.platform.common.fp.data.Tuple.Triple_;
+
+// @formatter:off
 
 /**
  * The underlying implementation for TreeMap and TreeSet.
@@ -472,9 +474,9 @@ final class Tree {
             } else {
                 Bin<K,V> b = (Bin<K,V>)t;
                 int cmp = b.tip.compare(k, b.key);
-                return cmp < 0 ? inCaseOf(splitMember(b.left, k), Triple((z, lt, gt) ->
+                return cmp < 0 ? inCaseOf(splitMember(b.left, k), Triple_((z, lt, gt) ->
                                     Tuple.of(z, lt, b.link(gt, b.right)))) :
-                       cmp > 0 ? inCaseOf(splitMember(b.right, k), Triple((z, lt, gt) ->
+                       cmp > 0 ? inCaseOf(splitMember(b.right, k), Triple_((z, lt, gt) ->
                                     Tuple.of(z, b.link(b.left, lt), gt)))
                                : Tuple.of(b.value, b.left, b.right);
             }
@@ -491,7 +493,7 @@ final class Tree {
                 return false;
             } else {
                 Bin<K,V> t1b = (Bin<K,V>)t1;
-                return inCaseOf(splitMember(t2, t1b.key), Triple((z, lt, gt) ->
+                return inCaseOf(splitMember(t2, t1b.key), Triple_((z, lt, gt) ->
                     z != null && p.test(t1b.value, z) &&
                     isSubsetOf(t1b.left, lt, p) &&
                     isSubsetOf(t1b.right, gt, p)));

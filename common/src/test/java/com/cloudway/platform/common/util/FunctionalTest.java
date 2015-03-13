@@ -37,7 +37,12 @@ import static com.cloudway.platform.common.fp.control.Conditionals.*;
 import static com.cloudway.platform.common.fp.control.Trampoline.immediate;
 import static com.cloudway.platform.common.fp.control.Trampoline.suspend;
 import static com.cloudway.platform.common.fp.control.Comprehension.*;
-import static com.cloudway.platform.common.fp.data.Tuple.Tuple;
+import static com.cloudway.platform.common.fp.data.IntSeq.IntCons;
+import static com.cloudway.platform.common.fp.data.IntSeq.IntNil;
+import static com.cloudway.platform.common.fp.data.Seq.Cons;
+import static com.cloudway.platform.common.fp.data.Seq.Nil;
+import static com.cloudway.platform.common.fp.data.Seq.Single;
+import static com.cloudway.platform.common.fp.data.Tuple.Tuple_;
 
 // @formatter:off
 public class FunctionalTest
@@ -57,8 +62,8 @@ public class FunctionalTest
 
         public static boolean safe(int q, IntSeq qs, int n) {
             return with(qs).<Boolean>get()
-                .when(IntSeq.Nil(() -> true))
-                .when(IntSeq.Seq((x, xs) -> x != q && x != q + n && x != q - n && safe(q, xs, n+1)))
+                .when(IntNil(() -> true))
+                .when(IntCons((x, xs) -> x != q && x != q + n && x != q - n && safe(q, xs, n+1)))
                 .get();
         }
     }
@@ -106,8 +111,8 @@ public class FunctionalTest
 
     public static IntSeq qsort(IntSeq seq) {
         return with(seq).<IntSeq>get()
-            .when(IntSeq.Nil(IntSeq::nil))
-            .when(IntSeq.Seq((x, xs) -> IntSeq.concat(
+            .when(IntNil(IntSeq::nil))
+            .when(IntCons((x, xs) -> IntSeq.concat(
                     qsort(xs.filter(y -> y < x)),
                     IntSeq.of(x),
                     qsort(xs.filter(y -> y >= x))
@@ -131,9 +136,9 @@ public class FunctionalTest
 
     private static <T extends Comparable<T>> Optional<T> maximum(Seq<T> list) {
         return with(list).<Optional<T>>get()
-            .when(Seq.Nil(Optional::empty))
-            .when(Seq.Single(Optional::of))
-            .when(Seq.Seq((x, y, ys) -> maximum(Seq.cons(max(x, y), ys))))
+            .when(Nil(Optional::empty))
+            .when(Single(Optional::of))
+            .when(Cons((x, y, ys) -> maximum(Seq.cons(max(x, y), ys))))
             .get();
     }
 
@@ -279,15 +284,15 @@ public class FunctionalTest
             }
 
             private Seq<Pair<Integer>> S(int s) {
-                return pairs.filter(on(Tuple((a,b) -> a+b == s)));
+                return pairs.filter(on(Tuple_((a,b) -> a+b == s)));
             }
 
             private Seq<Pair<Integer>> P(int p) {
-                return pairs.filter(on(Tuple((a,b) -> a*b == p)));
+                return pairs.filter(on(Tuple_((a,b) -> a*b == p)));
             }
 
             private <T> boolean unique(Seq<T> s) {
-                return with(s).<Boolean>get().when(Seq.Single(x -> true)).orElse(false);
+                return with(s).<Boolean>get().when(Single(x -> true)).orElse(false);
             }
 
             private boolean MrP_dont_know(int p) {
@@ -295,15 +300,15 @@ public class FunctionalTest
             }
 
             private boolean MrS_knew_MrP_dont_know(int s) {
-                return S(s).allMatch(on(Tuple((a,b) -> MrP_dont_know(a*b))));
+                return S(s).allMatch(on(Tuple_((a,b) -> MrP_dont_know(a*b))));
             }
 
             private boolean MrP_now_know(int p) {
-                return unique(P(p).filter(on(Tuple((a,b) -> MrS_knew_MrP_dont_know(a+b)))));
+                return unique(P(p).filter(on(Tuple_((a,b) -> MrS_knew_MrP_dont_know(a+b)))));
             }
 
             private boolean MrS_now_know(int s) {
-                return unique(S(s).filter(on(Tuple((a,b) -> MrP_now_know(a*b)))));
+                return unique(S(s).filter(on(Tuple_((a,b) -> MrP_now_know(a*b)))));
             }
 
             private Seq<Pair<Integer>> solve() {

@@ -25,8 +25,11 @@ import com.cloudway.platform.common.fp.data.SeqZipper;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.function.ExceptionBiFunction;
+
 import static com.cloudway.platform.common.fp.control.Comprehension.*;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
+import static com.cloudway.platform.common.fp.data.IntSeq.IntCons;
+import static com.cloudway.platform.common.fp.data.IntSeq.IntSingle;
 import static com.cloudway.platform.common.fp.data.Optionals.Just;
 
 // @formatter:off
@@ -42,10 +45,10 @@ public class MonadStateTest {
 
         static IntSeq scan(IntSeq stack, String item) {
             return with(stack, item).<IntSeq>get()
-                .when(IntSeq.Seq((x, y, ys) -> $("+", () -> IntSeq.cons(y + x, ys))))
-                .when(IntSeq.Seq((x, y, ys) -> $("-", () -> IntSeq.cons(y - x, ys))))
-                .when(IntSeq.Seq((x, y, ys) -> $("*", () -> IntSeq.cons(y * x, ys))))
-                .when(IntSeq.Seq((x, y, ys) -> $("/", () -> IntSeq.cons(y / x, ys))))
+                .when(IntCons((x, y, ys) -> $("+", () -> IntSeq.cons(y + x, ys))))
+                .when(IntCons((x, y, ys) -> $("-", () -> IntSeq.cons(y - x, ys))))
+                .when(IntCons((x, y, ys) -> $("*", () -> IntSeq.cons(y * x, ys))))
+                .when(IntCons((x, y, ys) -> $("/", () -> IntSeq.cons(y / x, ys))))
                 .orElseGet(() -> IntSeq.cons(Integer.parseInt(item), stack));
         }
     }
@@ -55,16 +58,16 @@ public class MonadStateTest {
 
         public static OptionalInt solve(String expression) {
             Optional<IntSeq> stack = Optionals.foldM(IntSeq.nil(), Seq.of(SPACES.split(expression)), SafeRPN::scan);
-            return inCaseOf(stack, in(Just(IntSeq.Single(OptionalInt::of))), otherwise(OptionalInt.empty()));
+            return inCaseOf(stack, in(Just(IntSingle(OptionalInt::of))), otherwise(OptionalInt.empty()));
         }
 
         static Optional<IntSeq> scan(IntSeq stack, String item) {
             return with(stack, item).<Optional<IntSeq>>get()
-                .when(IntSeq.Seq((x, y, ys) -> $("+", () -> Optional.of(IntSeq.cons(y + x, ys)))))
-                .when(IntSeq.Seq((x, y, ys) -> $("-", () -> Optional.of(IntSeq.cons(y - x, ys)))))
-                .when(IntSeq.Seq((x, y, ys) -> $("*", () -> Optional.of(IntSeq.cons(y * x, ys)))))
-                .when(IntSeq.Seq((x, y, ys) -> $("/", () -> x == 0 ? Optional.empty()
-                                                                   : Optional.of(IntSeq.cons(y / x, ys)))))
+                .when(IntCons((x, y, ys) -> $("+", () -> Optional.of(IntSeq.cons(y + x, ys)))))
+                .when(IntCons((x, y, ys) -> $("-", () -> Optional.of(IntSeq.cons(y - x, ys)))))
+                .when(IntCons((x, y, ys) -> $("*", () -> Optional.of(IntSeq.cons(y * x, ys)))))
+                .when(IntCons((x, y, ys) -> $("/", () -> x == 0 ? Optional.empty()
+                                                                : Optional.of(IntSeq.cons(y / x, ys)))))
                 .orElseGet(() -> parseIntOpt(item).map(n -> IntSeq.cons(n, stack)));
         }
     }
@@ -141,7 +144,7 @@ public class MonadStateTest {
 
         static MonadState<Integer, Optional<IntSeq>> pop() {
             return MonadState.state((Optional<IntSeq> stack) ->
-                select.from(stack, as(IntSeq.Seq((x, xs) ->
+                select.from(stack, as(IntCons((x, xs) ->
                        yield(Tuple.of(x, Optional.of(xs))))))
                       .orElseGet(() -> Tuple.of(0, Optional.empty())));
         }

@@ -20,7 +20,7 @@ import com.cloudway.platform.common.fp.data.Tuple;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
 import static com.cloudway.platform.common.fp.control.Comprehension.*;
 import static com.cloudway.platform.common.fp.data.Optionals.Just;
-import static com.cloudway.platform.common.fp.data.Tuple.Tuple;
+import static com.cloudway.platform.common.fp.data.Tuple.Tuple_;
 
 // @formatter:off
 public class ComprehensionTest
@@ -89,12 +89,12 @@ public class ComprehensionTest
         };
         String result;
 
-        result = select.from(Stream.of(source), as(Tuple((a, b) ->
+        result = select.from(Stream.of(source), as(Tuple_((a, b) ->
                         yield(a + ":" + b))))
                        .collect(joining(","));
         assertEquals("a:1,b:2,c:3", result);
 
-        result = select.from(Seq.of(source), as(Tuple((a, b) ->
+        result = select.from(Seq.of(source), as(Tuple_((a, b) ->
                         yield(a + ":" + b))))
                        .show(",", "", "");
         assertEquals("a:1,b:2,c:3", result);
@@ -107,12 +107,12 @@ public class ComprehensionTest
         };
         String result;
 
-        result = select.from(Stream.of(source), as(in(Just(Tuple((a,b) ->
+        result = select.from(Stream.of(source), as(in(Just(Tuple_((a,b) ->
                         yield(a + ":" + b))))))
                        .collect(joining(","));
         assertEquals("a:1,c:3", result);
 
-        result = select.from(Seq.of(source), as(in(Just(Tuple((a,b) ->
+        result = select.from(Seq.of(source), as(in(Just(Tuple_((a,b) ->
                         yield(a + ":" + b))))))
                        .show(",", "", "");
         assertEquals("a:1,c:3", result);
