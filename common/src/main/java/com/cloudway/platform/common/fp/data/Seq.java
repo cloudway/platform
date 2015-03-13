@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.function.BiConsumer;
@@ -70,6 +71,15 @@ public interface Seq<T> extends Iterable<T>
         return isEmpty() ? Optional.empty() : Optional.of(head());
     }
 
+    /**
+     * Returns <tt>true</tt> if this list contains the specified element.
+     *
+     * @return <tt>true</tt> if this list contains the specified element
+     */
+    default boolean contains(T e) {
+        return find(x -> Objects.equals(e, x)).isPresent();
+    }
+
     // Constructors
 
     /**
@@ -101,6 +111,18 @@ public interface Seq<T> extends Iterable<T>
      */
     static <T> Seq<T> cons(T head, Supplier<Seq<T>> tail) {
         return SeqImpl.cons(head, tail);
+    }
+
+    /**
+     * Construct a lazy list with two head elements and a tail generator.
+     *
+     * @param x the first element in the list
+     * @param y the second element in the list
+     * @param ys a supplier to generate remaining elements in the list
+     * @return the list that concatenate from heads and tail
+     */
+    static <T> Seq<T> cons(T x, T y, Supplier<Seq<T>> ys) {
+        return cons(x, cons(y, ys));
     }
 
     /**
@@ -194,32 +216,7 @@ public interface Seq<T> extends Iterable<T>
      * Create an infinite list where all items are the specified object.
      */
     static <T> Seq<T> repeat(T value) {
-        return new Seq<T>() {
-            @Override
-            public boolean isEmpty() {
-                return false;
-            }
-
-            @Override
-            public T head() {
-                return value;
-            }
-
-            @Override
-            public Seq<T> tail() {
-                return this;
-            }
-
-            @Override
-            public Seq<T> reverse() {
-                return this;
-            }
-
-            @Override
-            public String toString() {
-                return "[" + value + ", ...]";
-            }
-        };
+        return new SeqImpl.Reapter<>(value);
     }
 
     /**
@@ -451,6 +448,16 @@ public interface Seq<T> extends Iterable<T>
      */
     default Seq<T> sorted(Comparator<? super T> comparator) {
         return SeqImpl.sort(this, comparator);
+    }
+
+    /**
+     * Returns a sequence consisting of the distinct elements (according to
+     * {@link Object#equals(Object)}) of this sequence.
+     *
+     * @return the new sequence
+     */
+    default Seq<T> distinct() {
+        return SeqImpl.distinct(this);
     }
 
     /**
@@ -723,9 +730,9 @@ public interface Seq<T> extends Iterable<T>
      */
     default Optional<T> find(Predicate<? super T> predicate) {
         for (Seq<T> xs = this; !xs.isEmpty(); xs = xs.tail()) {
-            T val = xs.head();
-            if (predicate.test(val)) {
-                return Optional.of(val);
+            T x = xs.head();
+            if (predicate.test(x)) {
+                return Optional.of(x);
             }
         }
         return Optional.empty();

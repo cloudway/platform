@@ -7,6 +7,8 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -179,6 +181,39 @@ final class SeqImpl {
         }
     }
 
+    static class Reapter<T> implements Seq<T> {
+        private final T value;
+
+        Reapter(T value) {
+            this.value = value;
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return false;
+        }
+
+        @Override
+        public T head() {
+            return value;
+        }
+
+        @Override
+        public Seq<T> tail() {
+            return this;
+        }
+
+        @Override
+        public Seq<T> reverse() {
+            return this;
+        }
+
+        @Override
+        public String toString() {
+            return "[" + value + ", ...]";
+        }
+    }
+
     @SuppressWarnings("unchecked")
     static <T> Seq<T> nil() {
         return (Seq<T>)NIL;
@@ -286,5 +321,22 @@ final class SeqImpl {
         return cmp.compare(as.head(), bs.head()) > 0
             ? cons(bs.head(), () -> merge(as, bs.tail(), cmp))
             : cons(as.head(), () -> merge(as.tail(), bs, cmp));
+    }
+
+    static <T> Seq<T> distinct(Seq<T> xs) {
+        return distinct(xs, new HashMap<>());
+    }
+
+    private static <T> Seq<T> distinct(Seq<T> xs, Map<T, Unit> ls) {
+        while (!xs.isEmpty()) {
+            T x = xs.head();
+            Seq<T> t = xs;
+            if (ls.putIfAbsent(x, Unit.U) == null) {
+                return cons(x, () -> distinct(t.tail(), ls));
+            } else {
+                xs = xs.tail();
+            }
+        }
+        return xs;
     }
 }
