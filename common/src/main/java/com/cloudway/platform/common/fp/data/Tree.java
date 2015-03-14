@@ -7,6 +7,7 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.Comparator;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
@@ -33,7 +34,6 @@ final class Tree {
     /**
      * The common operations of a balanced binary tree.
      */
-    @SuppressWarnings("unused")
     interface Node<K,V> {
         boolean isEmpty();
         int size();
@@ -47,8 +47,8 @@ final class Tree {
         Node<K,V> __compute(K k, BiFunction<? super K, Optional<V>, Optional<? extends V>> f);
         Node<K,V> __merge(K k, V v, BiFunction<? super V, ? super V, ? extends V> f);
 
-        <R> Node<K,R> __map(BiFunction<? super K, ? super V, ? extends R> f);
-        Node<K,V> __filter(BiPredicate<? super K, ? super V> p);
+        <R> Node<K,R> __map(Function<Map.Entry<K,V>, ? extends R> f);
+        Node<K,V> __filter(Predicate<Map.Entry<K,V>> p);
 
         boolean valid();
     }
@@ -124,12 +124,12 @@ final class Tree {
 
         @Override
         @SuppressWarnings("unchecked")
-        public <R> Node<K,R> __map(BiFunction<? super K, ? super V, ? extends R> f) {
+        public <R> Node<K,R> __map(Function<Map.Entry<K,V>, ? extends R> f) {
             return (Node<K,R>)this;
         }
 
         @Override
-        public Node<K,V> __filter(BiPredicate<? super K, ? super V> p) {
+        public Node<K,V> __filter(Predicate<Map.Entry<K,V>> p) {
             return this;
         }
 
@@ -142,7 +142,7 @@ final class Tree {
     /**
      * A tree node that contains data and child nodes.
      */
-    static class Bin<K,V> implements Node<K,V> {
+    static class Bin<K,V> implements Node<K,V>, Map.Entry<K,V> {
         final Tip<K,V> tip;
         final int size;
         final K key;
@@ -167,6 +167,21 @@ final class Tree {
         @Override
         public int size() {
             return size;
+        }
+
+        @Override
+        public K getKey() {
+            return key;
+        }
+
+        @Override
+        public V getValue() {
+            return value;
+        }
+
+        @Override
+        public V setValue(V value) {
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -243,21 +258,21 @@ final class Tree {
         }
 
         @Override
-        public <R> Node<K,R> __map(BiFunction<? super K, ? super V, ? extends R> f) {
+        public <R> Node<K,R> __map(Function<Map.Entry<K,V>, ? extends R> f) {
             @SuppressWarnings("unchecked") Tip<K,R> t = (Tip<K,R>)tip;
-            return t.cons(size, key, f.apply(key, value), left.__map(f), right.__map(f));
+            return t.cons(size, key, f.apply(this), left.__map(f), right.__map(f));
         }
 
         @Override
-        public Node<K,V> __filter(BiPredicate<? super K, ? super V> p) {
-            if (p.test(key, value)) {
+        public Node<K,V> __filter(Predicate<Map.Entry<K,V>> p) {
+            if (p.test(this)) {
                 return link(left.__filter(p), right.__filter(p));
             } else {
                 return merge(left.__filter(p), right.__filter(p));
             }
         }
 
-        static <K,V> Optional<Bin<K,V>> lookupLT(Node<K,V> t, K k) {
+        static <K,V> Optional<Map.Entry<K,V>> lookupLT(Node<K,V> t, K k) {
             Bin<K,V> lt = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
@@ -271,7 +286,7 @@ final class Tree {
             return Optional.ofNullable(lt);
         }
 
-        static <K,V> Optional<Bin<K,V>> lookupGT(Node<K,V> t, K k) {
+        static <K,V> Optional<Map.Entry<K,V>> lookupGT(Node<K,V> t, K k) {
             Bin<K,V> gt = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
@@ -285,7 +300,7 @@ final class Tree {
             return Optional.ofNullable(gt);
         }
 
-        static <K,V> Optional<Bin<K,V>> lookupLE(Node<K,V> t, K k) {
+        static <K,V> Optional<Map.Entry<K,V>> lookupLE(Node<K,V> t, K k) {
             Bin<K,V> le = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
@@ -303,7 +318,7 @@ final class Tree {
             return Optional.ofNullable(le);
         }
 
-        static <K,V> Optional<Bin<K,V>> lookupGE(Node<K,V> t, K k) {
+        static <K,V> Optional<Map.Entry<K,V>> lookupGE(Node<K,V> t, K k) {
             Bin<K,V> ge = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
@@ -321,7 +336,7 @@ final class Tree {
             return Optional.ofNullable(ge);
         }
 
-        static <K,V> Bin<K,V> findFirst(Node<K,V> t) {
+        static <K,V> Map.Entry<K,V> findFirst(Node<K,V> t) {
             if (t.isEmpty()) {
                 throw new NoSuchElementException();
             } else {
@@ -333,7 +348,7 @@ final class Tree {
             }
         }
 
-        static <K,V> Bin<K,V> findLast(Node<K,V> t) {
+        static <K,V> Map.Entry<K,V> findLast(Node<K,V> t) {
             if (t.isEmpty()) {
                 throw new NoSuchElementException();
             } else {
@@ -422,19 +437,28 @@ final class Tree {
             }
         }
 
-        static <K,V,R> R foldLeft(Node<K,V> t, R z, TriFunction<R, ? super K, ? super V, R> f) {
+        static <K,V,R> R foldLeft(Node<K,V> t, R z, BiFunction<R, Map.Entry<K,V>, R> f) {
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
-                z = f.apply(foldLeft(b.left, z, f), b.key, b.value);
+                z = f.apply(foldLeft(b.left, z, f), b);
                 t = b.right;
             }
             return z;
         }
 
-        static <K,V,R> R foldRight(Node<K,V> t, R z, TriFunction<? super K, ? super V, Supplier<R>, R> f) {
+        static <K,V,R> R foldRight(Node<K,V> t, R z, BiFunction<Map.Entry<K,V>, Supplier<R>, R> f) {
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t; R r = z;
-                z = f.apply(b.key, b.value, () -> foldRight(b.right, r, f));
+                z = f.apply(b, () -> foldRight(b.right, r, f));
+                t = b.left;
+            }
+            return z;
+        }
+
+        static <K,V,R> R foldRight_(Node<K,V> t, R z, BiFunction<Map.Entry<K,V>, R, R> f) {
+            while (!t.isEmpty()) {
+                Bin<K,V> b = (Bin<K,V>)t; R r = z;
+                z = f.apply(b, foldRight_(b.right, r, f));
                 t = b.left;
             }
             return z;
@@ -459,7 +483,7 @@ final class Tree {
         }
 
         Node<K,V> balanceR(Node<K,V> l, Node<K,V> r) {
-            return (l == left && r == right) ? this :  balanceR(tip, key, value, l, r);
+            return (l == left && r == right) ? this : balanceR(tip, key, value, l, r);
         }
 
         // Utility methods that return sub-ranges of the original tree
@@ -821,7 +845,6 @@ final class Tree {
          * balanceL is called when left subtree might have been inserted to or when
          * right subtree might have been deleted from.
          */
-        @SuppressWarnings("MethodOnlyUsedFromInnerClass")
         static <K, V> Node<K,V> balanceL(Tip<K,V> tip, K k, V v, Node<K,V> l, Node<K,V> r) {
             if (r.isEmpty()) {
                 if (l.isEmpty()) {
@@ -880,7 +903,6 @@ final class Tree {
          * balanceR is called when right subtree might have been inserted to or when
          * left subtree might have been deleted from.
          */
-        @SuppressWarnings("MethodOnlyUsedFromInnerClass")
         static <K, V> Node<K,V> balanceR(Tip<K,V> tip, K k, V v, Node<K,V> l, Node<K,V> r) {
             if (l.isEmpty()) {
                 if (r.isEmpty()) {
@@ -942,7 +964,7 @@ final class Tree {
 
         static <K, V> String showTree(Node<K,V> t, BiFunction<? super K, ? super V, String> elem, Seq<String> bars) {
             if (t.isEmpty()) {
-                return showBars(bars) + "|\n";
+                return showBars(bars) + "@\n";
             }
 
             Bin<K,V> tb = (Bin<K,V>)t;
@@ -1098,85 +1120,118 @@ final class Tree {
         }
 
         @Override
+        default <R> TreeMap<K,R> map(Function<? super V, ? extends R> f) {
+            return (TreeMap<K,R>)__map(b -> f.apply(b.getValue()));
+        }
+
+        @Override
         default <R> TreeMap<K,R> mapKV(BiFunction<? super K, ? super V, ? extends R> f) {
-            return (TreeMap<K,R>)__map(f);
+            return (TreeMap<K,R>)__map(b -> f.apply(b.getKey(), b.getValue()));
+        }
+
+        @Override
+        default TreeMap<K,V> filter(Predicate<? super V> p) {
+            return (TreeMap<K,V>)__filter(b -> p.test(b.getValue()));
         }
 
         @Override
         default TreeMap<K,V> filterKV(BiPredicate<? super K, ? super V> p) {
-            return (TreeMap<K,V>)__filter(p);
+            return (TreeMap<K,V>)__filter(b -> p.test(b.getKey(), b.getValue()));
+        }
+
+        @Override
+        default <R> R foldLeft(R z, BiFunction<R, ? super V, R> f) {
+            return Bin.foldLeft(this, z, (r, b) -> f.apply(r, b.getValue()));
         }
 
         @Override
         default <R> R foldLeftKV(R z, TriFunction<R, ? super K, ? super V, R> f) {
-            return Bin.foldLeft(this, z, f);
+            return Bin.foldLeft(this, z, (r, b) -> f.apply(r, b.getKey(), b.getValue()));
+        }
+
+        @Override
+        default <R> R foldRight(R z, BiFunction<? super V, Supplier<R>, R> f) {
+            return Bin.foldRight(this, z, (b, r) -> f.apply(b.getValue(), r));
         }
 
         @Override
         default <R> R foldRightKV(R z, TriFunction<? super K, ? super V, Supplier<R>, R> f) {
-            return Bin.foldRight(this, z, f);
+            return Bin.foldRight(this, z, (b, r) -> f.apply(b.getKey(), b.getValue(), r));
         }
 
         @Override
-        default Optional<Tuple<K, V>> lowerEntry(K k) {
-            return Bin.lookupLT(this, k).map(b -> Tuple.of(b.key, b.value));
+        default <R> R foldRight_(R z, BiFunction<? super V, R, R> f) {
+            return Bin.foldRight_(this, z, (b, r) -> f.apply(b.getValue(), r));
+        }
+
+        @Override
+        default <R> R foldRightKV_(R z, TriFunction<? super K, ? super V, R, R> f) {
+            return Bin.foldRight_(this, z, (b, r) -> f.apply(b.getKey(), b.getValue(), r));
+        }
+
+        @Override
+        default Seq<Map.Entry<K,V>> entries() {
+            return Bin.foldRight(this, Seq.nil(), Seq::cons);
+        }
+
+        @Override
+        default Optional<Map.Entry<K, V>> lowerEntry(K k) {
+            return Bin.lookupLT(this, k);
         }
 
         @Override
         default Optional<K> lowerKey(K k) {
-            return Bin.lookupLT(this, k).map(b -> b.key);
+            return Bin.lookupLT(this, k).map(Map.Entry::getKey);
         }
 
         @Override
-        default Optional<Tuple<K,V>> floorEntry(K k) {
-            return Bin.lookupLE(this, k).map(b -> Tuple.of(b.key, b.value));
+        default Optional<Map.Entry<K,V>> floorEntry(K k) {
+            return Bin.lookupLE(this, k);
         }
 
         @Override
         default Optional<K> floorKey(K k) {
-            return Bin.lookupLE(this, k).map(b -> b.key);
+            return Bin.lookupLE(this, k).map(Map.Entry::getKey);
         }
 
         @Override
-        default Optional<Tuple<K,V>> ceilingEntry(K k) {
-            return Bin.lookupGE(this, k).map(b -> Tuple.of(b.key, b.value));
+        default Optional<Map.Entry<K,V>> ceilingEntry(K k) {
+            return Bin.lookupGE(this, k);
         }
 
         @Override
         default Optional<K> ceilingKey(K k) {
-            return Bin.lookupGE(this, k).map(b -> b.key);
+            return Bin.lookupGE(this, k).map(Map.Entry::getKey);
         }
 
         @Override
-        default Optional<Tuple<K,V>> higherEntry(K k) {
-            return Bin.lookupGT(this, k).map(b -> Tuple.of(b.key, b.value));
+        default Optional<Map.Entry<K,V>> higherEntry(K k) {
+            return Bin.lookupGT(this, k);
         }
 
         @Override
         default Optional<K> higherKey(K k) {
-            return Bin.lookupGT(this, k).map(b -> b.key);
+            return Bin.lookupGT(this, k).map(Map.Entry::getKey);
         }
 
         @Override
-        default Tuple<K,V> firstEntry() {
-            Bin<K,V> first = Bin.findFirst(this);
-            return Tuple.of(first.key, first.value);
+        default Map.Entry<K,V> firstEntry() {
+            return Bin.findFirst(this);
         }
 
         @Override
         default K firstKey() {
-            return Bin.findFirst(this).key;
+            return Bin.findFirst(this).getKey();
         }
 
         @Override
-        default Tuple<K,V> lastEntry() {
-            Bin<K,V> last = Bin.findLast(this);
-            return Tuple.of(last.key, last.value);
+        default Map.Entry<K,V> lastEntry() {
+            return Bin.findLast(this);
         }
 
         @Override
         default K lastKey() {
-            return Bin.findLast(this).key;
+            return Bin.findLast(this).getKey();
         }
 
         @Override
@@ -1292,27 +1347,27 @@ final class Tree {
 
         @Override
         default <R> TreeSet<R> map(Function<? super E, ? extends R> f) {
-            return (TreeSet<R>)__map((e, u) -> f.apply(e));
+            return (TreeSet<R>)__map(b -> f.apply(b.getKey()));
         }
 
         @Override
-        default TreeSet<E> filter(Predicate<E> p) {
-            return (TreeSet<E>)__filter((e, u) -> p.test(e));
+        default TreeSet<E> filter(Predicate<? super E> p) {
+            return (TreeSet<E>)__filter(b -> p.test(b.getKey()));
         }
 
         @Override
         default <R> R foldLeft(R z, BiFunction<R, ? super E, R> f) {
-            return Bin.foldLeft(this, z, (r, e, u) -> f.apply(r, e));
+            return Bin.foldLeft(this, z, (r, b) -> f.apply(r, b.getKey()));
         }
 
         @Override
         default <R> R foldRight(R z, BiFunction<? super E, Supplier<R>, R> f) {
-            return Bin.foldRight(this, z, (e, u, r) -> f.apply(e, r));
+            return Bin.foldRight(this, z, (b, r) -> f.apply(b.getKey(), r));
         }
 
         @Override
         default <R> R foldRight_(R z, BiFunction<? super E, R, R> f) {
-            return Bin.foldRight(this, z, (e, u, r) -> f.apply(e, r.get()));
+            return Bin.foldRight(this, z, (b, r) -> f.apply(b.getKey(), r.get()));
         }
 
         @Override
@@ -1332,32 +1387,32 @@ final class Tree {
 
         @Override
         default Optional<E> lower(E e) {
-            return Bin.lookupLT(this, e).map(b -> b.key);
+            return Bin.lookupLT(this, e).map(Map.Entry::getKey);
         }
 
         @Override
         default Optional<E> floor(E e) {
-            return Bin.lookupLE(this, e).map(b -> b.key);
+            return Bin.lookupLE(this, e).map(Map.Entry::getKey);
         }
 
         @Override
         default Optional<E> ceiling(E e) {
-            return Bin.lookupGE(this, e).map(b -> b.key);
+            return Bin.lookupGE(this, e).map(Map.Entry::getKey);
         }
 
         @Override
         default Optional<E> higher(E e) {
-            return Bin.lookupGT(this, e).map(b -> b.key);
+            return Bin.lookupGT(this, e).map(Map.Entry::getKey);
         }
 
         @Override
         default E first() {
-            return Bin.findFirst(this).key;
+            return Bin.findFirst(this).getKey();
         }
 
         @Override
         default E last() {
-            return Bin.findLast(this).key;
+            return Bin.findLast(this).getKey();
         }
     }
 

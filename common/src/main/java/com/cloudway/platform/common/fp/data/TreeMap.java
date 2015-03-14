@@ -7,6 +7,7 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.Comparator;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
@@ -348,9 +349,7 @@ public interface TreeMap<K, V> {
      *
      * @return a list of the mappings contained in this map
      */
-    default Seq<Tuple<K,V>> entries() {
-        return foldRightKV(Seq.nil(), (k, v, ts) -> Seq.cons(Tuple.of(k, v), ts));
-    }
+    Seq<Map.Entry<K,V>> entries();
 
     // Folding
 
@@ -358,9 +357,7 @@ public interface TreeMap<K, V> {
      * Reduce the map elements using the accumulator function that accept
      * element value, from left to right.
      */
-    default <R> R foldLeft(R seed, BiFunction<R, ? super V, R> accumulator) {
-        return foldLeftKV(seed, (z, k, v) -> accumulator.apply(z, v));
-    }
+    <R> R foldLeft(R seed, BiFunction<R, ? super V, R> accumulator);
 
     /**
      * Reduce the map elements using the accumulator function that accept
@@ -374,9 +371,7 @@ public interface TreeMap<K, V> {
      * accumulator accept a delay evaluation of reduced result instead of
      * a strict value.
      */
-    default <R> R foldRight(R seed, BiFunction<? super V, Supplier<R>, R> accumulator) {
-        return foldRightKV(seed, (k, v, z) -> accumulator.apply(v, z));
-    }
+    <R> R foldRight(R seed, BiFunction<? super V, Supplier<R>, R> accumulator);
 
     /**
      * Reduce the map elements using the accumulator function that accept
@@ -389,16 +384,12 @@ public interface TreeMap<K, V> {
     /**
      * The strict version of {@link #foldRight(Object,BiFunction) foldRight}.
      */
-    default <R> R foldRight_(R seed, BiFunction<? super V, R, R> accumulator) {
-        return foldRightKV(seed, (k, v, z) -> accumulator.apply(v, z.get()));
-    }
+    <R> R foldRight_(R seed, BiFunction<? super V, R, R> accumulator);
 
     /**
      * the strict version of {@link #foldRightKV(Object,TriFunction) foldRightKV}.
      */
-    default <R> R foldRightKV_(R seed, TriFunction<? super K, ? super V, R, R> accumulator) {
-        return foldRightKV(seed, (k, v, z) -> accumulator.apply(k, v, z.get()));
-    }
+    <R> R foldRightKV_(R seed, TriFunction<? super K, ? super V, R, R> accumulator);
 
     // Navigation
 
@@ -411,7 +402,7 @@ public interface TreeMap<K, V> {
      * @return an entry with the greatest key less than {@code key}, or
      *         {@code Optional.empty()} if there is no such key
      */
-    Optional<Tuple<K, V>> lowerEntry(K key);
+    Optional<Map.Entry<K, V>> lowerEntry(K key);
 
     /**
      * Returns the greatest key strictly less than the given key, or
@@ -432,7 +423,7 @@ public interface TreeMap<K, V> {
      * @return an entry with the greatest key less than or equal to {@code key},
      *         or {@code Optional.empty()} if there is no such key
      */
-    Optional<Tuple<K, V>> floorEntry(K key);
+    Optional<Map.Entry<K, V>> floorEntry(K key);
 
     /**
      * Returns the greatest key less than or equal to the given key, or
@@ -453,7 +444,7 @@ public interface TreeMap<K, V> {
      * @return an entry with the least key greater than or equal to {@code key},
      *         or {@code Optional.empty()} if there is no such key
      */
-    Optional<Tuple<K, V>> ceilingEntry(K key);
+    Optional<Map.Entry<K, V>> ceilingEntry(K key);
 
     /**
      * Returns the least key greater than or equal to the given key, or
@@ -473,7 +464,7 @@ public interface TreeMap<K, V> {
      * @return an entry with the least key greater than {@code key}, or
      *         {@code Optional.empty()} if there is no such key
      */
-    Optional<Tuple<K, V>> higherEntry(K key);
+    Optional<Map.Entry<K, V>> higherEntry(K key);
 
     /**
      * Returns the least key strictly greater than the given key, or
@@ -491,7 +482,7 @@ public interface TreeMap<K, V> {
      * @return an entry with the least key
      * @throws NoSuchElementException if this map is empty
      */
-    Tuple<K, V> firstEntry();
+    Map.Entry<K, V> firstEntry();
 
     /**
      * Returns the first (lowest) key currently in this map.
@@ -507,12 +498,12 @@ public interface TreeMap<K, V> {
      * @return an entry with the greatest key
      * @throws NoSuchElementException if this map is empty
      */
-    Tuple<K, V> lastEntry();
+    Map.Entry<K, V> lastEntry();
 
     /**
-     * Returns the last (higest) key currently in this map.
+     * Returns the last (highest) key currently in this map.
      *
-     * @return the last (higest) key currently in this map
+     * @return the last (highest) key currently in this map
      * @throws NoSuchElementException if this map is empty
      */
     K lastKey();

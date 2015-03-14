@@ -9,6 +9,7 @@ package com.cloudway.platform.common.util;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Random;
@@ -19,11 +20,11 @@ import org.junit.Test;
 import static java.util.Comparator.*;
 import static org.junit.Assert.*;
 
+import com.cloudway.platform.common.fp.data.CopyOnWriteTreeMap;
 import com.cloudway.platform.common.fp.data.IntSeq;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.TreeMap;
 import com.cloudway.platform.common.fp.data.TreeSet;
-import com.cloudway.platform.common.fp.data.Tuple;
 
 public class TreeTest {
     private TreeMap<String, Integer> tm;
@@ -357,7 +358,7 @@ public class TreeTest {
     @Test
     public void test_entries() {
         tm.entries().forEach(t -> {
-            assertSame(tm.get(t.first()), t.second());
+            assertSame(tm.get(t.getKey()), t.getValue());
         });
     }
 
@@ -367,31 +368,65 @@ public class TreeTest {
             IntSeq.rangeClosed(0, 100, 2).boxed()
                   .foldLeft(TreeMap.empty(), (m, x) -> m.put(x, x));
 
-        assertEquals(Tuple.of(0, 0), tm.firstEntry());
+        assertEntryEquals(0, 0, tm.firstEntry());
         assertEquals(Integer.valueOf(0), tm.firstKey());
-        assertEquals(Tuple.of(100, 100), tm.lastEntry());
+        assertEntryEquals(100, 100, tm.lastEntry());
         assertEquals(Integer.valueOf(100), tm.lastKey());
 
-        assertEquals(Optional.of(Tuple.of(40, 40)), tm.lowerEntry(42));
+        assertEntryEquals(40, 40, tm.lowerEntry(42));
         assertEquals(Optional.of(40), tm.lowerKey(42));
-        assertEquals(Optional.of(Tuple.of(40, 40)), tm.lowerEntry(41));
+        assertEntryEquals(40, 40, tm.lowerEntry(41));
         assertEquals(Optional.of(40), tm.lowerKey(41));
-        assertEquals(Optional.of(Tuple.of(42, 42)), tm.floorEntry(42));
+        assertEntryEquals(42, 42, tm.floorEntry(42));
         assertEquals(Optional.of(42), tm.floorKey(42));
-        assertEquals(Optional.of(Tuple.of(40, 40)), tm.floorEntry(41));
+        assertEntryEquals(40, 40, tm.floorEntry(41));
         assertEquals(Optional.of(40), tm.floorKey(41));
-        assertEquals(Optional.of(Tuple.of(42, 42)), tm.ceilingEntry(42));
+        assertEntryEquals(42, 42, tm.ceilingEntry(42));
         assertEquals(Optional.of(42), tm.ceilingKey(42));
-        assertEquals(Optional.of(Tuple.of(42, 42)), tm.ceilingEntry(41));
+        assertEntryEquals(42, 42, tm.ceilingEntry(41));
         assertEquals(Optional.of(42), tm.ceilingKey(41));
-        assertEquals(Optional.of(Tuple.of(44, 44)), tm.higherEntry(42));
+        assertEntryEquals(44, 44, tm.higherEntry(42));
         assertEquals(Optional.of(44), tm.higherKey(42));
-        assertEquals(Optional.of(Tuple.of(42, 42)), tm.higherEntry(41));
+        assertEntryEquals(42, 42, tm.higherEntry(41));
         assertEquals(Optional.of(42), tm.higherKey(41));
 
-        assertEquals(Optional.<Tuple<Integer,Integer>>empty(), tm.lowerEntry(0));
+        assertEquals(Optional.<Map.Entry<Integer,Integer>>empty(), tm.lowerEntry(0));
         assertEquals(Optional.<Integer>empty(), tm.lowerKey(0));
-        assertEquals(Optional.<Tuple<Integer,Integer>>empty(), tm.higherEntry(100));
+        assertEquals(Optional.<Map.Entry<Integer,Integer>>empty(), tm.higherEntry(100));
         assertEquals(Optional.<Integer>empty(), tm.higherKey(100));
+    }
+
+    static <K,V> void assertEntryEquals(K k, V v, Map.Entry<K,V> e) {
+        assertEquals(k, e.getKey());
+        assertEquals(v, e.getValue());
+    }
+
+    static <K,V> void assertEntryEquals(K k, V v, Optional<Map.Entry<K,V>> e) {
+        assertTrue(e.isPresent());
+        assertEquals(k, e.get().getKey());
+        assertEquals(v, e.get().getValue());
+    }
+
+    @Test
+    public void test_CopyOnWriteTreeMap() {
+        List<Character> vowels = Arrays.asList('a', 'e', 'i', 'o', 'u');
+
+        CopyOnWriteTreeMap<Character, Integer> actual = new CopyOnWriteTreeMap<>();
+        for (char c = 'a'; c <= 'z'; c++) {
+            actual.put(c, (int)c);
+        }
+        actual.keySet().removeAll(vowels);
+
+        HashMap<Character, Integer> expected = new HashMap<>();
+        for (char c = 'a'; c <= 'z'; c++) {
+            expected.put(c, (int)c);
+        }
+        expected.keySet().removeAll(vowels);
+
+        assertEquals(expected.size(), actual.size());
+        expected.forEach((k, v) -> {
+            assertTrue(actual.containsKey(k));
+            assertEquals(v, actual.get(k));
+        });
     }
 }

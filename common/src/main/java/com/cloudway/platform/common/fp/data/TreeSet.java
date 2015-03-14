@@ -188,7 +188,7 @@ public interface TreeSet<E> {
      * should be included
      * @return the filtered set
      */
-    TreeSet<E> filter(Predicate<E> predicate);
+    TreeSet<E> filter(Predicate<? super E> predicate);
 
     /**
      * Perform the given action for each element in this set until all elements
