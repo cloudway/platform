@@ -58,9 +58,9 @@ final class Tree {
      * tree node.
      */
     static abstract class Tip<K,V> implements Node<K,V> {
-        final Comparator<K> cmp;
+        final Comparator<? super K> cmp;
 
-        protected Tip(Comparator<K> cmp) {
+        protected Tip(Comparator<? super K> cmp) {
             this.cmp = cmp;
         }
 
@@ -254,6 +254,94 @@ final class Tree {
                 return link(left.__filter(p), right.__filter(p));
             } else {
                 return merge(left.__filter(p), right.__filter(p));
+            }
+        }
+
+        static <K,V> Optional<Bin<K,V>> lookupLT(Node<K,V> t, K k) {
+            Bin<K,V> lt = null;
+            while (!t.isEmpty()) {
+                Bin<K,V> b = (Bin<K,V>)t;
+                if (b.tip.compare(k, b.key) <= 0) {
+                    t = b.left;
+                } else {
+                    lt = b;
+                    t = b.right;
+                }
+            }
+            return Optional.ofNullable(lt);
+        }
+
+        static <K,V> Optional<Bin<K,V>> lookupGT(Node<K,V> t, K k) {
+            Bin<K,V> gt = null;
+            while (!t.isEmpty()) {
+                Bin<K,V> b = (Bin<K,V>)t;
+                if (b.tip.compare(k, b.key) >= 0) {
+                    t = b.right;
+                } else {
+                    gt = b;
+                    t = b.left;
+                }
+            }
+            return Optional.ofNullable(gt);
+        }
+
+        static <K,V> Optional<Bin<K,V>> lookupLE(Node<K,V> t, K k) {
+            Bin<K,V> le = null;
+            while (!t.isEmpty()) {
+                Bin<K,V> b = (Bin<K,V>)t;
+                int cmp = b.tip.compare(k, b.key);
+                if (cmp < 0) {
+                    t = b.left;
+                } else if (cmp > 0) {
+                    le = b;
+                    t = b.right;
+                } else {
+                    le = b;
+                    break;
+                }
+            }
+            return Optional.ofNullable(le);
+        }
+
+        static <K,V> Optional<Bin<K,V>> lookupGE(Node<K,V> t, K k) {
+            Bin<K,V> ge = null;
+            while (!t.isEmpty()) {
+                Bin<K,V> b = (Bin<K,V>)t;
+                int cmp = b.tip.compare(k, b.key);
+                if (cmp > 0) {
+                    t = b.right;
+                } else if (cmp < 0) {
+                    ge = b;
+                    t = b.left;
+                } else {
+                    ge = b;
+                    break;
+                }
+            }
+            return Optional.ofNullable(ge);
+        }
+
+        static <K,V> Bin<K,V> findFirst(Node<K,V> t) {
+            if (t.isEmpty()) {
+                throw new NoSuchElementException();
+            } else {
+                Bin<K,V> b = (Bin<K,V>)t;
+                while (!b.left.isEmpty()) {
+                    b = (Bin<K,V>)b.left;
+                }
+                return b;
+            }
+        }
+
+        static <K,V> Bin<K,V> findLast(Node<K,V> t) {
+            if (t.isEmpty()) {
+                throw new NoSuchElementException();
+            } else {
+                Bin<K,V> b = (Bin<K,V>)t;
+                while (!b.right.isEmpty()) {
+                    b = (Bin<K,V>)b.right;
+                }
+                return b;
             }
         }
 
@@ -1030,6 +1118,68 @@ final class Tree {
         }
 
         @Override
+        default Optional<Tuple<K, V>> lowerEntry(K k) {
+            return Bin.lookupLT(this, k).map(b -> Tuple.of(b.key, b.value));
+        }
+
+        @Override
+        default Optional<K> lowerKey(K k) {
+            return Bin.lookupLT(this, k).map(b -> b.key);
+        }
+
+        @Override
+        default Optional<Tuple<K,V>> floorEntry(K k) {
+            return Bin.lookupLE(this, k).map(b -> Tuple.of(b.key, b.value));
+        }
+
+        @Override
+        default Optional<K> floorKey(K k) {
+            return Bin.lookupLE(this, k).map(b -> b.key);
+        }
+
+        @Override
+        default Optional<Tuple<K,V>> ceilingEntry(K k) {
+            return Bin.lookupGE(this, k).map(b -> Tuple.of(b.key, b.value));
+        }
+
+        @Override
+        default Optional<K> ceilingKey(K k) {
+            return Bin.lookupGE(this, k).map(b -> b.key);
+        }
+
+        @Override
+        default Optional<Tuple<K,V>> higherEntry(K k) {
+            return Bin.lookupGT(this, k).map(b -> Tuple.of(b.key, b.value));
+        }
+
+        @Override
+        default Optional<K> higherKey(K k) {
+            return Bin.lookupGT(this, k).map(b -> b.key);
+        }
+
+        @Override
+        default Tuple<K,V> firstEntry() {
+            Bin<K,V> first = Bin.findFirst(this);
+            return Tuple.of(first.key, first.value);
+        }
+
+        @Override
+        default K firstKey() {
+            return Bin.findFirst(this).key;
+        }
+
+        @Override
+        default Tuple<K,V> lastEntry() {
+            Bin<K,V> last = Bin.findLast(this);
+            return Tuple.of(last.key, last.value);
+        }
+
+        @Override
+        default K lastKey() {
+            return Bin.findLast(this).key;
+        }
+
+        @Override
         default String showTree() {
             return showTree((k, v) -> "(" + k + "," + v + ")");
         }
@@ -1041,7 +1191,7 @@ final class Tree {
     }
 
     static class MapTip<K,V> extends Tip<K,V> implements MapNode<K,V> {
-        MapTip(Comparator<K> cmp) {
+        MapTip(Comparator<? super K> cmp) {
             super(cmp);
         }
 
@@ -1179,10 +1329,40 @@ final class Tree {
         default TreeSet<E> intersection(TreeSet<E> s) {
             return (TreeSet<E>)Bin.intersection(this, (Node<E,Unit>)s);
         }
+
+        @Override
+        default Optional<E> lower(E e) {
+            return Bin.lookupLT(this, e).map(b -> b.key);
+        }
+
+        @Override
+        default Optional<E> floor(E e) {
+            return Bin.lookupLE(this, e).map(b -> b.key);
+        }
+
+        @Override
+        default Optional<E> ceiling(E e) {
+            return Bin.lookupGE(this, e).map(b -> b.key);
+        }
+
+        @Override
+        default Optional<E> higher(E e) {
+            return Bin.lookupGT(this, e).map(b -> b.key);
+        }
+
+        @Override
+        default E first() {
+            return Bin.findFirst(this).key;
+        }
+
+        @Override
+        default E last() {
+            return Bin.findLast(this).key;
+        }
     }
 
     static class SetTip<E> extends Tip<E,Unit> implements SetNode<E> {
-        SetTip(Comparator<E> cmp) {
+        SetTip(Comparator<? super E> cmp) {
             super(cmp);
         }
 

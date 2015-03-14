@@ -7,7 +7,9 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.Comparator;
+import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -48,7 +50,7 @@ public interface TreeSet<E> {
      * @param c the comparator that will be used to order this set
      * @throws NullPointerException if <tt>c</tt> is null
      */
-    static <E> TreeSet<E> empty(Comparator<E> c) {
+    static <E> TreeSet<E> empty(Comparator<? super E> c) {
         Objects.requireNonNull(c);
         return new Tree.SetTip<>(c);
     }
@@ -68,7 +70,7 @@ public interface TreeSet<E> {
      * @param c the comparator that will be used to order this set
      * @throws NullPointerException if <tt>c</tt> is null
      */
-    static <E> TreeSet<E> singleton(Comparator<E> c, E value) {
+    static <E> TreeSet<E> singleton(Comparator<? super E> c, E value) {
         return empty(c).add(value);
     }
 
@@ -93,7 +95,7 @@ public interface TreeSet<E> {
      * @throws NullPointerException if <tt>c</tt> is null
      */
     @SafeVarargs
-    static <E> TreeSet<E> of(Comparator<E> c, E... elements) {
+    static <E> TreeSet<E> of(Comparator<? super E> c, E... elements) {
         TreeSet<E> res = empty(c);
         for (E e : elements) {
             res = res.add(e);
@@ -115,7 +117,7 @@ public interface TreeSet<E> {
      * @param c the comparator that will be used to order this set
      * @throws NullPointerException if <tt>c</tt> is null
      */
-    static <E> TreeSet<E> fromList(Comparator<E> c, Seq<E> list) {
+    static <E> TreeSet<E> fromList(Comparator<? super E> c, Seq<E> list) {
         return list.foldLeft(empty(c), TreeSet::add);
     }
 
@@ -248,4 +250,60 @@ public interface TreeSet<E> {
      * @return the intersection of two sets
      */
     TreeSet<E> intersection(TreeSet<E> s);
+
+    /**
+     * Returns the greatest element in this set strictly less than the given
+     * element, or {@code Optional.empty()} if there is no such element.
+     *
+     * @param e the value to match
+     * @return the greatest element less than {@code e} or {@code Optional.empty()}
+     *         if there is no such element
+     */
+    Optional<E> lower(E e);
+
+    /**
+     * Returns the greatest element in this set less than or equal to the given
+     * element, or {@code Optional.empty()} if there is no such element.
+     *
+     * @param e the value to match
+     * @return the greatest element less than or equal to {@code e}, or
+     *         {@code Optional.empty()} if there is no such element
+     */
+    Optional<E> floor(E e);
+
+    /**
+     * Returns the least element in this set greater than or equal to the given
+     * element, or {@code Optional.empty()} if there is no such element.
+     *
+     * @param e the value to match
+     * @return the least element greater than or equal to {@code e}, or
+     *         {@code Optional.empty()} if there is no such element
+     */
+    Optional<E> ceiling(E e);
+
+    /**
+     * Returns the least element in this set strictly greater than the given
+     * element, or {@code Optional.empty()} if there is no such element.
+     *
+     * @param e the value to match
+     * @return the least element greater than {@code e}, or {@code Optional.empty()}
+     *         if there is no such element
+     */
+    Optional<E> higher(E e);
+
+    /**
+     * Returns the first (lowest) element in this set.
+     *
+     * @return the first (lowest) element in this set
+     * @throws NoSuchElementException if this set is empty
+     */
+    E first();
+
+    /**
+     * Returns the last (highest) element in this set.
+     *
+     * @return the last (highest) element in this set
+     * @throws NoSuchElementException if this set is empty
+     */
+    E last();
 }

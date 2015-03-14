@@ -23,6 +23,7 @@ import com.cloudway.platform.common.fp.data.IntSeq;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.TreeMap;
 import com.cloudway.platform.common.fp.data.TreeSet;
+import com.cloudway.platform.common.fp.data.Tuple;
 
 public class TreeTest {
     private TreeMap<String, Integer> tm;
@@ -32,7 +33,7 @@ public class TreeTest {
 
     @Before
     public void initialize() {
-        data = shuffle(1000);
+        data = shuffle(200);
         tm = TreeMap.empty();
         for (Integer x : data) {
             put(x.toString(), x);
@@ -354,10 +355,43 @@ public class TreeTest {
     }
 
     @Test
-    @SuppressWarnings("NumberEquality")
     public void test_entries() {
         tm.entries().forEach(t -> {
             assertSame(tm.get(t.first()), t.second());
         });
+    }
+
+    @Test
+    public void test_navigation() {
+        TreeMap<Integer, Integer> tm =
+            IntSeq.rangeClosed(0, 100, 2).boxed()
+                  .foldLeft(TreeMap.empty(), (m, x) -> m.put(x, x));
+
+        assertEquals(Tuple.of(0, 0), tm.firstEntry());
+        assertEquals(Integer.valueOf(0), tm.firstKey());
+        assertEquals(Tuple.of(100, 100), tm.lastEntry());
+        assertEquals(Integer.valueOf(100), tm.lastKey());
+
+        assertEquals(Optional.of(Tuple.of(40, 40)), tm.lowerEntry(42));
+        assertEquals(Optional.of(40), tm.lowerKey(42));
+        assertEquals(Optional.of(Tuple.of(40, 40)), tm.lowerEntry(41));
+        assertEquals(Optional.of(40), tm.lowerKey(41));
+        assertEquals(Optional.of(Tuple.of(42, 42)), tm.floorEntry(42));
+        assertEquals(Optional.of(42), tm.floorKey(42));
+        assertEquals(Optional.of(Tuple.of(40, 40)), tm.floorEntry(41));
+        assertEquals(Optional.of(40), tm.floorKey(41));
+        assertEquals(Optional.of(Tuple.of(42, 42)), tm.ceilingEntry(42));
+        assertEquals(Optional.of(42), tm.ceilingKey(42));
+        assertEquals(Optional.of(Tuple.of(42, 42)), tm.ceilingEntry(41));
+        assertEquals(Optional.of(42), tm.ceilingKey(41));
+        assertEquals(Optional.of(Tuple.of(44, 44)), tm.higherEntry(42));
+        assertEquals(Optional.of(44), tm.higherKey(42));
+        assertEquals(Optional.of(Tuple.of(42, 42)), tm.higherEntry(41));
+        assertEquals(Optional.of(42), tm.higherKey(41));
+
+        assertEquals(Optional.<Tuple<Integer,Integer>>empty(), tm.lowerEntry(0));
+        assertEquals(Optional.<Integer>empty(), tm.lowerKey(0));
+        assertEquals(Optional.<Tuple<Integer,Integer>>empty(), tm.higherEntry(100));
+        assertEquals(Optional.<Integer>empty(), tm.higherKey(100));
     }
 }

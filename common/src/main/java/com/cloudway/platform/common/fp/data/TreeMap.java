@@ -54,7 +54,7 @@ public interface TreeMap<K, V> {
      * @param c the comparator that will be used to order this map
      * @throws NullPointerException if {@code c} is null
      */
-    static <K, V> TreeMap<K, V> empty(Comparator<K> c) {
+    static <K, V> TreeMap<K, V> empty(Comparator<? super K> c) {
         Objects.requireNonNull(c);
         return new Tree.MapTip<>(c);
     }
@@ -74,7 +74,7 @@ public interface TreeMap<K, V> {
      * @param c the comparator that will be used to order this map
      * @throws NullPointerException if {@code c} is null
      */
-    static <K, V> TreeMap<K, V> singleton(Comparator<K> c, K key, V value) {
+    static <K, V> TreeMap<K, V> singleton(Comparator<? super K> c, K key, V value) {
         return TreeMap.<K,V>empty(c).put(key, value);
     }
 
@@ -399,6 +399,123 @@ public interface TreeMap<K, V> {
     default <R> R foldRightKV_(R seed, TriFunction<? super K, ? super V, R, R> accumulator) {
         return foldRightKV(seed, (k, v, z) -> accumulator.apply(k, v, z.get()));
     }
+
+    // Navigation
+
+    /**
+     * Returns a key-value mapping associated with the greatest key strictly
+     * less than the given key, or {@code Optional.empty()} if there is no
+     * such key.
+     *
+     * @param key the key
+     * @return an entry with the greatest key less than {@code key}, or
+     *         {@code Optional.empty()} if there is no such key
+     */
+    Optional<Tuple<K, V>> lowerEntry(K key);
+
+    /**
+     * Returns the greatest key strictly less than the given key, or
+     * {@code Optional.empty()} if there is no such key.
+     *
+     * @param key the key
+     * @return the greatest key less than {@code key}, or {@code Optional.empty}
+     *         if there is no such key
+     */
+    Optional<K> lowerKey(K key);
+
+    /**
+     * Returns a key-value mapping associated with the greatest key less than
+     * or equal to the given key, or {@code Optional.empty()} if there is no
+     * such key.
+     *
+     * @param key the key
+     * @return an entry with the greatest key less than or equal to {@code key},
+     *         or {@code Optional.empty()} if there is no such key
+     */
+    Optional<Tuple<K, V>> floorEntry(K key);
+
+    /**
+     * Returns the greatest key less than or equal to the given key, or
+     * {@code Optional.empty()} if there is no such key.
+     *
+     * @param key the key
+     * @return the greatest key less than or equal to {@code key}, or
+     *         {@code Optional.empty()} if there is no such key
+     */
+    Optional<K> floorKey(K key);
+
+    /**
+     * Returns a key-value mapping associated with the least key greater than
+     * or equal to the given key, or {@code Optional.empty()} if there is no
+     * such key.
+     *
+     * @param key the key
+     * @return an entry with the least key greater than or equal to {@code key},
+     *         or {@code Optional.empty()} if there is no such key
+     */
+    Optional<Tuple<K, V>> ceilingEntry(K key);
+
+    /**
+     * Returns the least key greater than or equal to the given key, or
+     * {@code Optional.empty()} if there is no such key.
+     *
+     * @param key the key
+     * @return the least key greater than or equal to {@code key}, or
+     *         {@code Optional.empty()} if there is no such key
+     */
+    Optional<K> ceilingKey(K key);
+
+    /**
+     * Returns a key-value mapping associated with the least key strictly greater
+     * than the given key, or {@code Optional.empty()} if there is no such key.
+     *
+     * @param key the key
+     * @return an entry with the least key greater than {@code key}, or
+     *         {@code Optional.empty()} if there is no such key
+     */
+    Optional<Tuple<K, V>> higherEntry(K key);
+
+    /**
+     * Returns the least key strictly greater than the given key, or
+     * {@code Optional.empty()} if there is no such key.
+     *
+     * @param key the key
+     * @return the least key greater than {@code key}, or {@code Optional.empty()}
+     *         if there is no such key
+     */
+    Optional<K> higherKey(K key);
+
+    /**
+     * Returns a key-value mapping associated with the least key in this map.
+     *
+     * @return an entry with the least key
+     * @throws NoSuchElementException if this map is empty
+     */
+    Tuple<K, V> firstEntry();
+
+    /**
+     * Returns the first (lowest) key currently in this map.
+     *
+     * @return the first (lowest) key currently in this map
+     * @throws NoSuchElementException if this map is empty
+     */
+    K firstKey();
+
+    /**
+     * Returns a key-value mapping associated with the greatest key in this map.
+     *
+     * @return an entry with the greatest key
+     * @throws NoSuchElementException if this map is empty
+     */
+    Tuple<K, V> lastEntry();
+
+    /**
+     * Returns the last (higest) key currently in this map.
+     *
+     * @return the last (higest) key currently in this map
+     * @throws NoSuchElementException if this map is empty
+     */
+    K lastKey();
 
     // Debugging
 
