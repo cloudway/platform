@@ -57,6 +57,16 @@ public final class StateIO<A, S> {
         return $(s -> IO.pure(Tuple.of(a, s)));
     }
 
+    private static final StateIO<Unit,?> _unit = pure(Unit.U);
+
+    /**
+     * Returns a do nothing I/O action.
+     */
+    @SuppressWarnings("unchecked")
+    public static <S> StateIO<Unit, S> unit() {
+        return (StateIO<Unit,S>)_unit;
+    }
+
     /**
      * Constructs a pure computation that results in the given lazy evaluation
      * thunk.
@@ -83,6 +93,16 @@ public final class StateIO<A, S> {
      */
     public static <A, S> StateIO<A, S> lift(IO<A> m) {
         return $(s -> m.map(a -> Tuple.of(a, s)));
+    }
+
+    /**
+     * Prompt an IO action to a stateful IO action.
+     *
+     * @param m the IO action which has no return value
+     * @return the prompted stateful IO action
+     */
+    public static <S> StateIO<Unit, S> lift_(VoidIO m) {
+        return lift(m);
     }
 
     /**

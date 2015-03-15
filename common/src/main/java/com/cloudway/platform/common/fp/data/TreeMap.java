@@ -308,6 +308,48 @@ public interface TreeMap<K, V> {
     TreeMap<K,V> filterKV(BiPredicate<? super K, ? super V> predicate);
 
     /**
+     * Removes all of the mappings of this map that satisfy the given predicate.
+     *
+     * @param predicate a predicate which returns {@code true} for mappings to
+     * be removed
+     */
+    default TreeMap<K,V> removeIf(BiPredicate<? super K, ? super V> predicate) {
+        return filterKV(predicate.negate());
+    }
+
+    /**
+     * Removes all of the mappings of this map that the key satisfy the given
+     * predicate.
+     *
+     * @param predicate a predicate which returns {@code true} for keys to be
+     * removed
+     */
+    default TreeMap<K,V> removeKeys(Predicate<? super K> predicate) {
+        return filterKV((k, v) -> !predicate.test(k));
+    }
+
+    /**
+     * Removes all of the mappings of this map that the value satisfy the given
+     * predicate.
+     *
+     * @param predicate a predicate which returns {@code true} for values to be
+     * removed
+     */
+    default TreeMap<K,V> removeValues(Predicate<? super V> predicate) {
+        return filter(predicate.negate());
+    }
+
+    /**
+     * Removes all of the mappings of this map that the value equals to the given
+     * value.
+     *
+     * @param value a value for which to be removed
+     */
+    default TreeMap<K,V> removeValues(V value) {
+        return filter(x -> !Objects.equals(x, value));
+    }
+
+    /**
      * Perform the given action for each entry in this map until all entries
      * have been processed or the action throws an exception.
      *

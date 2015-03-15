@@ -190,25 +190,13 @@ public final class Cont<A> {
     /**
      * The exit function type.
      */
-    @FunctionalInterface
     public interface Exit<A> {
         /**
          * Escape from CPS computation with a value.
          *
          * @param value the escaped value
          */
-        Cont<?> escape(A value);
-
-        /**
-         * A convenient method to escape from CPS computation when the given
-         * condition satisfied.
-         *
-         * @param test the condition to test
-         * @param value the escaped value
-         */
-        default Cont<?> escapeIf(boolean test, A value) {
-            return test ? escape(value) : pure(Unit.U);
-        }
+        <B> Cont<B> escape(A value);
     }
 
     /**
@@ -229,7 +217,17 @@ public final class Cont<A> {
      * @return a continuation that may or may not escaped from current continuation
      */
     public static <A> Cont<A> callCC(Function<Exit<A>, Cont<A>> f) {
-        return $(c -> f.apply(a -> $(__ -> c.apply(a))).run(c));
+        // Note: the compacted code is as:
+        //     $(c -> f.apply(a -> $(__ -> c.apply(a))).run(c))
+        // but generic method can not be represented as a lambda expression
+        return $(c -> {
+            Exit<A> exit = new Exit<A>() {
+                @Override public <B> Cont<B> escape(A a) {
+                    return $(__ -> c.apply(a));
+                }
+            };
+            return f.apply(exit).run(c);
+        });
     }
 
     /**

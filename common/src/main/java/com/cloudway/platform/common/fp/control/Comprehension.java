@@ -8,7 +8,6 @@ package com.cloudway.platform.common.fp.control;
 
 import java.util.Collection;
 import java.util.Optional;
-import java.util.function.BiFunction;
 import java.util.function.DoubleFunction;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -19,11 +18,11 @@ import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
+import com.cloudway.platform.common.fp.data.Either;
 import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.IntSeq;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.function.TriFunction;
 import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.fp.io.VoidIO;
 
@@ -61,18 +60,18 @@ public final class Comprehension {
          * Build downstream from given qualifier.
          */
         default S build(Qualifier<R, S> q) {
-            return q != null ? q.build(this) : identity();
+            return q != null ? q.build(this) : empty();
         }
 
         /**
-         * Build the identity element.
+         * Build the empty element.
          */
-        S identity();
+        S empty();
 
         /**
          * Build the element contains the result value.
          */
-        S yield(R value);
+        S pure(R value);
     }
 
     /**
@@ -82,48 +81,48 @@ public final class Comprehension {
     private enum Builders implements Builder {
         STREAM {
             @Override
-            public Stream identity() {
+            public Stream empty() {
                 return Stream.empty();
             }
 
             @Override
-            public Stream yield(Object value) {
+            public Stream pure(Object value) {
                 return Stream.of(value);
             }
         },
 
         SEQ {
             @Override
-            public Seq identity() {
+            public Seq empty() {
                 return Seq.nil();
             }
 
             @Override
-            public Seq yield(Object value) {
+            public Seq pure(Object value) {
                 return Seq.of(value);
             }
         },
 
         OPTIONAL {
             @Override
-            public Optional identity() {
+            public Optional empty() {
                 return Optional.empty();
             }
 
             @Override
-            public Optional yield(Object value) {
+            public Optional pure(Object value) {
                 return Optional.of(value);
             }
         },
 
         FUNCTION {
             @Override
-            public Function identity() {
+            public Function empty() {
                 return Fn.id();
             }
 
             @Override
-            public Function yield(Object value) {
+            public Function pure(Object value) {
                 return Fn.pure(value);
             }
         },
@@ -375,7 +374,7 @@ public final class Comprehension {
         return new Qualifier<R, S>() {
             @Override
             protected S build(Builder<R, S> builder) {
-                return test && next != null ? next.build(builder) : builder.identity();
+                return test && next != null ? next.build(builder) : builder.empty();
             }
         };
     }
@@ -387,7 +386,7 @@ public final class Comprehension {
         return new Qualifier<R, S>() {
             @Override
             protected S build(Builder<R, S> builder) {
-                return builder.yield(result);
+                return builder.pure(result);
             }
         };
     }
@@ -416,22 +415,24 @@ public final class Comprehension {
         return f.apply(t);
     }
 
-    /**
-     * Introduce local variables.
-     */
-    public static <T, U, R> R let(T t, U u, BiFunction<? super T, ? super U, ? extends R> f) {
-        return f.apply(t, u);
-    }
-
-    /**
-     * Introduce local variables.
-     */
-    public static <T, U, V, R> R let(T t, U u, V v, TriFunction<? super T, ? super U, ? super V, ? extends R> f) {
-        return f.apply(t, u, v);
-    }
-
     // Do notation helper methods.  These methods simply call {@code bind} or
     // {@code andThen} on monads.
+
+    /**
+     * Helper method to chain optional actions together.
+     */
+    public static <A, B> Optional<B>
+    do_(Optional<A> a, Function<? super A, Optional<B>> f) {
+        return a.flatMap(f);
+    }
+
+    /**
+     * Helper method to chain either actions together.
+     */
+    public static <T, A, B> Either<T, B>
+    do_(Either<T, A> a, Function<? super A, Either<T, B>> f) {
+        return a.flatMap(f);
+    }
 
     /**
      * Helper method to chain IO actions together.
@@ -452,6 +453,20 @@ public final class Comprehension {
      */
     public static <A, B> IO<B> do_(IO<A> a, Supplier<IO<B>> b) {
         return a.andThen(b);
+    }
+
+    /**
+     * Conditional execution of IO action.
+     */
+    public static IO<Unit> when(boolean test, IO<Unit> then) {
+        return test ? then : IO.unit;
+    }
+
+    /**
+     * The reverse of when.
+     */
+    public static IO<Unit> unless(boolean test, IO<Unit> orElse) {
+        return test ? IO.unit : orElse;
     }
 
     /**
@@ -493,6 +508,20 @@ public final class Comprehension {
     }
 
     /**
+     * Conditional execution of state action.
+     */
+    public static <S> MonadState<Unit, S> when(boolean test, MonadState<Unit, S> then) {
+        return test ? then : MonadState.pure(Unit.U);
+    }
+
+    /**
+     * The reverse of when.
+     */
+    public static <S> MonadState<Unit, S> unless(boolean test, MonadState<Unit, S> orElse) {
+        return test ? MonadState.pure(Unit.U) : orElse;
+    }
+
+    /**
      * Helper method to chain stateful IO actions together.
      */
     public static <A, B, S> StateIO<B, S>
@@ -514,6 +543,20 @@ public final class Comprehension {
     public static <A, B, S> StateIO<B, S>
     do_(StateIO<A, S> a, Supplier<StateIO<B, S>> b) {
         return a.andThen(b);
+    }
+
+    /**
+     * Conditional execution of IO action.
+     */
+    public static <S> StateIO<Unit, S> when(boolean test, StateIO<Unit, S> then) {
+        return test ? then : StateIO.unit();
+    }
+
+    /**
+     * The reverse of when.
+     */
+    public static <S> StateIO<Unit, S> unless(boolean test, StateIO<Unit, S> orElse) {
+        return test ? StateIO.unit() : orElse;
     }
 
     /**
@@ -541,6 +584,20 @@ public final class Comprehension {
     }
 
     /**
+     * Conditional execution of trampoline action.
+     */
+    public static Trampoline<Unit> when(boolean test, Trampoline<Unit> then) {
+        return test ? then : Trampoline.pure(Unit.U);
+    }
+
+    /**
+     * The reverse of when.
+     */
+    public static Trampoline<Unit> unless(boolean test, Trampoline<Unit> orElse) {
+        return test ? Trampoline.pure(Unit.U) : orElse;
+    }
+
+    /**
      * Helper method to chain CPS actions together.
      */
     public static <A, B> Cont<B>
@@ -565,6 +622,20 @@ public final class Comprehension {
     }
 
     /**
+     * Conditional execution of continuation action.
+     */
+    public static Cont<Unit> when(boolean test, Cont<Unit> then) {
+        return test ? then : Cont.pure(Unit.U);
+    }
+
+    /**
+     * The reverse of when.
+     */
+    public static Cont<Unit> unless(boolean test, Cont<Unit> orElse) {
+        return test ? Cont.pure(Unit.U) : orElse;
+    }
+
+    /**
      * Helper method to chain CPS actions together.
      */
     public static <A, B, S> StateCont<B, S>
@@ -586,6 +657,20 @@ public final class Comprehension {
     public static <A, B, S> StateCont<B, S>
     do_(StateCont<A, S> a, Supplier<StateCont<B, S>> b) {
         return a.andThen(b);
+    }
+
+    /**
+     * Conditional execution of continuation action.
+     */
+    public static <S> StateCont<Unit, S> when(boolean test, StateCont<Unit, S> then) {
+        return test ? then : StateCont.pure(Unit.U);
+    }
+
+    /**
+     * The reverse of when.
+     */
+    public static <S> StateCont<Unit, S> unless(boolean test, StateCont<Unit, S> orElse) {
+        return test ? StateCont.pure(Unit.U) : orElse;
     }
 
     /**

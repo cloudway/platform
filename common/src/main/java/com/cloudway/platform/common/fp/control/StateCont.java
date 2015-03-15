@@ -187,25 +187,13 @@ public final class StateCont<A, S> {
     /**
      * The exit function type.
      */
-    @FunctionalInterface
     public interface Exit<A, S> {
         /**
          * Escape from CPS computation with a value.
          *
          * @param value the escaped value
          */
-        StateCont<?, S> escape(A value);
-
-        /**
-         * A convenient method to escape from CPS computation when the given
-         * condition satisfied.
-         *
-         * @param test the condition to test
-         * @param value the escaped value
-         */
-        default StateCont<?, S> escapeIf(boolean test, A value) {
-            return test ? escape(value) : pure(Unit.U);
-        }
+        <B> StateCont<B, S> escape(A value);
     }
 
     /**
@@ -226,7 +214,17 @@ public final class StateCont<A, S> {
      * @return a continuation that may or may not escaped from current continuation
      */
     public static <A, S> StateCont<A, S> callCC(Function<Exit<A, S>, StateCont<A, S>> f) {
-        return $(c -> f.apply(a -> $(__ -> c.apply(a))).run(c));
+        return $(c -> {
+            // Note: the compacted code is as:
+            //     $(c -> f.apply(a -> $(__ -> c.apply(a))).run(c))
+            // but generic method can not be represented as a lambda expression
+            Exit<A, S> exit = new Exit<A, S>() {
+                @Override public <B> StateCont<B, S> escape(A a) {
+                    return $(__ -> c.apply(a));
+                }
+            };
+            return f.apply(exit).run(c);
+        });
     }
 
     /**
@@ -244,7 +242,7 @@ public final class StateCont<A, S> {
      * continuation.
      */
     public static <A, S> StateCont<A, S> reset(StateCont<A, S> m) {
-        return lift(m.eval());
+        return $(k -> m.eval().bind(k));
     }
 
     /**

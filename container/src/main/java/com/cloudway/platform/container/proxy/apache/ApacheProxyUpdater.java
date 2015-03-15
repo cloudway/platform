@@ -10,11 +10,13 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import com.google.common.collect.ImmutableSet;
 
+import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.TreeMap;
 import com.cloudway.platform.container.proxy.HttpProxyUpdater;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.proxy.ProxyMapping;
@@ -39,28 +41,26 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
     {
         addContainer(ac);
 
-        mappings.writting(d -> map.stream()
+        mappings.write(d -> Seq.wrap(map)
             .filter(having(ProxyMapping::getProtocol, is(oneOf(SUPPORTED_PROTOCOLS))))
-            .forEach(pm -> d.putIfAbsent(ac.getId() + pm.getFrontend(), pm.getBackend())));
+            .foldLeft(d, (m, pm) -> m.putIfAbsent(ac.getId() + pm.getFrontend(), pm.getBackend())));
     }
 
     @Override
     public void removeMappings(ApplicationContainer ac, Collection<ProxyMapping> map)
         throws IOException
     {
-        mappings.writting(d -> map.stream()
+        mappings.write(d -> Seq.wrap(map)
             .filter(having(ProxyMapping::getProtocol, is(oneOf(SUPPORTED_PROTOCOLS))))
             .map(pm -> ac.getId() + pm.getFrontend())
-            .sorted()
-            .distinct()
-            .forEach(d::remove));
+            .foldLeft(d, TreeMap::remove));
     }
 
-    private void removeMappings(ApplicationContainer ac)
+    private void removeAllMappings(ApplicationContainer ac)
         throws IOException
     {
         String id = ac.getId();
-        mappings.writting(d -> d.keySet().removeIf(k -> {
+        mappings.write(d -> d.removeKeys(k -> {
             int i = k.indexOf('/');
             if (i != -1)
                 k = k.substring(0, i);
@@ -71,7 +71,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
     private void addContainer(ApplicationContainer ac)
         throws IOException
     {
-        containers.writting(d ->
+        containers.write(d ->
             d.merge(ac.getDomainName(), ac.getId(), (oldValue, value) ->
                 oldValue.contains(value) ? oldValue : oldValue + "|" + value
             ));
@@ -84,24 +84,21 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
         String id = ac.getId();
         BooleanHolder removed = new BooleanHolder();
 
-        containers.writting(d -> {
-            String value = d.get(fqdn);
-            if (value != null && value.contains(id)) {
-                String newValue = Stream.of(value.split("\\|"))
-                    .filter(not(id))
-                    .collect(Collectors.joining("|"));
-                if (newValue.isEmpty()) {
-                    d.remove(fqdn);
-                    removed.set(true);
-                } else {
-                    d.put(fqdn, newValue);
-                }
+        containers.write(d -> d.computeIfPresent(fqdn, (key, value) -> {
+            String newValue = Seq.of(value.split("\\|"))
+                .filter(not(id))
+                .collect(Collectors.joining("|"));
+            if (newValue.isEmpty()) {
+                removed.set(true);
+                return Optional.empty();
+            } else {
+                return Optional.of(newValue);
             }
-        });
+        }));
 
         // remove aliases if container is fully removed
         if (removed.get()) {
-            aliases.writting(d -> d.values().remove(fqdn));
+            aliases.write(d -> d.removeValues(fqdn));
         }
     }
 
@@ -109,14 +106,14 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
     public void addAlias(String name, String fqdn)
         throws IOException
     {
-        aliases.writting(d -> d.put(name, fqdn));
+        aliases.write(d -> d.put(name, fqdn));
     }
 
     @Override
     public void removeAlias(String name)
         throws IOException
     {
-        aliases.writting(d -> d.remove(name));
+        aliases.write(d -> d.remove(name));
     }
 
     @Override
@@ -124,7 +121,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
         throws IOException
     {
         String time = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
-        idles.writting(d -> d.put(ac.getId(), time));
+        idles.write(d -> d.put(ac.getId(), time));
     }
 
     @Override
@@ -132,16 +129,17 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
         throws IOException
     {
         BooleanHolder result = new BooleanHolder();
-        idles.writting(d -> result.set(d.remove(ac.getId()) != null));
+        idles.write(d -> {
+            result.set(d.containsKey(ac.getId()));
+            return d.remove(ac.getId());
+        });
         return result.get();
     }
 
     @Override
     public boolean isIdle(ApplicationContainer ac) {
         try {
-            BooleanHolder result = new BooleanHolder();
-            idles.reading(d -> result.set(d.containsKey(ac.getId())));
-            return result.get();
+            return idles.read(d -> d.containsKey(ac.getId()));
         } catch (IOException ex) {
             return false;
         }
@@ -150,7 +148,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
     @Override
     public void purge(ApplicationContainer ac) throws IOException {
         removeContainer(ac);
-        removeMappings(ac);
+        removeAllMappings(ac);
         unidle(ac);
     }
 }

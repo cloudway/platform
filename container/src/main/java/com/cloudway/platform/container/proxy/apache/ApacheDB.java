@@ -6,29 +6,30 @@
 
 package com.cloudway.platform.container.proxy.apache;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-import java.util.stream.Stream;
-
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.stream.Stream;
 
+import com.cloudway.platform.common.fp.control.StateIO;
+import com.cloudway.platform.common.fp.data.TreeMap;
+import com.cloudway.platform.common.fp.data.Unit;
+import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Exec;
-import com.cloudway.platform.common.fp.io.IO;
 
 import static java.nio.file.Files.*;
-import static java.nio.file.StandardCopyOption.*;
 import static com.cloudway.platform.common.util.MoreFiles.*;
-import static com.cloudway.platform.common.util.MoreCollectors.*;
+import static java.nio.file.StandardCopyOption.*;
+import static com.cloudway.platform.common.fp.control.StateIO.*;
+import static com.cloudway.platform.common.fp.control.Comprehension.*;
 
-class ApacheDB
-{
+final class ApacheDB {
     private static final String SUFFIX = ".txt";
 
     private static final String httxt2dbm =
@@ -56,8 +57,7 @@ class ApacheDB
     private final String mapname;
     private final boolean nodbm;
 
-    private Map<String, String> map = new LinkedHashMap<>();
-    private long mtime = -1;
+    private final AtomicReference<MapFile> state = new AtomicReference<>(new MapFile());
 
     public ApacheDB(String mapname, boolean nodbm) {
         this.mapname = mapname;
@@ -68,58 +68,108 @@ class ApacheDB
         this(mapname, false);
     }
 
-    public synchronized void reading(Consumer<Map<String,String>> action)
+    public <R> R read(Function<TreeMap<String, String>, R> action)
         throws IOException
     {
-        action.accept(load());
+        MapFile file = atomically(load());
+        return action.apply(file.map);
     }
 
-    public synchronized boolean writting(Consumer<Map<String,String>> action)
+    public void write(Function<TreeMap<String, String>, TreeMap<String, String>> action)
         throws IOException
     {
-        Map<String, String> newmap = new LinkedHashMap<>(load());
-        action.accept(newmap);
+        atomically(
+            do_(load(), oldmap ->
+            let(action.apply(oldmap), newmap ->
+            unless(oldmap.equals(newmap), store(newmap))))
+        );
+    }
 
-        if (map.equals(newmap)) {
-            return false;
-        } else {
-            map = newmap;
-            store(newmap);
-            return true;
+    // FIXME: STM (Software Transactional Memory) required
+    private MapFile atomically(StateIO<?, MapFile> action) throws IOException {
+        MapFile oldfile, newfile;
+        do {
+            oldfile = state.get();
+            newfile = action.exec(oldfile).runIO();
+        } while (!state.compareAndSet(oldfile, newfile));
+        return newfile;
+    }
+
+    static class MapFile {
+        final TreeMap<String,String> map;
+        final long mtime;
+
+        public MapFile() {
+            this(TreeMap.empty(), 0);
+        }
+
+        MapFile(TreeMap<String,String> map, long mtime) {
+            this.map = map;
+            this.mtime = mtime;
         }
     }
 
-    private Map<String, String> load() throws IOException {
-        Path file = basedir().resolve(mapname + SUFFIX);
-        if (Files.exists(file)) {
-            long last_mtime = getLastModifiedTime(file).to(TimeUnit.NANOSECONDS);
-            if (last_mtime != this.mtime) {
-                try (Stream<String> lines = Files.lines(file)) {
-                    this.map = lines.collect(toSplittingMap(' '));
-                    this.mtime = last_mtime;
+    private StateIO<TreeMap<String,String>, MapFile> load() {
+        return do_(get(), oldfile ->
+               do_(readMap(oldfile), newfile ->
+               do_(put(newfile),
+               do_(pure(newfile.map)))));
+    }
+
+    private StateIO<MapFile, MapFile> readMap(MapFile oldfile) {
+        return lift(() -> {
+            Path file = basedir().resolve(mapname + SUFFIX);
+            if (Files.exists(file)) {
+                long last_mtime = mtime(file);
+                if (last_mtime != oldfile.mtime) {
+                    try (Stream<String> lines = Files.lines(file)) {
+                        return new MapFile(parseLines(lines), last_mtime);
+                    }
+                } else {
+                    return oldfile;
                 }
+            } else {
+                return new MapFile();
             }
-        } else {
-            map.clear();
-        }
-        return map;
+        });
     }
 
-    private void store(Map<String, String> map) throws IOException {
-        Path base = basedir();
-        if (!Files.exists(base)) {
-            mkdir(base);
-        }
+    private static TreeMap<String, String> parseLines(Stream<String> lines) {
+        return lines.reduce(TreeMap.<String,String>empty(), ApacheDB::parse, TreeMap::putAll);
+    }
 
-        Path txt = base.resolve(mapname + SUFFIX);
-        try (BufferedWriter f = newBufferedWriter(txt)) {
-            IO.forEach(map, (k,v) -> f.write(k + " " + v + "\n"));
+    private static TreeMap<String, String> parse(TreeMap<String,String> map, String line) {
+        int i = line.indexOf(' ');
+        if (i != -1) {
+            String key = line.substring(0, i).trim();
+            String value = line.substring(i + 1).trim();
+            return map.put(key, value);
+        } else {
+            return map;
         }
-        this.mtime = getLastModifiedTime(txt).to(TimeUnit.NANOSECONDS);
+    }
 
-        if (!nodbm) {
-            Path dbm = base.resolve(mapname + ".db");
-            Path wd = createTempDirectory(base, mapname + ".db~");
+    private StateIO<Unit, MapFile> store(TreeMap<String, String> map) {
+        return do_(lift(() -> mkdir(basedir())), base ->
+               let(base.resolve(mapname + SUFFIX), txt ->
+               let(base.resolve(mapname + ".db"), dbm ->
+               do_(writeMap(txt, map), modtime ->
+               do_(unless(nodbm, writeDBM(base, dbm, txt)),
+               do_(put(new MapFile(map, modtime))))))));
+    }
+
+    private static StateIO<Long, MapFile> writeMap(Path file, TreeMap<String, String> map) {
+        return lift(() -> {
+            try (BufferedWriter f = newBufferedWriter(file)) {
+                IO.forEach(map, (k, v) -> f.write(k + " " + v + "\n"));
+            }
+            return mtime(file);
+        });
+    }
+
+    private static StateIO<Unit, MapFile> writeDBM(Path base, Path dbm, Path txt) {
+        return lift_(() -> {
+            Path wd = createTempDirectory(base, dbm.getFileName() + "~");
             try {
                 Path tmpdb = wd.resolve("tmp.db");
                 Exec.args(httxt2dbm, "-f", "DB", "-i", txt, "-o", tmpdb)
@@ -128,10 +178,14 @@ class ApacheDB
             } finally {
                 deleteFileTree(wd);
             }
-        }
+        });
     }
 
     private static Path basedir() {
         return Config.VAR_DIR.resolve(".httpd");
+    }
+
+    private static long mtime(Path file) throws IOException {
+        return getLastModifiedTime(file).to(TimeUnit.MILLISECONDS);
     }
 }

@@ -191,6 +191,16 @@ public interface TreeSet<E> {
     TreeSet<E> filter(Predicate<? super E> predicate);
 
     /**
+     * Removes all of the elements of this set that satisfy the given predicate.
+     *
+     * @param filter a predicate which returns {@code true} for elements to be
+     *        removed
+     */
+    default TreeSet<E> removeIf(Predicate<? super E> filter) {
+        return filter(filter.negate());
+    }
+
+    /**
      * Perform the given action for each element in this set until all elements
      * have been processed or the action throws an exception.
      *

@@ -508,33 +508,31 @@ public class FunctionalTest
                        ? MonadState.pure(memo.get(n))
                        : do_(fibmemo_(n - 1), (BigInteger a) ->
                          do_(fibmemo_(n - 2), (BigInteger b) ->
-                         let(a.add(b), c ->
-                         do_(updateMemo(n, c),
+                         let(a.add(b), (BigInteger c) ->
+                         do_(MonadState.modify(m -> m.put(n, c)),
                          do_(MonadState.pure(c)))))));
-        }
-
-        private static MonadState<Unit, TreeMap<Integer, BigInteger>> updateMemo(int n, BigInteger c) {
-            return MonadState.modify(memo -> {
-                memo = memo.put(n, c);
-                assertTrue(memo.valid());
-                return memo;
-            });
         }
     }
 
-    @Test(timeout = 10000)
+    @Test
     public void trampolineTest() {
         assertEquals(BigInteger.valueOf(3628800), TrampolineTest.factorial(10).run());
         assertEquals(BigInteger.valueOf(144), TrampolineTest.fibonacci(12).run());
         assertEquals(BigInteger.valueOf(144), TrampolineTest.fibzipper(12).run());
         assertEquals(BigInteger.valueOf(144), TrampolineTest.fibtailcall(12).run());
         assertEquals(BigInteger.valueOf(144), TrampolineTest.fibmemo(12));
+    }
 
+    @Test(timeout = 10000)
+    public void tailcallTest() {
         // tail call has constant stack usage and should not overflow
         TrampolineTest.fibtailcall(10000).run();
+    }
 
+    @Test(timeout = 10000)
+    public void memoizationTest() {
         // memoization should improve performance dramatically
-        TrampolineTest.fibmemo(100);
+        TrampolineTest.fibmemo(1000);
     }
 
     // ----------------------------------------------------------------------
@@ -544,17 +542,76 @@ public class FunctionalTest
 
         static Cont<String> ask(String name) {
             return Cont.callCC(exit ->
-                do_(exit.escapeIf(name.isEmpty(), "You forget to tell me your name!"),
-                do_(exit.escapeIf(name.equals("martin"), "Welcome to earth, uncle martin"),
+                do_(when(name.isEmpty(), exit.escape("You forget to tell me your name!")),
+                do_(when(name.equals("martin"), exit.escape("Welcome to earth, uncle martin")),
                 do_(Cont.yield("Welcome, " + name + "!")))));
         }
 
         static Cont<Double> harmsum(IntSeq nums) {
             return Cont.callCC(exit ->
                 Cont.foldM(0.0, nums.boxed(), (r, x) -> do_(
-                    exit.escapeIf(x == 0, 0.0),
+                    when(x == 0, exit.escape(0.0)),
                     Cont.yield(r + 1.0 / x))
                 ));
+        }
+
+        /* We use the continuation monad to perform "escapes" from code blocks.
+         * This function implements a complicated control structure to process
+         * numbers:
+         *
+         * Input (n)     Output                    List Shown
+         * =========     ======                    ==========
+         * 0-9           n                         none
+         * 10-199        number of digits in (n/2) digits of (n/2)
+         * 200-19999     n                         digits of (n/2)
+         * 20000-1999999 (n/2) backwards           none
+         * >= 2000000    sum of digits of (n/2)    digits of (n/2)
+         */
+        static String fun(int n) {
+            return
+                do_(Cont.<String>callCC(exit1 ->
+                    do_(when(n < 10, exit1.escape(String.valueOf(n))),
+                    let(String.valueOf(n/2), (String ns) ->
+                    do_(Cont.<Integer>callCC(exit2 ->
+                        do_(when(n < 200, exit2.escape(ns.length())),
+                        do_(when(n < 20000, exit2.escape(n)),
+                        do_(when(n < 2000000, exit1.escape(reverse(ns))),
+                        Cont.yield(sumDigits(ns)))))), n_ ->
+                    Cont.yield("(" + n_ + "," + ns + ")"))))))
+                .eval();
+        }
+
+        /* The following is the equivalent imperative implementation. Although
+         * it's more efficient but it's hard to read and error proven.
+         */
+        @SuppressWarnings("unused")
+        static String imfun(int n) {
+            if (n < 10) {
+                return String.valueOf(n);
+            } else {
+                String ns = String.valueOf(n/2);
+                int n_;
+                if (n < 200) {
+                    n_ = ns.length();
+                } else if (n < 20000) {
+                    n_ = n;
+                } else if (n < 2000000) {
+                    return reverse(ns);
+                } else {
+                    n_ = sumDigits(ns);
+                }
+                return "(" + n_ + "," + ns + ")";
+            }
+        }
+
+        static String reverse(String s) {
+            return Seq.wrap(s).reverse()
+                      .dropWhile(c -> c == '0')
+                      .foldLeft(new StringBuilder(), StringBuilder::append).toString();
+        }
+
+        static int sumDigits(String ns) {
+            return Seq.wrap(ns).map(c -> c - '0').foldLeft(0, Integer::sum);
         }
     }
 
@@ -571,6 +628,16 @@ public class FunctionalTest
         double actual = CallCC.harmsum(IntSeq.of(1, 2, 3, 4)).eval();
         assertTrue(Double.compare(expected, actual) == 0);
         assertTrue(Double.compare(0.0, CallCC.harmsum(IntSeq.of(1, 2, 0, 4)).eval()) == 0);
+    }
+
+    @Test
+    public void complicatedCallCCTest() {
+        assertEquals("5", CallCC.fun(5));
+        assertEquals("(1,6)", CallCC.fun(12));
+        assertEquals("(2,75)", CallCC.fun(150));
+        assertEquals("(450,225)", CallCC.fun(450));
+        assertEquals("9052", CallCC.fun(50180));
+        assertEquals("(40,157079632)", CallCC.fun(314159265));
     }
 
     // This implementation is ugly because it uses mutable state

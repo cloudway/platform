@@ -16,6 +16,7 @@ import java.util.stream.Stream;
 
 import com.cloudway.platform.common.fp.control.Conditionals;
 import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.TreeMap;
 import com.cloudway.platform.common.fp.data.Unit;
 
 /**
@@ -219,6 +220,16 @@ public interface IO<A> {
     }
 
     static <K, V> void forEach(Map<K, V> map, IOBiConsumer<? super K, ? super V> action)
+        throws IOException
+    {
+        try {
+            map.forEach(IOBiConsumer.wrap(action));
+        } catch (UncheckedIOException ex) {
+            throw ex.getCause();
+        }
+    }
+
+    static <K, V> void forEach(TreeMap<K, V> map, IOBiConsumer<? super K, ? super V> action)
         throws IOException
     {
         try {

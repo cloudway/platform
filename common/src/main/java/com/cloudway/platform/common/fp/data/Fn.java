@@ -7,6 +7,7 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
@@ -49,6 +50,28 @@ public final class Fn {
      */
     public static <A, B> Function<A, B> f(Function<A, B> f) {
         return f;
+    }
+
+    /**
+     * Convert a Consumer to a Function.
+     *
+     * @param f the Consumer to be converted
+     * @return the Function executing consumer and return Unit
+     */
+    public static <A> Function<A, Unit> f_(Consumer<A> f) {
+        return a -> { f.accept(a); return Unit.U; };
+    }
+
+    /**
+     * Function composition.
+     *
+     * @param f the function to compose with other one
+     * @param g the function to apply before <tt>f</tt> is applied
+     * @return a composed function that first applies the function <tt>g</tt>
+     * and then applies function <tt>f</tt>
+     */
+    public static <A, B, C> Function<A, C> compose(Function<B, C> f, Function<A, B> g) {
+        return f.compose(g);
     }
 
     /**
@@ -240,14 +263,6 @@ public final class Fn {
     }
 
     /**
-     * Kleisli composition of function monads.
-     */
-    public static <T, A, B, C> Function<A, Function<T, C>>
-    compose(Function<A, Function<T, B>> f, Function<B, Function<T, C>> g) {
-        return x -> bind(f.apply(x), g);
-    }
-
-    /**
      * Promotes a function of arity-1 to a higher-order function.
      *
      * @param f the function to promote
@@ -307,7 +322,7 @@ public final class Fn {
      * @return   a new function after performing the composition, then application
      */
     public static <T, A, B, C, D> Function<T, D>
-    zip(Function<T, A> ma, Function<T, B> mb, Function<T, C> mc, TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
+    zip3(Function<T, A> ma, Function<T, B> mb, Function<T, C> mc, TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
         return Fn.<T,A,B,C,D>liftM3(f).apply(ma, mb, mc);
     }
 }
