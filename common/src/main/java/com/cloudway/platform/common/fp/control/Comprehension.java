@@ -472,7 +472,7 @@ public final class Comprehension {
     /**
      * Helper method to wrap an IO action.
      */
-    public static <A> IO<A> io$(IO<A> a) {
+    public static <A> IO<A> io(IO<A> a) {
         return a;
     }
 
@@ -511,14 +511,14 @@ public final class Comprehension {
      * Conditional execution of state action.
      */
     public static <S> MonadState<Unit, S> when(boolean test, MonadState<Unit, S> then) {
-        return test ? then : MonadState.pure(Unit.U);
+        return test ? then : MonadState.unit();
     }
 
     /**
      * The reverse of when.
      */
     public static <S> MonadState<Unit, S> unless(boolean test, MonadState<Unit, S> orElse) {
-        return test ? MonadState.pure(Unit.U) : orElse;
+        return test ? MonadState.unit() : orElse;
     }
 
     /**
@@ -625,14 +625,14 @@ public final class Comprehension {
      * Conditional execution of continuation action.
      */
     public static Cont<Unit> when(boolean test, Cont<Unit> then) {
-        return test ? then : Cont.pure(Unit.U);
+        return test ? then : Cont.unit();
     }
 
     /**
      * The reverse of when.
      */
     public static Cont<Unit> unless(boolean test, Cont<Unit> orElse) {
-        return test ? Cont.pure(Unit.U) : orElse;
+        return test ? Cont.unit() : orElse;
     }
 
     /**
@@ -663,14 +663,14 @@ public final class Comprehension {
      * Conditional execution of continuation action.
      */
     public static <S> StateCont<Unit, S> when(boolean test, StateCont<Unit, S> then) {
-        return test ? then : StateCont.pure(Unit.U);
+        return test ? then : StateCont.unit();
     }
 
     /**
      * The reverse of when.
      */
     public static <S> StateCont<Unit, S> unless(boolean test, StateCont<Unit, S> orElse) {
-        return test ? StateCont.pure(Unit.U) : orElse;
+        return test ? StateCont.unit() : orElse;
     }
 
     /**

@@ -196,7 +196,7 @@ public abstract class Either<A, B> {
      * the result.
      */
     public static <A, B> Either<A, Seq<B>> flatM(Seq<Either<A, B>> ms) {
-        return ms.foldRightStrict(right(Seq.nil()), liftM2(Seq::cons));
+        return ms.foldRight_(right(Seq.nil()), liftM2(Seq::cons));
     }
 
     /**

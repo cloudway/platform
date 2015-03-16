@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.StringJoiner;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -17,6 +18,10 @@ import static java.util.Objects.requireNonNull;
 
 final class SeqImpl {
     private SeqImpl() {}
+
+    private interface Delayed {
+        boolean computed();
+    }
 
     @SuppressWarnings("rawtypes")
     private static final Seq NIL = new Seq() {
@@ -105,11 +110,11 @@ final class SeqImpl {
 
         @Override
         public String toString() {
-            return show(100);
+            return SeqImpl.toString(this);
         }
     }
 
-    private static class LazySeq<T> implements Seq<T> {
+    private static class LazySeq<T> implements Seq<T>, Delayed {
         private final T head;
         private volatile Supplier<Seq<T>> generator;
         private volatile Seq<T> tail;
@@ -144,12 +149,21 @@ final class SeqImpl {
         }
 
         @Override
+        public boolean computed() {
+            return generator == null;
+        }
+
+        @Override
         public String toString() {
-            return show(100);
+            if (generator != null) {
+                return "[" + head + ", ?]";
+            } else {
+                return SeqImpl.toString(this);
+            }
         }
     }
 
-    private static class DelaySeq<T> implements Seq<T> {
+    private static class DelaySeq<T> implements Seq<T>, Delayed {
         private final Seq<T> delayed;
 
         DelaySeq(Seq<T> delayed) {
@@ -158,6 +172,11 @@ final class SeqImpl {
 
         Seq<T> force() {
             return delayed.tail();
+        }
+
+        @Override
+        public boolean computed() {
+            return ((Delayed)delayed).computed();
         }
 
         @Override
@@ -177,14 +196,14 @@ final class SeqImpl {
 
         @Override
         public String toString() {
-            return show(100);
+            return SeqImpl.toString(this);
         }
     }
 
-    static class Reapter<T> implements Seq<T> {
+    static class Repeater<T> implements Seq<T> {
         private final T value;
 
-        Reapter(T value) {
+        Repeater(T value) {
             this.value = value;
         }
 
@@ -232,7 +251,11 @@ final class SeqImpl {
     }
 
     static <T> Seq<T> delay(Seq<T> seq) {
-        return new DelaySeq<>(requireNonNull(seq));
+        if ((seq instanceof Delayed) && !((Delayed)seq).computed()) {
+            return new DelaySeq<>(seq);
+        } else {
+            return seq.tail();
+        }
     }
 
     static <T> Seq<T> force(Seq<T> seq) {
@@ -338,5 +361,25 @@ final class SeqImpl {
             }
         }
         return xs;
+    }
+
+    static <T> String toString(Seq<T> xs) {
+        StringJoiner sj = new StringJoiner(", ", "[", "]");
+        while (true) {
+            if ((xs instanceof Delayed) && !((Delayed)xs).computed()) {
+                sj.add("?");
+                break;
+            } else if (xs.isEmpty()) {
+                break;
+            } else if (xs instanceof Repeater) {
+                sj.add(String.valueOf(xs.head()));
+                sj.add("...");
+                break;
+            } else {
+                sj.add(String.valueOf(xs.head()));
+                xs = xs.tail();
+            }
+        }
+        return sj.toString();
     }
 }

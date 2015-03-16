@@ -193,7 +193,7 @@ public abstract class Trampoline<A> {
      * thunk.
      *
      * @param a a thunk that eventually produce computation result
-     * @return the state monad that hold the computation
+     * @return the trampoline that holds the computation
      */
     public static <A> Trampoline<A> lazy(Supplier<A> a) {
         return new Thunk<>(Fn.lazy(a));
@@ -298,7 +298,7 @@ public abstract class Trampoline<A> {
      * the result.
      */
     public static <A> Trampoline<Seq<A>> flatM(Seq<Trampoline<A>> ms) {
-        return ms.foldRightStrict(pure(Seq.nil()), liftM2(Seq::cons));
+        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
     }
 
     /**

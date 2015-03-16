@@ -215,7 +215,7 @@ public final class StateIO<A, S> {
      * the result.
      */
     public static <A, S> StateIO<Seq<A>, S> flatM(Seq<StateIO<A, S>> ms) {
-        return ms.foldRightStrict(pure(Seq.nil()), liftM2(Seq::cons));
+        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
     }
 
     /**

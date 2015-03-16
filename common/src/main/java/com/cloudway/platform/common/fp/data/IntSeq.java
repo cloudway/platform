@@ -142,32 +142,7 @@ public interface IntSeq
      * Create an infinite list where all items are the specified object.
      */
     static IntSeq repeat(int value) {
-        return new IntSeq() {
-            @Override
-            public boolean isEmpty() {
-                return false;
-            }
-
-            @Override
-            public int head() {
-                return value;
-            }
-
-            @Override
-            public IntSeq tail() {
-                return this;
-            }
-
-            @Override
-            public IntSeq reverse() {
-                return this;
-            }
-
-            @Override
-            public String toString() {
-                return "[" + value + ", ...]";
-            }
-        };
+        return new IntSeqImpl.Repeater(value);
     }
 
     /**

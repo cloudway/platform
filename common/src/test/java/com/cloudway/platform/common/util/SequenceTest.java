@@ -184,46 +184,46 @@ public class SequenceTest
     public void foldTest() {
         assertEquals(6,  (int)Seq.of(1, 2, 3).foldLeft(0, (acc, x) -> acc + x));
         assertEquals(6,  (int)Seq.of(1, 2, 3).foldRight(0, (x, acc) -> x + acc.get()));
-        assertEquals(6,  (int)Seq.of(1, 2, 3).foldRightStrict(0, (x, acc) -> x + acc));
+        assertEquals(6,  (int)Seq.of(1, 2, 3).foldRight_(0, (x, acc) -> x + acc));
         assertEquals(-6, (int)Seq.of(1, 2, 3).foldLeft(0, (acc, x) -> acc - x));
         assertEquals(2,  (int)Seq.of(1, 2, 3).foldRight(0, (x, acc) -> x - acc.get()));
-        assertEquals(2,  (int)Seq.of(1, 2, 3).foldRightStrict(0, (x, acc) -> x - acc));
+        assertEquals(2,  (int)Seq.of(1, 2, 3).foldRight_(0, (x, acc) -> x - acc));
 
         assertEquals(0, (int)Seq.<Integer>nil().foldLeft(0, (acc, x) -> acc + x));
         assertEquals(0, (int)Seq.<Integer>nil().foldRight(0, (x, acc) -> x + acc.get()));
-        assertEquals(0, (int)Seq.<Integer>nil().foldRightStrict(0, (x, acc) -> x + acc));
+        assertEquals(0, (int)Seq.<Integer>nil().foldRight_(0, (x, acc) -> x + acc));
 
         assertEquals(1,  (int)Seq.of(1).foldLeft(0, (acc, x) -> acc + x));
         assertEquals(1,  (int)Seq.of(1).foldRight(0, (x, acc) -> x + acc.get()));
-        assertEquals(1,  (int)Seq.of(1).foldRightStrict(0, (x, acc) -> x + acc));
+        assertEquals(1,  (int)Seq.of(1).foldRight_(0, (x, acc) -> x + acc));
         assertEquals(-1, (int)Seq.of(1).foldLeft(0, (acc, x) -> acc - x));
         assertEquals(1,  (int)Seq.of(1).foldRight(0, (x, acc) -> x - acc.get()));
-        assertEquals(1,  (int)Seq.of(1).foldRightStrict(0, (x, acc) -> x - acc));
+        assertEquals(1,  (int)Seq.of(1).foldRight_(0, (x, acc) -> x - acc));
 
         assertEquals(Optional.of(6),  Seq.of(1, 2, 3).foldLeft((acc, x) -> acc + x));
         assertEquals(Optional.of(6),  Seq.of(1, 2, 3).foldRight((x, acc) -> x + acc.get()));
-        assertEquals(Optional.of(6),  Seq.of(1, 2, 3).foldRightStrict((x, acc) -> x + acc));
+        assertEquals(Optional.of(6),  Seq.of(1, 2, 3).foldRight_((x, acc) -> x + acc));
         assertEquals(Optional.of(-4), Seq.of(1, 2, 3).foldLeft((acc, x) -> acc - x));
         assertEquals(Optional.of(2),  Seq.of(1, 2, 3).foldRight((x, acc) -> x - acc.get()));
-        assertEquals(Optional.of(2),  Seq.of(1, 2, 3).foldRightStrict((x, acc) -> x - acc));
+        assertEquals(Optional.of(2),  Seq.of(1, 2, 3).foldRight_((x, acc) -> x - acc));
 
         assertEquals(Optional.<Integer>empty(), Seq.<Integer>nil().foldLeft((acc, x) -> acc + x));
         assertEquals(Optional.<Integer>empty(), Seq.<Integer>nil().foldRight((x, acc) -> x + acc.get()));
-        assertEquals(Optional.<Integer>empty(), Seq.<Integer>nil().foldRightStrict((x, acc) -> x + acc));
+        assertEquals(Optional.<Integer>empty(), Seq.<Integer>nil().foldRight_((x, acc) -> x + acc));
 
         assertEquals(Optional.of(1),  Seq.of(1).foldLeft((acc, x) -> acc + x));
         assertEquals(Optional.of(1),  Seq.of(1).foldRight((x, acc) -> x + acc.get()));
-        assertEquals(Optional.of(1),  Seq.of(1).foldRightStrict((x, acc) -> x + acc));
+        assertEquals(Optional.of(1),  Seq.of(1).foldRight_((x, acc) -> x + acc));
         assertEquals(Optional.of(1),  Seq.of(1).foldLeft((acc, x) -> acc - x));
         assertEquals(Optional.of(1),  Seq.of(1).foldRight((x, acc) -> x - acc.get()));
-        assertEquals(Optional.of(1),  Seq.of(1).foldRightStrict((x, acc) -> x - acc));
+        assertEquals(Optional.of(1),  Seq.of(1).foldRight_((x, acc) -> x - acc));
 
         assertEquals(Optional.of(3),  Seq.of(1, 2).foldLeft((acc, x) -> acc + x));
         assertEquals(Optional.of(3),  Seq.of(1, 2).foldRight((x, acc) -> x + acc.get()));
-        assertEquals(Optional.of(3),  Seq.of(1, 2).foldRightStrict((x, acc) -> x + acc));
+        assertEquals(Optional.of(3),  Seq.of(1, 2).foldRight_((x, acc) -> x + acc));
         assertEquals(Optional.of(-1), Seq.of(1, 2).foldLeft((acc, x) -> acc - x));
         assertEquals(Optional.of(-1), Seq.of(1, 2).foldRight((x, acc) -> x - acc.get()));
-        assertEquals(Optional.of(-1), Seq.of(1, 2).foldRightStrict((x, acc) -> x - acc));
+        assertEquals(Optional.of(-1), Seq.of(1, 2).foldRight_((x, acc) -> x - acc));
 
         assertEquals("abc", Seq.of("a", "b", "c").foldLeft("", String::concat));
         assertEquals("abc", Seq.of("a", "b", "c").foldLeft(new StringBuilder(), StringBuilder::append).toString());

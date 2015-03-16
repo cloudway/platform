@@ -72,11 +72,14 @@ public final class StateCont<A, S> {
         return $(f -> f.apply(a));
     }
 
+    private static final StateCont<Unit,?> _unit = pure(Unit.U);
+
     /**
-     * Synonym of {@link #pure(Object) pure}.
+     * Returns a do nothing computation.
      */
-    public static <A, S> StateCont<A, S> yield(A a) {
-        return pure(a);
+    @SuppressWarnings("unchecked")
+    public static <S> StateCont<Unit, S> unit() {
+        return (StateCont<Unit,S>)_unit;
     }
 
     /**
@@ -258,7 +261,7 @@ public final class StateCont<A, S> {
      * the result.
      */
     public static <A, S> StateCont<Seq<A>, S> flatM(Seq<StateCont<A, S>> ms) {
-        return ms.foldRightStrict(pure(Seq.nil()), liftM2(Seq::cons));
+        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
     }
 
     /**

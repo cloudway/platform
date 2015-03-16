@@ -113,7 +113,7 @@ public interface IO<A> {
      * the result.
      */
     static <A> IO<Seq<A>> sequence(Seq<IO<A>> ms) {
-        return ms.foldRightStrict(pure(Seq.nil()), liftM2(Seq::cons));
+        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
     }
 
     /**
@@ -121,7 +121,7 @@ public interface IO<A> {
      * the result.
      */
     static IO<Unit> sequence_(Seq<IO<?>> ms) {
-        return ms.foldRight(pure(Unit.U), IO::andThen);
+        return ms.foldRight(pure(Unit.U), IO::<Unit>andThen);
     }
 
     /**

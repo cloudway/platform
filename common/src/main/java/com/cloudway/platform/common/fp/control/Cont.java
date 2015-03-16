@@ -94,6 +94,15 @@ public final class Cont<A> {
         return $(f -> f.apply(a));
     }
 
+    private static final Cont<Unit> _unit = pure(Unit.U);
+
+    /**
+     * Returns a do nothing computation.
+     */
+    public static Cont<Unit> unit() {
+        return _unit;
+    }
+
     /**
      * Synonym of {@link #pure(Object)}.
      */
@@ -251,7 +260,7 @@ public final class Cont<A> {
      * the result.
      */
     public static <A> Cont<Seq<A>> flatM(Seq<Cont<A>> ms) {
-        return ms.foldRightStrict(pure(Seq.nil()), liftM2(Seq::cons));
+        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
     }
 
     /**

@@ -64,6 +64,16 @@ public final class MonadState<A, S> {
         return $(s -> immediate(Tuple.of(a, s)));
     }
 
+    private static final MonadState<Unit,?> _unit = pure(Unit.U);
+
+    /**
+     * Returns a do nothing computation.
+     */
+    @SuppressWarnings("unchecked")
+    public static <S> MonadState<Unit, S> unit() {
+        return (MonadState<Unit,S>)_unit;
+    }
+
     /**
      * Constructs a pure computation that results in the given lazy evaluation
      * thunk.
@@ -202,7 +212,7 @@ public final class MonadState<A, S> {
      * the result.
      */
     public static <A, S> MonadState<Seq<A>, S> flatM(Seq<MonadState<A, S>> ms) {
-        return ms.foldRightStrict(pure(Seq.nil()), liftM2(Seq::cons));
+        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
     }
 
     /**

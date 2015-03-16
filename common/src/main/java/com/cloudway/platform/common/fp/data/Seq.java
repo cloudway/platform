@@ -216,7 +216,7 @@ public interface Seq<T> extends Iterable<T>
      * Create an infinite list where all items are the specified object.
      */
     static <T> Seq<T> repeat(T value) {
-        return new SeqImpl.Reapter<>(value);
+        return new SeqImpl.Repeater<>(value);
     }
 
     /**
@@ -227,14 +227,6 @@ public interface Seq<T> extends Iterable<T>
     }
 
     // Deconstructions
-
-    /**
-     * Returns a predicate that evaluate to true if the list to be tested
-     * is empty.
-     */
-    static <T> Predicate<Seq<T>> Nil() {
-        return Seq::isEmpty;
-    }
 
     /**
      * Returns a conditional case that will be evaluated if the list to be
@@ -487,10 +479,11 @@ public interface Seq<T> extends Iterable<T>
      * @param xs the list of pairs to transform
      * @return a list of first components and a list of second components
      */
+    @SuppressWarnings("RedundantTypeArguments")
     static <T, U> Tuple<Seq<T>, Seq<U>> unzip(Seq<Tuple<T, U>> xs) {
-        return xs.foldRight(Tuple.of(nil(), nil()), (t, r) ->
-            Tuple.of(cons(t.first(),  Fn.map(r, Tuple::first)),
-                     cons(t.second(), Fn.map(r, Tuple::second))));
+        return xs.foldRight(Tuple.of(Seq.<T>nil(), Seq.<U>nil()), (t, r) ->
+            Tuple.of(Seq.<T>cons(t.first(),  Fn.map(r, Tuple::first)),
+                     Seq.<U>cons(t.second(), Fn.map(r, Tuple::second))));
     }
 
     /**
@@ -537,15 +530,15 @@ public interface Seq<T> extends Iterable<T>
     /**
      * The strict version of {@link #foldRight(Object,BiFunction) foldRight}.
      */
-    default <R> R foldRightStrict(R identity, BiFunction<? super T, R, R> accumulator) {
+    default <R> R foldRight_(R identity, BiFunction<? super T, R, R> accumulator) {
         return reverse().foldLeft(identity, (acc, x) -> accumulator.apply(x, acc));
     }
 
     /**
-     * A variant of {@link #foldRightStrict(Object,BiFunction)} that has no starting
+     * A variant of {@link #foldRight_(Object,BiFunction)} that has no starting
      * value argument.
      */
-    default Optional<T> foldRightStrict(BinaryOperator<T> accumulator) {
+    default Optional<T> foldRight_(BinaryOperator<T> accumulator) {
         return reverse().foldLeft((acc, x) -> accumulator.apply(x, acc));
     }
 

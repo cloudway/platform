@@ -239,7 +239,7 @@ public final class Fn {
      */
     public static <T, A> Function<T, Seq<A>>
     flatM(Seq<Function<T, A>> ms) {
-        return ms.foldRightStrict(pure(Seq.nil()), liftM2(Seq::cons));
+        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
     }
 
     /**

@@ -7,6 +7,7 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.NoSuchElementException;
+import java.util.StringJoiner;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.IntBinaryOperator;
@@ -16,6 +17,10 @@ import static java.util.Objects.requireNonNull;
 
 final class IntSeqImpl {
     private IntSeqImpl() {}
+
+    private interface Delayed {
+        boolean computed();
+    }
 
     private static final IntSeq NIL = new IntSeq() {
         @Override
@@ -70,11 +75,11 @@ final class IntSeqImpl {
 
         @Override
         public String toString() {
-            return show(100);
+            return IntSeqImpl.toString(this);
         }
     }
 
-    private static class LazyIntSeq implements IntSeq {
+    private static class LazyIntSeq implements IntSeq, Delayed {
         private final int head;
         private volatile Supplier<IntSeq> generator;
         private volatile IntSeq tail;
@@ -109,12 +114,21 @@ final class IntSeqImpl {
         }
 
         @Override
+        public boolean computed() {
+            return generator == null;
+        }
+
+        @Override
         public String toString() {
-            return show(100);
+            if (generator != null) {
+                return "[" + head + ", ?]";
+            } else {
+                return IntSeqImpl.toString(this);
+            }
         }
     }
 
-    private static class DelayIntSeq implements IntSeq {
+    private static class DelayIntSeq implements IntSeq, Delayed {
         private final IntSeq delayed;
 
         DelayIntSeq(IntSeq delayed) {
@@ -123,6 +137,11 @@ final class IntSeqImpl {
 
         IntSeq force() {
             return delayed.tail();
+        }
+
+        @Override
+        public boolean computed() {
+            return ((Delayed)delayed).computed();
         }
 
         @Override
@@ -142,7 +161,40 @@ final class IntSeqImpl {
 
         @Override
         public String toString() {
-            return show(100);
+            return IntSeqImpl.toString(this);
+        }
+    }
+
+    static class Repeater implements IntSeq {
+        private final int value;
+
+        Repeater(int value) {
+            this.value = value;
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return false;
+        }
+
+        @Override
+        public int head() {
+            return value;
+        }
+
+        @Override
+        public IntSeq tail() {
+            return this;
+        }
+
+        @Override
+        public IntSeq reverse() {
+            return this;
+        }
+
+        @Override
+        public String toString() {
+            return "[" + value + ", ...]";
         }
     }
 
@@ -186,8 +238,12 @@ final class IntSeqImpl {
 
         @Override
         public String toString() {
-            String res = "[" + start + ".." + end + "]";
-            if (step != 1)
+            return "[" + showRange() + "]";
+        }
+
+        String showRange() {
+            String res = start + ".." + end;
+            if (step != -1)
                 res += "(" + step + ")";
             return res;
         }
@@ -297,7 +353,11 @@ final class IntSeqImpl {
     }
 
     static IntSeq delay(IntSeq seq) {
-        return new DelayIntSeq(requireNonNull(seq));
+        if ((seq instanceof Delayed) && !((Delayed)seq).computed()) {
+            return new DelayIntSeq(seq);
+        } else {
+            return seq.tail();
+        }
     }
 
     static IntSeq force(IntSeq seq) {
@@ -415,5 +475,28 @@ final class IntSeqImpl {
         return as.head() > bs.head()
                ? cons(bs.head(), () -> merge(as, bs.tail()))
                : cons(as.head(), () -> merge(as.tail(), bs));
+    }
+
+    static String toString(IntSeq xs) {
+        StringJoiner sj = new StringJoiner(", ", "[", "]");
+        while (true) {
+            if ((xs instanceof Delayed) && !((Delayed)xs).computed()) {
+                sj.add("?");
+                break;
+            } else if (xs.isEmpty()) {
+                break;
+            } else if (xs instanceof Repeater) {
+                sj.add(String.valueOf(xs.head()));
+                sj.add("...");
+                break;
+            } else if (xs instanceof Range) {
+                sj.add(((Range)xs).showRange());
+                break;
+            } else {
+                sj.add(String.valueOf(xs.head()));
+                xs = xs.tail();
+            }
+        }
+        return sj.toString();
     }
 }
