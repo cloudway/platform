@@ -17,6 +17,8 @@ import com.cloudway.platform.common.fp.function.TriFunction;
 import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.fp.io.VoidIO;
 
+import static com.cloudway.platform.common.fp.control.TrampolineIO.*;
+
 /**
  * The stateful IO monad.
  *
@@ -25,16 +27,21 @@ import com.cloudway.platform.common.fp.io.VoidIO;
  */
 public final class StateIO<A, S> {
     // the state transfer function
-    private final Function<S, IO<Tuple<A, S>>> sf;
+    private final Function<S, TrampolineIO<Tuple<A, S>>> sf;
 
     // construct a stateful IO monad
-    private StateIO(Function<S, IO<Tuple<A, S>>> f) {
+    private StateIO(Function<S, TrampolineIO<Tuple<A, S>>> f) {
         this.sf = f;
     }
 
     // helper method to construct a monad from a transfer function
-    static <A, S> StateIO<A, S> $(Function<S, IO<Tuple<A, S>>> f) {
+    static <A, S> StateIO<A, S> $(Function<S, TrampolineIO<Tuple<A, S>>> f) {
         return new StateIO<>(f);
+    }
+
+    // single step the state transfer
+    private TrampolineIO<Tuple<A, S>> go(S s) {
+        return sf.apply(s);
     }
 
     /**
@@ -44,7 +51,7 @@ public final class StateIO<A, S> {
      * @return the stateful IO monad
      */
     public static <A, S> StateIO<A, S> state(Function<S, Tuple<A, S>> f) {
-        return $(s -> IO.pure(f.apply(s)));
+        return $(s -> immediate(f.apply(s)));
     }
 
     /**
@@ -54,7 +61,7 @@ public final class StateIO<A, S> {
      * @return the stateful IO monad that hold the final result
      */
     public static <A, S> StateIO<A, S> pure(A a) {
-        return $(s -> IO.pure(Tuple.of(a, s)));
+        return $(s -> immediate(Tuple.of(a, s)));
     }
 
     private static final StateIO<Unit,?> _unit = pure(Unit.U);
@@ -92,7 +99,7 @@ public final class StateIO<A, S> {
      * @return the prompted stateful IO action
      */
     public static <A, S> StateIO<A, S> lift(IO<A> m) {
-        return $(s -> m.map(a -> Tuple.of(a, s)));
+        return $(s -> TrampolineIO.lift(m).map(a -> Tuple.of(a, s)));
     }
 
     /**
@@ -113,7 +120,7 @@ public final class StateIO<A, S> {
      * @return the tuple of final value and final state wrapped in an IO monad
      */
     public IO<Tuple<A, S>> run(S s) {
-        return sf.apply(s);
+        return go(s).run();
     }
 
     /**
@@ -143,28 +150,28 @@ public final class StateIO<A, S> {
      * and wrapping the result to a new state.
      */
     public <B> StateIO<B, S> map(Function<? super A, ? extends B> f) {
-        return $(s -> run(s).map(t -> t.mapFirst(f)));
+        return $(s -> suspend(() -> go(s).map(t -> t.mapFirst(f))));
     }
 
     /**
      * Transfer a state computation by feeding the value to the given function.
      */
     public <B> StateIO<B, S> bind(Function<? super A, StateIO<B, S>> f) {
-        return $(s -> run(s).bind(t -> f.apply(t.first()).run(t.second())));
+        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> f.apply(t.first()).go(t.second())))));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
     public <B> StateIO<B, S> andThen(Supplier<StateIO<B, S>> next) {
-        return $(s -> run(s).bind(t -> next.get().run(t.second())));
+        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> next.get().go(t.second())))));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
     public <B> StateIO<B, S> andThen(StateIO<B, S> next) {
-        return $(s -> run(s).bind(t -> next.run(t.second())));
+        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> next.go(t.second())))));
     }
 
     /**
@@ -172,42 +179,49 @@ public final class StateIO<A, S> {
      * given function.
      */
     public <B> StateIO<B, S> maps(Function<IO<Tuple<A, S>>, IO<Tuple<B, S>>> f) {
-        return $(s -> f.apply(run(s)));
+        return $(s -> suspend(() -> TrampolineIO.lift(f.apply(run(s)))));
     }
 
     /**
      * Execute action on a state modified by applying function.
      */
     public StateIO<A, S> withs(Function<S, S> f) {
-        return $(s -> run(f.apply(s)));
+        return $(s -> suspend(() -> go(f.apply(s))));
     }
 
     /**
      * Fetch the current value of the state within the monad.
      */
     public static <S> StateIO<S, S> get() {
-        return $(s -> IO.pure(Tuple.of(s, s)));
+        return $(s -> immediate(Tuple.of(s, s)));
+    }
+
+    /**
+     * Fetch the current value of the state and bind the value to the given function.
+     */
+    public static <B, S> StateIO<B,S> get(Function<? super S, StateIO<B, S>> f) {
+        return $(s -> suspend(() -> f.apply(s).go(s))); // get().bind(f)
     }
 
     /**
      * Sets the state within the monad.
      */
     public static <S> StateIO<Unit, S> put(S s) {
-        return $(__ -> IO.pure(Tuple.of(Unit.U, s)));
+        return $(__ -> immediate(Tuple.of(Unit.U, s)));
     }
 
     /**
      * Updates the state to the result of applying a function to the current state.
      */
     public static <S> StateIO<Unit, S> modify(Function<S, S> f) {
-        return $(s -> IO.pure(Tuple.of(Unit.U, f.apply(s))));
+        return $(s -> immediate(Tuple.of(Unit.U, f.apply(s))));
     }
 
     /**
      * Get specific component of the state, using a projection function applied.
      */
     public static <A, S> StateIO<A, S> gets(Function<S, A> f) {
-        return $(s -> IO.pure(Tuple.of(f.apply(s), s)));
+        return $(s -> immediate(Tuple.of(f.apply(s), s)));
     }
 
     /**
@@ -311,7 +325,7 @@ public final class StateIO<A, S> {
      */
     public static <A, B, C, D, S> StateIO<D, S>
     zip3(StateIO<A, S> ma, StateIO<B, S> mb, StateIO<C, S> mc,
-         TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
+            TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
         return StateIO.<A,B,C,D,S>liftM3(f).apply(ma, mb, mc);
     }
 }

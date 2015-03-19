@@ -10,6 +10,7 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +28,7 @@ import java.util.stream.IntStream;
 import com.google.common.collect.ImmutableMap;
 
 import com.cloudway.platform.common.fp.control.ConditionCase;
-import com.cloudway.platform.common.fp.control.StateIO;
+import com.cloudway.platform.common.fp.control.MonadState;
 import com.cloudway.platform.common.fp.data.Holder;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
@@ -1019,20 +1020,19 @@ public class ConditionalTest
             BREADTH_FIRST {
                 @Override
                 public <T> void walk(Tree<T> tree, Consumer<T> action) {
-                    walk(action).run(Seq.of(tree)).runUncheckedIO();
+                    walk(action).run(Seq.of(tree));
                 }
 
-                private <T> StateIO<Unit, Seq<Tree<T>>> walk(Consumer<T> action) {
-                    Holder<StateIO<Unit, Seq<Tree<T>>>> loop = new Holder<>();
-                    return loop.set(
-                      do_(StateIO.get(), queue ->
-                      do_(inCaseOf(queue, Cons((tree, remaining) ->
+                private <T> MonadState<Unit, Seq<Tree<T>>> walk(Consumer<T> action) {
+                    return
+                      MonadState.get(queue ->
+                      inCaseOf(queue, Cons((tree, remaining) ->
                         do_(inCaseOf(tree, Node((a, x, b) ->
-                          do_(StateIO.action(() -> action.accept(x)),
-                          do_(StateIO.put(remaining.append(Seq.of(a, b)))))),
-                          otherwise(StateIO.put(remaining))),
-                        do_(loop.get()))),
-                        otherwise(StateIO.pure(Unit.U))))));
+                          do_(MonadState.action(() -> action.accept(x)),
+                          do_(MonadState.put(remaining.append(Seq.of(a, b)))))),
+                          otherwise(MonadState.put(remaining))),
+                        do_(() -> walk(action)))),
+                      otherwise(MonadState.pure(Unit.U))));
                 }
             };
 
@@ -1123,11 +1123,19 @@ public class ConditionalTest
     @Test
     public void ascendingSequenceTreeTest() {
         testTree(IntStream.rangeClosed(1, 100).toArray());
+
+        TreeSet<Integer> tree = buildTree(IntStream.rangeClosed(1, 10));
+        List<Integer> list = tree.collect(TreeSet.Traverser.BREADTH_FIRST, toList());
+        assertEquals(Arrays.asList(4, 2, 6, 1, 3, 5, 8, 7, 9, 10), list);
     }
 
     @Test
     public void descendingSequenceTreeTest() {
         testTree(IntStream.rangeClosed(1, 100).map(i -> 101 - i).toArray());
+
+        TreeSet<Integer> tree = buildTree(IntStream.rangeClosed(1, 10).map(i -> 11 - i));
+        List<Integer> list = tree.collect(TreeSet.Traverser.BREADTH_FIRST, toList());
+        assertEquals(Arrays.asList(7, 5, 9, 3, 6, 8, 10, 2, 4, 1), list);
     }
 
     private static void testTree(int[] source) {
