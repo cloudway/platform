@@ -283,8 +283,7 @@ public interface Seq<T> extends Iterable<T>
         if (isEmpty()) {
             return nil();
         } else {
-            Holder<Seq<T>> h = new Holder<>();
-            return h.set(SeqImpl.concat(this, h::get));
+            return Ref.cycle((Ref<Seq<T>> h) -> SeqImpl.concat(this, h));
         }
     }
 
@@ -468,8 +467,17 @@ public interface Seq<T> extends Iterable<T>
      * </pre>}
      * </p>
      */
-    default <U, R> Seq<R> zip(Seq<? extends U> other, BiFunction<? super T, ? super U, ? extends R> zipper) {
+    default <U, R> Seq<R> zip(Seq<? extends U> other,
+            BiFunction<? super T, ? super U, ? extends R> zipper) {
         return SeqImpl.zip(this, other, zipper);
+    }
+
+    /**
+     * The static version of {@link #zip(Seq,Seq,BiFunction)}.
+     */
+    static <T, U, R> Seq<R> zip(Seq<? extends T> xs, Seq<? extends U> ys,
+            BiFunction<? super T, ? super U, ? extends R> zipper) {
+        return SeqImpl.zip(xs, ys, zipper);
     }
 
     /**
@@ -729,6 +737,14 @@ public interface Seq<T> extends Iterable<T>
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * Returns '[()]' if the given guard condition is true, otherwise returns '[]'.
+     * This method can be used in a 'do' notation.
+     */
+    static Seq<Unit> guard(boolean test) {
+        return test ? of(Unit.U) : nil();
     }
 
     /**

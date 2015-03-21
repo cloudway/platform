@@ -46,7 +46,7 @@ import com.cloudway.platform.common.os.Etc;
 import com.cloudway.platform.common.os.Etc.PASSWD;
 import com.cloudway.platform.common.os.Posix;
 import com.cloudway.platform.common.os.Config;
-import com.cloudway.platform.common.fp.data.IntHolder;
+import com.cloudway.platform.common.fp.data.IntRef;
 import com.cloudway.platform.common.fp.control.Predicates;
 import com.cloudway.platform.common.fp.function.ExceptionConsumer;
 import com.cloudway.platform.container.proxy.HttpProxy;
@@ -291,10 +291,10 @@ public class ApplicationContainerTest
     }
 
     private void checkContainers(String... names) {
-        IntHolder count = new IntHolder(0);
+        IntRef count = new IntRef(0);
         ApplicationContainer.all().forEach(ac -> {
             assertThat(Arrays.asList(names), hasItem(ac.getName()));
-            count.incrementAndGet();
+            count.increment();
             checkContainer(ac);
         });
         assertThat(count.get(), is(names.length));
@@ -829,7 +829,7 @@ public class ApplicationContainerTest
     private String installAddonWithRepo(ApplicationContainer container, Path source, String repo)
         throws IOException
     {
-        IntHolder hostId = new IntHolder();
+        IntRef hostId = new IntRef();
 
         context.checking(new Expectations() {{
             allowing(repository).exists(); will(returnValue(true));

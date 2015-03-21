@@ -7,6 +7,7 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -14,12 +15,14 @@ import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.control.Cont;
 import com.cloudway.platform.common.fp.function.TriFunction;
-import static com.cloudway.platform.common.fp.control.Comprehension.*;
+import static com.cloudway.platform.common.fp.control.Syntax.*;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
 import static com.cloudway.platform.common.fp.data.Tuple.Triple_;
 
@@ -1167,6 +1170,17 @@ final class Tree {
         @Override
         default <R> R foldRightKV_(R z, TriFunction<? super K, ? super V, R, R> f) {
             return Bin.foldRight_(this, z, (b, r) -> f.apply(b.getKey(), b.getValue(), r));
+        }
+
+        @Override
+        default Iterator<Map.Entry<K,V>> iterator() {
+            return Cont.generator(Bin.foldRight(this, Cont.<Map.Entry<K,V>>finish(),
+                (e, r) -> Cont.yield(e).then(r))).iterator();
+        }
+
+        @Override
+        default void forEach(Consumer<? super Map.Entry<K,V>> action) {
+            Bin.foldLeft(this, Unit.U, (z, e) -> { action.accept(e); return z; });
         }
 
         @Override

@@ -26,7 +26,7 @@ import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.function.ExceptionBiFunction;
 
-import static com.cloudway.platform.common.fp.control.Comprehension.*;
+import static com.cloudway.platform.common.fp.control.Syntax.*;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
 import static com.cloudway.platform.common.fp.data.IntSeq.IntCons;
 import static com.cloudway.platform.common.fp.data.IntSeq.IntSingle;
@@ -85,7 +85,7 @@ public class MonadStateTest {
 
         public static int solve(String expression) {
             return Seq.of(SPACES.split(expression))
-                      .foldRight(pop(), (item, next) -> scan(item).andThen(next))
+                      .foldRight(pop(), (item, next) -> scan(item).then(next))
                       .eval(IntSeq.nil());
         }
 
@@ -113,7 +113,7 @@ public class MonadStateTest {
 
         public static OptionalInt solve(String expression) {
             return Seq.of(SPACES.split(expression))
-                      .foldRight(getResult(), (item, next) -> scan(item).andThen(next))
+                      .foldRight(getResult(), (item, next) -> scan(item).then(next))
                       .eval(Optional.of(IntSeq.nil()));
         }
 
@@ -150,7 +150,7 @@ public class MonadStateTest {
         }
 
         static MonadState<OptionalInt, Optional<IntSeq>> getResult() {
-            return pop().maps((result, stack) ->
+            return pop().mapState((result, stack) ->
                 select.from(stack, (IntSeq xs) -> where(xs.isEmpty(),
                        yield(Tuple.of(OptionalInt.of(result), Optional.<IntSeq>empty()))))
                       .orElseGet(() -> Tuple.of(OptionalInt.empty(), Optional.<IntSeq>empty())));
@@ -225,7 +225,7 @@ public class MonadStateTest {
     @Test
     public void doorStateTest() {
         MonadState<Door.State, Door> states =
-            Door.open().andThen(Door.open()).andThen(Door.close()).andThen(Door.close());
+            Door.open().then(Door.open()).then(Door.close()).then(Door.close());
         Tuple<Door.State, Door> result = states.run(new Door(Door.State.CLOSED));
         assertEquals(Door.State.CLOSED, result.first());
         assertEquals(Door.State.CLOSED, result.second().state());
@@ -286,7 +286,7 @@ public class MonadStateTest {
     @Test
     public void flatMTest() {
         MonadState<Integer, Integer> inc =
-            MonadState.get(x -> MonadState.put(x+1).andThen(MonadState.pure(x)));
+            MonadState.get(x -> MonadState.put(x+1).then(MonadState.pure(x)));
 
         Seq<MonadState<Integer,Integer>> states = Seq.replicate(3, inc);
         Tuple<Seq<Integer>, Integer> res = MonadState.flatM(states).run(0);
@@ -300,7 +300,7 @@ public class MonadStateTest {
     @Test
     public void stateRunOverflowTest() {
         MonadState<Integer, Integer> inc =
-            MonadState.get(x -> MonadState.put(x+1).andThen(MonadState.pure(x)));
+            MonadState.get(x -> MonadState.put(x+1).then(MonadState.pure(x)));
 
         // ensure no stack overflow
         MonadState.flatM(Seq.replicate(10_000, inc)).run(0).first().count();
@@ -310,7 +310,7 @@ public class MonadStateTest {
     @Test
     public void mapMTest() {
         Function<Integer, MonadState<Integer,Integer>> add =
-            x -> MonadState.get(y -> MonadState.put(x+y).andThen(MonadState.pure(y)));
+            x -> MonadState.get(y -> MonadState.put(x+y).then(MonadState.pure(y)));
 
         Seq<Integer> xs = Seq.of(1, 2, 3);
         Tuple<Seq<Integer>, Integer> res = MonadState.mapM(xs, add).run(0);
@@ -330,7 +330,7 @@ public class MonadStateTest {
     public void filterMTest() {
         Function<Integer, MonadState<Boolean,Integer>> fadd =
             x -> x == 0 ? MonadState.pure(false)
-                        : MonadState.get(y -> MonadState.put(x+y).andThen(MonadState.pure(true)));
+                        : MonadState.get(y -> MonadState.put(x+y).then(MonadState.pure(true)));
 
         Seq<Integer> xs = Seq.of(1, 2, 0, 3);
         Tuple<Seq<Integer>, Integer> result = MonadState.filterM(xs, fadd).run(0);
@@ -341,7 +341,7 @@ public class MonadStateTest {
     @Test
     public void foldMTest() {
         BiFunction<Integer, Integer, MonadState<Integer,Integer>> add2 =
-            (z, x) -> MonadState.get(y -> MonadState.put(x + y + z).andThen(MonadState.pure(z + x)));
+            (z, x) -> MonadState.get(y -> MonadState.put(x + y + z).then(MonadState.pure(z + x)));
 
         Seq<Integer> xs = Seq.of(1, 2, 3);
         Tuple<Integer, Integer> result = MonadState.foldM(0, xs, add2).run(0);

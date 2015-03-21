@@ -27,7 +27,7 @@ import static java.nio.file.Files.*;
 import static com.cloudway.platform.common.util.MoreFiles.*;
 import static java.nio.file.StandardCopyOption.*;
 import static com.cloudway.platform.common.fp.control.StateIO.*;
-import static com.cloudway.platform.common.fp.control.Comprehension.*;
+import static com.cloudway.platform.common.fp.control.Syntax.*;
 
 final class ApacheDB {
     private static final String SUFFIX = ".txt";

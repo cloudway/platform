@@ -171,15 +171,6 @@ public abstract class Either<A, B> {
     }
 
     /**
-     * Returns the 'Right' value, if present, otherwise a RuntimeException
-     * is thrown.  The 'Left' value type must be String, otherwise a
-     * ClassCastException is thrown.
-     */
-    public B get() {
-        return getOrThrow(a -> new RuntimeException((String)a));
-    }
-
-    /**
      * Returns the 'Right' value, if present, otherwise throw an exception
      * to be created by the provided supplier.
      */
@@ -208,6 +199,15 @@ public abstract class Either<A, B> {
     }
 
     /**
+     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
+     * Bind the given function to the given computations with a final join.
+     */
+    public static <T, A, B, C> Either<T, Seq<C>>
+    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, Either<T, C>> f) {
+        return flatM(Seq.zip(xs, ys, f));
+    }
+
+    /**
      * This generalizes the list-based filter function.
      */
     public static <A, B> Either<A, Seq<B>> filterM(Seq<B> xs, Function<? super B, Either<A, Boolean>> p) {
@@ -232,7 +232,7 @@ public abstract class Either<A, B> {
      * Kleisli composition of monads.
      */
     public static <A, B, C, X> Function<A, Either<X, C>>
-    compose(Function<A, Either<X, B>> f, Function<B, Either<X, C>> g) {
+    kleisli(Function<A, Either<X, B>> f, Function<B, Either<X, C>> g) {
         return x -> f.apply(x).flatMap(g);
     }
 
@@ -258,21 +258,5 @@ public abstract class Either<A, B> {
     public static <A, T, U, V, R> TriFunction<Either<A, T>, Either<A, U>, Either<A, V>, Either<A, R>>
     liftM3(TriFunction<? super T, ? super U, ? super V, ? extends R> f) {
         return (m1, m2, m3) -> m1.flatMap(x1 -> m2.flatMap(x2 -> m3.map(x3 -> f.apply(x1, x2, x3))));
-    }
-
-    /**
-     * Bind the given function to the given either with a final join.
-     */
-    public static <A, T, U, R> Either<A, R>
-    zip(Either<A, T> m1, Either<A, U> m2, BiFunction<? super T, ? super U, ? extends R> f) {
-        return Either.<A,T,U,R>liftM2(f).apply(m1, m2);
-    }
-
-    /**
-     * Bind the given function to the given either with a final join.
-     */
-    public static <A, T, U, V, R> Either<A, R>
-    zip3(Either<A, T> m1, Either<A, U> m2, Either<A, V> m3, TriFunction<? super T, ? super U, ? super V, ? extends R> f) {
-        return Either.<A,T,U,V,R>liftM3(f).apply(m1, m2, m3);
     }
 }

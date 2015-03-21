@@ -94,7 +94,7 @@ public interface IO<A> {
      * @param other the another I/O action that performed after this I/O action
      * @return a new I/O action that sequentially perform I/O actions
      */
-    default <B> IO<B> andThen(IO<B> other) {
+    default <B> IO<B> then(IO<B> other) {
         return () -> { runIO(); return other.runIO(); };
     }
 
@@ -104,7 +104,7 @@ public interface IO<A> {
      * @param other the another I/O action that performed after this I/O action
      * @return a new I/O action that sequentially perform I/O actions
      */
-    default <B> IO<B> andThen(Supplier<IO<B>> other) {
+    default <B> IO<B> then(Supplier<IO<B>> other) {
         return () -> { runIO(); return other.get().runIO(); };
     }
 
@@ -121,7 +121,7 @@ public interface IO<A> {
      * the result.
      */
     static IO<Unit> sequence_(Seq<IO<?>> ms) {
-        return ms.foldRight(pure(Unit.U), IO::<Unit>andThen);
+        return ms.foldRight(pure(Unit.U), IO::<Unit>then);
     }
 
     /**
@@ -137,6 +137,24 @@ public interface IO<A> {
      */
     static <A> IO<Unit> mapM_(Seq<A> xs, Function<? super A, IO<?>> f) {
         return sequence_(xs.map(f));
+    }
+
+    /**
+     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
+     * Bind the given function to the given computations with a final join.
+     */
+    static <A, B, C> IO<Seq<C>>
+    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, IO<C>> f) {
+        return sequence(Seq.zip(xs, ys, f));
+    }
+
+    /**
+     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
+     * final result.
+     */
+    static <A, B, C> IO<Unit>
+    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, IO<C>> f) {
+        return sequence_(Seq.zip(xs, ys, f));
     }
 
     /**
@@ -161,9 +179,23 @@ public interface IO<A> {
     }
 
     /**
+     * Perform the action n times, gathering the results.
+     */
+    static <A> IO<Seq<A>> replicateM(int n, IO<A> a) {
+        return sequence(Seq.replicate(n, a));
+    }
+
+    /**
+     * Perform the action n times, discards the result.
+     */
+    static <A> IO<Unit> replicateM_(int n, IO<A> a) {
+        return sequence_(Seq.replicate(n, a));
+    }
+
+    /**
      * Kleisli composition of monads.
      */
-    static <A, B, C> Function<A, IO<C>> compose(Function<A, IO<B>> f, Function<B, IO<C>> g) {
+    static <A, B, C> Function<A, IO<C>> kleisli(Function<A, IO<B>> f, Function<B, IO<C>> g) {
         return x -> f.apply(x).bind(g);
     }
 
@@ -177,7 +209,8 @@ public interface IO<A> {
     /**
      * Promote a function to an I/O action.
      */
-    static <A, B, C> BiFunction<IO<A>, IO<B>, IO<C>> liftM2(BiFunction<? super A, ? super B, ? extends C> f) {
+    static <A, B, C> BiFunction<IO<A>, IO<B>, IO<C>>
+    liftM2(BiFunction<? super A, ? super B, ? extends C> f) {
         return (m1, m2) -> m1.bind(x1 -> m2.map(x2 -> f.apply(x1, x2)));
     }
 

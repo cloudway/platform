@@ -288,7 +288,7 @@ public class CopyOnWriteTreeMap<K,V> extends AbstractMap<K,V> implements java.io
     class EntrySet extends AbstractSet<Map.Entry<K,V>> {
         @Override
         public Iterator<Map.Entry<K,V>> iterator() {
-            return getTree().entries().iterator();
+            return getTree().iterator();
         }
 
         @Override

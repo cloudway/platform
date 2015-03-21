@@ -6,35 +6,47 @@
 
 package com.cloudway.platform.common.fp.data;
 
+import java.util.function.BooleanSupplier;
+
 /**
- * Java lambda "closes" environment variables, a {@code BooleanHolder} can captures
+ * Java lambda "closes" environment variables, a {@code BooleanRef} can captures
  * these variables.
  */
-public class BooleanHolder implements java.io.Serializable {
+public class BooleanRef implements BooleanSupplier, java.io.Serializable {
     private static final long serialVersionUID = 3461124418194635930L;
 
     private boolean value;
 
     /**
-     * Creates a new BooleanHolder with the given initial value.
+     * Creates a new BooleanRef with the given initial value.
      *
      * @param initialValue the initial value
      */
-    public BooleanHolder(boolean initialValue) {
+    public BooleanRef(boolean initialValue) {
         value = initialValue;
     }
 
     /**
-     * Creates a new BooleanHolder with initial value {@code false}.
+     * Creates a new BooleanRef with initial value {@code false}.
      */
-    public BooleanHolder() {}
+    public BooleanRef() {}
 
     /**
-     * Gets the hold value.
+     * Gets the indirect referenced value.
+     *
+     * @return the current indirect referenced value
+     */
+    public boolean get() {
+        return value;
+    }
+
+    /**
+     * Gets the hold value as a result.
      *
      * @return the current hold value
      */
-    public boolean get() {
+    @Override
+    public boolean getAsBoolean() {
         return value;
     }
 
@@ -57,6 +69,15 @@ public class BooleanHolder implements java.io.Serializable {
         boolean oldValue = value;
         value = newValue;
         return oldValue;
+    }
+
+    /**
+     * Negates the referenced boolean value.
+     *
+     * @return the negation value
+     */
+    public boolean negate() {
+        return value = !value;
     }
 
     /**

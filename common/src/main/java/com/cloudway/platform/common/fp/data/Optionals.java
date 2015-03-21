@@ -112,6 +112,15 @@ public final class Optionals
     }
 
     /**
+     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
+     * Bind the given function to the given computations with a final join.
+     */
+    public static <A, B, C> Optional<Seq<C>>
+    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, Optional<C>> f) {
+        return flatM(Seq.zip(xs, ys, f));
+    }
+
+    /**
      * This generalizes the list-based filter function.
      */
     public static <T> Optional<Seq<T>> filterM(Seq<T> xs, Function<? super T, Optional<Boolean>> p) {
@@ -143,7 +152,7 @@ public final class Optionals
      * Kleisli composition of monads.
      */
     public static <A, B, C> Function<A, Optional<C>>
-    compose(Function<A, Optional<B>> f, Function<B, Optional<C>> g) {
+    kleisli(Function<A, Optional<B>> f, Function<B, Optional<C>> g) {
         return x -> f.apply(x).flatMap(g);
     }
 
@@ -161,6 +170,14 @@ public final class Optionals
     public static <T, U, R> BiFunction<Optional<T>, Optional<U>, Optional<R>>
     liftM2(BiFunction<? super T, ? super U, ? extends R> f) {
         return (m1,m2) -> m1.flatMap(x1 -> m2.map(x2 -> f.apply(x1, x2)));
+    }
+
+    /**
+     * Returns {@code Just ()} if the given guard condition is true, otherwise
+     * returns {@code Nothing}
+     */
+    public static <T> Optional<Unit> guard(boolean test) {
+        return test ? Optional.of(Unit.U) : Optional.empty();
     }
 
     /**

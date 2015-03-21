@@ -127,7 +127,7 @@ public class CopyOnWriteTreeSet<E> extends AbstractSet<E> implements java.io.Ser
 
     @Override
     public Iterator<E> iterator() {
-        return getTree().toList().iterator();
+        return getTree().iterator();
     }
 
     @Override

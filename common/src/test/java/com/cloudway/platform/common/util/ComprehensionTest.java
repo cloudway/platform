@@ -18,7 +18,7 @@ import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
-import static com.cloudway.platform.common.fp.control.Comprehension.*;
+import static com.cloudway.platform.common.fp.control.Syntax.*;
 import static com.cloudway.platform.common.fp.data.Optionals.Just;
 import static com.cloudway.platform.common.fp.data.Tuple.Tuple_;
 

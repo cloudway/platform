@@ -6,9 +6,12 @@
 
 package com.cloudway.platform.common.fp.control;
 
+import java.util.Iterator;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.data.Fn;
@@ -22,7 +25,7 @@ import com.cloudway.platform.common.fp.function.TriFunction;
  * <p>Continuation&lt;A, R&gt; is a CPS computation that produces an intermediate
  * result of type {@code A} within a CPS computation whose final type is {@code R}</p>
  *
- * <p>The {@code yield} method simply creates a continuation which passes the
+ * <p>The {@code pure} method simply creates a continuation which passes the
  * value on.</p>
  *
  * <p>The {@code bind} method adds the bound function into the continuation chain.</p>
@@ -30,7 +33,7 @@ import com.cloudway.platform.common.fp.function.TriFunction;
  * @param <A> the type of intermediate result of computation
  */
 public final class Cont<A> {
-    // the CPS transfer type
+    // the CPS transfer type: (a -> r) -> r
     @FunctionalInterface
     private interface K<A, R> {
         R apply(Function<A, R> f);
@@ -104,13 +107,6 @@ public final class Cont<A> {
     }
 
     /**
-     * Synonym of {@link #pure(Object)}.
-     */
-    public static <A> Cont<A> yield(A a) {
-        return pure(a);
-    }
-
-    /**
      * Yield a thunk that has a lazily evaluated computation.
      *
      * @param a a thunk that eventually produce computation result
@@ -161,7 +157,7 @@ public final class Cont<A> {
      * @param b the new continuation transformation
      * @return a continuation that transfers this continuation to the given continuation
      */
-    public <B> Cont<B> andThen(Cont<B> b) {
+    public <B> Cont<B> then(Cont<B> b) {
         return $(c -> run(a -> b.run(c)));
     }
 
@@ -171,7 +167,7 @@ public final class Cont<A> {
      * @param b the new continuation transformation
      * @return a continuation that transfers this continuation to the given continuation
      */
-    public <B> Cont<B> andThen(Supplier<Cont<B>> b) {
+    public <B> Cont<B> then(Supplier<Cont<B>> b) {
         return $(c -> run(a -> b.get().run(c)));
     }
 
@@ -255,6 +251,8 @@ public final class Cont<A> {
         return $((Function<A, R> k) -> f.apply(k).eval());
     }
 
+    // Monad
+
     /**
      * Evaluate each action in the sequence from left to right, and collect
      * the result.
@@ -268,7 +266,7 @@ public final class Cont<A> {
      * the result.
      */
     public static <A> Cont<Unit> sequence(Seq<Cont<A>> ms) {
-        return ms.foldRight(pure(Unit.U), Cont::andThen);
+        return ms.foldRight(unit(), Cont::then);
     }
 
     /**
@@ -286,6 +284,24 @@ public final class Cont<A> {
     public static <A, B> Cont<Unit>
     mapM_(Seq<A> xs, Function<? super A, Cont<B>> f) {
         return sequence(xs.map(f));
+    }
+
+    /**
+     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
+     * Bind the given function to the given computations with a final join.
+     */
+    public static <A, B, C> Cont<Seq<C>>
+    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, Cont<C>> f) {
+        return flatM(Seq.zip(xs, ys, f));
+    }
+
+    /**
+     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
+     * final result.
+     */
+    public static <A, B, C> Cont<Unit>
+    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, Cont<C>> f) {
+        return sequence(Seq.zip(xs, ys, f));
     }
 
     /**
@@ -312,10 +328,24 @@ public final class Cont<A> {
     }
 
     /**
+     * Perform the action n times, gathering the results.
+     */
+    public static <A> Cont<Seq<A>> replicateM(int n, Cont<A> a) {
+        return flatM(Seq.replicate(n, a));
+    }
+
+    /**
+     * Perform the action n times, discards the result.
+     */
+    public static <A> Cont<Unit> replicateM_(int n, Cont<A> a) {
+        return sequence(Seq.replicate(n, a));
+    }
+
+    /**
      * Kleisli composition of monads.
      */
     public static <A, B, C> Function<A, Cont<C>>
-    compose(Function<A, Cont<B>> f, Function<B, Cont<C>> g) {
+    kleisli(Function<A, Cont<B>> f, Function<B, Cont<C>> g) {
         return x -> f.apply(x).bind(g);
     }
 
@@ -343,20 +373,142 @@ public final class Cont<A> {
         return (m1, m2, m3) -> m1.bind(x1 -> m2.bind(x2 -> m3.map(x3 -> f.apply(x1, x2, x3))));
     }
 
-    /**
-     * Bind the given function to the given CPS computations with a final join.
-     */
-    public static <A, B, C> Cont<C>
-    zip(Cont<A> ma, Cont<B> mb, BiFunction<? super A, ? super B, ? extends C> f) {
-        return liftM2(f).apply(ma, mb);
+    // Generator
+
+    private static class Yield<A> {
+        final A result;
+        final Function<A, Optional<Yield<A>>> cont;
+
+        Yield(A e, Function<A, Optional<Yield<A>>> k) {
+            result = e;
+            cont = k;
+        }
+
+        Optional<Yield<A>> next() {
+            return cont.apply(result);
+        }
+
+        Optional<Yield<A>> send(A value) {
+            return cont.apply(value);
+        }
     }
 
-    /**
-     * Bind the given function to the given CPS computations with a final join.
-     */
-    public static <A, B, C, D> Cont<D>
-    zip3(Cont<A> ma, Cont<B> mb, Cont<C> mc,
-         TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
-        return liftM3(f).apply(ma, mb, mc);
+    Optional<Yield<A>> runYield() {
+        return reset(map(__ -> Optional.<Yield<A>>empty())).eval();
+    }
+
+    public static <A> Cont<A> yield(A a) {
+        return Cont.<A, Optional<Yield<A>>>shift(k -> pure(Optional.of(new Yield<A>(a, k))));
+    }
+
+    public static <A> Cont<A> yield(Supplier<A> a) {
+        return Cont.<A, Optional<Yield<A>>>shift(k -> pure(Optional.of(new Yield<A>(a.get(), k))));
+    }
+
+    public static <A> Cont<A> yieldFrom(Generator<A> g) {
+        if (g instanceof Gen) {
+            return ((Gen<A>)g).cont;
+        } else {
+            return g.foldRight(finish(), (x, r) -> yield(x).then(r));
+        }
+    }
+
+    public static <A> Cont<A> yieldList(Seq<A> xs) {
+        return xs.map(Cont::yield).foldRight(finish(), Cont::then);
+    }
+
+    public static <A> Cont<Unit> sendTo(Generator.Channel<A> target, A value) {
+        return action(() -> target.send(value));
+    }
+
+    private static final Cont<?> _finish = pure(null);
+
+    @SuppressWarnings("unchecked")
+    public static <A> Cont<A> finish() {
+        return (Cont<A>)_finish; // no NPE since null will be discarded
+    }
+
+    public static <A> Generator<A> generator(Cont<A> k) {
+        return new Gen<A>(k);
+    }
+
+    private static class Gen<A> implements Generator<A> {
+        private final Cont<A> cont;
+
+        Gen(Cont<A> k) {
+            cont = k;
+        }
+
+        @Override
+        public Iterator<A> iterator() {
+            return start();
+        }
+
+        @Override
+        public Channel<A> start() {
+            return new Channel<A>() {
+                private Optional<Yield<A>> ch = cont.runYield();
+
+                @Override
+                public boolean hasNext() {
+                    return ch.isPresent();
+                }
+
+                @Override
+                public A next() {
+                    Yield<A> y = ch.get();
+                    ch = y.next();
+                    return y.result;
+                }
+
+                @Override
+                public A send(A value) {
+                    ch = ch.get().send(value);
+                    return ch.get().result;
+                }
+            };
+        }
+
+        @Override
+        public Generator<A> filter(Predicate<? super A> p) {
+            return generator(foldRight(finish(), (x, r) ->
+                p.test(x) ? yield(x).then(r) : r.get()
+            ));
+        }
+
+        @Override
+        public <B> Generator<B> map(Function<? super A, ? extends B> f) {
+            return generator(foldRight(finish(), (x, r) -> yield(f.apply(x)).then(r)));
+        }
+
+        @Override
+        public <B> Generator<B> bind(Function<? super A, ? extends Generator<B>> f) {
+            return generator(foldRight(finish(), (x, r) -> yieldFrom(f.apply(x)).then(r)));
+        }
+
+        @Override
+        public <R> R foldRight(R z, BiFunction<? super A, Supplier<R>, R> f) {
+            return fold(cont.runYield(), z, f);
+        }
+
+        private static <A, R>
+        R fold(Optional<Yield<A>> yield, R z, BiFunction<? super A, Supplier<R>, R> f) {
+            return yield.map(y -> f.apply(y.result, () -> fold(y.next(), z, f))).orElse(z);
+        }
+
+        @Override
+        public <B, C> Generator<C> zip(Generator<B> b, BiFunction<? super A, ? super B, ? extends C> f) {
+            return generator(zip_(cont.runYield(), yieldFrom(b).runYield(), f));
+        }
+
+        private static <A, B, C> Cont<C> zip_(Optional<Yield<A>> ya, Optional<Yield<B>> yb,
+                    BiFunction<? super A, ? super B, ? extends C> f) {
+            if (ya.isPresent() && yb.isPresent()) {
+                Yield<A> a = ya.get(); Yield<B> b = yb.get();
+                return yield(f.apply(a.result, b.result)).then(() -> zip_(a.next(), b.next(), f));
+            } else {
+                return finish();
+            }
+        }
     }
 }

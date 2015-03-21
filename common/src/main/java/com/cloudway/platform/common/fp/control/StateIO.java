@@ -93,7 +93,7 @@ public final class StateIO<A, S> {
     }
 
     /**
-     * Prompt an IO action to a stateful IO action.
+     * Promote an IO action to a stateful IO action.
      *
      * @param m the IO action
      * @return the prompted stateful IO action
@@ -103,7 +103,7 @@ public final class StateIO<A, S> {
     }
 
     /**
-     * Prompt an IO action to a stateful IO action.
+     * Promote an IO action to a stateful IO action.
      *
      * @param m the IO action which has no return value
      * @return the prompted stateful IO action
@@ -163,14 +163,14 @@ public final class StateIO<A, S> {
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> StateIO<B, S> andThen(Supplier<StateIO<B, S>> next) {
+    public <B> StateIO<B, S> then(Supplier<StateIO<B, S>> next) {
         return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> next.get().go(t.second())))));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> StateIO<B, S> andThen(StateIO<B, S> next) {
+    public <B> StateIO<B, S> then(StateIO<B, S> next) {
         return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> next.go(t.second())))));
     }
 
@@ -178,14 +178,14 @@ public final class StateIO<A, S> {
      * Map both the return value and final state of computation using the
      * given function.
      */
-    public <B> StateIO<B, S> maps(Function<IO<Tuple<A, S>>, IO<Tuple<B, S>>> f) {
+    public <B> StateIO<B, S> mapState(Function<IO<Tuple<A, S>>, IO<Tuple<B, S>>> f) {
         return $(s -> suspend(() -> TrampolineIO.lift(f.apply(run(s)))));
     }
 
     /**
      * Execute action on a state modified by applying function.
      */
-    public StateIO<A, S> withs(Function<S, S> f) {
+    public StateIO<A, S> withState(Function<S, S> f) {
         return $(s -> suspend(() -> go(f.apply(s))));
     }
 
@@ -237,7 +237,7 @@ public final class StateIO<A, S> {
      * the result.
      */
     public static <A, S> StateIO<Unit, S> sequence(Seq<StateIO<A, S>> ms) {
-        return ms.foldRight(pure(Unit.U), StateIO::andThen);
+        return ms.foldRight(pure(Unit.U), StateIO::then);
     }
 
     /**
@@ -255,6 +255,24 @@ public final class StateIO<A, S> {
     public static <A, B, S> StateIO<Unit, S>
     mapM_(Seq<A> xs, Function<? super A, StateIO<B,S>> f) {
         return sequence(xs.map(f));
+    }
+
+    /**
+     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
+     * Bind the given function to the given computations with a final join.
+     */
+    public static <A, B, C, S> StateIO<Seq<C>, S>
+    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, StateIO<C, S>> f) {
+        return flatM(Seq.zip(xs, ys, f));
+    }
+
+    /**
+     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
+     * final result.
+     */
+    public static <A, B, C, S> StateIO<Unit, S>
+    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, StateIO<C, S>> f) {
+        return sequence(Seq.zip(xs, ys, f));
     }
 
     /**
@@ -281,10 +299,24 @@ public final class StateIO<A, S> {
     }
 
     /**
+     * Perform the action n times, gathering the results.
+     */
+    public static <A, S> StateIO<Seq<A>, S> replicateM(int n, StateIO<A, S> a) {
+        return flatM(Seq.replicate(n, a));
+    }
+
+    /**
+     * Perform the action n times, discards the result.
+     */
+    public static <A, S> StateIO<Unit, S> replicateM_(int n, StateIO<A, S> a) {
+        return sequence(Seq.replicate(n, a));
+    }
+
+    /**
      * Kleisli composition of monads.
      */
     public static <A, B, C, S> Function<A, StateIO<C, S>>
-    compose(Function<A, StateIO<B, S>> f, Function<B, StateIO<C, S>> g) {
+    kleisli(Function<A, StateIO<B, S>> f, Function<B, StateIO<C, S>> g) {
         return x -> f.apply(x).bind(g);
     }
 
@@ -310,22 +342,5 @@ public final class StateIO<A, S> {
     public static <A, B, C, D, S> TriFunction<StateIO<A,S>, StateIO<B,S>, StateIO<C,S>, StateIO<D,S>>
     liftM3(TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
         return (m1, m2, m3) -> m1.bind(x1 -> m2.bind(x2 -> m3.map(x3 -> f.apply(x1, x2, x3))));
-    }
-
-    /**
-     * Bind the given function to the given state computations with a final join.
-     */
-    public static <A, B, C, S> StateIO<C, S>
-    zip(StateIO<A, S> ma, StateIO<B, S> mb, BiFunction<? super A, ? super B, ? extends C> f) {
-        return StateIO.<A,B,C,S>liftM2(f).apply(ma, mb);
-    }
-
-    /**
-     * Bind the given function to the given state computations with a final join.
-     */
-    public static <A, B, C, D, S> StateIO<D, S>
-    zip3(StateIO<A, S> ma, StateIO<B, S> mb, StateIO<C, S> mc,
-            TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
-        return StateIO.<A,B,C,D,S>liftM3(f).apply(ma, mb, mc);
     }
 }

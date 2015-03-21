@@ -17,7 +17,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -28,19 +27,22 @@ import java.util.stream.IntStream;
 import com.google.common.collect.ImmutableMap;
 
 import com.cloudway.platform.common.fp.control.ConditionCase;
-import com.cloudway.platform.common.fp.control.MonadState;
-import com.cloudway.platform.common.fp.data.Holder;
+import com.cloudway.platform.common.fp.control.Generator;
+import com.cloudway.platform.common.fp.control.StateCont;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
-import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.function.TriFunction;
 import com.cloudway.platform.common.fp.function.ExceptionAction;
 import com.cloudway.platform.common.fp.function.ExceptionBiFunction;
 import com.cloudway.platform.common.fp.function.ExceptionFunction;
 import com.cloudway.platform.common.fp.function.ExceptionSupplier;
 
-import static com.cloudway.platform.common.fp.control.Comprehension.do_;
+import static com.cloudway.platform.common.fp.control.Syntax.*;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
+import static com.cloudway.platform.common.fp.control.Cont.generator;
+import static com.cloudway.platform.common.fp.control.Cont.yield;
+import static com.cloudway.platform.common.fp.control.Cont.yieldFrom;
+import static com.cloudway.platform.common.fp.control.Cont.finish;
 import static com.cloudway.platform.common.fp.data.Optionals.*;
 import static com.cloudway.platform.common.fp.data.Seq.Cons;
 import static com.cloudway.platform.common.fp.data.Tuple.Tuple_;
@@ -995,48 +997,48 @@ public class ConditionalTest
         public enum Traverser {
             PRE_ORDER {
                 @Override
-                public <T> void walk(Tree<T> tree, Consumer<T> action) {
-                    do__(tree, Node((a, x, b) -> {
-                        walk(a, action);
-                        action.accept(x);
-                        walk(b, action);
-                        return null;
-                    }));
+                public <T> Generator<T> walk(Tree<T> tree) {
+                    return generator(
+                      inCaseOf(tree, Node((a, x, b) ->
+                        do_(yieldFrom(walk(a)), () ->
+                        do_(yield(x), () ->
+                        do_(yieldFrom(walk(b)))))),
+                      otherwise(finish())));
                 }
             },
 
             POST_ORDER {
                 @Override
-                public <T> void walk(Tree<T> tree, Consumer<T> action) {
-                    do__(tree, Node((a, x, b) -> {
-                        walk(b, action);
-                        action.accept(x);
-                        walk(a, action);
-                        return null;
-                    }));
+                public <T> Generator<T> walk(Tree<T> tree) {
+                    return generator(
+                      inCaseOf(tree, Node((a, x, b) ->
+                        do_(yieldFrom(walk(b)), () ->
+                        do_(yield(x), () ->
+                        do_(yieldFrom(walk(a)))))),
+                      otherwise(finish())));
                 }
             },
 
             BREADTH_FIRST {
                 @Override
-                public <T> void walk(Tree<T> tree, Consumer<T> action) {
-                    walk(action).run(Seq.of(tree));
+                public <T> Generator<T> walk(Tree<T> tree) {
+                    return StateCont.generator(Seq.of(tree), walk_());
                 }
 
-                private <T> MonadState<Unit, Seq<Tree<T>>> walk(Consumer<T> action) {
-                    return
-                      MonadState.get(queue ->
+                private <T> StateCont<T, Seq<Tree<T>>> walk_() {
+                    return loop(again ->
+                      do_(StateCont.get(), queue ->
                       inCaseOf(queue, Cons((tree, remaining) ->
                         do_(inCaseOf(tree, Node((a, x, b) ->
-                          do_(MonadState.action(() -> action.accept(x)),
-                          do_(MonadState.put(remaining.append(Seq.of(a, b)))))),
-                          otherwise(MonadState.put(remaining))),
-                        do_(() -> walk(action)))),
-                      otherwise(MonadState.pure(Unit.U))));
+                          do_(StateCont.yield(x),
+                          do_(StateCont.put(remaining.append(Seq.of(a, b)))))),
+                        otherwise(StateCont.put(remaining))),
+                        again)),
+                      otherwise(StateCont.finish()))));
                 }
             };
 
-            public abstract <T> void walk(Tree<T> tree, Consumer<T> action);
+            public abstract <T> Generator<T> walk(Tree<T> tree);
         }
 
         // TreeSet implementation
@@ -1056,7 +1058,7 @@ public class ConditionalTest
         }
 
         public void forEach(Traverser traverser, Consumer<T> action) {
-            traverser.walk(root, action);
+            traverser.walk(root).forEach(action);
         }
 
         public void forEach(Consumer<T> action) {
@@ -1064,9 +1066,7 @@ public class ConditionalTest
         }
 
         public <U> U reduce(Traverser traverser, U seed, BiFunction<U, ? super T, U> acc) {
-            Holder<U> result = new Holder<>(seed);
-            traverser.walk(root, x -> result.accumulateAndGet(x, acc));
-            return result.get();
+            return traverser.walk(root).foldLeft(seed, acc);
         }
 
         public <U> U reduce(U seed, BiFunction<U, ? super T, U> acc) {
@@ -1074,10 +1074,7 @@ public class ConditionalTest
         }
 
         public <A, R> R collect(Traverser traverser, Collector<T, A, R> collector) {
-            A container = collector.supplier().get();
-            BiConsumer<A, T> accumulator = collector.accumulator();
-            traverser.walk(root, x -> accumulator.accept(container, x));
-            return collector.finisher().apply(container);
+            return traverser.walk(root).asList().collect(collector);
         }
 
         public <R> R collect(Collector<T, ?, R> collector) {

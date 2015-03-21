@@ -6,8 +6,11 @@
 
 package com.cloudway.platform.common.fp.control;
 
+import java.util.Iterator;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.data.Fn;
@@ -130,7 +133,7 @@ public final class StateCont<A, S> {
      * @param b the new continuation transformation
      * @return a continuation that transfers this continuation to the given continuation
      */
-    public <B> StateCont<B, S> andThen(StateCont<B, S> b) {
+    public <B> StateCont<B, S> then(StateCont<B, S> b) {
         return $(c -> run(a -> b.run(c)));
     }
 
@@ -140,7 +143,7 @@ public final class StateCont<A, S> {
      * @param b the new continuation transformation
      * @return a continuation that transfers this continuation to the given continuation
      */
-    public <B> StateCont<B, S> andThen(Supplier<StateCont<B, S>> b) {
+    public <B> StateCont<B, S> then(Supplier<StateCont<B, S>> b) {
         return $(c -> run(a -> b.get().run(c)));
     }
 
@@ -171,6 +174,13 @@ public final class StateCont<A, S> {
      */
     public static <S> StateCont<S, S> get() {
         return lift(MonadState.get());
+    }
+
+    /**
+     * Fetch the current value of the state and bind the value to the given function.
+     */
+    public static <B, S> StateCont<B, S> get(Function<? super S, StateCont<B, S>> f) {
+        return StateCont.<S>get().bind(f);
     }
 
     /**
@@ -217,10 +227,10 @@ public final class StateCont<A, S> {
      * @return a continuation that may or may not escaped from current continuation
      */
     public static <A, S> StateCont<A, S> callCC(Function<Exit<A, S>, StateCont<A, S>> f) {
+        // Note: the compacted code is as:
+        //     $(c -> f.apply(a -> $(__ -> c.apply(a))).run(c))
+        // but generic method can not be represented as a lambda expression
         return $(c -> {
-            // Note: the compacted code is as:
-            //     $(c -> f.apply(a -> $(__ -> c.apply(a))).run(c))
-            // but generic method can not be represented as a lambda expression
             Exit<A, S> exit = new Exit<A, S>() {
                 @Override public <B> StateCont<B, S> escape(A a) {
                     return $(__ -> c.apply(a));
@@ -231,7 +241,7 @@ public final class StateCont<A, S> {
     }
 
     /**
-     * Prompt a state computation to a stateful CPS computation.
+     * Promote a state computation to a stateful CPS computation.
      *
      * @param m the state computation
      * @return the prompted stateful CPS computation
@@ -256,6 +266,8 @@ public final class StateCont<A, S> {
         return $((Function<A, MonadState<R, S>> k) -> f.apply(k).eval());
     }
 
+    // Monad
+
     /**
      * Evaluate each action in the sequence from left to right, and collect
      * the result.
@@ -269,7 +281,7 @@ public final class StateCont<A, S> {
      * the result.
      */
     public static <A, S> StateCont<Unit, S> sequence(Seq<StateCont<A, S>> ms) {
-        return ms.foldRight(pure(Unit.U), StateCont::andThen);
+        return ms.foldRight(unit(), StateCont::then);
     }
 
     /**
@@ -287,6 +299,24 @@ public final class StateCont<A, S> {
     public static <A, B, S> StateCont<Unit, S>
     mapM_(Seq<A> xs, Function<? super A, StateCont<B, S>> f) {
         return sequence(xs.map(f));
+    }
+
+    /**
+     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
+     * Bind the given function to the given computations with a final join.
+     */
+    public static <A, B, C, S> StateCont<Seq<C>, S>
+    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, StateCont<C, S>> f) {
+        return flatM(Seq.zip(xs, ys, f));
+    }
+
+    /**
+     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
+     * final result.
+     */
+    public static <A, B, C, S> StateCont<Unit, S>
+    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, StateCont<C, S>> f) {
+        return sequence(Seq.zip(xs, ys, f));
     }
 
     /**
@@ -313,10 +343,24 @@ public final class StateCont<A, S> {
     }
 
     /**
+     * Perform the action n times, gathering the results.
+     */
+    public static <A, S> StateCont<Seq<A>, S> replicateM(int n, StateCont<A, S> a) {
+        return flatM(Seq.replicate(n, a));
+    }
+
+    /**
+     * Perform the action n times, discards the result.
+     */
+    public static <A, S> StateCont<Unit, S> replicateM_(int n, StateCont<A, S> a) {
+        return sequence(Seq.replicate(n, a));
+    }
+
+    /**
      * Kleisli composition of monads.
      */
     public static <A, B, C, S> Function<A, StateCont<C, S>>
-    compose(Function<A, StateCont<B, S>> f, Function<B, StateCont<C, S>> g) {
+    kleisli(Function<A, StateCont<B, S>> f, Function<B, StateCont<C, S>> g) {
         return x -> f.apply(x).bind(g);
     }
 
@@ -344,20 +388,155 @@ public final class StateCont<A, S> {
         return (m1, m2, m3) -> m1.bind(x1 -> m2.bind(x2 -> m3.map(x3 -> f.apply(x1, x2, x3))));
     }
 
-    /**
-     * Bind the given function to the given CPS computations with a final join.
-     */
-    public static <A, B, C, S> StateCont<C, S>
-    zip(StateCont<A, S> ma, StateCont<B, S> mb, BiFunction<? super A, ? super B, ? extends C> f) {
-        return StateCont.<A,B,C,S>liftM2(f).apply(ma, mb);
+    // Generator
+
+    private static class Yield<A, S> {
+        final A result;
+        final S state;
+        final Function<A, MonadState<Optional<Yield<A, S>>, S>> cont;
+
+        Yield(A a, S s, Function<A, MonadState<Optional<Yield<A, S>>, S>> k) {
+            result = a;
+            state = s;
+            cont = k;
+        }
+
+        Optional<Yield<A, S>> next() {
+            return cont.apply(result).eval(state);
+        }
+
+        Optional<Yield<A, S>> send(A value) {
+            return cont.apply(value).eval(state);
+        }
     }
 
-    /**
-     * Bind the given function to the given CPS computations with a final join.
-     */
-    public static <A, B, C, D, S> StateCont<D, S>
-    zip3(StateCont<A, S> ma, StateCont<B, S> mb, StateCont<C, S> mc,
-         TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
-        return StateCont.<A,B,C,D,S>liftM3(f).apply(ma, mb, mc);
+    Optional<Yield<A, S>> runYield(S s) {
+        return reset(map(__ -> Optional.<Yield<A,S>>empty())).eval().eval(s);
+    }
+
+    public static <A, S> StateCont<A, S> yield(A a) {
+        return StateCont.<A, Optional<Yield<A, S>>, S>shift(k ->
+            StateCont.<S>get().map(s -> Optional.of(new Yield<>(a, s, k))));
+    }
+
+    public static <A, S> StateCont<A, S> yield(Supplier<A> a) {
+        return StateCont.<A, Optional<Yield<A, S>>, S>shift(k ->
+            StateCont.<S>get().map(s -> Optional.of(new Yield<>(a.get(), s, k))));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A, S> StateCont<A, S> yieldFrom(Generator<A> g) {
+        if (g instanceof Gen) {
+            return ((Gen<A,S>)g).cont;
+        } else {
+            return g.foldRight(finish(), (x, r) -> StateCont.<A,S>yield(x).then(r));
+        }
+    }
+
+    public static <A, S> StateCont<A, S> yieldList(Seq<A> xs) {
+        return xs.map(StateCont::<A,S>yield).foldRight(finish(), StateCont::then);
+    }
+
+    public static <A, S> StateCont<Unit, S> sendTo(Generator.Channel<A> target, A value) {
+        return action(() -> target.send(value));
+    }
+
+    private static final StateCont<?,?> _finish = pure(null);
+
+    @SuppressWarnings("unchecked")
+    public static <A, S> StateCont<A, S> finish() {
+        return (StateCont<A,S>)_finish; // no NPE since null will be discarded
+    }
+
+    public static <A, S> Generator<A> generator(S s, StateCont<A, S> k) {
+        return new Gen<>(s, k);
+    }
+
+    private static class Gen<A, S> implements Generator<A> {
+        private final S state;
+        private final StateCont<A, S> cont;
+
+        Gen(S s, StateCont<A, S> k) {
+            state = s;
+            cont = k;
+        }
+
+        @Override
+        public Iterator<A> iterator() {
+            return start();
+        }
+
+        @Override
+        public Channel<A> start() {
+            return new Channel<A>() {
+                private Optional<Yield<A, S>> ch = cont.runYield(state);
+
+                @Override
+                public boolean hasNext() {
+                    return ch.isPresent();
+                }
+
+                @Override
+                public A next() {
+                    Yield<A, S> y = ch.get();
+                    ch = y.next();
+                    return y.result;
+                }
+
+                @Override
+                public A send(A value) {
+                    ch = ch.get().send(value);
+                    return ch.get().result;
+                }
+            };
+        }
+
+        @Override
+        public Generator<A> filter(Predicate<? super A> p) {
+            return generator(state, foldRight(finish(), (x, r) ->
+                p.test(x) ? StateCont.<A,S>yield(x).then(r) : r.get()
+            ));
+        }
+
+        @Override
+        public <B> Generator<B> map(Function<? super A, ? extends B> f) {
+            return generator(state, foldRight(finish(), (x, r) ->
+                StateCont.<B,S>yield(f.apply(x)).then(r)
+            ));
+        }
+
+        @Override
+        public <B> Generator<B> bind(Function<? super A, ? extends Generator<B>> f) {
+            return generator(state, foldRight(finish(), (x, r) ->
+                StateCont.<B,S>yieldFrom(f.apply(x)).then(r)
+            ));
+        }
+
+        @Override
+        public <R> R foldRight(R z, BiFunction<? super A, Supplier<R>, R> f) {
+            return fold(cont.runYield(state), z, f);
+        }
+
+        private static <A, R, S>
+        R fold(Optional<Yield<A, S>> yield, R z, BiFunction<? super A, Supplier<R>, R> f) {
+            return yield.map(y -> f.apply(y.result, () -> fold(y.next(), z, f))).orElse(z);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <B, C> Generator<C> zip(Generator<B> b, BiFunction<? super A, ? super B, ? extends C> f) {
+            StateCont<B, S> kb = yieldFrom(b);
+            return generator(state, zip_(cont.runYield(state), kb.runYield(state), f));
+        }
+
+        private static <A, B, C, S> StateCont<C,S> zip_(Optional<Yield<A,S>> ya, Optional<Yield<B,S>> yb,
+                    BiFunction<? super A, ? super B, ? extends C> f) {
+            if (ya.isPresent() && yb.isPresent()) {
+                Yield<A,S> a = ya.get(); Yield<B,S> b = yb.get();
+                return StateCont.<C,S>yield(f.apply(a.result, b.result)).then(() -> zip_(a.next(), b.next(), f));
+            } else {
+                return finish();
+            }
+        }
     }
 }

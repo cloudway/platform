@@ -18,7 +18,7 @@ import com.cloudway.platform.container.proxy.ProxyMapping;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 
-import static com.cloudway.platform.common.fp.control.Comprehension.*;
+import static com.cloudway.platform.common.fp.control.Syntax.*;
 import static com.cloudway.platform.common.util.MoreCollectors.*;
 import static com.google.common.base.Strings.isNullOrEmpty;
 

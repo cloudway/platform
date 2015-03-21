@@ -37,7 +37,7 @@ import com.cloudway.platform.common.fp.function.TriFunction;
  * @param <K> the type of keys maintained by this map
  * @param <V> the type of mapped values
  */
-public interface TreeMap<K, V> {
+public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
     // Construction
 
     /**

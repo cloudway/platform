@@ -36,7 +36,7 @@ import com.cloudway.platform.common.fp.data.Unit;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
 import static com.cloudway.platform.common.fp.control.Trampoline.immediate;
 import static com.cloudway.platform.common.fp.control.Trampoline.suspend;
-import static com.cloudway.platform.common.fp.control.Comprehension.*;
+import static com.cloudway.platform.common.fp.control.Syntax.*;
 import static com.cloudway.platform.common.fp.data.IntSeq.IntCons;
 import static com.cloudway.platform.common.fp.data.IntSeq.IntNil;
 import static com.cloudway.platform.common.fp.data.Seq.Cons;
@@ -544,14 +544,14 @@ public class FunctionalTest
             return Cont.callCC(exit ->
                 do_(when(name.isEmpty(), exit.escape("You forget to tell me your name!")),
                 do_(when(name.equals("martin"), exit.escape("Welcome to earth, uncle martin")),
-                do_(Cont.yield("Welcome, " + name + "!")))));
+                do_(Cont.pure("Welcome, " + name + "!")))));
         }
 
         static Cont<Double> harmsum(IntSeq nums) {
             return Cont.callCC(exit ->
                 Cont.foldM(0.0, nums.boxed(), (r, x) -> do_(
                     when(x == 0, exit.escape(0.0)),
-                    Cont.yield(r + 1.0 / x))
+                    Cont.pure(r + 1.0 / x))
                 ));
         }
 
@@ -576,8 +576,8 @@ public class FunctionalTest
                         do_(when(n < 200, exit2.escape(ns.length())),
                         do_(when(n < 20000, exit2.escape(n)),
                         do_(when(n < 2000000, exit1.escape(reverse(ns))),
-                        Cont.yield(sumDigits(ns)))))), n_ ->
-                    Cont.yield("(" + n_ + "," + ns + ")"))))))
+                        Cont.pure(sumDigits(ns)))))), n_ ->
+                    Cont.pure("(" + n_ + "," + ns + ")"))))))
                 .eval();
         }
 
@@ -773,16 +773,6 @@ public class FunctionalTest
         assertEquals(10, (int)h.apply(0));
         assertEquals(15, (int)h.apply(1));
         assertEquals(20, (int)h.apply(2));
-    }
-
-    @Test
-    public void functionZipTest() {
-        Function<Integer, Integer> f = x -> x * 5;
-        Function<Integer, Integer> g = x -> x + 10;
-        Function<Integer, Integer> h = Fn.zip(f, g, Integer::sum); // x->(x*5)+(x+10)
-        assertEquals(10, (int)h.apply(0));
-        assertEquals(16, (int)h.apply(1));
-        assertEquals(22, (int)h.apply(2));
     }
 
     @Test

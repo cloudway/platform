@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 
 import com.cloudway.platform.common.fp.data.Either;
 import com.cloudway.platform.common.fp.data.Fn;
+import com.cloudway.platform.common.fp.data.Ref;
 import com.cloudway.platform.common.fp.data.IntSeq;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
@@ -27,10 +28,10 @@ import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.fp.io.VoidIO;
 
 /**
- * A utility class that build a DSL for list comprehension.
+ * This class contains keywords for functional DSL.
  */
-public final class Comprehension {
-    private Comprehension() {}
+public final class Syntax {
+    private Syntax() {}
 
     /**
      * A polymorphism interface that responsible to build a list comprehension.
@@ -295,75 +296,75 @@ public final class Comprehension {
         private select() {}
 
         /**
-         * @see Comprehension#from(Stream,Function)
+         * @see Syntax#from(Stream,Function)
          */
         public static <T, R> Stream<R>
         from(Stream<T> stream, Function<? super T, ? extends Qualifier<R, Stream<R>>> mapper) {
-            return Comprehension.from(stream, mapper).select();
+            return Syntax.from(stream, mapper).select();
         }
 
         /**
-         * @see Comprehension#from(IntStream,IntFunction)
+         * @see Syntax#from(IntStream,IntFunction)
          */
         public static <R> Stream<R>
         from(IntStream stream, IntFunction<? extends Qualifier<R, Stream<R>>> mapper) {
-            return Comprehension.from(stream, mapper).select();
+            return Syntax.from(stream, mapper).select();
         }
 
         /**
-         * @see Comprehension#from(LongStream,LongFunction)
+         * @see Syntax#from(LongStream,LongFunction)
          */
         public static <R> Stream<R>
         from(LongStream stream, LongFunction<? extends Qualifier<R, Stream<R>>> mapper) {
-            return Comprehension.from(stream, mapper).select();
+            return Syntax.from(stream, mapper).select();
         }
 
         /**
-         * @see Comprehension#from(DoubleStream,DoubleFunction)
+         * @see Syntax#from(DoubleStream,DoubleFunction)
          */
         public static <R> Stream<R>
         from(DoubleStream stream, DoubleFunction<? extends Qualifier<R, Stream<R>>> mapper) {
-            return Comprehension.from(stream, mapper).select();
+            return Syntax.from(stream, mapper).select();
         }
 
         /**
-         * @see Comprehension#from(Collection,Function)
+         * @see Syntax#from(Collection,Function)
          */
         public static <T, R> Stream<R>
         from(Collection<T> col, Function<? super T, ? extends Qualifier<R, Stream<R>>> mapper) {
-            return Comprehension.from(col, mapper).select();
+            return Syntax.from(col, mapper).select();
         }
 
         /**
-         * @see Comprehension#from(Seq,Function)
+         * @see Syntax#from(Seq,Function)
          */
         public static <T, R> Seq<R>
         from(Seq<T> seq, Function<? super T, ? extends Qualifier<R, Seq<R>>> mapper) {
-            return Comprehension.from(seq, mapper).select();
+            return Syntax.from(seq, mapper).select();
         }
 
         /**
-         * @see Comprehension#from(IntSeq,IntFunction)
+         * @see Syntax#from(IntSeq,IntFunction)
          */
         public static <R> Seq<R>
         from(IntSeq seq, IntFunction<? extends Qualifier<R, Seq<R>>> mapper) {
-            return Comprehension.from(seq, mapper).select();
+            return Syntax.from(seq, mapper).select();
         }
 
         /**
-         * @see Comprehension#from(Optional,Function)
+         * @see Syntax#from(Optional,Function)
          */
         public static <T, R> Optional<R>
         from(Optional<T> optional, Function<? super T, ? extends Qualifier<R, Optional<R>>> mapper) {
-            return Comprehension.from(optional, mapper).select();
+            return Syntax.from(optional, mapper).select();
         }
 
         /**
-         * @see Comprehension#from(Function,Function)
+         * @see Syntax#from(Function,Function)
          */
         public static <T, W, R> Function<T, R>
         from(Function<T, W> h, Function<? super W, ? extends Qualifier<R, Function<T, R>>> f) {
-            return Comprehension.from(h, f).select();
+            return Syntax.from(h, f).select();
         }
     }
 
@@ -415,8 +416,40 @@ public final class Comprehension {
         return f.apply(t);
     }
 
-    // Do notation helper methods.  These methods simply call {@code bind} or
-    // {@code andThen} on monads.
+    /**
+     * Simulate a 'do-while' loop.
+     */
+    public static <T> T loop(Function<Supplier<T>, T> body) {
+        Ref<Supplier<T>> h = new Ref<>();
+        return h.set(Fn.lazy(() -> body.apply(h.get()))).get();
+    }
+
+    // Do notation helper methods. These methods simply call 'bind' or 'then'
+    // on monads.
+
+    /**
+     * Helper method to chain lists together.
+     */
+    public static <A, B> Seq<B>
+    do_(Seq<A> a, Function<? super A, Seq<B>> f) {
+        return a.flatMap(f);
+    }
+
+    /**
+     * Helper method to chain lists together, discard intermediate result.
+     */
+    public static <A, B> Seq<B>
+    do_(Seq<A> a, Seq<B> b) {
+        return a.flatMap(Fn.pure(b));
+    }
+
+    /**
+     * Helper method to chain lists together, discard intermediate result.
+     */
+    public static <A, B> Seq<B>
+    do_(Seq<A> a, Supplier<Seq<B>> b) {
+        return a.flatMap(__ -> b.get());
+    }
 
     /**
      * Helper method to chain optional actions together.
@@ -424,6 +457,22 @@ public final class Comprehension {
     public static <A, B> Optional<B>
     do_(Optional<A> a, Function<? super A, Optional<B>> f) {
         return a.flatMap(f);
+    }
+
+    /**
+     * Helper method to chain optionals together, discard intermediate result.
+     */
+    public static <A, B> Optional<B>
+    do_(Optional<A> a, Optional<B> b) {
+        return a.flatMap(Fn.pure(b));
+    }
+
+    /**
+     * Helper method to chain optionals together, discard intermediate result.
+     */
+    public static <A, B> Optional<B>
+    do_(Optional<A> a, Supplier<Optional<B>> b) {
+        return a.flatMap(__ -> b.get());
     }
 
     /**
@@ -445,14 +494,14 @@ public final class Comprehension {
      * Helper method to chain IO actions together, discard intermediate result.
      */
     public static <A, B> IO<B> do_(IO<A> a, IO<B> b) {
-        return a.andThen(b);
+        return a.then(b);
     }
 
     /**
      * Helper method to chain IO actions together, discard intermediate result.
      */
     public static <A, B> IO<B> do_(IO<A> a, Supplier<IO<B>> b) {
-        return a.andThen(b);
+        return a.then(b);
     }
 
     /**
@@ -467,6 +516,13 @@ public final class Comprehension {
      */
     public static IO<Unit> unless(boolean test, IO<Unit> orElse) {
         return test ? IO.unit : orElse;
+    }
+
+    /**
+     * Repeats the action infinitely.
+     */
+    public static <A, B> IO<B> forever(IO<A> a) {
+        return loop(a::then);
     }
 
     /**
@@ -496,7 +552,7 @@ public final class Comprehension {
      */
     public static <A, B, S> MonadState<B, S>
     do_(MonadState<A, S> a, MonadState<B, S> b) {
-        return a.andThen(b);
+        return a.then(b);
     }
 
     /**
@@ -504,7 +560,7 @@ public final class Comprehension {
      */
     public static <A, B, S> MonadState<B, S>
     do_(MonadState<A, S> a, Supplier<MonadState<B, S>> b) {
-        return a.andThen(b);
+        return a.then(b);
     }
 
     /**
@@ -522,6 +578,13 @@ public final class Comprehension {
     }
 
     /**
+     * Repeats the action infinitely.
+     */
+    public static <A, B, S> MonadState<B, S> forever(MonadState<A, S> a) {
+        return loop(a::then);
+    }
+
+    /**
      * Helper method to chain stateful IO actions together.
      */
     public static <A, B, S> StateIO<B, S>
@@ -534,7 +597,7 @@ public final class Comprehension {
      */
     public static <A, B, S> StateIO<B, S>
     do_(StateIO<A, S> a, StateIO<B, S> b) {
-        return a.andThen(b);
+        return a.then(b);
     }
 
     /**
@@ -542,7 +605,7 @@ public final class Comprehension {
      */
     public static <A, B, S> StateIO<B, S>
     do_(StateIO<A, S> a, Supplier<StateIO<B, S>> b) {
-        return a.andThen(b);
+        return a.then(b);
     }
 
     /**
@@ -560,6 +623,13 @@ public final class Comprehension {
     }
 
     /**
+     * Repeats the action infinitely.
+     */
+    public static <A, B, S> StateIO<B, S> forever(StateIO<A, S> a) {
+        return loop(a::then);
+    }
+
+    /**
      * Helper method to chain trampoline actions together.
      */
     public static <A, B> Trampoline<B>
@@ -572,7 +642,7 @@ public final class Comprehension {
      */
     public static <A, B> Trampoline<B>
     do_(Trampoline<A> a, Trampoline<B> b) {
-        return a.bind(__ -> b);
+        return a.then(b);
     }
 
     /**
@@ -580,21 +650,58 @@ public final class Comprehension {
      */
     public static <A, B> Trampoline<B>
     do_(Trampoline<A> a, Supplier<Trampoline<B>> b) {
-        return a.bind(__ -> Trampoline.suspend(b));
+        return a.then(b);
     }
 
     /**
      * Conditional execution of trampoline action.
      */
     public static Trampoline<Unit> when(boolean test, Trampoline<Unit> then) {
-        return test ? then : Trampoline.pure(Unit.U);
+        return test ? then : Trampoline.unit();
     }
 
     /**
      * The reverse of when.
      */
     public static Trampoline<Unit> unless(boolean test, Trampoline<Unit> orElse) {
-        return test ? Trampoline.pure(Unit.U) : orElse;
+        return test ? Trampoline.unit() : orElse;
+    }
+
+    /**
+     * Helper method to chain trampoline actions together.
+     */
+    public static <A, B> TrampolineIO<B>
+    do_(TrampolineIO<A> a, Function<? super A, TrampolineIO<B>> f) {
+        return a.bind(f);
+    }
+
+    /**
+     * Helper method to chain trampoline actions together, discard intermediate result.
+     */
+    public static <A, B> TrampolineIO<B> do_(TrampolineIO<A> a, TrampolineIO<B> b) {
+        return a.then(b);
+    }
+
+    /**
+     * Helper method to chain trampoline actions together, discard intermediate result.
+     */
+    public static <A, B> TrampolineIO<B>
+    do_(TrampolineIO<A> a, Supplier<TrampolineIO<B>> b) {
+        return a.then(b);
+    }
+
+    /**
+     * Conditional execution of trampoline action.
+     */
+    public static TrampolineIO<Unit> when(boolean test, TrampolineIO<Unit> then) {
+        return test ? then : TrampolineIO.unit();
+    }
+
+    /**
+     * The reverse of when.
+     */
+    public static TrampolineIO<Unit> unless(boolean test, TrampolineIO<Unit> orElse) {
+        return test ? TrampolineIO.unit() : orElse;
     }
 
     /**
@@ -610,7 +717,7 @@ public final class Comprehension {
      */
     public static <A, B> Cont<B>
     do_(Cont<A> a, Cont<B> b) {
-        return a.andThen(b);
+        return a.then(b);
     }
 
     /**
@@ -618,7 +725,7 @@ public final class Comprehension {
      */
     public static <A, B> Cont<B>
     do_(Cont<A> a, Supplier<Cont<B>> b) {
-        return a.andThen(b);
+        return a.then(b);
     }
 
     /**
@@ -636,6 +743,13 @@ public final class Comprehension {
     }
 
     /**
+     * Repeats the action infinitely.
+     */
+    public static <A, B> Cont<B> forever(Cont<A> a) {
+        return loop(a::then);
+    }
+
+    /**
      * Helper method to chain CPS actions together.
      */
     public static <A, B, S> StateCont<B, S>
@@ -648,7 +762,7 @@ public final class Comprehension {
      */
     public static <A, B, S> StateCont<B, S>
     do_(StateCont<A, S> a, StateCont<B, S> b) {
-        return a.andThen(b);
+        return a.then(b);
     }
 
     /**
@@ -656,7 +770,7 @@ public final class Comprehension {
      */
     public static <A, B, S> StateCont<B, S>
     do_(StateCont<A, S> a, Supplier<StateCont<B, S>> b) {
-        return a.andThen(b);
+        return a.then(b);
     }
 
     /**
@@ -671,6 +785,58 @@ public final class Comprehension {
      */
     public static <S> StateCont<Unit, S> unless(boolean test, StateCont<Unit, S> orElse) {
         return test ? StateCont.unit() : orElse;
+    }
+
+    /**
+     * Repeats the action infinitely.
+     */
+    public static <A, B, S> StateCont<B, S> forever(StateCont<A, S> a) {
+        return loop(a::then);
+    }
+
+    /**
+     * Helper method to chain generator actions together.
+     */
+    public static <A, B> Generator<B>
+    do_(Generator<A> a, Function<? super A, Generator<B>> f) {
+        return a.bind(f);
+    }
+
+    /**
+     * Helper method to chain generator actions together, discard intermediate result.
+     */
+    public static <A, B> Generator<B>
+    do_(Generator<A> a, Generator<B> b) {
+        return a.then(b);
+    }
+
+    /**
+     * Helper method to chain generator actions together, discard intermediate result.
+     */
+    public static <A, B> Generator<B>
+    do_(Generator<A> a, Supplier<Generator<B>> b) {
+        return a.then(b);
+    }
+
+    /**
+     * Conditional execution of generator action.
+     */
+    public static Generator<Unit> when(boolean test, Generator<Unit> then) {
+        return test ? then : Generator.pure(Unit.U);
+    }
+
+    /**
+     * The reverse of when.
+     */
+    public static Generator<Unit> unless(boolean test, Generator<Unit> orElse) {
+        return test ? Generator.pure(Unit.U) : orElse;
+    }
+
+    /**
+     * Repeats the action infinitely.
+     */
+    public static <A, B> Generator<B> forever(Generator<A> a) {
+        return loop(a::then);
     }
 
     /**

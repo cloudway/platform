@@ -7,6 +7,7 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
@@ -15,6 +16,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+
+import com.cloudway.platform.common.fp.control.Cont;
 
 /**
  * <p>An efficient implementation of sets</p>
@@ -32,7 +35,7 @@ import java.util.function.Supplier;
  *
  * @param <E> the type of set elements
  */
-public interface TreeSet<E> {
+public interface TreeSet<E> extends Iterable<E> {
     // Construction
 
     /**
@@ -201,11 +204,23 @@ public interface TreeSet<E> {
     }
 
     /**
+     * Returns an iterator over the elements contained in this set.
+     *
+     * @return an iterator over the elements contained in this set.
+     */
+    @Override
+    default Iterator<E> iterator() {
+        return Cont.generator(foldRight(Cont.<E>finish(),
+            (e, r) -> Cont.yield(e).then(r))).iterator();
+    }
+
+    /**
      * Perform the given action for each element in this set until all elements
      * have been processed or the action throws an exception.
      *
      * @param action an action to perform on each elements
      */
+    @Override
     default void forEach(Consumer<? super E> action) {
         foldLeft(Unit.U, (z, e) -> { action.accept(e); return z; });
     }

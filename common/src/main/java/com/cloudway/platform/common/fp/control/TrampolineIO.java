@@ -187,6 +187,15 @@ public abstract class TrampolineIO<A> {
         return new Pure<>(a);
     }
 
+    private static final TrampolineIO<Unit> _unit = pure(Unit.U);
+
+    /**
+     * Returns a do nothing computation.
+     */
+    public static TrampolineIO<Unit> unit() {
+        return _unit;
+    }
+
     /**
      * Synonym for {@link #pure(Object) pure}.
      */
@@ -306,6 +315,26 @@ public abstract class TrampolineIO<A> {
     public abstract <B> TrampolineIO<B> bind(Function<? super A, ? extends TrampolineIO<B>> f);
 
     /**
+     * Transfer a trampoline by discarding the intermediate value.
+     *
+     * @param b the new trampoline transformation
+     * @return a trampoline that transfers this trampoline to the given trampoline
+     */
+    public <B> TrampolineIO<B> then(TrampolineIO<B> b) {
+        return bind(__ -> b);
+    }
+
+    /**
+     * Transfer a trampoline by discarding the intermediate value.
+     *
+     * @param b the new trampoline transformation
+     * @return a trampoline that transfers this trampoline to the given trampoline
+     */
+    public <B> TrampolineIO<B> then(Supplier<TrampolineIO<B>> b) {
+        return bind(__ -> b.get());
+    }
+
+    /**
      * Evaluate each action in the sequence from left to right, and collect
      * the result.
      */
@@ -314,17 +343,53 @@ public abstract class TrampolineIO<A> {
     }
 
     /**
+     * Evaluate each action in the sequence from left to right, and ignore
+     * the result.
+     */
+    public static <A> TrampolineIO<Unit> sequence(Seq<TrampolineIO<A>> ms) {
+        return ms.foldRight(pure(Unit.U), TrampolineIO::then);
+    }
+
+    /**
      * The {@code mapM} is analogous to {@link Seq#map(Function) map} except that
      * its result is encapsulated in a {@code Trampoline}.
      */
-    public static <A, B> TrampolineIO<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends TrampolineIO<B>> f) {
+    public static <A, B> TrampolineIO<Seq<B>>
+    mapM(Seq<A> xs, Function<? super A, ? extends TrampolineIO<B>> f) {
         return flatM(xs.map(f));
+    }
+
+    /**
+     * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
+     */
+    public static <A, B> TrampolineIO<Unit>
+    mapM_(Seq<A> xs, Function<? super A, ? extends TrampolineIO<B>> f) {
+        return sequence(xs.map(f));
+    }
+
+    /**
+     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
+     * Bind the given function to the given computations with a final join.
+     */
+    public static <A, B, C> TrampolineIO<Seq<C>>
+    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, TrampolineIO<C>> f) {
+        return flatM(Seq.zip(xs, ys, f));
+    }
+
+    /**
+     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
+     * final result.
+     */
+    public static <A, B, C> TrampolineIO<Unit>
+    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, TrampolineIO<C>> f) {
+        return sequence(Seq.zip(xs, ys, f));
     }
 
     /**
      * This generalizes the list-based filter function.
      */
-    public static <A> TrampolineIO<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends TrampolineIO<Boolean>> p) {
+    public static <A> TrampolineIO<Seq<A>>
+    filterM(Seq<A> xs, Function<? super A, ? extends TrampolineIO<Boolean>> p) {
         return xs.isEmpty()
             ? pure(Seq.nil())
             : p.apply(xs.head()).bind(flg ->
@@ -338,15 +403,30 @@ public abstract class TrampolineIO<A> {
      * {@code foldM} works from left-to-right over the lists arguments. If right-to-left
      * evaluation is required, the input list should be reversed.
      */
-    public static <A, B> TrampolineIO<B> foldM(B r0, Seq<A> xs, BiFunction<B, ? super A, TrampolineIO<B>> f) {
+    public static <A, B> TrampolineIO<B>
+    foldM(B r0, Seq<A> xs, BiFunction<B, ? super A, TrampolineIO<B>> f) {
         return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
+    }
+
+    /**
+     * Perform the action n times, gathering the results.
+     */
+    public static <A> TrampolineIO<Seq<A>> replicateM(int n, TrampolineIO<A> a) {
+        return flatM(Seq.replicate(n, a));
+    }
+
+    /**
+     * Perform the action n times, discards the result.
+     */
+    public static <A> TrampolineIO<Unit> replicateM_(int n, TrampolineIO<A> a) {
+        return sequence(Seq.replicate(n, a));
     }
 
     /**
      * Kleisli composition of monads.
      */
     public static <A, B, C> Function<A, TrampolineIO<C>>
-    compose(Function<A, TrampolineIO<B>> f, Function<B, TrampolineIO<C>> g) {
+    kleisli(Function<A, TrampolineIO<B>> f, Function<B, TrampolineIO<C>> g) {
         return x -> f.apply(x).bind(g);
     }
 

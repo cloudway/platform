@@ -46,20 +46,6 @@ public final class Conditionals {
     }
 
     /**
-     * A shortcut for single condition pattern matching action.
-     *
-     * @param <T> the type of input argument
-     * @param value the input argument
-     * @param cond the pattern to be matched
-     */
-    public static <T> void do__(T value, ConditionCase<? super T, ?, RuntimeException> cond) {
-        ExceptionSupplier<?, RuntimeException> sup = cond.evaluate(value);
-        if (sup != null) {
-            sup.produce();
-        }
-    }
-
-    /**
      * A shortcut for single condition pattern matching.
      *
      * @param <T> the type of input argument

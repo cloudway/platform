@@ -7,37 +7,48 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.function.IntBinaryOperator;
+import java.util.function.IntSupplier;
 import java.util.function.IntUnaryOperator;
 
 /**
- * Java lambda "closes" environment variables, an {@code IntHolder} can captures
+ * Java lambda "closes" environment variables, an {@code IntRef} can captures
  * these variables.
  */
-public class IntHolder implements java.io.Serializable {
+public class IntRef implements IntSupplier, java.io.Serializable {
     private static final long serialVersionUID = 5409316215531576258L;
 
     private int value;
 
     /**
-     * Creates a new IntHolder with the given initial value.
+     * Creates a new IntRef with the given initial value.
      *
      * @param initialValue the initial value
      */
-    public IntHolder(int initialValue) {
+    public IntRef(int initialValue) {
         value = initialValue;
     }
 
     /**
-     * Creates a new IntHolder with initial value {@code 0}.
+     * Creates a new IntRef with initial value {@code 0}.
      */
-    public IntHolder() {}
+    public IntRef() {}
 
     /**
-     * Gets the hold value.
+     * Gets the indirect referenced value.
+     *
+     * @return the current indirect referenced value
+     */
+    public int get() {
+        return value;
+    }
+
+    /**
+     * Gets the hold value as a result.
      *
      * @return the current hold value
      */
-    public int get() {
+    @Override
+    public int getAsInt() {
         return value;
     }
 
@@ -65,6 +76,15 @@ public class IntHolder implements java.io.Serializable {
     /**
      * Increments by one the current value.
      *
+     * @return the updated value
+     */
+    public int increment() {
+        return ++value;
+    }
+
+    /**
+     * Increments by one the current value.
+     *
      * @return the previous value
      */
     public int getAndIncrement() {
@@ -74,10 +94,29 @@ public class IntHolder implements java.io.Serializable {
     /**
      * Decrements by one the current value.
      *
+     * @return the updated value
+     */
+    public int decrement() {
+        return --value;
+    }
+
+    /**
+     * Decrements by one the current value.
+     *
      * @return the previous value
      */
     public int getAndDecrement() {
         return value--;
+    }
+
+    /**
+     * Adds the given value to the current value
+     *
+     * @param delta the value to add
+     * @return the updated value
+     */
+    public int add(int delta) {
+        return value += delta;
     }
 
     /**
@@ -93,31 +132,14 @@ public class IntHolder implements java.io.Serializable {
     }
 
     /**
-     * Increments by one the current value.
+     * Updates the current value with the results of applying the given function,
+     * returning the updated value.
      *
+     * @param updater a function to evaluate new value
      * @return the updated value
      */
-    public int incrementAndGet() {
-        return ++value;
-    }
-
-    /**
-     * Decrements by one the current value.
-     *
-     * @return the updated value
-     */
-    public int decrementAndGet() {
-        return --value;
-    }
-
-    /**
-     * Adds the given value to the current value
-     *
-     * @param delta the value to add
-     * @return the updated value
-     */
-    public int addAndGet(int delta) {
-        return value += delta;
+    public int update(IntUnaryOperator updater) {
+        return value = updater.applyAsInt(value);
     }
 
     /**
@@ -134,14 +156,16 @@ public class IntHolder implements java.io.Serializable {
     }
 
     /**
-     * Updates the current value with the results of applying the given function,
-     * returning the updated value.
+     * Updates the current value with the results of applying the given
+     * function to the current and given value, returning the updated
+     * value.
      *
-     * @param updater a function to evaluate new value
+     * @param x the update value
+     * @param accumulator a function of two arguments
      * @return the updated value
      */
-    public int updateAndGet(IntUnaryOperator updater) {
-        return value = updater.applyAsInt(value);
+    public int accumulate(int x, IntBinaryOperator accumulator) {
+        return value = accumulator.applyAsInt(value, x);
     }
 
     /**
@@ -157,19 +181,6 @@ public class IntHolder implements java.io.Serializable {
         int oldValue = value;
         value = accumulator.applyAsInt(value, x);
         return oldValue;
-    }
-
-    /**
-     * Updates the current value with the results of applying the given
-     * function to the current and given value, returning the updated
-     * value.
-     *
-     * @param x the update value
-     * @param accumulator a function of two arguments
-     * @return the updated value
-     */
-    public int accumulateAndGet(int x, IntBinaryOperator accumulator) {
-        return value = accumulator.applyAsInt(value, x);
     }
 
     /**

@@ -284,8 +284,7 @@ public interface IntSeq
         if (isEmpty()) {
             return nil();
         } else {
-            Holder<IntSeq> h = new Holder<>();
-            return h.set(IntSeqImpl.concat(this, h::get));
+            return Ref.cycle((Ref<IntSeq> h) -> IntSeqImpl.concat(this, h));
         }
     }
 

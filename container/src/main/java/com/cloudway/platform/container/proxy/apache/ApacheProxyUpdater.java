@@ -20,7 +20,7 @@ import com.cloudway.platform.common.fp.data.TreeMap;
 import com.cloudway.platform.container.proxy.HttpProxyUpdater;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.proxy.ProxyMapping;
-import com.cloudway.platform.common.fp.data.BooleanHolder;
+import com.cloudway.platform.common.fp.data.BooleanRef;
 import static com.cloudway.platform.common.fp.control.Predicates.*;
 
 public enum ApacheProxyUpdater implements HttpProxyUpdater
@@ -82,7 +82,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
     {
         String fqdn = ac.getDomainName();
         String id = ac.getId();
-        BooleanHolder removed = new BooleanHolder();
+        BooleanRef removed = new BooleanRef();
 
         containers.write(d -> d.computeIfPresent(fqdn, (key, value) -> {
             String newValue = Seq.of(value.split("\\|"))
@@ -128,7 +128,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
     public boolean unidle(ApplicationContainer ac)
         throws IOException
     {
-        BooleanHolder result = new BooleanHolder();
+        BooleanRef result = new BooleanRef();
         idles.write(d -> {
             result.set(d.containsKey(ac.getId()));
             return d.remove(ac.getId());

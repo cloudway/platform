@@ -252,6 +252,15 @@ public final class Fn {
     }
 
     /**
+     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
+     * Bind the given function to the given computations with a final join.
+     */
+    public static <T, A, B, C> Function<T, Seq<C>>
+    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, Function<T, C>> f) {
+        return flatM(Seq.zip(xs, ys, f));
+    }
+
+    /**
      * The {@code foldM} is analogous to {@link Seq#foldLeft(Object,BiFunction) foldLeft},
      * except that its result is encapsulated in a function. Note that {@code foldM}
      * works from left-to-right over the lists arguments. If right-to-left evaluation
@@ -293,36 +302,5 @@ public final class Fn {
     public static <T, A, B, C, D> TriFunction<Function<T, A>, Function<T, B>, Function<T, C>, Function<T, D>>
     liftM3(TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
         return (m1, m2, m3) -> bind(m1, x1 -> bind(m2, x2 -> map(m3, x3 -> f.apply(x1, x2, x3))));
-    }
-
-    /**
-     * Bind the given function {@code f} to the values of the given functions,
-     * with a final join.
-     *
-     * @param ma a function to bind {@code f} function to
-     * @param mb a function to bind {@code f} function to
-     * @param f  the bound function to be composed with {@code ca} and then
-     *           applied with {@code cb}
-     * @return   a new function after performing the composition, then application
-     */
-    public static <T, A, B, C> Function<T, C>
-    zip(Function<T, A> ma, Function<T, B> mb, BiFunction<? super A, ? super B, ? extends C> f) {
-        return Fn.<T,A,B,C>liftM2(f).apply(ma, mb);
-    }
-
-    /**
-     * Bind the given function {@code f} to the values of the given functions,
-     * with a final join.
-     *
-     * @param ma a function to bind {@code f} function to
-     * @param mb a function to bind {@code f} function to
-     * @param mc a function to bind {@code f} function to
-     * @param f  the bound function to be composed with {@code ca} and then
-     *           applied with {@code cb}
-     * @return   a new function after performing the composition, then application
-     */
-    public static <T, A, B, C, D> Function<T, D>
-    zip3(Function<T, A> ma, Function<T, B> mb, Function<T, C> mc, TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
-        return Fn.<T,A,B,C,D>liftM3(f).apply(ma, mb, mc);
     }
 }

@@ -138,14 +138,14 @@ public final class MonadState<A, S> {
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> MonadState<B, S> andThen(Supplier<MonadState<B, S>> next) {
+    public <B> MonadState<B, S> then(Supplier<MonadState<B, S>> next) {
         return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> next.get().go(t.second())))));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> MonadState<B, S> andThen(MonadState<B, S> next) {
+    public <B> MonadState<B, S> then(MonadState<B, S> next) {
         return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> next.go(t.second())))));
     }
 
@@ -153,7 +153,7 @@ public final class MonadState<A, S> {
      * Map both the return value and final state of computation using the given
      * function.
      */
-    public <B> MonadState<B, S> maps(Function<Tuple<A, S>, Tuple<B, S>> f) {
+    public <B> MonadState<B, S> mapState(Function<Tuple<A, S>, Tuple<B, S>> f) {
         return $(s -> suspend(() -> go(s).map(f)));
     }
 
@@ -161,14 +161,14 @@ public final class MonadState<A, S> {
      * Map both the return value and final state of computation using the given
      * function.
      */
-    public <B> MonadState<B, S> maps(BiFunction<? super A, ? super S, Tuple<B, S>> f) {
+    public <B> MonadState<B, S> mapState(BiFunction<? super A, ? super S, Tuple<B, S>> f) {
         return $(s -> suspend(() -> go(s).map(t -> t.map(f))));
     }
 
     /**
      * Executes action on a state modified by applying function.
      */
-    public MonadState<A, S> withs(Function<S,S> f) {
+    public MonadState<A, S> withState(Function<S, S> f) {
         return $(s -> suspend(() -> go(f.apply(s))));
     }
 
@@ -220,7 +220,7 @@ public final class MonadState<A, S> {
      * the result.
      */
     public static <A, S> MonadState<Unit, S> sequence(Seq<MonadState<A, S>> ms) {
-        return ms.foldRight(pure(Unit.U), MonadState::andThen);
+        return ms.foldRight(pure(Unit.U), MonadState::then);
     }
 
     /**
@@ -238,6 +238,24 @@ public final class MonadState<A, S> {
     public static <A, B, S> MonadState<Unit, S>
     mapM_(Seq<A> xs, Function<? super A, MonadState<B,S>> f) {
         return sequence(xs.map(f));
+    }
+
+    /**
+     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
+     * Bind the given function to the given computations with a final join.
+     */
+    public static <A, B, C, S> MonadState<Seq<C>, S>
+    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, MonadState<C, S>> f) {
+        return flatM(Seq.zip(xs, ys, f));
+    }
+
+    /**
+     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
+     * final result.
+     */
+    public static <A, B, C, S> MonadState<Unit, S>
+    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, MonadState<C, S>> f) {
+        return sequence(Seq.zip(xs, ys, f));
     }
 
     /**
@@ -264,10 +282,24 @@ public final class MonadState<A, S> {
     }
 
     /**
+     * Perform the action n times, gathering the results.
+     */
+    public static <A, S> MonadState<Seq<A>, S> replicateM(int n, MonadState<A, S> a) {
+        return flatM(Seq.replicate(n, a));
+    }
+
+    /**
+     * Perform the action n times, discards the result.
+     */
+    public static <A, S> MonadState<Unit, S> replicateM_(int n, MonadState<A, S> a) {
+        return sequence(Seq.replicate(n, a));
+    }
+
+    /**
      * Kleisli composition of monads.
      */
     public static <A, B, C, S> Function<A, MonadState<C, S>>
-    compose(Function<A, MonadState<B, S>> f, Function<B, MonadState<C, S>> g) {
+    kleisli(Function<A, MonadState<B, S>> f, Function<B, MonadState<C, S>> g) {
         return x -> f.apply(x).bind(g);
     }
 
@@ -293,22 +325,5 @@ public final class MonadState<A, S> {
     public static <A, B, C, D, S> TriFunction<MonadState<A,S>, MonadState<B,S>, MonadState<C,S>, MonadState<D,S>>
     liftM3(TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
         return (m1, m2, m3) -> m1.bind(x1 -> m2.bind(x2 -> m3.map(x3 -> f.apply(x1, x2, x3))));
-    }
-
-    /**
-     * Bind the given function to the given state computations with a final join.
-     */
-    public static <A, B, C, S> MonadState<C, S>
-    zip(MonadState<A, S> ma, MonadState<B, S> mb, BiFunction<? super A, ? super B, ? extends C> f) {
-        return MonadState.<A,B,C,S>liftM2(f).apply(ma, mb);
-    }
-
-    /**
-     * Bind the given function to the given state computations with a final join.
-     */
-    public static <A, B, C, D, S> MonadState<D, S>
-    zip3(MonadState<A, S> ma, MonadState<B, S> mb, MonadState<C, S> mc,
-         TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
-        return MonadState.<A,B,C,D,S>liftM3(f).apply(ma, mb, mc);
     }
 }
