@@ -8,14 +8,14 @@ package com.cloudway.platform.common.fp.control;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.function.BiFunction;
-import java.util.function.BinaryOperator;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.data.Fn;
+import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
 
@@ -32,7 +32,7 @@ import com.cloudway.platform.common.fp.data.Unit;
  *
  * @param <A> the type of yielded value
  */
-public interface Generator<A> extends Iterable<A> {
+public interface Generator<A> extends Foldable<A> {
     /**
      * A channel to communicate between generators.
      *
@@ -55,15 +55,6 @@ public interface Generator<A> extends Iterable<A> {
      * @return a {@code Channel} used to communication
      */
     Channel<A> start();
-
-    /**
-     * Returns a list view of generated values, may be infinite.
-     *
-     * @return a list containing generated values
-     */
-    default Seq<A> asList() {
-        return foldRight(Seq.nil(), Seq::cons);
-    }
 
     // Monad
 
@@ -138,32 +129,8 @@ public interface Generator<A> extends Iterable<A> {
      * @param accumulator a function for combining two values
      * @return the result of the reduction
      */
+    @Override
     <R> R foldRight(R identity, BiFunction<? super A, Supplier<R>, R> accumulator);
-
-    /**
-     * The strict version of {@link #foldRight(Object,BiFunction) foldRight}.
-     *
-     * @param identity the identity value for the accumulating function
-     * @param accumulator a function for combining two values
-     * @return the result of the reduction
-     */
-    default <R> R foldRight_(R identity, BiFunction<? super A, R, R> accumulator) {
-        return foldRight(identity, (x, r) -> accumulator.apply(x, r.get()));
-    }
-
-    /**
-     * A variant of {@link #foldRight(Object,BiFunction)} that has no starting
-     * value argument.
-     *
-     * @param accumulator a function for combining two values
-     * @return the result of the reduction
-     */
-    default Optional<A> foldRight(BinaryOperator<A> accumulator) {
-        BiFunction<A, Optional<A>, Optional<A>> mf =
-            (x, my) -> my.isPresent() ? Optional.of(accumulator.apply(x, my.get()))
-                                      : Optional.of(x);
-        return foldRight_(Optional.empty(), mf);
-    }
 
     /**
      * Reduce the generator using the binary operator, from left to right.
@@ -172,29 +139,26 @@ public interface Generator<A> extends Iterable<A> {
      * @param accumulator a function for combining two values
      * @return the result of the reduction
      */
+    @Override
     default <R> R foldLeft(R identity, BiFunction<R, ? super A, R> accumulator) {
         R result = identity;
-        for (A a : this)
+        for (A a : this) {
             result = accumulator.apply(result, a);
+        }
         return result;
     }
 
     /**
-     * A variant of {@link #foldLeft(Object,BiFunction)} that has no starting
-     * value argument.
+     * Performs the given action for each element of the {@code Iterable}
+     * until all elements have been processed or the action throws an
+     * exception.
      *
-     * @param accumulator a function for combining two values
-     * @return the result of the reduction
+     * @param action The action to be performed for each element
      */
-    default Optional<A> foldLeft(BinaryOperator<A> accumulator) {
-        Iterator<A> it = iterator();
-        if (it.hasNext()) {
-            A result = it.next();
-            while (it.hasNext())
-                result = accumulator.apply(result, it.next());
-            return Optional.of(result);
-        } else {
-            return Optional.empty();
+    @Override
+    default void forEach(Consumer<? super A> action) {
+        for (A a : this) {
+            action.accept(a);
         }
     }
 
@@ -223,7 +187,7 @@ public interface Generator<A> extends Iterable<A> {
      * Evaluate each action in the sequence from left to right, and ignore
      * the result.
      */
-    static <A> Generator<Unit> sequence(Seq<Generator<A>> ms) {
+    static <A> Generator<Unit> sequence(Foldable<Generator<A>> ms) {
         return ms.foldRight(pure(Unit.U), Generator::then);
     }
 
@@ -238,8 +202,8 @@ public interface Generator<A> extends Iterable<A> {
     /**
      * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
      */
-    static <A, B> Generator<Unit> mapM_(Seq<A> xs, Function<? super A, Generator<B>> f) {
-        return sequence(xs.map(f));
+    static <A, B> Generator<Unit> mapM_(Foldable<A> xs, Function<? super A, Generator<B>> f) {
+        return xs.foldRight(pure(Unit.U), (x, r) -> f.apply(x).then(r));
     }
 
     /**
@@ -277,7 +241,7 @@ public interface Generator<A> extends Iterable<A> {
      * {@code foldM} works from left-to-right over the lists arguments. If right-to-left
      * evaluation is required, the input list should be reversed.
      */
-    static <A, B> Generator<B> foldM(B r0, Seq<A> xs, BiFunction<B, ? super A, Generator<B>> f) {
+    static <A, B> Generator<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, Generator<B>> f) {
         return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
     }
 
@@ -306,7 +270,7 @@ public interface Generator<A> extends Iterable<A> {
     /**
      * Promote a function to a generator function.
      */
-    static <A, B, C> Function<Generator<A>, Generator<B>>
+    static <A, B> Function<Generator<A>, Generator<B>>
     liftM(Function<? super A, ? extends B> f) {
         return m -> m.map(f);
     }

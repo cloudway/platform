@@ -13,15 +13,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.StringJoiner;
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
-import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -36,7 +33,7 @@ import com.cloudway.platform.common.fp.control.ConditionCase;
  *
  * @param <T> the element type
  */
-public interface Seq<T> extends Iterable<T>
+public interface Seq<T> extends Foldable<T>
 {
     /**
      * Returns {@code true} if this list contains no elements.
@@ -495,8 +492,20 @@ public interface Seq<T> extends Iterable<T>
     }
 
     /**
+     * Reduce the list using the binary operator, from right to left. This is
+     * a lazy operation so the accumulator accept a delay evaluation of reduced
+     * result instead of a strict value.
+     */
+    @Override
+    default <R> R foldRight(R identity, BiFunction<? super T, Supplier<R>, R> accumulator) {
+        return isEmpty() ? identity
+             : accumulator.apply(head(), Fn.lazy(() -> tail().foldRight(identity, accumulator)));
+    }
+
+    /**
      * Reduce the list using the binary operator, from left to right.
      */
+    @Override
     default <R> R foldLeft(R identity, BiFunction<R, ? super T, R> accumulator) {
         R result = identity;
         for (Seq<T> xs = this; !xs.isEmpty(); xs = xs.tail()) {
@@ -505,49 +514,15 @@ public interface Seq<T> extends Iterable<T>
         return result;
     }
 
-    /**
-     * A variant of {@link #foldLeft(Object,BiFunction)} that has no starting
-     * value argument.
-     */
-    default Optional<T> foldLeft(BinaryOperator<T> accumulator) {
-        return isEmpty()
-            ? Optional.<T>empty()
-            : Optional.of(tail().foldLeft(head(), accumulator));
+    @Override
+    default Seq<T> asList() {
+        return this;
     }
 
-    /**
-     * Reduce the list using the binary operator, from right to left. This is
-     * a lazy operation so the accumulator accept a delay evaluation of reduced
-     * result instead of a strict value.
-     */
-    default <R> R foldRight(R identity, BiFunction<? super T, Supplier<R>, R> accumulator) {
-        return isEmpty() ? identity
-             : accumulator.apply(head(), Fn.lazy(() -> tail().foldRight(identity, accumulator)));
-    }
-
-    /**
-     * A variant of {@link #foldRight(Object,BiFunction)} that has no starting
-     * value argument.
-     */
-    default Optional<T> foldRight(BiFunction<T, Supplier<T>, T> accumulator) {
-        return isEmpty()        ? Optional.empty()
-             : tail().isEmpty() ? Optional.of(head())
-             : Optional.of(accumulator.apply(head(), Fn.lazy(() -> tail().foldRight(accumulator).get())));
-    }
-
-    /**
-     * The strict version of {@link #foldRight(Object,BiFunction) foldRight}.
-     */
-    default <R> R foldRight_(R identity, BiFunction<? super T, R, R> accumulator) {
-        return reverse().foldLeft(identity, (acc, x) -> accumulator.apply(x, acc));
-    }
-
-    /**
-     * A variant of {@link #foldRight_(Object,BiFunction)} that has no starting
-     * value argument.
-     */
-    default Optional<T> foldRight_(BinaryOperator<T> accumulator) {
-        return reverse().foldLeft((acc, x) -> accumulator.apply(x, acc));
+    @Override
+    default Seq<T> asReversedList() {
+    default Seq<T> asReverseList() {
+        return reverse();
     }
 
     /**
@@ -567,26 +542,6 @@ public interface Seq<T> extends Iterable<T>
     default <R> Seq<R> scanRight(R identity, BiFunction<? super T, Supplier<R>, R> accumulator) {
         return foldRight(of(identity), (x, acc) ->
             cons(accumulator.apply(x, Fn.map(acc, Seq::head)), acc));
-    }
-
-    /**
-     * Performs a reduction operation on the elements of this sequence using a
-     * {@code Collector}.  A {@code Collector} is borrowed from Stream API that
-     * encapsulates the functions used as arguments to reduction operation.
-     *
-     * @param <R> the type of the result
-     * @param <A> the intermediate accumulation type of the {@code Collector}
-     * @param collector the {@code Collector} describing the reduction
-     * @return the result of the reduction
-     */
-    @SuppressWarnings("unchecked")
-    default <R, A> R collect(Collector<? super T, A, R> collector) {
-        A container = collector.supplier().get();
-        BiConsumer<A, ? super T> accumulator = collector.accumulator();
-        forEach(x -> accumulator.accept(container, x));
-        return collector.characteristics().contains(Collector.Characteristics.IDENTITY_FINISH)
-            ? (R) container
-            : collector.finisher().apply(container);
     }
 
     /**

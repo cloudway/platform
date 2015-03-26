@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Either;
+import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.function.TriFunction;
@@ -334,7 +335,7 @@ public abstract class Trampoline<A> {
      * Evaluate each action in the sequence from left to right, and ignore
      * the result.
      */
-    public static <A> Trampoline<Unit> sequence(Seq<Trampoline<A>> ms) {
+    public static <A> Trampoline<Unit> sequence(Foldable<Trampoline<A>> ms) {
         return ms.foldRight(unit(), Trampoline::then);
     }
 
@@ -351,8 +352,8 @@ public abstract class Trampoline<A> {
      * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
      */
     public static <A, B> Trampoline<Unit>
-    mapM_(Seq<A> xs, Function<? super A, ? extends Trampoline<B>> f) {
-        return sequence(xs.map(f));
+    mapM_(Foldable<A> xs, Function<? super A, ? extends Trampoline<B>> f) {
+        return xs.foldRight(unit(), (x, r) -> f.apply(x).then(r));
     }
 
     /**
@@ -392,7 +393,7 @@ public abstract class Trampoline<A> {
      * evaluation is required, the input list should be reversed.
      */
     public static <A, B> Trampoline<B>
-    foldM(B r0, Seq<A> xs, BiFunction<B, ? super A, Trampoline<B>> f) {
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, Trampoline<B>> f) {
         return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
     }
 

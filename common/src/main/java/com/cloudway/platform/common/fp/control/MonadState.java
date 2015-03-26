@@ -11,6 +11,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.data.Fn;
+import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
@@ -219,7 +220,7 @@ public final class MonadState<A, S> {
      * Evaluate each action in the sequence from left to right, and ignore
      * the result.
      */
-    public static <A, S> MonadState<Unit, S> sequence(Seq<MonadState<A, S>> ms) {
+    public static <A, S> MonadState<Unit, S> sequence(Foldable<MonadState<A, S>> ms) {
         return ms.foldRight(pure(Unit.U), MonadState::then);
     }
 
@@ -236,8 +237,8 @@ public final class MonadState<A, S> {
      * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
      */
     public static <A, B, S> MonadState<Unit, S>
-    mapM_(Seq<A> xs, Function<? super A, MonadState<B,S>> f) {
-        return sequence(xs.map(f));
+    mapM_(Foldable<A> xs, Function<? super A, MonadState<B,S>> f) {
+        return xs.foldRight(unit(), (x, r) -> f.apply(x).then(r));
     }
 
     /**
@@ -277,7 +278,7 @@ public final class MonadState<A, S> {
      * evaluation is required, the input list should be reversed.
      */
     public static <A, B, S> MonadState<B, S>
-    foldM(B r0, Seq<A> xs, BiFunction<B, ? super A, MonadState<B, S>> f) {
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, MonadState<B, S>> f) {
         return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
     }
 

@@ -267,7 +267,7 @@ public final class Fn {
      * is required, the input list should be reversed.
      */
     public static <T, A, B> Function<T, B>
-    foldM(B r0, Seq<A> xs, BiFunction<B, ? super A, Function<T, B>> f) {
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, Function<T, B>> f) {
         return xs.foldLeft(pure(r0), (m, x) -> bind(m, r -> f.apply(r, x)));
     }
 

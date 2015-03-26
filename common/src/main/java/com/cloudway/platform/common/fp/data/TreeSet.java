@@ -7,17 +7,13 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-
-import com.cloudway.platform.common.fp.control.Cont;
 
 /**
  * <p>An efficient implementation of sets</p>
@@ -35,7 +31,7 @@ import com.cloudway.platform.common.fp.control.Cont;
  *
  * @param <E> the type of set elements
  */
-public interface TreeSet<E> extends Iterable<E> {
+public interface TreeSet<E> extends Foldable<E> {
     // Construction
 
     /**
@@ -204,30 +200,9 @@ public interface TreeSet<E> extends Iterable<E> {
     }
 
     /**
-     * Returns an iterator over the elements contained in this set.
-     *
-     * @return an iterator over the elements contained in this set.
-     */
-    @Override
-    default Iterator<E> iterator() {
-        return Cont.generator(foldRight(Cont.<E>finish(),
-            (e, r) -> Cont.yield(e).then(r))).iterator();
-    }
-
-    /**
-     * Perform the given action for each element in this set until all elements
-     * have been processed or the action throws an exception.
-     *
-     * @param action an action to perform on each elements
-     */
-    @Override
-    default void forEach(Consumer<? super E> action) {
-        foldLeft(Unit.U, (z, e) -> { action.accept(e); return z; });
-    }
-
-    /**
      * Reduce the set elements using the accumulator function, from left to right.
      */
+    @Override
     <R> R foldLeft(R seed, BiFunction<R, ? super E, R> accumulator);
 
     /**
@@ -235,21 +210,14 @@ public interface TreeSet<E> extends Iterable<E> {
      * This is a lazy operation so the accumulator accept a delay evaluation of
      * reduced result instead of a strict value.
      */
+    @Override
     <R> R foldRight(R seed, BiFunction<? super E, Supplier<R>, R> accumulator);
 
     /**
      * The strict version of {@link #foldRight(Object,BiFunction) foldRight}.
      */
+    @Override
     <R> R foldRight_(R seed, BiFunction<? super E, R, R> accumulator);
-
-    /**
-     * Returns a list of elements contained in this set.
-     *
-     * @return a list of elements contained in this set.
-     */
-    default Seq<E> toList() {
-        return foldRight(Seq.nil(), Seq::cons);
-    }
 
     /**
      * Unions all of the elements from the specified set to this set.

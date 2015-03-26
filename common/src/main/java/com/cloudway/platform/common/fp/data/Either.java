@@ -224,7 +224,8 @@ public abstract class Either<A, B> {
      * {@code foldM} works from left-to-right over the lists arguments. If right-to-left
      * evaluation is required, the input list should be reversed.
      */
-    public static <A, T, R> Either<A, R> foldM(R r0, Seq<T> xs, BiFunction<R, ? super T, Either<A, R>> f) {
+    public static <A, T, R> Either<A, R>
+    foldM(R r0, Foldable<T> xs, BiFunction<R, ? super T, Either<A, R>> f) {
         return xs.foldLeft(right(r0), (m, x) -> m.flatMap(r -> f.apply(r, x)));
     }
 

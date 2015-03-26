@@ -10,6 +10,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
@@ -236,7 +237,7 @@ public final class StateIO<A, S> {
      * Evaluate each action in the sequence from left to right, and ignore
      * the result.
      */
-    public static <A, S> StateIO<Unit, S> sequence(Seq<StateIO<A, S>> ms) {
+    public static <A, S> StateIO<Unit, S> sequence(Foldable<StateIO<A, S>> ms) {
         return ms.foldRight(pure(Unit.U), StateIO::then);
     }
 
@@ -253,8 +254,8 @@ public final class StateIO<A, S> {
      * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
      */
     public static <A, B, S> StateIO<Unit, S>
-    mapM_(Seq<A> xs, Function<? super A, StateIO<B,S>> f) {
-        return sequence(xs.map(f));
+    mapM_(Foldable<A> xs, Function<? super A, StateIO<B,S>> f) {
+        return xs.foldRight(unit(), (x, r) -> f.apply(x).then(r));
     }
 
     /**
@@ -294,7 +295,7 @@ public final class StateIO<A, S> {
      * evaluation is required, the input list should be reversed.
      */
     public static <A, B, S> StateIO<B, S>
-    foldM(B r0, Seq<A> xs, BiFunction<B, ? super A, StateIO<B, S>> f) {
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, StateIO<B, S>> f) {
         return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
     }
 

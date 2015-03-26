@@ -132,10 +132,17 @@ public final class Optionals
     }
 
     /**
-     * The {@code foldM} is analogous to {@link Seq#foldLeft(Object,BiFunction) foldLeft},
+     * The {@code foldM} is analogous to {@link Foldable#foldLeft(Object,BiFunction) foldLeft},
      * except that its result is encapsulated in an {@code Optional}. Note that
      * {@code foldM} works from left-to-right over the list arguments. If right-to-left
      * evaluation is required, the input list should be reversed.
+     */
+    public static <T, R> Optional<R> foldM(R r0, Foldable<T> xs, BiFunction<R, ? super T, Optional<R>> f) {
+        return xs.foldLeft(Optional.of(r0), (m, x) -> m.flatMap(r -> f.apply(r, x)));
+    }
+
+    /**
+     * 'foldM' Optimized for list.
      */
     public static <T, R> Optional<R> foldM(R r0, Seq<T> xs, BiFunction<R, ? super T, Optional<R>> f) {
         Optional<R> r = Optional.of(r0);

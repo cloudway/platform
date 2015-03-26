@@ -15,6 +15,7 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.fp.control.Conditionals;
+import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.TreeMap;
 import com.cloudway.platform.common.fp.data.Unit;
@@ -112,7 +113,7 @@ public interface IO<A> {
      * Evaluate each action in the sequence from left to right, and collect
      * the result.
      */
-    static <A> IO<Seq<A>> sequence(Seq<IO<A>> ms) {
+    static <A> IO<Seq<A>> flatM(Seq<IO<A>> ms) {
         return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
     }
 
@@ -120,7 +121,7 @@ public interface IO<A> {
      * Evaluate each action in the sequence from left to right, and discard
      * the result.
      */
-    static IO<Unit> sequence_(Seq<IO<?>> ms) {
+    static IO<Unit> sequence(Foldable<IO<?>> ms) {
         return ms.foldRight(pure(Unit.U), IO::<Unit>then);
     }
 
@@ -129,14 +130,14 @@ public interface IO<A> {
      * its result is encapsulated in an {@code IO}.
      */
     static <A, B> IO<Seq<B>> mapM(Seq<A> xs, Function<? super A, IO<B>> f) {
-        return sequence(xs.map(f));
+        return flatM(xs.map(f));
     }
 
     /**
      * {@code mapM_} is equivalent to {@code sequence_(xs.map(f))}.
      */
-    static <A> IO<Unit> mapM_(Seq<A> xs, Function<? super A, IO<?>> f) {
-        return sequence_(xs.map(f));
+    static <A> IO<Unit> mapM_(Foldable<A> xs, Function<? super A, IO<?>> f) {
+        return xs.foldRight(unit, (x, r) -> f.apply(x).then(r));
     }
 
     /**
@@ -145,7 +146,7 @@ public interface IO<A> {
      */
     static <A, B, C> IO<Seq<C>>
     zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, IO<C>> f) {
-        return sequence(Seq.zip(xs, ys, f));
+        return flatM(Seq.zip(xs, ys, f));
     }
 
     /**
@@ -154,7 +155,7 @@ public interface IO<A> {
      */
     static <A, B, C> IO<Unit>
     zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, IO<C>> f) {
-        return sequence_(Seq.zip(xs, ys, f));
+        return sequence(Seq.zip(xs, ys, f));
     }
 
     /**
@@ -174,7 +175,7 @@ public interface IO<A> {
      * works from left-to-right over the lists arguments, If right-to-left evaluation
      * is required, the input list should be reversed.
      */
-    static <A, B> IO<B> foldM(B r0, Seq<A> xs, BiFunction<B, ? super A, IO<B>> f) {
+    static <A, B> IO<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, IO<B>> f) {
         return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
     }
 
@@ -182,14 +183,14 @@ public interface IO<A> {
      * Perform the action n times, gathering the results.
      */
     static <A> IO<Seq<A>> replicateM(int n, IO<A> a) {
-        return sequence(Seq.replicate(n, a));
+        return flatM(Seq.replicate(n, a));
     }
 
     /**
      * Perform the action n times, discards the result.
      */
     static <A> IO<Unit> replicateM_(int n, IO<A> a) {
-        return sequence_(Seq.replicate(n, a));
+        return sequence(Seq.replicate(n, a));
     }
 
     /**

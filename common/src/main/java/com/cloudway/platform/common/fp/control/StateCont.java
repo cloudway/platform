@@ -14,6 +14,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.data.Fn;
+import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.function.TriFunction;
@@ -280,7 +281,7 @@ public final class StateCont<A, S> {
      * Evaluate each action in the sequence from left to right, and ignore
      * the result.
      */
-    public static <A, S> StateCont<Unit, S> sequence(Seq<StateCont<A, S>> ms) {
+    public static <A, S> StateCont<Unit, S> sequence(Foldable<StateCont<A, S>> ms) {
         return ms.foldRight(unit(), StateCont::then);
     }
 
@@ -297,8 +298,8 @@ public final class StateCont<A, S> {
      * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
      */
     public static <A, B, S> StateCont<Unit, S>
-    mapM_(Seq<A> xs, Function<? super A, StateCont<B, S>> f) {
-        return sequence(xs.map(f));
+    mapM_(Foldable<A> xs, Function<? super A, StateCont<B, S>> f) {
+        return xs.foldRight(unit(), (x, r) -> f.apply(x).then(r));
     }
 
     /**
@@ -338,7 +339,7 @@ public final class StateCont<A, S> {
      * evaluation is required, the input list should be reversed.
      */
     public static <A, B, S> StateCont<B, S>
-    foldM(B r0, Seq<A> xs, BiFunction<B, ? super A, StateCont<B, S>> f) {
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, StateCont<B, S>> f) {
         return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
     }
 
