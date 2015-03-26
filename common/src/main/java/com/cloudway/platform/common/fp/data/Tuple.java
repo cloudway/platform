@@ -188,9 +188,9 @@ public class Tuple<T, U> implements Serializable, Cloneable
      * Returns a conditional case to deconstruct elements of a tuple.
      *
      * <p>Usage:</p>
-     * <pre>
+     * <pre>{@code
      *     when(Tuple((m, v) -> m*v*v/2))
-     * </pre>
+     * }</pre>
      */
     public static <T, U, R, X extends Throwable> ConditionCase<Tuple<T, U>, R, X>
     Tuple_(ExceptionBiFunction<? super T, ? super U, ? extends R, X> mapper) {

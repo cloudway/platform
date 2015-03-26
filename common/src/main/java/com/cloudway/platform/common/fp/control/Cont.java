@@ -68,9 +68,9 @@ public final class Cont<A> {
      * The result of running a CPS computation with 'return' as the final
      * continuation.
      *
-     * <p><pre>
+     * <pre>{@code
      *     yield(x).eval() == x
-     * </pre></p>
+     * }</pre>
      */
     public A eval() {
         return run(Fn.id());

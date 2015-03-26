@@ -23,10 +23,10 @@ public interface ConditionCase<T, R, X extends Throwable>
     /**
      * Lift an inner conditional case to return the final result.
      *
-     * <p><pre>
+     * <pre>{@code
      * Given a function: T -> () -> R
      * Return a function: T -> R
-     * </pre></p>
+     * }</pre>
      *
      * @param value the input value to this conditional case
      * @param defaultResult the default result value if conditional case

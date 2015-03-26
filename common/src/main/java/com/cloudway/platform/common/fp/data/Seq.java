@@ -362,9 +362,9 @@ public interface Seq<T> extends Foldable<T>
 
     /**
      * Transposes the rows and columns of its argument. For example.
-     * <p><pre>
+     * <pre>{@code
      *     transpose [[1,2,3],[4,5,6]] == [[1,4],[2,5],[3,6]]
-     * </pre></p>
+     * }</pre>
      */
     static <T> Seq<Seq<T>> transpose(Seq<Seq<T>> source) {
         Seq<T> head = source.filter(xs -> !xs.isEmpty()).map(Seq::head);
@@ -457,12 +457,11 @@ public interface Seq<T> extends Foldable<T>
 
     /**
      * Zip two lists into one using a function to produce result values.
-     * <p>
-     * {@code <pre>
-     * // ("1:a", "2:b", "3:c")
-     * Seq.of(1, 2, 3).zip(Seq.of("a", "b", "c"), (i,s) -> i + ":" + s)
-     * </pre>}
-     * </p>
+     *
+     * <pre>{@code
+     *     // ("1:a", "2:b", "3:c")
+     *     Seq.of(1, 2, 3).zip(Seq.of("a", "b", "c"), (i,s) -> i + ":" + s)
+     * }</pre>
      */
     default <U, R> Seq<R> zip(Seq<? extends U> other,
             BiFunction<? super T, ? super U, ? extends R> zipper) {
@@ -520,7 +519,6 @@ public interface Seq<T> extends Foldable<T>
     }
 
     @Override
-    default Seq<T> asReversedList() {
     default Seq<T> asReverseList() {
         return reverse();
     }

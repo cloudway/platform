@@ -94,9 +94,9 @@ public final class Conditionals {
      * Promote a pattern matching function to a predicate so it can be used in stream API.
      *
      * <p>For example:</p>
-     * <pre>
+     * <pre>{@code
      *     Stream.of(tuples).filter(on(Tuple((a,b) -> a==b));
-     * </pre>
+     * }</pre>
      */
     public static <T> Predicate<T> on(ConditionCase<? super T, Boolean, RuntimeException> cond) {
         return t -> cond.lift(t, false);
@@ -160,18 +160,18 @@ public final class Conditionals {
      * {@code Tuple()} method deconstruct the tuple elements into arguments to
      * a lambda expression.</p>
      *
-     * <pre>
-     *     void test(Optional&lt;Tuple&gt; obj) {
+     * <pre>{@code
+     *     void test(Optional<Tuple> obj) {
      *         with(obj)
-     *          .when(in(Just(Tuple((x, y) -> ...))));
+     *           .when(in(Just(Tuple((x, y) -> ...))));
      *     }
-     * </pre>
+     * }</pre>
      *
      * <p>The pseudo code of this method in haskell notation:</p>
-     * <pre>
+     * <pre>{@code
      *  in :: (T -> () -> () -> R) -> (T -> () -> R)
      *  in f t = f t ()
-     * </pre>
+     * }</pre>
      */
     public static <T, R, X extends Throwable> ConditionCase<T, R, X>
     in(ConditionCase<T, ExceptionSupplier<R, X>, X> cond) {
@@ -673,7 +673,7 @@ public final class Conditionals {
          * case and make code more readable.
          *
          * <p>The following example illustrate this use case:</p>
-         * <pre>
+         * <pre>{@code
          *     String showType(Number value) {
          *       with(value)
          *         .when(Integer.class,  x -> print("an integer"))
@@ -681,7 +681,7 @@ public final class Conditionals {
          *         .when(Double.class,   x -> print("a double"))
          *         .orElse("Unknown");
          *     }
-         * </pre>
+         * }</pre>
          *
          * @param type the desired type to check
          * @param action the action that evaluating the value, the value passed
@@ -743,7 +743,7 @@ public final class Conditionals {
          * case and make code more readable.
          *
          * <p>The following example illustrate this use case:</p>
-         * <pre>
+         * <pre>{@code
          *     String showType(Number value) {
          *       with(value).&lt;String&gt;get()
          *         .when(Integer.class,  x -> forType(x))
@@ -760,10 +760,10 @@ public final class Conditionals {
          *         assertThat(showType(1), is("Integer"));
          *         assertThat(showType(1.0), is("Double"));
          *     }
-         * </pre>
+         * }</pre>
          *
          * <p>The original code as follows is tedious and error prone:</p>
-         * <pre>
+         * <pre>{@code
          *     String showType(Number value) {
          *         if (value instanceof Integer) {
          *             return forType((Integer)value);
@@ -775,7 +775,7 @@ public final class Conditionals {
          *             return "Unknown";
          *         }
          *     }
-         * </pre>
+         * }</pre>
          *
          * @param type the desired type to check
          * @param converter the function that convert value to result, the value passed
