@@ -10,10 +10,6 @@ import java.util.Comparator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
 
 /**
  * <p>An efficient implementation of sets</p>
@@ -31,7 +27,7 @@ import java.util.function.Supplier;
  *
  * @param <E> the type of set elements
  */
-public interface TreeSet<E> extends Foldable<E> {
+public interface TreePSet<E> extends PSet<E> {
     // Construction
 
     /**
@@ -39,7 +35,7 @@ public interface TreeSet<E> extends Foldable<E> {
      * of its elements.
      */
     @SuppressWarnings("unchecked")
-    static <E extends Comparable<E>> TreeSet<E> empty() {
+    static <E extends Comparable<E>> PSet<E> empty() {
         return Tree.EMPTY_SET;
     }
 
@@ -49,7 +45,7 @@ public interface TreeSet<E> extends Foldable<E> {
      * @param c the comparator that will be used to order this set
      * @throws NullPointerException if <tt>c</tt> is null
      */
-    static <E> TreeSet<E> empty(Comparator<? super E> c) {
+    static <E> PSet<E> empty(Comparator<? super E> c) {
         Objects.requireNonNull(c);
         return new Tree.SetTip<>(c);
     }
@@ -58,8 +54,8 @@ public interface TreeSet<E> extends Foldable<E> {
      * Construct a set with a single element, sorted according to the natural
      * ordering of its elements.
      */
-    static <E extends Comparable<E>> TreeSet<E> singleton(E value) {
-        return TreeSet.<E>empty().add(value);
+    static <E extends Comparable<E>> PSet<E> singleton(E value) {
+        return TreePSet.<E>empty().add(value);
     }
 
     /**
@@ -69,7 +65,7 @@ public interface TreeSet<E> extends Foldable<E> {
      * @param c the comparator that will be used to order this set
      * @throws NullPointerException if <tt>c</tt> is null
      */
-    static <E> TreeSet<E> singleton(Comparator<? super E> c, E value) {
+    static <E> PSet<E> singleton(Comparator<? super E> c, E value) {
         return empty(c).add(value);
     }
 
@@ -78,8 +74,8 @@ public interface TreeSet<E> extends Foldable<E> {
      * ordering of its elements.
      */
     @SafeVarargs
-    static <E extends Comparable<E>> TreeSet<E> of(E... elements) {
-        TreeSet<E> res = empty();
+    static <E extends Comparable<E>> PSet<E> of(E... elements) {
+        PSet<E> res = empty();
         for (E e : elements) {
             res = res.add(e);
         }
@@ -94,8 +90,8 @@ public interface TreeSet<E> extends Foldable<E> {
      * @throws NullPointerException if <tt>c</tt> is null
      */
     @SafeVarargs
-    static <E> TreeSet<E> of(Comparator<? super E> c, E... elements) {
-        TreeSet<E> res = empty(c);
+    static <E> PSet<E> of(Comparator<? super E> c, E... elements) {
+        PSet<E> res = empty(c);
         for (E e : elements) {
             res = res.add(e);
         }
@@ -106,8 +102,8 @@ public interface TreeSet<E> extends Foldable<E> {
      * Construct a set from a list, sorted according to the natural ordering
      * of its elements.
      */
-    static <E extends Comparable<E>> TreeSet<E> fromList(Seq<E> list) {
-        return list.foldLeft(empty(), TreeSet::add);
+    static <E extends Comparable<E>> PSet<E> fromList(Seq<E> list) {
+        return list.foldLeft(empty(), PSet::add);
     }
 
     /**
@@ -116,133 +112,11 @@ public interface TreeSet<E> extends Foldable<E> {
      * @param c the comparator that will be used to order this set
      * @throws NullPointerException if <tt>c</tt> is null
      */
-    static <E> TreeSet<E> fromList(Comparator<? super E> c, Seq<E> list) {
-        return list.foldLeft(empty(c), TreeSet::add);
+    static <E> PSet<E> fromList(Comparator<? super E> c, Seq<E> list) {
+        return list.foldLeft(empty(c), PSet::add);
     }
 
-    // Query Operations
-
-    /**
-     * Returns {@code true} if this set contains no elements.
-     *
-     * @return {@code true} if this set contains no elements
-     */
-    boolean isEmpty();
-
-    /**
-     * Returns the number of elements in this set.
-     *
-     * @return the number of elements in this set
-     */
-    int size();
-
-    /**
-     * Returns {@code true} if this set contains the specified element.
-     *
-     * @param e element whose presence in this set is to be tested
-     * @return {@code true} if this set contains the specified element
-     */
-    boolean contains(E e);
-
-    // Modification Operations
-
-    /**
-     * Adds the specified element to this set if it is not already present.
-     *
-     * @param e element to be added to this set
-     */
-    TreeSet<E> add(E e);
-
-    /**
-     * Removes the specified element from this set if it is present.
-     *
-     * @param e element to be removed from this set, if present
-     */
-    TreeSet<E> remove(E e);
-
-    /**
-     * Returns <tt>true</tt> if this set contains all of the elements of the
-     * specified set.
-     *
-     * @param s set to be checked for containment in this set
-     * @return <tt>true</tt> if this set contains all of the elements of the
-     *         specified set
-     */
-    boolean containsAll(TreeSet<E> s);
-
-    /**
-     * Returns a set consisting of the results of applying the given function
-     * to the elements of this set.
-     *
-     * @param mapper a function to apply to each element
-     * @return the mapped set
-     */
-    <R> TreeSet<R> map(Function<? super E, ? extends R> mapper);
-
-    /**
-     * Returns a set consisting of the elements of this set that match the given
-     * predicate.
-     *
-     * @param predicate a predicate to apply to each element to determine if it
-     * should be included
-     * @return the filtered set
-     */
-    TreeSet<E> filter(Predicate<? super E> predicate);
-
-    /**
-     * Removes all of the elements of this set that satisfy the given predicate.
-     *
-     * @param filter a predicate which returns {@code true} for elements to be
-     *        removed
-     */
-    default TreeSet<E> removeIf(Predicate<? super E> filter) {
-        return filter(filter.negate());
-    }
-
-    /**
-     * Reduce the set elements using the accumulator function, from left to right.
-     */
-    @Override
-    <R> R foldLeft(R seed, BiFunction<R, ? super E, R> accumulator);
-
-    /**
-     * Reduce the map elements using the accumulator function, from right to left.
-     * This is a lazy operation so the accumulator accept a delay evaluation of
-     * reduced result instead of a strict value.
-     */
-    @Override
-    <R> R foldRight(R seed, BiFunction<? super E, Supplier<R>, R> accumulator);
-
-    /**
-     * The strict version of {@link #foldRight(Object,BiFunction) foldRight}.
-     */
-    @Override
-    <R> R foldRight_(R seed, BiFunction<? super E, R, R> accumulator);
-
-    /**
-     * Unions all of the elements from the specified set to this set.
-     *
-     * @param s set to be union in this set
-     * @return the union of two sets
-     */
-    TreeSet<E> union(TreeSet<E> s);
-
-    /**
-     * Difference of two sets. Return elements of the first set not existing
-     * in the second set.
-     *
-     * @param s set to be difference in this set
-     * @return the difference of two sets
-     */
-    TreeSet<E> difference(TreeSet<E> s);
-
-    /**
-     * Intersection of two sets. Return elements existing in both sets.
-     *
-     * @param s set to be intersect in this set
-     * @return the intersection of two sets
-     */
-    TreeSet<E> intersection(TreeSet<E> s);
+    // Navigation
 
     /**
      * Returns the greatest element in this set strictly less than the given

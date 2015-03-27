@@ -27,9 +27,10 @@ import com.cloudway.platform.common.fp.control.MonadState;
 import com.cloudway.platform.common.fp.control.StateCont;
 import com.cloudway.platform.common.fp.control.Trampoline;
 import com.cloudway.platform.common.fp.data.IntSeq;
+import com.cloudway.platform.common.fp.data.PMap;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Pair;
-import com.cloudway.platform.common.fp.data.TreeMap;
+import com.cloudway.platform.common.fp.data.TreePMap;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
 
@@ -497,12 +498,12 @@ public class FunctionalTest
         // This is not a trampoline test case, just demonstrate to use memoization
         // to improve performance
         static BigInteger fibmemo(int n) {
-            TreeMap<Integer, BigInteger> memo = TreeMap.empty();
+            PMap<Integer, BigInteger> memo = TreePMap.empty();
             memo = memo.put(1, BigInteger.ONE).put(2, BigInteger.ONE);
             return fibmemo_(n).eval(memo);
         }
 
-        private static MonadState<BigInteger, TreeMap<Integer, BigInteger>> fibmemo_(int n) {
+        private static MonadState<BigInteger, PMap<Integer, BigInteger>> fibmemo_(int n) {
             return do_(MonadState.get(), memo ->
                        memo.containsKey(n)
                        ? MonadState.pure(memo.get(n))

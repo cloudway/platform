@@ -6,7 +6,6 @@
 
 package com.cloudway.platform.common.fp.data;
 
-import java.util.Comparator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -21,63 +20,12 @@ import java.util.function.Supplier;
 import com.cloudway.platform.common.fp.function.TriFunction;
 
 /**
- * <p>An efficient implementation of maps from keys to values.</p>
- *
- * <p>The implementation of map is based on size balanced binary trees (or trees
- * of bounded balance) as described by:</p>
- *
- * <ul>
- * <li>Stephen Adams, <a href="http://www.swiss.ai.mit.edu/~adams/BB/">
- *     "Efficient sets: a balancing act"</a>, Journal of Functional Programming
- *     3(4):553-562, October 1993,</li>
- * <li>J. Nievergelt and E.M. Reingold, "Binary search trees of bounded balance",
- *     SIAM journal of computing 2(1), March 1973.</li>
- * </ul>
+ * The PMap (P stands for Pure or Persistent) is an analogy of java.util.Map.
  *
  * @param <K> the type of keys maintained by this map
  * @param <V> the type of mapped values
  */
-public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
-    // Construction
-
-    /**
-     * Construct an empty map, sorted according to the natural ordering
-     * of its elements.
-     */
-    @SuppressWarnings("unchecked")
-    static <K extends Comparable<K>, V> TreeMap<K, V> empty() {
-        return Tree.EMPTY_MAP;
-    }
-
-    /**
-     * Construct an empty map, sorted according to the specified comparator.
-     *
-     * @param c the comparator that will be used to order this map
-     * @throws NullPointerException if {@code c} is null
-     */
-    static <K, V> TreeMap<K, V> empty(Comparator<? super K> c) {
-        Objects.requireNonNull(c);
-        return new Tree.MapTip<>(c);
-    }
-
-    /**
-     * Construct a map with a single element, sorted according to the natural
-     * ordering of its elements.
-     */
-    static <K extends Comparable<K>, V> TreeMap<K, V> singleton(K key, V value) {
-        return TreeMap.<K,V>empty().put(key, value);
-    }
-
-    /**
-     * Construct a map with a single element, sorted according to the specified
-     * comparator.
-     *
-     * @param c the comparator that will be used to order this map
-     * @throws NullPointerException if {@code c} is null
-     */
-    static <K, V> TreeMap<K, V> singleton(Comparator<? super K> c, K key, V value) {
-        return TreeMap.<K,V>empty(c).put(key, value);
-    }
+public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
 
     // Query Operations
 
@@ -102,7 +50,9 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param key key whose presence in this map is to be tested
      * @return {@code true} if this map contains a mapping for the specified key
      */
-    boolean containsKey(K key);
+    default boolean containsKey(Object key) {
+        return lookup(key).isPresent();
+    }
 
     /**
      * Lookup the value to which the specified key is mapped.  Returns
@@ -113,7 +63,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      *         {@code Optional.empty()} if this map contains no mapping
      *         for the key
      */
-    Optional<V> lookup(K key);
+    Optional<V> lookup(Object key);
 
     /**
      * Returns the value to which the specified key is mapped. If this map contains
@@ -123,7 +73,9 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @return the value to which specified key is mapped
      * @throws NoSuchElementException if this map contains no mapping for the key
      */
-    V get(K key);
+    default V get(Object key) {
+        return lookup(key).get();
+    }
 
     /**
      * Returns the value to which the specified key is mapped, or default value
@@ -133,7 +85,60 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param def the default mapping of the key
      * @return the map that contains new mappings, the original map is unchanged
      */
-    V getOrDefault(K key, V def);
+    default V getOrDefault(Object key, V def) {
+        return lookup(key).orElse(def);
+    }
+
+    /**
+     * Search for an element that satisfy the given predicate.
+     *
+     * @param predicate the predicate to be tested on element
+     * @return {@code Optional.empty()} if element not found in the map, otherwise
+     * a {@code Optional} wrapping the found element
+     */
+    Optional<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> predicate);
+
+    /**
+     * Returns whether any elements of this map match the provided
+     * predicate. May not evaluate the predicate on all elements if not
+     * necessary for determining the result. If the map is empty then
+     * {@code false} is returned and the predicate is not evaluated.
+     *
+     * @param predicate a predicate to apply to elements of this map
+     * @return {@code true} if any elements of the map match the provided
+     * predicate, other {@code false}
+     */
+    default boolean anyMatch(BiPredicate<? super K, ? super V> predicate) {
+        return find(predicate).isPresent();
+    }
+
+    /**
+     * Returns whether all elements of this map match the provided predicate.
+     * May not evaluate the predicate on all elements if not necessary for
+     * determining the result. If the map is empty then {@code true} is returned
+     * and the predicate is not evaluated.
+     *
+     * @param predicate a predicate to apply to elements of this map
+     * @return {@code true} if either all elements of the map match the
+     * provided predicate or the set is empty, otherwise {@code false}
+     */
+    default boolean allMatch(BiPredicate<? super K, ? super V> predicate) {
+        return !anyMatch(predicate.negate());
+    }
+
+    /**
+     * Returns whether no elements of this map match the provided predicate.
+     * May not evaluate the predicate on all elements if not necessary for
+     * determining the result. If the map is empty then {@code true} is returned
+     * and the predicate is not evaluated.
+     *
+     * @param predicate a predicate to apply to elements of this map
+     * @return {@code true} if either no elements of the stream match the
+     * provided predicate or the map is empty, otherwise {@code false}
+     */
+    default boolean noneMatch(BiPredicate<? super K, ? super V> predicate) {
+        return !anyMatch(predicate);
+    }
 
     // Modification Operations
 
@@ -145,7 +150,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param value value to be associated with the specified key
      * @return the map that contains new mappings, the original map is unchanged
      */
-    TreeMap<K, V> put(K key, V value);
+    PMap<K, V> put(K key, V value);
 
     /**
      * Removes the mapping for a key from this map if it is present.
@@ -153,7 +158,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param key key with which the specified value is associated
      * @return the map that contains new mappings, the original map is unchanged
      */
-    TreeMap<K, V> remove(K key);
+    PMap<K, V> remove(Object key);
 
     /**
      * Replaces the entry for the specified key only if currently mapped to the
@@ -163,7 +168,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param oldValue value expected to be associated with the specified key
      * @param newValue value to be associated with the specified key
      */
-    default TreeMap<K, V> replace(K key, V oldValue, V newValue) {
+    default PMap<K, V> replace(K key, V oldValue, V newValue) {
         return computeIfPresent(key, (k, v) ->
             Optional.of(v.equals(oldValue) ? newValue : oldValue));
     }
@@ -175,7 +180,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param key key with which the specified value is associated
      * @param value value to be associated with the specified key
      */
-    default TreeMap<K, V> replace(K key, V value) {
+    default PMap<K, V> replace(K key, V value) {
         return computeIfPresent(key, (k, v) -> Optional.of(value));
     }
 
@@ -186,7 +191,9 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param value value to be associated with the specified key
      * @return the map that contains new mappings, the original map is unchanged
      */
-    TreeMap<K, V> putIfAbsent(K key, V value);
+    default PMap<K, V> putIfAbsent(K key, V value) {
+        return containsKey(key) ? this : put(key, value);
+    }
 
     /**
      * If the specified key is not already associated with a value, attempt to
@@ -197,7 +204,13 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param mappingFunction the function to compute a value
      * @return the map that contains new mappings, the original map is unchanged
      */
-    TreeMap<K, V> computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction);
+    default PMap<K, V> computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction) {
+        if (containsKey(key)) {
+            return this;
+        } else {
+            return put(key, mappingFunction.apply(key));
+        }
+    }
 
     /**
      * If the value for the specified key is present, attempt to compute a new
@@ -210,8 +223,20 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param key key with which the specified value is to be associated
      * @param remappingFunction the function to compute a value
      */
-    TreeMap<K, V> computeIfPresent(K key,
-            BiFunction<? super K, ? super V, Optional<? extends V>> remappingFunction);
+    default PMap<K, V> computeIfPresent(K key,
+            BiFunction<? super K, ? super V, Optional<? extends V>> remappingFunction) {
+        Optional<V> oldValue = lookup(key);
+        if (oldValue.isPresent()) {
+            Optional<? extends V> newValue = remappingFunction.apply(key, oldValue.get());
+            if (newValue.isPresent()) {
+                return put(key, newValue.get());
+            } else {
+                return remove(key);
+            }
+        } else {
+            return this;
+        }
+    }
 
     /**
      * Attempts to compute a mapping for the specified key and its current mapped
@@ -224,8 +249,18 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param key key with which the specified value is to be associated
      * @param remappingFunction the function to compute a value
      */
-    TreeMap<K, V> compute(K key,
-            BiFunction<? super K, Optional<V>, Optional<? extends V>> remappingFunction);
+    default PMap<K, V> compute(K key,
+            BiFunction<? super K, Optional<V>, Optional<? extends V>> remappingFunction) {
+        Optional<V> oldValue = lookup(key);
+        Optional<? extends V> newValue = remappingFunction.apply(key, oldValue);
+        if (newValue.isPresent()) {
+            return put(key, newValue.get());
+        } else if (oldValue.isPresent()) {
+            return remove(key);
+        } else {
+            return this;
+        }
+    }
 
     /**
      * If the specified key is not already associated with a value, associate
@@ -245,8 +280,14 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param remappingFunction the function to recompute a value if present
      * @return the map that contains new mappings, the original map is unchanged
      */
-    TreeMap<K, V> merge(K key, V value,
-            BiFunction<? super V, ? super V, ? extends V> remappingFunction);
+    default PMap<K, V> merge(K key, V value,
+            BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
+        Optional<V> oldValue = lookup(key);
+        V newValue = oldValue.isPresent()
+            ? remappingFunction.apply(oldValue.get(), value)
+            : value;
+        return put(key, newValue);
+    }
 
     // Bulk Operations
 
@@ -258,7 +299,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @return <tt>true</tt> if this map contains all of the elements of the
      *         specified map
      */
-    boolean containsAll(TreeMap<K,V> m);
+    boolean containsAll(PMap<? extends K, ? extends V> m);
 
     /**
      * Unions all of the mappings from the specified map to this map.
@@ -266,7 +307,14 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param m mappings to be union in this map
      * @return the union of two maps
      */
-    TreeMap<K, V> putAll(TreeMap<K, V> m);
+    PMap<K, V> putAll(PMap<? extends K, ? extends V> m);
+
+    /**
+     * Returns an empty map.
+     *
+     * @return an empty map
+     */
+    PMap<K, V> clear();
 
     /**
      * Replaces each entry's value with the result of invoking the given
@@ -274,7 +322,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      *
      * @param f the function to apply to each entry value
      */
-    default <R> TreeMap<K,R> map(Function<? super V, ? extends R> f) {
+    default <R> PMap<K,R> map(Function<? super V, ? extends R> f) {
         return mapKV((k, v) -> f.apply(v));
     }
 
@@ -285,7 +333,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      *
      * @param f the function to apply to each entry
      */
-    <R> TreeMap<K,R> mapKV(BiFunction<? super K, ? super V, ? extends R> f);
+    <R> PMap<K,R> mapKV(BiFunction<? super K, ? super V, ? extends R> f);
 
     /**
      * Returns a map consisting of the mappings of this map that matches
@@ -294,7 +342,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param predicate a predicate to apply to each map entry value to
      * determine if it should be included
      */
-    default TreeMap<K,V> filter(Predicate<? super V> predicate) {
+    default PMap<K,V> filter(Predicate<? super V> predicate) {
         return filterKV((k, v) -> predicate.test(v));
     }
 
@@ -305,7 +353,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param predicate a predicate to apply to each map entry key and value
      * to determine if it should be included
      */
-    TreeMap<K,V> filterKV(BiPredicate<? super K, ? super V> predicate);
+    PMap<K,V> filterKV(BiPredicate<? super K, ? super V> predicate);
 
     /**
      * Removes all of the mappings of this map that satisfy the given predicate.
@@ -313,7 +361,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param predicate a predicate which returns {@code true} for mappings to
      * be removed
      */
-    default TreeMap<K,V> removeIf(BiPredicate<? super K, ? super V> predicate) {
+    default PMap<K,V> removeIf(BiPredicate<? super K, ? super V> predicate) {
         return filterKV(predicate.negate());
     }
 
@@ -324,7 +372,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param predicate a predicate which returns {@code true} for keys to be
      * removed
      */
-    default TreeMap<K,V> removeKeys(Predicate<? super K> predicate) {
+    default PMap<K,V> removeKeys(Predicate<? super K> predicate) {
         return filterKV((k, v) -> !predicate.test(k));
     }
 
@@ -335,7 +383,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param predicate a predicate which returns {@code true} for values to be
      * removed
      */
-    default TreeMap<K,V> removeValues(Predicate<? super V> predicate) {
+    default PMap<K,V> removeValues(Predicate<? super V> predicate) {
         return filter(predicate.negate());
     }
 
@@ -345,7 +393,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      *
      * @param value a value for which to be removed
      */
-    default TreeMap<K,V> removeValues(V value) {
+    default PMap<K,V> removeValues(V value) {
         return filter(x -> !Objects.equals(x, value));
     }
 
@@ -366,7 +414,7 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
      *
      * @return a set of the keys contained in this map
      */
-    TreeSet<K> keySet();
+    PSet<K> keySet();
 
     /**
      * Returns a list of the keys contained in this map.
@@ -426,146 +474,16 @@ public interface TreeMap<K, V> extends Iterable<Map.Entry<K, V>> {
     /**
      * The strict version of {@link #foldRight(Object,BiFunction) foldRight}.
      */
-    <R> R foldRight_(R seed, BiFunction<? super V, R, R> accumulator);
+    default <R> R foldRight_(R seed, BiFunction<? super V, R, R> accumulator) {
+        Seq<V> rev = foldLeft(Seq.nil(), Fn.flip(Seq::cons));
+        return rev.foldLeft(seed, (r, x) -> accumulator.apply(x, r));
+    }
 
     /**
      * the strict version of {@link #foldRightKV(Object,TriFunction) foldRightKV}.
      */
-    <R> R foldRightKV_(R seed, TriFunction<? super K, ? super V, R, R> accumulator);
-
-    // Navigation
-
-    /**
-     * Returns a key-value mapping associated with the greatest key strictly
-     * less than the given key, or {@code Optional.empty()} if there is no
-     * such key.
-     *
-     * @param key the key
-     * @return an entry with the greatest key less than {@code key}, or
-     *         {@code Optional.empty()} if there is no such key
-     */
-    Optional<Map.Entry<K, V>> lowerEntry(K key);
-
-    /**
-     * Returns the greatest key strictly less than the given key, or
-     * {@code Optional.empty()} if there is no such key.
-     *
-     * @param key the key
-     * @return the greatest key less than {@code key}, or {@code Optional.empty}
-     *         if there is no such key
-     */
-    Optional<K> lowerKey(K key);
-
-    /**
-     * Returns a key-value mapping associated with the greatest key less than
-     * or equal to the given key, or {@code Optional.empty()} if there is no
-     * such key.
-     *
-     * @param key the key
-     * @return an entry with the greatest key less than or equal to {@code key},
-     *         or {@code Optional.empty()} if there is no such key
-     */
-    Optional<Map.Entry<K, V>> floorEntry(K key);
-
-    /**
-     * Returns the greatest key less than or equal to the given key, or
-     * {@code Optional.empty()} if there is no such key.
-     *
-     * @param key the key
-     * @return the greatest key less than or equal to {@code key}, or
-     *         {@code Optional.empty()} if there is no such key
-     */
-    Optional<K> floorKey(K key);
-
-    /**
-     * Returns a key-value mapping associated with the least key greater than
-     * or equal to the given key, or {@code Optional.empty()} if there is no
-     * such key.
-     *
-     * @param key the key
-     * @return an entry with the least key greater than or equal to {@code key},
-     *         or {@code Optional.empty()} if there is no such key
-     */
-    Optional<Map.Entry<K, V>> ceilingEntry(K key);
-
-    /**
-     * Returns the least key greater than or equal to the given key, or
-     * {@code Optional.empty()} if there is no such key.
-     *
-     * @param key the key
-     * @return the least key greater than or equal to {@code key}, or
-     *         {@code Optional.empty()} if there is no such key
-     */
-    Optional<K> ceilingKey(K key);
-
-    /**
-     * Returns a key-value mapping associated with the least key strictly greater
-     * than the given key, or {@code Optional.empty()} if there is no such key.
-     *
-     * @param key the key
-     * @return an entry with the least key greater than {@code key}, or
-     *         {@code Optional.empty()} if there is no such key
-     */
-    Optional<Map.Entry<K, V>> higherEntry(K key);
-
-    /**
-     * Returns the least key strictly greater than the given key, or
-     * {@code Optional.empty()} if there is no such key.
-     *
-     * @param key the key
-     * @return the least key greater than {@code key}, or {@code Optional.empty()}
-     *         if there is no such key
-     */
-    Optional<K> higherKey(K key);
-
-    /**
-     * Returns a key-value mapping associated with the least key in this map.
-     *
-     * @return an entry with the least key
-     * @throws NoSuchElementException if this map is empty
-     */
-    Map.Entry<K, V> firstEntry();
-
-    /**
-     * Returns the first (lowest) key currently in this map.
-     *
-     * @return the first (lowest) key currently in this map
-     * @throws NoSuchElementException if this map is empty
-     */
-    K firstKey();
-
-    /**
-     * Returns a key-value mapping associated with the greatest key in this map.
-     *
-     * @return an entry with the greatest key
-     * @throws NoSuchElementException if this map is empty
-     */
-    Map.Entry<K, V> lastEntry();
-
-    /**
-     * Returns the last (highest) key currently in this map.
-     *
-     * @return the last (highest) key currently in this map
-     * @throws NoSuchElementException if this map is empty
-     */
-    K lastKey();
-
-    // Debugging
-
-    /**
-     * Show the tree that implements the map. This method is used for debugging
-     * purposes only.
-     */
-    String showTree();
-
-    /**
-     * Shows the tree that implements the map. Elements are shown using the
-     * {@code showElem} function. This method is used for debugging purposes only.
-     */
-    String showTree(BiFunction<? super K, ? super V, String> showElem);
-
-    /**
-     * Test if the internal map structure is valid.
-     */
-    boolean valid();
+    default <R> R foldRightKV_(R seed, TriFunction<? super K, ? super V, R, R> accumulator) {
+        Seq<Tuple<K,V>> rev = foldLeftKV(Seq.nil(), (r, k, v) -> Seq.cons(Tuple.of(k, v), r));
+        return rev.foldLeft(seed, (r, t) -> accumulator.apply(t.first(), t.second(), r));
+    }
 }

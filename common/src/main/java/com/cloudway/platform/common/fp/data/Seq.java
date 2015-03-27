@@ -649,11 +649,7 @@ public interface Seq<T> extends Foldable<T>
      * provided predicate or the list is empty, otherwise {@code false}
      */
     default boolean allMatch(Predicate<? super T> predicate) {
-        for (Seq<T> xs = this; !xs.isEmpty(); xs = xs.tail()) {
-            if (!predicate.test(xs.head()))
-                return false;
-        }
-        return true;
+        return !anyMatch(predicate.negate());
     }
 
     /**
@@ -667,11 +663,7 @@ public interface Seq<T> extends Foldable<T>
      * provided predicate or the list is empty, otherwise {@code false}
      */
     default boolean noneMatch(Predicate<? super T> predicate) {
-        for (Seq<T> xs = this; !xs.isEmpty(); xs = xs.tail()) {
-            if (predicate.test(xs.head()))
-                return false;
-        }
-        return true;
+        return !anyMatch(predicate);
     }
 
     /**

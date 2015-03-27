@@ -15,8 +15,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import com.google.common.collect.ImmutableSet;
 
+import com.cloudway.platform.common.fp.data.PMap;
 import com.cloudway.platform.common.fp.data.Seq;
-import com.cloudway.platform.common.fp.data.TreeMap;
 import com.cloudway.platform.container.proxy.HttpProxyUpdater;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.proxy.ProxyMapping;
@@ -53,7 +53,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
         mappings.write(d -> Seq.wrap(map)
             .filter(having(ProxyMapping::getProtocol, is(oneOf(SUPPORTED_PROTOCOLS))))
             .map(pm -> ac.getId() + pm.getFrontend())
-            .foldLeft(d, TreeMap::remove));
+            .foldLeft(d, PMap::remove));
     }
 
     private void removeAllMappings(ApplicationContainer ac)

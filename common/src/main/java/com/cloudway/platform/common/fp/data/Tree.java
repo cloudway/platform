@@ -41,6 +41,7 @@ final class Tree {
         boolean isEmpty();
         int size();
         V __lookup(K k);
+        Optional<Map.Entry<K,V>> __find(BiPredicate<? super K, ? super V> p);
 
         Node<K,V> __put(K k, V v);
         Node<K,V> __remove(K k);
@@ -86,6 +87,11 @@ final class Tree {
         @Override
         public V __lookup(K k) {
             return null;
+        }
+
+        @Override
+        public Optional<Map.Entry<K,V>> __find(BiPredicate<? super K, ? super V> p) {
+            return Optional.empty();
         }
 
         @Override
@@ -202,6 +208,16 @@ final class Tree {
                 }
             }
             return null;
+        }
+
+        @Override
+        public Optional<Map.Entry<K,V>> __find(BiPredicate<? super K, ? super V> p) {
+            if (p.test(key, value)) {
+                return Optional.of(this);
+            } else {
+                Optional<Map.Entry<K,V>> e = left.__find(p);
+                return e.isPresent() ? e : right.__find(p);
+            }
         }
 
         @Override
@@ -1049,97 +1065,115 @@ final class Tree {
 
     // mixin interface to convert generic tree node to map node
     @SuppressWarnings("unchecked")
-    interface MapNode<K,V> extends Node<K,V>, TreeMap<K,V> {
+    interface MapNode<K,V> extends Node<K,V>, TreePMap<K,V> {
         @Override
-        default boolean containsKey(K k) {
-            return __lookup(k) != null;
+        default boolean containsKey(Object k) {
+            return __lookup((K)k) != null;
         }
 
         @Override
-        default Optional<V> lookup(K k) {
-            return Optional.ofNullable(__lookup(k));
+        default Optional<V> lookup(Object k) {
+            return Optional.ofNullable(__lookup((K)k));
         }
 
         @Override
-        default V get(K k) {
-            V v = __lookup(k);
+        default V get(Object k) {
+            V v = __lookup((K)k);
             if (v == null)
                 throw new NoSuchElementException();
             return v;
         }
 
         @Override
-        default V getOrDefault(K k, V d) {
-            V v = __lookup(k);
+        default V getOrDefault(Object k, V d) {
+            V v = __lookup((K)k);
             return v != null ? v : d;
         }
 
         @Override
-        default TreeMap<K,V> put(K k, V v) {
+        default Optional<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
+            return __find(p);
+        }
+
+        @Override
+        default PMap<K,V> put(K k, V v) {
             Objects.requireNonNull(v);
-            return (TreeMap<K,V>)__put(k, v);
+            return (PMap<K,V>)__put(k, v);
         }
 
         @Override
-        default TreeMap<K,V> remove(K k) {
-            return (TreeMap<K,V>)__remove(k);
+        default PMap<K,V> remove(Object k) {
+            return (PMap<K,V>)__remove((K)k);
         }
 
         @Override
-        default TreeMap<K,V> putIfAbsent(K k, V v) {
+        default PMap<K,V> putIfAbsent(K k, V v) {
             Objects.requireNonNull(v);
-            return (TreeMap<K,V>)__putIfAbsent(k, v);
+            return (PMap<K,V>)__putIfAbsent(k, v);
         }
 
         @Override
-        default TreeMap<K,V> computeIfAbsent(K k, Function<? super K, ? extends V> f) {
-            return (TreeMap<K,V>)__computeIfAbsent(k, f);
+        default PMap<K,V> computeIfAbsent(K k, Function<? super K, ? extends V> f) {
+            return (PMap<K,V>)__computeIfAbsent(k, f);
         }
 
         @Override
-        default TreeMap<K,V> computeIfPresent(K k, BiFunction<? super K, ? super V, Optional<? extends V>> f) {
-            return (TreeMap<K,V>)__computeIfPresent(k, f);
+        default PMap<K,V> computeIfPresent(K k, BiFunction<? super K, ? super V, Optional<? extends V>> f) {
+            return (PMap<K,V>)__computeIfPresent(k, f);
         }
 
         @Override
-        default TreeMap<K,V> compute(K k, BiFunction<? super K, Optional<V>, Optional<? extends V>> f) {
-            return (TreeMap<K,V>)__compute(k, f);
+        default PMap<K,V> compute(K k, BiFunction<? super K, Optional<V>, Optional<? extends V>> f) {
+            return (PMap<K,V>)__compute(k, f);
         }
 
         @Override
-        default TreeMap<K,V> merge(K k, V v, BiFunction<? super V, ? super V, ? extends V> f) {
+        default PMap<K,V> merge(K k, V v, BiFunction<? super V, ? super V, ? extends V> f) {
             Objects.requireNonNull(v);
-            return (TreeMap<K,V>)__merge(k, v, f);
+            return (PMap<K,V>)__merge(k, v, f);
         }
 
         @Override
-        default boolean containsAll(TreeMap<K,V> m) {
-            return this.size() >= m.size() && Bin.isSubsetOf((Node<K,V>)m, this, Objects::equals);
+        default boolean containsAll(PMap<? extends K, ? extends V> that) {
+            if (this.size() < that.size()) {
+                return false;
+            } else if (that instanceof Node) {
+                return Bin.isSubsetOf((Node<K,V>)that, this, Objects::equals);
+            } else {
+                return that.allMatch((k, v) -> {
+                    V v1;
+                    return (v1 = __lookup(k)) != null && v1.equals(v);
+                });
+            }
         }
 
         @Override
-        default TreeMap<K,V> putAll(TreeMap<K,V> m) {
-            return (TreeMap<K,V>)Bin.union((Node<K,V>)m, this);
+        default PMap<K,V> putAll(PMap<? extends K, ? extends V> that) {
+            if (that instanceof Node) {
+                return (PMap<K,V>)Bin.union((Node<K,V>)that, this);
+            } else {
+                return that.foldLeftKV((PMap<K,V>)this, PMap::put);
+            }
         }
 
         @Override
-        default <R> TreeMap<K,R> map(Function<? super V, ? extends R> f) {
-            return (TreeMap<K,R>)__map(b -> f.apply(b.getValue()));
+        default <R> PMap<K,R> map(Function<? super V, ? extends R> f) {
+            return (PMap<K,R>)__map(b -> f.apply(b.getValue()));
         }
 
         @Override
-        default <R> TreeMap<K,R> mapKV(BiFunction<? super K, ? super V, ? extends R> f) {
-            return (TreeMap<K,R>)__map(b -> f.apply(b.getKey(), b.getValue()));
+        default <R> PMap<K,R> mapKV(BiFunction<? super K, ? super V, ? extends R> f) {
+            return (PMap<K,R>)__map(b -> f.apply(b.getKey(), b.getValue()));
         }
 
         @Override
-        default TreeMap<K,V> filter(Predicate<? super V> p) {
-            return (TreeMap<K,V>)__filter(b -> p.test(b.getValue()));
+        default PMap<K,V> filter(Predicate<? super V> p) {
+            return (PMap<K,V>)__filter(b -> p.test(b.getValue()));
         }
 
         @Override
-        default TreeMap<K,V> filterKV(BiPredicate<? super K, ? super V> p) {
-            return (TreeMap<K,V>)__filter(b -> p.test(b.getKey(), b.getValue()));
+        default PMap<K,V> filterKV(BiPredicate<? super K, ? super V> p) {
+            return (PMap<K,V>)__filter(b -> p.test(b.getKey(), b.getValue()));
         }
 
         @Override
@@ -1270,7 +1304,12 @@ final class Tree {
         }
 
         @Override
-        public TreeSet<K> keySet() {
+        public PMap<K,V> clear() {
+            return this;
+        }
+
+        @Override
+        public PSet<K> keySet() {
             return toKeySet();
         }
 
@@ -1280,7 +1319,7 @@ final class Tree {
         }
 
         public boolean equals(Object obj) {
-            return (obj instanceof TreeMap) && ((TreeMap)obj).isEmpty();
+            return (obj instanceof PMap) && ((PMap)obj).isEmpty();
         }
 
         public int hashCode() {
@@ -1298,7 +1337,13 @@ final class Tree {
         }
 
         @Override
-        public TreeSet<K> keySet() {
+        @SuppressWarnings("unchecked")
+        public PMap<K,V> clear() {
+            return (PMap<K,V>)tip;
+        }
+
+        @Override
+        public PSet<K> keySet() {
             return toKeySet(this, ((MapTip<K,V>)tip).toKeySet());
         }
 
@@ -1311,13 +1356,13 @@ final class Tree {
             }
         }
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
         public boolean equals(Object obj) {
             if (this == obj)
                 return true;
-            if (!(obj instanceof TreeMap))
+            if (!(obj instanceof PMap))
                 return false;
-            TreeMap other = (TreeMap)obj;
+            @SuppressWarnings("unchecked")
+            PMap<K,V> other = (PMap<K,V>)obj;
             return this.size() == other.size() && containsAll(other);
         }
 
@@ -1338,35 +1383,41 @@ final class Tree {
 
     // mixin interface to convert generic tree node to set node
     @SuppressWarnings("unchecked")
-    interface SetNode<E> extends Node<E,Unit>, TreeSet<E> {
+    interface SetNode<E> extends Node<E,Unit>, TreePSet<E> {
         @Override
-        default boolean contains(E e) {
-            return __lookup(e) != null;
+        default boolean contains(Object e) {
+            return __lookup((E)e) != null;
         }
 
         @Override
-        default TreeSet<E> add(E e) {
-            return (TreeSet<E>)__put(e, Unit.U);
+        default Optional<E> find(Predicate<? super E> p) {
+            return __find((k, v) -> p.test(k)).map(Map.Entry::getKey);
         }
 
         @Override
-        default TreeSet<E> remove(E e) {
-            return (TreeSet<E>)__remove(e);
+        default PSet<E> add(E e) {
+            return (PSet<E>)__put(e, Unit.U);
         }
 
         @Override
-        default boolean containsAll(TreeSet<E> s) {
-            return this.size() >= s.size() && Bin.isSubsetOf((Node<E,Unit>)s, this, (x,y) -> true);
+        default PSet<E> remove(Object e) {
+            return (PSet<E>)__remove((E)e);
         }
 
         @Override
-        default <R> TreeSet<R> map(Function<? super E, ? extends R> f) {
-            return (TreeSet<R>)__map(b -> f.apply(b.getKey()));
+        default boolean containsAll(PSet<? extends E> that) {
+            if (size() < that.size()) {
+                return false;
+            } else if (that instanceof Node) {
+                return Bin.isSubsetOf((Node<E,Unit>)that, this, (x,y) -> true);
+            } else {
+                return that.allMatch(this::contains);
+            }
         }
 
         @Override
-        default TreeSet<E> filter(Predicate<? super E> p) {
-            return (TreeSet<E>)__filter(b -> p.test(b.getKey()));
+        default PSet<E> filter(Predicate<? super E> p) {
+            return (PSet<E>)__filter(b -> p.test(b.getKey()));
         }
 
         @Override
@@ -1385,18 +1436,18 @@ final class Tree {
         }
 
         @Override
-        default TreeSet<E> union(TreeSet<E> s) {
-            return (TreeSet<E>)Bin.union(this, (Node<E,Unit>)s);
+        default PSet<E> union(PSet<E> s) {
+            return (PSet<E>)Bin.union(this, (Node<E,Unit>)s);
         }
 
         @Override
-        default TreeSet<E> difference(TreeSet<E> s) {
-            return (TreeSet<E>)Bin.difference(this, (Node<E,Unit>)s);
+        default PSet<E> difference(PSet<E> s) {
+            return (PSet<E>)Bin.difference(this, (Node<E,Unit>)s);
         }
 
         @Override
-        default TreeSet<E> intersection(TreeSet<E> s) {
-            return (TreeSet<E>)Bin.intersection(this, (Node<E,Unit>)s);
+        default PSet<E> intersection(PSet<E> s) {
+            return (PSet<E>)Bin.intersection(this, (Node<E,Unit>)s);
         }
 
         @Override
@@ -1440,8 +1491,13 @@ final class Tree {
             return new SetBin<>(this, sz, k, v, l, r);
         }
 
+        @Override
+        public PSet<E> clear() {
+            return this;
+        }
+
         public boolean equals(Object obj) {
-            return (obj instanceof TreeSet) && ((TreeSet)obj).isEmpty();
+            return (obj instanceof PSet) && ((PSet)obj).isEmpty();
         }
 
         public int hashCode() {
@@ -1458,13 +1514,19 @@ final class Tree {
             super(tip, size, key, value, left, right);
         }
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
+        @Override
+        @SuppressWarnings("unchecked")
+        public PSet<E> clear() {
+            return (PSet<E>)tip;
+        }
+
         public boolean equals(Object obj) {
             if (this == obj)
                 return true;
-            if (!(obj instanceof TreeSet))
+            if (!(obj instanceof PSet))
                 return false;
-            TreeSet other = (TreeSet)obj;
+            @SuppressWarnings("unchecked")
+            PSet<E> other = (PSet<E>)obj;
             return this.size() == other.size() && containsAll(other);
         }
 

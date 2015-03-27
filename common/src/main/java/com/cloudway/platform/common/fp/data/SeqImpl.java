@@ -7,8 +7,6 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.StringJoiner;
 import java.util.function.BiFunction;
@@ -347,15 +345,15 @@ final class SeqImpl {
     }
 
     static <T> Seq<T> distinct(Seq<T> xs) {
-        return distinct(xs, new HashMap<>());
+        return distinct(xs, HashPSet.empty());
     }
 
-    private static <T> Seq<T> distinct(Seq<T> xs, Map<T, Unit> ls) {
+    private static <T> Seq<T> distinct(Seq<T> xs, PSet<T> ls) {
         while (!xs.isEmpty()) {
             T x = xs.head();
             Seq<T> t = xs;
-            if (ls.putIfAbsent(x, Unit.U) == null) {
-                return cons(x, () -> distinct(t.tail(), ls));
+            if (!ls.contains(x)) {
+                return cons(x, () -> distinct(t.tail(), ls.add(x)));
             } else {
                 xs = xs.tail();
             }

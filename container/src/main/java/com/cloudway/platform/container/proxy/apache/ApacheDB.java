@@ -17,7 +17,8 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.fp.control.StateIO;
-import com.cloudway.platform.common.fp.data.TreeMap;
+import com.cloudway.platform.common.fp.data.HashPMap;
+import com.cloudway.platform.common.fp.data.PMap;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.os.Config;
@@ -68,14 +69,14 @@ final class ApacheDB {
         this(mapname, false);
     }
 
-    public <R> R read(Function<TreeMap<String, String>, R> action)
+    public <R> R read(Function<PMap<String, String>, R> action)
         throws IOException
     {
         MapFile file = atomically(load());
         return action.apply(file.map);
     }
 
-    public void write(Function<TreeMap<String, String>, TreeMap<String, String>> action)
+    public void write(Function<PMap<String, String>, PMap<String, String>> action)
         throws IOException
     {
         atomically(
@@ -96,20 +97,20 @@ final class ApacheDB {
     }
 
     static class MapFile {
-        final TreeMap<String,String> map;
+        final PMap<String,String> map;
         final long mtime;
 
         public MapFile() {
-            this(TreeMap.empty(), 0);
+            this(HashPMap.empty(), 0);
         }
 
-        MapFile(TreeMap<String,String> map, long mtime) {
+        MapFile(PMap<String,String> map, long mtime) {
             this.map = map;
             this.mtime = mtime;
         }
     }
 
-    private StateIO<TreeMap<String,String>, MapFile> load() {
+    private StateIO<PMap<String,String>, MapFile> load() {
         return do_(get(), oldfile ->
                do_(readMap(oldfile), newfile ->
                do_(put(newfile),
@@ -134,11 +135,11 @@ final class ApacheDB {
         });
     }
 
-    private static TreeMap<String, String> parseLines(Stream<String> lines) {
-        return lines.reduce(TreeMap.<String,String>empty(), ApacheDB::parse, TreeMap::putAll);
+    private static PMap<String, String> parseLines(Stream<String> lines) {
+        return lines.reduce(HashPMap.<String,String>empty(), ApacheDB::parse, PMap::putAll);
     }
 
-    private static TreeMap<String, String> parse(TreeMap<String,String> map, String line) {
+    private static PMap<String, String> parse(PMap<String,String> map, String line) {
         int i = line.indexOf(' ');
         if (i != -1) {
             String key = line.substring(0, i).trim();
@@ -149,7 +150,7 @@ final class ApacheDB {
         }
     }
 
-    private StateIO<Unit, MapFile> store(TreeMap<String, String> map) {
+    private StateIO<Unit, MapFile> store(PMap<String, String> map) {
         return do_(lift(() -> mkdir(basedir())), base ->
                let(base.resolve(mapname + SUFFIX), txt ->
                let(base.resolve(mapname + ".db"), dbm ->
@@ -158,7 +159,7 @@ final class ApacheDB {
                do_(put(new MapFile(map, modtime))))))));
     }
 
-    private static StateIO<Long, MapFile> writeMap(Path file, TreeMap<String, String> map) {
+    private static StateIO<Long, MapFile> writeMap(Path file, PMap<String, String> map) {
         return lift(() -> {
             try (BufferedWriter f = newBufferedWriter(file)) {
                 IO.forEach(map, (k, v) -> f.write(k + " " + v + "\n"));

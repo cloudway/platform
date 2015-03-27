@@ -20,14 +20,16 @@ import org.junit.Test;
 import static java.util.Comparator.*;
 import static org.junit.Assert.*;
 
-import com.cloudway.platform.common.fp.data.CopyOnWriteTreeMap;
+import com.cloudway.platform.common.fp.data.MutablePMap;
 import com.cloudway.platform.common.fp.data.IntSeq;
+import com.cloudway.platform.common.fp.data.PMap;
+import com.cloudway.platform.common.fp.data.PSet;
 import com.cloudway.platform.common.fp.data.Seq;
-import com.cloudway.platform.common.fp.data.TreeMap;
-import com.cloudway.platform.common.fp.data.TreeSet;
+import com.cloudway.platform.common.fp.data.TreePMap;
+import com.cloudway.platform.common.fp.data.TreePSet;
 
 public class TreeTest {
-    private TreeMap<String, Integer> tm;
+    private PMap<String, Integer> tm;
     private Integer[] data;
 
     private static final String KEY = "42";
@@ -35,7 +37,7 @@ public class TreeTest {
     @Before
     public void initialize() {
         data = shuffle(200);
-        tm = TreeMap.empty();
+        tm = TreePMap.empty();
         for (Integer x : data) {
             put(x.toString(), x);
         }
@@ -49,7 +51,8 @@ public class TreeTest {
                         .boxed().toArray(Integer[]::new);
     }
 
-    private <K, V> TreeMap<K,V> validate(TreeMap<K,V> tm) {
+    private <K, V> PMap<K,V> validate(PMap<K,V> pm) {
+        TreePMap<K,V> tm = (TreePMap<K,V>)pm;
         if (!tm.valid()) {
             StringBuilder msg = new StringBuilder();
             msg.append("Internal tree structure corrupted\n\n");
@@ -81,11 +84,11 @@ public class TreeTest {
 
     @Test
     public void test_empty() {
-        testEmptyMap(TreeMap.<String, Integer>empty());
-        testEmptyMap(TreeMap.<String, Integer>empty(reverseOrder()));
+        testEmptyMap(TreePMap.<String, Integer>empty());
+        testEmptyMap(TreePMap.<String, Integer>empty(reverseOrder()));
     }
 
-    private static void testEmptyMap(TreeMap<String, Integer> m) {
+    private static void testEmptyMap(PMap<String, Integer> m) {
         assertTrue(m.isEmpty());
         assertEquals(0, m.size());
         assertFalse(m.containsKey(KEY));
@@ -105,7 +108,7 @@ public class TreeTest {
 
     @Test
     public void test_get_same_value() {
-        TreeMap<Integer, Object> tm = TreeMap.empty();
+        PMap<Integer, Object> tm = TreePMap.empty();
         Integer k1 = 1, k2 = 2;
         Object o = new Object();
         tm = tm.put(k1, o).put(k2, o);
@@ -146,7 +149,7 @@ public class TreeTest {
 
     @Test
     public void test_remove_not_exists() {
-        TreeMap<String, Integer> orig = tm;
+        PMap<String, Integer> orig = tm;
         remove("XXX");
         assertEquals(data.length, tm.size());
         assertEquals(orig, tm);
@@ -173,16 +176,16 @@ public class TreeTest {
 
     @Test
     public void test_containsAll_positive() {
-        assertTrue(tm.containsAll(TreeMap.empty()));
-        assertTrue(tm.containsAll(TreeMap.singleton("1", 1)));
+        assertTrue(tm.containsAll(TreePMap.empty()));
+        assertTrue(tm.containsAll(TreePMap.singleton("1", 1)));
 
-        TreeMap<String, Integer> m2 = TreeMap.empty();
+        PMap<String, Integer> m2 = TreePMap.empty();
         for (int i = 1; i <= 10; i++) {
             m2 = m2.put(String.valueOf(i), i);
         }
         assertTrue(tm.containsAll(m2));
 
-        m2 = TreeMap.empty();
+        m2 = TreePMap.empty();
         for (int i = 0; i < 10; i++) {
             int x = data.length - 1 - i;
             m2 = m2.put(String.valueOf(x), x);
@@ -192,10 +195,10 @@ public class TreeTest {
 
     @Test
     public void test_containsAll_negative() {
-        assertFalse(TreeMap.<String, Integer>empty().containsAll(tm));
-        assertFalse(tm.containsAll(TreeMap.singleton("-1", -1)));
+        assertFalse(TreePMap.<String, Integer>empty().containsAll(tm));
+        assertFalse(tm.containsAll(TreePMap.singleton("-1", -1)));
 
-        TreeMap<String, Integer> m2 = TreeMap.empty();
+        PMap<String, Integer> m2 = TreePMap.empty();
         for (int i = -1; i < 10; i++) {
             m2 = m2.put(String.valueOf(i), i);
         }
@@ -210,16 +213,16 @@ public class TreeTest {
 
     @Test
     public void test_putAll_same_value() {
-        assertSame(tm, tm.putAll(TreeMap.empty()));
-        assertSame(tm, TreeMap.<String, Integer>empty().putAll(tm));
+        assertSame(tm, tm.putAll(TreePMap.empty()));
+        assertSame(tm, TreePMap.<String, Integer>empty().putAll(tm));
 
-        TreeMap<String, Integer> m2 = TreeMap.empty();
+        PMap<String, Integer> m2 = TreePMap.empty();
         for (int i = 0; i < 10; i++) {
             m2 = m2.put(String.valueOf(i), i);
         }
 
-        TreeMap<String, Integer> m12 = validate(tm.putAll(m2));
-        TreeMap<String, Integer> m21 = validate(m2.putAll(tm));
+        PMap<String, Integer> m12 = validate(tm.putAll(m2));
+        PMap<String, Integer> m21 = validate(m2.putAll(tm));
 
         assertEquals(tm, m12);
         assertEquals(tm, m21);
@@ -233,13 +236,13 @@ public class TreeTest {
 
     @Test
     public void test_putAll_diff_value() {
-        TreeMap<String, Integer> m2 = TreeMap.empty();
+        PMap<String, Integer> m2 = TreePMap.empty();
         for (int i = 0; i < 10; i++) {
             m2 = m2.put(String.valueOf(i), i * 2);
         }
 
-        TreeMap<String, Integer> m12 = validate(tm.putAll(m2));
-        TreeMap<String, Integer> m21 = validate(m2.putAll(tm));
+        PMap<String, Integer> m12 = validate(tm.putAll(m2));
+        PMap<String, Integer> m21 = validate(m2.putAll(tm));
 
         assertNotEquals(tm, m12);
         assertEquals(tm, m21);
@@ -253,13 +256,13 @@ public class TreeTest {
 
     @Test
     public void test_putAll_diff_key() {
-        TreeMap<String, Integer> m2 = TreeMap.empty();
+        PMap<String, Integer> m2 = TreePMap.empty();
         for (int i = -5; i <= 5; i++) {
             m2 = m2.put(String.valueOf(i), i);
         }
 
-        TreeMap<String, Integer> m12 = validate(tm.putAll(m2));
-        TreeMap<String, Integer> m21 = validate(m2.putAll(tm));
+        PMap<String, Integer> m12 = validate(tm.putAll(m2));
+        PMap<String, Integer> m21 = validate(m2.putAll(tm));
 
         assertNotEquals(tm, m12);
         assertNotEquals(tm, m21);
@@ -273,7 +276,7 @@ public class TreeTest {
 
     @Test
     public void test_compute() {
-        TreeMap<String, Integer> actual = TreeMap.empty();
+        PMap<String, Integer> actual = TreePMap.empty();
         for (int i = -(data.length - 1); i < data.length; i++) {
             actual = validate(actual.compute(String.valueOf(i), (k, v) -> {
                 // remove odd and double even
@@ -286,7 +289,7 @@ public class TreeTest {
             }));
         }
 
-        TreeMap<String, Integer> expected = TreeMap.empty();
+        PMap<String, Integer> expected = TreePMap.empty();
         for (int i = 0; i < data.length; i += 2) {
             expected = expected.put(String.valueOf(i), i * 2)
                                .put(String.valueOf(-i), -i * 2);
@@ -298,8 +301,8 @@ public class TreeTest {
     @Test
     public void test_merge() {
         String message = "the quick brown fox jumps over the lazy dog";
-        TreeMap<Character, Integer> actual = Seq.wrap(message).filter(c -> c != ' ')
-            .foldLeft(TreeMap.empty(), (m, c) -> m.merge(c, 1, Integer::sum));
+        PMap<Character, Integer> actual = Seq.wrap(message).filter(c -> c != ' ')
+            .foldLeft(TreePMap.empty(), (m, c) -> m.merge(c, 1, Integer::sum));
         validate(actual);
 
         HashMap<Character, Integer> expected = Seq.wrap(message).filter(c -> c != ' ')
@@ -313,7 +316,7 @@ public class TreeTest {
 
     @Test
     public void test_map() {
-        TreeMap<String, Integer> expected = TreeMap.empty();
+        PMap<String, Integer> expected = TreePMap.empty();
         for (int i = 0; i < data.length; i++) {
             expected = expected.put(String.valueOf(i), i * 2);
         }
@@ -323,7 +326,7 @@ public class TreeTest {
 
     @Test
     public void test_filter() {
-        TreeMap<String, Integer> expected = TreeMap.empty();
+        PMap<String, Integer> expected = TreePMap.empty();
         for (int i = 0; i < data.length; i += 2) {
             expected = expected.put(String.valueOf(i), i);
         }
@@ -333,7 +336,7 @@ public class TreeTest {
 
     @Test
     public void test_keySet() {
-        TreeSet<String> ks = tm.keySet();
+        PSet<String> ks = tm.keySet();
         assertEquals(data.length, ks.size());
         for (Integer x : data) {
             assertTrue(ks.contains(x.toString()));
@@ -364,9 +367,9 @@ public class TreeTest {
 
     @Test
     public void test_navigation() {
-        TreeMap<Integer, Integer> tm =
+        TreePMap<Integer, Integer> tm = (TreePMap<Integer,Integer>)
             IntSeq.rangeClosed(0, 100, 2).boxed()
-                  .foldLeft(TreeMap.empty(), (m, x) -> m.put(x, x));
+                  .foldLeft(TreePMap.<Integer,Integer>empty(), (m, x) -> m.put(x, x));
 
         assertEntryEquals(0, 0, tm.firstEntry());
         assertEquals(Integer.valueOf(0), tm.firstKey());
@@ -408,10 +411,10 @@ public class TreeTest {
     }
 
     @Test
-    public void test_CopyOnWriteTreeMap() {
+    public void test_MultableTreeMap() {
         List<Character> vowels = Arrays.asList('a', 'e', 'i', 'o', 'u');
 
-        CopyOnWriteTreeMap<Character, Integer> actual = new CopyOnWriteTreeMap<>();
+        MutablePMap<Character, Integer> actual = new MutablePMap<Character, Integer>(TreePMap.empty());
         for (char c = 'a'; c <= 'z'; c++) {
             actual.put(c, (int)c);
         }
@@ -428,5 +431,36 @@ public class TreeTest {
             assertTrue(actual.containsKey(k));
             assertEquals(v, actual.get(k));
         });
+    }
+
+
+    @Test
+    public void test_set() {
+        Random rnd = new Random();
+        PSet<Integer> s1 = TreePSet.fromList(Seq.generate(() -> rnd.nextInt(200)).take(100));
+        PSet<Integer> s2 = TreePSet.fromList(Seq.generate(() -> rnd.nextInt(200)).take(100));
+
+        PSet<Integer> u12 = s1.union(s2);
+        PSet<Integer> u21 = s2.union(s1);
+        PSet<Integer> i12 = s1.intersection(s2);
+        PSet<Integer> i21 = s2.intersection(s1);
+        PSet<Integer> d12 = s1.difference(s2);
+        PSet<Integer> d21 = s2.difference(s1);
+
+        assertTrue(u12.containsAll(s1));
+        assertTrue(u12.containsAll(s2));
+        assertTrue(u21.containsAll(s1));
+        assertTrue(u21.containsAll(s2));
+        assertTrue(u12.equals(u21));
+
+        assertTrue(s1.containsAll(i12));
+        assertTrue(s2.containsAll(i12));
+        assertTrue(s1.containsAll(i21));
+        assertTrue(s2.containsAll(i21));
+        assertTrue(i12.equals(i21));
+
+        assertTrue(s1.containsAll(d12));
+        assertTrue(s2.containsAll(d21));
+        assertFalse(d12.equals(d21));
     }
 }
