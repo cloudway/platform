@@ -6,12 +6,15 @@
 
 package com.cloudway.platform.common.fp.data;
 
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.StringJoiner;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
@@ -62,14 +65,14 @@ final class Tree {
      * tree node.
      */
     static abstract class Tip<K,V> implements Node<K,V> {
-        final Comparator<? super K> cmp;
+        final Comparator<? super K> comparator;
 
-        protected Tip(Comparator<? super K> cmp) {
-            this.cmp = cmp;
+        protected Tip(Comparator<? super K> comparator) {
+            this.comparator = comparator;
         }
 
         int compare(K k1, K k2) {
-            return cmp.compare(k1, k2);
+            return comparator.compare(k1, k2);
         }
 
         abstract Node<K,V> cons(int sz, K k, V v, Node<K,V> l, Node<K,V> r);
@@ -168,6 +171,10 @@ final class Tree {
             this.right = right;
         }
 
+        int compare(K k1, K k2) {
+            return tip.compare(k1, k2);
+        }
+
         @Override
         public boolean isEmpty() {
             return false;
@@ -198,7 +205,7 @@ final class Tree {
             Node<K,V> t = this;
             while (!t.isEmpty()) {
                 Bin<K,V> tb = (Bin<K,V>)t;
-                int cmp = tip.compare(k, tb.key);
+                int cmp = compare(k, tb.key);
                 if (cmp < 0) {
                     t = tb.left;
                 } else if (cmp > 0) {
@@ -222,7 +229,7 @@ final class Tree {
 
         @Override
         public Node<K,V> __put(K k, V v) {
-            int cmp = tip.compare(k, key);
+            int cmp = compare(k, key);
             return cmp < 0 ? balanceL(left.__put(k, v), right) :
                    cmp > 0 ? balanceR(left, right.__put(k, v))
                            : modify(v);
@@ -230,7 +237,7 @@ final class Tree {
 
         @Override
         public Node<K,V> __remove(K k) {
-            int cmp = tip.compare(k, key);
+            int cmp = compare(k, key);
             return cmp < 0 ? balanceR(left.__remove(k), right) :
                    cmp > 0 ? balanceL(left, right.__remove(k))
                            : delete();
@@ -238,7 +245,7 @@ final class Tree {
 
         @Override
         public Node<K,V> __putIfAbsent(K k, V v) {
-            int cmp = tip.compare(k, key);
+            int cmp = compare(k, key);
             return cmp < 0 ? balanceL(left.__putIfAbsent(k, v), right) :
                    cmp > 0 ? balanceR(left, right.__putIfAbsent(k, v))
                            : this;
@@ -246,7 +253,7 @@ final class Tree {
 
         @Override
         public Node<K,V> __computeIfAbsent(K k, Function<? super K, ? extends V> f) {
-            int cmp = tip.compare(k, key);
+            int cmp = compare(k, key);
             return cmp < 0 ? balanceL(left.__computeIfAbsent(k, f), right) :
                    cmp > 0 ? balanceR(left, right.__computeIfAbsent(k, f))
                            : this;
@@ -254,7 +261,7 @@ final class Tree {
 
         @Override
         public Node<K,V> __computeIfPresent(K k, BiFunction<? super K, ? super V, Optional<? extends V>> f) {
-            int cmp = tip.compare(k, key);
+            int cmp = compare(k, key);
             return cmp < 0 ? balanceL(left.__computeIfPresent(k, f), right) :
                    cmp > 0 ? balanceR(left, right.__computeIfPresent(k, f))
                            : f.apply(key, value).map(this::modify).orElseGet(this::delete);
@@ -262,7 +269,7 @@ final class Tree {
 
         @Override
         public Node<K,V> __compute(K k, BiFunction<? super K, Optional<V>, Optional<? extends V>> f) {
-            int cmp = tip.compare(k, key);
+            int cmp = compare(k, key);
             return cmp < 0 ? balance(left.__compute(k, f), right) :
                    cmp > 0 ? balance(left, right.__compute(k, f))
                            : f.apply(key, Optional.of(value)).map(this::modify).orElseGet(this::delete);
@@ -270,7 +277,7 @@ final class Tree {
 
         @Override
         public Node<K,V> __merge(K k, V v, BiFunction<? super V, ? super V, ? extends V> f) {
-            int cmp = tip.compare(k, key);
+            int cmp = compare(k, key);
             return cmp < 0 ? balanceL(left.__merge(k, v, f), right) :
                    cmp > 0 ? balanceR(left, right.__merge(k, v, f))
                            : modify(f.apply(value, v));
@@ -295,7 +302,7 @@ final class Tree {
             Bin<K,V> lt = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
-                if (b.tip.compare(k, b.key) <= 0) {
+                if (b.compare(k, b.key) <= 0) {
                     t = b.left;
                 } else {
                     lt = b;
@@ -309,7 +316,7 @@ final class Tree {
             Bin<K,V> gt = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
-                if (b.tip.compare(k, b.key) >= 0) {
+                if (b.compare(k, b.key) >= 0) {
                     t = b.right;
                 } else {
                     gt = b;
@@ -323,7 +330,7 @@ final class Tree {
             Bin<K,V> le = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
-                int cmp = b.tip.compare(k, b.key);
+                int cmp = b.compare(k, b.key);
                 if (cmp < 0) {
                     t = b.left;
                 } else if (cmp > 0) {
@@ -341,7 +348,7 @@ final class Tree {
             Bin<K,V> ge = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
-                int cmp = b.tip.compare(k, b.key);
+                int cmp = b.compare(k, b.key);
                 if (cmp > 0) {
                     t = b.right;
                 } else if (cmp < 0) {
@@ -457,28 +464,39 @@ final class Tree {
         }
 
         static <K,V,R> R foldLeft(Node<K,V> t, R z, BiFunction<R, Map.Entry<K,V>, R> f) {
-            while (!t.isEmpty()) {
-                Bin<K,V> b = (Bin<K,V>)t;
-                z = f.apply(foldLeft(b.left, z, f), b);
-                t = b.right;
+            if (!t.isEmpty()) {
+                PreOrder<K,V> st = new PreOrder<>();
+                for (Bin<K,V> p = st.first((Bin<K,V>)t); p != null; p = st.succ(p)) {
+                    z = f.apply(z, p);
+                }
             }
             return z;
         }
 
         static <K,V,R> R foldRight(Node<K,V> t, R z, BiFunction<Map.Entry<K,V>, Supplier<R>, R> f) {
-            while (!t.isEmpty()) {
-                Bin<K,V> b = (Bin<K,V>)t; R r = z;
-                z = f.apply(b, () -> foldRight(b.right, r, f));
-                t = b.left;
+            if (t.isEmpty()) {
+                return z;
+            } else {
+                PreOrder<K,V> st = new PreOrder<>();
+                return _foldr(st.first((Bin<K,V>)t), z, st, f);
             }
-            return z;
+        }
+
+        private static <K,V,R> R _foldr(Bin<K,V> t, R z, PreOrder<K,V> st,
+                BiFunction<Map.Entry<K,V>, Supplier<R>, R> f) {
+            if (t == null) {
+                return z;
+            } else {
+                return f.apply(t, () -> _foldr(st.succ(t), z, st, f));
+            }
         }
 
         static <K,V,R> R foldRight_(Node<K,V> t, R z, BiFunction<Map.Entry<K,V>, R, R> f) {
-            while (!t.isEmpty()) {
-                Bin<K,V> b = (Bin<K,V>)t; R r = z;
-                z = f.apply(b, foldRight_(b.right, r, f));
-                t = b.left;
+            if (!t.isEmpty()) {
+                PostOrder<K,V> st = new PostOrder<>();
+                for (Bin<K,V> p = st.last((Bin<K,V>)t); p != null; p = st.pred(p)) {
+                    z = f.apply(p, z);
+                }
             }
             return z;
         }
@@ -521,23 +539,23 @@ final class Tree {
             if (hk == null) {
                 while (!t.isEmpty()) {
                     Bin<K,V> tb = (Bin<K,V>)t;
-                    if (tip.compare(tb.key, lk) > 0)
+                    if (compare(tb.key, lk) > 0)
                         break;
                     t = tb.right;
                 }
             } else if (lk == null) {
                 while (!t.isEmpty()) {
                     Bin<K,V> tb = (Bin<K,V>)t;
-                    if (tip.compare(tb.key, hk) < 0)
+                    if (compare(tb.key, hk) < 0)
                         break;
                     t = tb.left;
                 }
             } else {
                 while (!t.isEmpty()) {
                     Bin<K,V> tb = (Bin<K,V>)t;
-                    if (tip.compare(tb.key, lk) <= 0) {
+                    if (compare(tb.key, lk) <= 0) {
                         t = tb.right;
-                    } else if (tip.compare(tb.key, hk) >= 0) {
+                    } else if (compare(tb.key, hk) >= 0) {
                         t = tb.left;
                     } else {
                         break;
@@ -557,7 +575,7 @@ final class Tree {
 
             while (!t.isEmpty()) {
                 Bin<K,V> tb = (Bin<K,V>)t;
-                int cmp = tb.tip.compare(k, tb.key);
+                int cmp = tb.compare(k, tb.key);
                 if (cmp < 0) {
                     t = tb.link(filterGt(tb.left, k), tb.right);
                     break;
@@ -581,7 +599,7 @@ final class Tree {
 
             while (!t.isEmpty()) {
                 Bin<K,V> tb = (Bin<K,V>)t;
-                int cmp = tb.tip.compare(tb.key, k);
+                int cmp = tb.compare(tb.key, k);
                 if (cmp < 0) {
                     t = tb.link(tb.left, filterLt(tb.right, k));
                     break;
@@ -604,7 +622,7 @@ final class Tree {
                 return Tuple.of(null, t, t);
             } else {
                 Bin<K,V> b = (Bin<K,V>)t;
-                int cmp = b.tip.compare(k, b.key);
+                int cmp = b.compare(k, b.key);
                 return cmp < 0 ? inCaseOf(splitMember(b.left, k), Triple_((z, lt, gt) ->
                                     Tuple.of(z, lt, b.link(gt, b.right)))) :
                        cmp > 0 ? inCaseOf(splitMember(b.right, k), Triple_((z, lt, gt) ->
@@ -1036,8 +1054,8 @@ final class Tree {
             } else {
                 Bin<K,V> b = (Bin<K,V>)t;
                 return lo.apply(b.key) && hi.apply(b.key)
-                    && bounded(b.left, lo, k -> b.tip.compare(k, b.key) < 0)
-                    && bounded(b.right, k -> b.tip.compare(k, b.key) > 0, hi);
+                    && bounded(b.left, lo, k -> b.compare(k, b.key) < 0)
+                    && bounded(b.right, k -> b.compare(k, b.key) > 0, hi);
             }
         }
 
@@ -1055,6 +1073,178 @@ final class Tree {
                               where(n + m + 1 == b.size,
                               yield(b.size))));
             }
+        }
+    }
+
+    static class PreOrder<K,V> {
+        Seq<Bin<K,V>> stack = Seq.nil();
+
+        final Bin<K,V> first(Bin<K,V> t) {
+            while (!t.left.isEmpty()) {
+                stack = Seq.cons(t, stack);
+                t = (Bin<K,V>)t.left;
+            }
+            return t;
+        }
+
+        final Bin<K,V> succ(Bin<K,V> t) {
+            if (!t.right.isEmpty()) {
+                return first((Bin<K,V>)t.right);
+            } else if (!stack.isEmpty()) {
+                Bin<K,V> up = stack.head();
+                stack = stack.tail();
+                return up;
+            } else {
+                return null;
+            }
+        }
+    }
+
+    static class PostOrder<K,V> {
+        Seq<Bin<K,V>> stack = Seq.nil();
+
+        final Bin<K,V> last(Bin<K,V> t) {
+            while (!t.right.isEmpty()) {
+                stack = Seq.cons(t, stack);
+                t = (Bin<K,V>)t.right;
+            }
+            return t;
+        }
+
+        final Bin<K,V> pred(Bin<K,V> t) {
+            if (!t.left.isEmpty()) {
+                return last((Bin<K,V>)t.left);
+            } else if (!stack.isEmpty()) {
+                Bin<K,V> up = stack.head();
+                stack = stack.tail();
+                return up;
+            } else {
+                return null;
+            }
+        }
+    }
+
+    static class TreeIterator<K,V> extends PreOrder<K,V> implements Iterator<K> {
+        Bin<K,V> current;
+
+        public TreeIterator(Bin<K,V> tree) {
+            this.current = first(tree);
+        }
+
+        @Override
+        public boolean hasNext() {
+            return current != null;
+        }
+
+        @Override
+        public K next() {
+            if (current == null)
+                throw new NoSuchElementException();
+            K k = current.key;
+            current = succ(current);
+            return k;
+        }
+    }
+
+    /**
+     * Iteration starts at a given origin and continues up to but not
+     * including a given fence (or null for end).
+     */
+    static class TreeSpliterator<K,V> extends PreOrder<K,V> implements Spliterator<K> {
+        final Bin<K,V> tree;
+        Bin<K,V> current;      // traverser; initially first node in range
+        Bin<K,V> fence;        // one past last, or null
+        int side;              // 0: top, -1: is a left split, +1: right
+        int est;               // size estimate
+
+        public TreeSpliterator(Bin<K,V> tree) {
+            this(tree, null, null, Seq.nil(), 0, -1);
+        }
+
+        private TreeSpliterator(Bin<K,V> tree, Bin<K,V> origin, Bin<K,V> fence,
+                                Seq<Bin<K,V>> stack, int side, int est) {
+            this.tree = tree;
+            this.current = origin;
+            this.fence = fence;
+            this.stack = stack;
+            this.side = side;
+            this.est = est;
+        }
+
+        final int getEstimate() { // force initialization
+            if (est < 0) {
+                current = first(tree);
+                est = tree.size();
+            }
+            return est;
+        }
+
+        @Override
+        public final long estimateSize() {
+            return getEstimate();
+        }
+
+        @Override
+        public TreeSpliterator<K,V> trySplit() {
+            if (est < 0)
+                getEstimate(); // force initialization
+            int d = side;
+            Bin<K,V> e = current, f = fence;
+            Node<K,V>
+                s = ((e == null || e == f) ? null :     // empty
+                     (d == 0)              ? tree :     // was top
+                     (d >  0)              ? e.right :  // was right
+                     (d <  0 && f != null) ? f.left :   // was left
+                     null);
+            if (s != null && !s.isEmpty() && s != e && s != f) {
+                Bin<K,V> t = (Bin<K,V>)s;
+                if (tree.compare(e.key, t.key) < 0) { // e not already past s
+                    Seq<Bin<K,V>> st = stack;
+                    stack = Seq.nil();
+                    current = t;
+                    side = 1;
+                    return new TreeSpliterator<>(tree, e, t, st, -1, est >>>= 1);
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public void forEachRemaining(Consumer<? super K> action) {
+            if (est < 0)
+                getEstimate(); // force initialization
+            Bin<K,V> f = fence, e;
+            if ((e = current) != null && e != f) {
+                current = f; // exhaust
+                do {
+                    action.accept(e.key);
+                    e = succ(e);
+                } while (e != null && e != f);
+            }
+        }
+
+        @Override
+        public boolean tryAdvance(Consumer<? super K> action) {
+            Bin<K,V> e;
+            if (est < 0)
+                getEstimate(); // force initialization
+            if ((e = current) == null || e == fence)
+                return false;
+            current = succ(e);
+            action.accept(e.key);
+            return true;
+        }
+
+        @Override
+        public int characteristics() {
+            return (side == 0 ? Spliterator.SIZED : 0) |
+                Spliterator.DISTINCT | Spliterator.SORTED |
+                Spliterator.ORDERED | Spliterator.IMMUTABLE;
+        }
+
+        @Override
+        public final Comparator<? super K> getComparator() {
+            return tree.tip.comparator;
         }
     }
 
@@ -1315,7 +1505,7 @@ final class Tree {
 
         @SuppressWarnings("unchecked")
         final SetTip<K> toKeySet() {
-            return this == EMPTY_MAP ? EMPTY_SET : new SetTip<>(cmp);
+            return this == EMPTY_MAP ? EMPTY_SET : new SetTip<>(comparator);
         }
 
         public boolean equals(Object obj) {
@@ -1372,7 +1562,8 @@ final class Tree {
 
         public String toString() {
             return foldLeftKV(new StringJoiner(", ", "[", "]"),
-                        (sj, k, v) -> sj.add("(" + k + "," + v + ")")).toString();
+                              (sj, k, v) -> sj.add("(" + k + "," + v + ")"))
+                  .toString();
         }
     }
 
@@ -1432,7 +1623,7 @@ final class Tree {
 
         @Override
         default <R> R foldRight_(R z, BiFunction<? super E, R, R> f) {
-            return Bin.foldRight(this, z, (b, r) -> f.apply(b.getKey(), r.get()));
+            return Bin.foldRight_(this, z, (b, r) -> f.apply(b.getKey(), r));
         }
 
         @Override
@@ -1496,6 +1687,16 @@ final class Tree {
             return this;
         }
 
+        @Override
+        public Iterator<E> iterator() {
+            return Collections.emptyIterator();
+        }
+
+        @Override
+        public Spliterator<E> spliterator() {
+            return Spliterators.emptySpliterator();
+        }
+
         public boolean equals(Object obj) {
             return (obj instanceof PSet) && ((PSet)obj).isEmpty();
         }
@@ -1520,6 +1721,16 @@ final class Tree {
             return (PSet<E>)tip;
         }
 
+        @Override
+        public Iterator<E> iterator() {
+            return new TreeIterator<>(this);
+        }
+
+        @Override
+        public Spliterator<E> spliterator() {
+            return new TreeSpliterator<>(this);
+        }
+
         public boolean equals(Object obj) {
             if (this == obj)
                 return true;
@@ -1536,7 +1747,8 @@ final class Tree {
 
         public String toString() {
             return foldLeft(new StringJoiner(",", "{", "}"),
-                    (sj, e) -> sj.add(String.valueOf(e))).toString();
+                            (sj, e) -> sj.add(String.valueOf(e)))
+                  .toString();
         }
     }
 }

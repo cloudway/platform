@@ -8,6 +8,8 @@ package com.cloudway.platform.common.fp.data;
 
 import java.util.Optional;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
  * The PSet (P stands for Pure or Persistent) is an analogy of java.util.Set.
@@ -168,4 +170,13 @@ public interface PSet<E> extends Foldable<E> {
      * @return the intersection of two sets
      */
     PSet<E> intersection(PSet<E> s);
+
+    /**
+     * Returns a sequential {@code Stream} with this set as its source.
+     *
+     * @return a sequential {@code Stream} over the elements in this set
+     */
+    default Stream<E> stream() {
+        return StreamSupport.stream(spliterator(), false);
+    }
 }

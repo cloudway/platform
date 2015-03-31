@@ -10,6 +10,7 @@ import java.util.AbstractSet;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Objects;
+import java.util.Spliterator;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
@@ -83,6 +84,11 @@ public class MutablePSet<E> extends AbstractSet<E> implements java.io.Serializab
     @Override
     public Iterator<E> iterator() {
         return snapshot().iterator();
+    }
+
+    @Override
+    public Spliterator<E> spliterator() {
+        return snapshot().spliterator();
     }
 
     @Override
