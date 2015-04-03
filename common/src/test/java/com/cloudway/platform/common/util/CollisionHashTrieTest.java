@@ -28,6 +28,10 @@ public class CollisionHashTrieTest extends HashTrieTestBase {
             return (obj instanceof CollisionKey)
                 && value == ((CollisionKey)obj).value;
         }
+
+        public String toString() {
+            return String.valueOf(value);
+        }
     }
 
     @Override

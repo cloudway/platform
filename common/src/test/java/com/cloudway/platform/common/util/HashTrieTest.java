@@ -22,6 +22,10 @@ public class HashTrieTest extends HashTrieTestBase {
             return (obj instanceof NormalKey)
                 && value == ((NormalKey)obj).value;
         }
+
+        public String toString() {
+            return String.valueOf(value);
+        }
     }
 
     @Override

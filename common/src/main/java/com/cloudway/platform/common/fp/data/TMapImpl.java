@@ -20,6 +20,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.control.Cont;
+import com.cloudway.platform.common.fp.data.HashPMap.MergeFunction;
 import com.cloudway.platform.common.fp.function.TriFunction;
 
 @SuppressWarnings("EqualsAndHashcode")
@@ -34,7 +35,7 @@ final class TMapImpl {
     }
 
     static <K,V> TMap<K,V> singleton(K k, V v) {
-        return new Singleton<>(node(k, v), hashing(k));
+        return new Singleton<>(k, v, hashing(k));
     }
 
     static int hashing(Object key) {
@@ -42,83 +43,84 @@ final class TMapImpl {
         return h ^ (h >>> 16);
     }
 
-    static <K,V> Node<K,V> node(K k, V v) {
-        return new Node<>(k, v);
+    static <K,V> NodeList<K,V> cons(K k, V v, NodeList<K,V> t) {
+        return new NodeList<>(k, v, t);
     }
 
-    static <K,V> NodeList<K,V> pair(Node<K,V> a, Node<K,V> b) {
-        return new NodeList<>(a, new NodeList<>(b, null));
+    @SuppressWarnings("unchecked")
+    static <K,V> TMap<K,V>[] newBuffer(int minSize) {
+        int bufferSize = Math.min(minSize + 6, 32 * 7);
+        return new TMap[bufferSize];
     }
 
-    static <K,V> NodeList<K,V> cons(Node<K,V> h, NodeList<K,V> t) {
-        return new NodeList<>(h, t);
-    }
+    static class Merger<K,V> implements MergeFunction<K,V> {
+        final MergeFunction<K,V> mergef;
+        final Merger<K,V> invert;
 
-    interface Merger<K,V> {
-        Node<K,V> apply(Node<K,V> kv1, Node<K,V> kv2);
-        Merger<K,V> invert();
-    }
-
-    static class LiftMerger<K,V> implements Merger<K,V> {
-        private final BiFunction<Node<K,V>, Node<K,V>, Node<K,V>> mergef;
-
-        LiftMerger(BiFunction<Node<K,V>, Node<K,V>, Node<K,V>> mergef) {
+        Merger(MergeFunction<K,V> mergef) {
             this.mergef = mergef;
+            this.invert = new InvertMerger<>(mergef, this);
+        }
+
+        Merger(MergeFunction<K,V> mergef, Merger<K,V> invert) {
+            this.mergef = mergef;
+            this.invert = invert;
         }
 
         @Override
-        public Node<K,V> apply(Node<K,V> kv1, Node<K,V> kv2) {
-            return mergef.apply(kv1, kv2);
+        public V apply(K k, V v1, V v2) {
+            return mergef.apply(k, v1, v2);
         }
 
-        @Override
         public Merger<K,V> invert() {
-            return new Merger<K,V>() {
-                @Override
-                public Node<K, V> apply(Node<K,V> kv1, Node<K,V> kv2) {
-                    return mergef.apply(kv2, kv1);
-                }
-                @Override
-                public Merger<K, V> invert() {
-                    return LiftMerger.this;
-                }
-            };
+            return invert;
         }
     }
 
-    static <K,V> Merger<K,V> liftMerger(BiFunction<Node<K,V>, Node<K,V>, Node<K,V>> mergef) {
-        return new LiftMerger<>(mergef);
+    static class InvertMerger<K,V> extends Merger<K,V> {
+        InvertMerger(MergeFunction<K,V> mergef, Merger<K,V> origin) {
+            super(mergef, origin);
+        }
+
+        @Override
+        public V apply(K k, V v1, V v2) {
+            return mergef.apply(k, v2, v1);
+        }
     }
 
-    static abstract class TMap<K,V> implements HashPMap<K,V> {
-        abstract Node<K,V> get0(Object key, int hash, int level);
-        abstract TMap<K,V> put0(Node<K,V> kv, int hash, int level, boolean onlyIfAbsent, Merger<K,V> merger);
-        abstract TMap<K,V> remove0(Object key, int hash, int level);
-        abstract TMap<K,V> replace0(K key, V oldValue, V newValue, int hash, int level, boolean anyValue);
-        abstract <U> TMap<K,U> map0(Function<Node<K,V>, ? extends U> f);
-        abstract TMap<K,V> filter0(BiPredicate<? super K, ? super V> p, int level, TMap<K,V>[] buffer, int offset0);
-        abstract TMap<K,V> merge0(TMap<K,V> that, int level, Merger<K,V> merger);
-        abstract boolean submapOf(TMap<K,V> that, int level);
-        abstract <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f);
-        abstract <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r);
+    static <K,V> Merger<K,V> liftMerger(MergeFunction<K,V> f) {
+        return new Merger<>(f);
+    }
 
-        Node<K,V> get0(Object key) {
+    interface TMap<K,V> extends HashPMap<K,V> {
+        Node<K,V> get0(Object key, int hash, int level);
+        TMap<K,V> put0(K key, V value, int hash, int level, boolean onlyIfAbsent, Merger<K,V> merger);
+        TMap<K,V> remove0(Object key, int hash, int level);
+        TMap<K,V> replace0(K key, V oldValue, V newValue, int hash, int level, boolean anyValue);
+        <U> TMap<K,U> map0(Function<Node<K,V>, ? extends U> f);
+        TMap<K,V> filter0(BiPredicate<? super K, ? super V> p, int level, TMap<K,V>[] buffer, int offset0);
+        TMap<K,V> merge0(TMap<K,V> that, int level, Merger<K,V> merger);
+        boolean submapOf(TMap<K,V> that, int level);
+        <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f);
+        <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r);
+
+        default Node<K,V> get0(Object key) {
             return get0(key, hashing(key), 0);
         }
 
         @Override
-        public boolean containsKey(Object key) {
+        default boolean containsKey(Object key) {
             return get0(key) != null;
         }
 
         @Override
-        public Optional<V> lookup(Object key) {
+        default Optional<V> lookup(Object key) {
             Node<K,V> kv = get0(key);
             return kv != null ? Optional.of(kv.value) : Optional.empty();
         }
 
         @Override
-        public V get(Object key) {
+        default V get(Object key) {
             Node<K,V> kv = get0(key);
             if (kv == null)
                 throw new NoSuchElementException();
@@ -126,56 +128,55 @@ final class TMapImpl {
         }
 
         @Override
-        public V getOrDefault(Object key, V def) {
+        default V getOrDefault(Object key, V def) {
             Node<K,V> kv = get0(key);
             return kv != null ? kv.value : def;
         }
 
         @Override
-        public PMap<K,V> put(K key, V value) {
-            return put0(node(key, value), hashing(key), 0, false, null);
+        default PMap<K,V> put(K key, V value) {
+            return put0(key, value, hashing(key), 0, false, null);
         }
 
         @Override
-        public PMap<K,V> putIfAbsent(K key, V value) {
-            return put0(node(key, value), hashing(key), 0, true, null);
+        default PMap<K,V> putIfAbsent(K key, V value) {
+            return put0(key, value, hashing(key), 0, true, null);
         }
 
         @Override
-        public PMap<K,V> remove(Object key) {
+        default PMap<K,V> remove(Object key) {
             return remove0(key, hashing(key), 0);
         }
 
         @Override
-        public PMap<K,V> replace(K key, V oldValue, V newValue) {
+        default PMap<K,V> replace(K key, V oldValue, V newValue) {
             return replace0(key, oldValue, newValue, hashing(key), 0, false);
         }
 
         @Override
-        public PMap<K,V> replace(K key, V value) {
+        default PMap<K,V> replace(K key, V value) {
             return replace0(key, null, value, hashing(key), 0, true);
         }
 
         @Override
-        public <U> PMap<K,U> mapKV(BiFunction<? super K, ? super V, ? extends U> f) {
-            return map0(kv -> f.apply(kv.key, kv.value));
-        }
-
-        @SuppressWarnings("unchecked")
-        private static <K,V> TMap<K,V>[] newBuffer(int minSize) {
-            int bufferSize = Math.min(minSize + 6, 32 * 7);
-            return new TMap[bufferSize];
+        default <U> PMap<K,U> map(Function<? super V, ? extends U> f) {
+            return map0(kv -> f.apply(kv.value));
         }
 
         @Override
-        public PMap<K,V> filterKV(BiPredicate<? super K, ? super V> p) {
+        default <U> PMap<K,U> mapKV(BiFunction<? super K, ? super V, ? extends U> f) {
+            return map0(kv -> f.apply(kv.key, kv.value));
+        }
+
+        @Override
+        default PMap<K,V> filterKV(BiPredicate<? super K, ? super V> p) {
             TMap<K,V> buffer[] = newBuffer(size());
             return filter0(p, 0, buffer, 0);
         }
 
         @Override
         @SuppressWarnings("unchecked")
-        public boolean containsAll(PMap<? extends K, ? extends V> that) {
+        default boolean containsAll(PMap<? extends K, ? extends V> that) {
             if (size() < that.size()) {
                 return false;
             } else if (that instanceof TMap) {
@@ -190,63 +191,62 @@ final class TMapImpl {
 
         @Override
         @SuppressWarnings("unchecked")
-        public PMap<K,V> putAll(PMap<? extends K, ? extends V> that) {
+        default PMap<K,V> putAll(PMap<? extends K, ? extends V> that) {
             if (that instanceof TMap) {
-                return merge0((TMap<K,V>)that, 0, liftMerger((a, b) -> b));
+                return merge0((TMap<K,V>)that, 0, liftMerger((k, a, b) -> b));
             } else {
                 return that.foldLeftKV((PMap<K,V>)this, PMap::put);
             }
         }
 
         @Override
-        public PMap<K,V> merge(PMap<K,V> that, TriFunction<? super K, ? super V, ? super V, ? extends V> f) {
-            Merger<K,V> merger = liftMerger((a, b) -> node(a.key, f.apply(a.key, a.value, b.value)));
-            return merge0((TMap<K,V>)that, 0, merger);
+        default PMap<K,V> merge(PMap<K,V> that, MergeFunction<K,V> f) {
+            return merge0((TMap<K,V>)that, 0, liftMerger(f));
         }
 
         @Override
-        public PMap<K,V> clear() {
+        default PMap<K,V> clear() {
             return TMapImpl.empty();
         }
 
         @Override
-        public <R> R foldLeft(R z, BiFunction<R, ? super V, R> f) {
-            return foldl(z, (r, e) -> f.apply(r, e.getValue()));
+        default  <R> R foldLeft(R z, BiFunction<R, ? super V, R> f) {
+            return foldl(z, (r, e) -> f.apply(r, e.value));
         }
 
         @Override
-        public <R> R foldLeftKV(R z, TriFunction<R, ? super K, ? super V, R> f) {
+        default  <R> R foldLeftKV(R z, TriFunction<R, ? super K, ? super V, R> f) {
             return foldl(z, (r, e) -> f.apply(r, e.key, e.value));
         }
 
         @Override
-        public <R> R foldRight(R z, BiFunction<? super V, Supplier<R>, R> f) {
+        default  <R> R foldRight(R z, BiFunction<? super V, Supplier<R>, R> f) {
             return foldr((e, r) -> f.apply(e.value, r), () -> z);
         }
 
         @Override
-        public <R> R foldRightKV(R z, TriFunction<? super K, ? super V, Supplier<R>, R> f) {
+        default  <R> R foldRightKV(R z, TriFunction<? super K, ? super V, Supplier<R>, R> f) {
             return foldr((e, r) -> f.apply(e.key, e.value, r), () -> z);
         }
 
         @Override
-        public Seq<Map.Entry<K,V>> entries() {
+        default Seq<Map.Entry<K,V>> entries() {
             return foldr(Seq::cons, Seq::nil);
         }
 
         @Override
-        public Iterator<Map.Entry<K,V>> iterator() {
+        default Iterator<Map.Entry<K,V>> iterator() {
             return Cont.generator(
                 foldr((e, r) -> Cont.yield(e).then(r), Cont::<Map.Entry<K,V>>finish))
                 .iterator();
         }
 
         @Override
-        public void forEach(Consumer<? super Map.Entry<K,V>> action) {
+        default void forEach(Consumer<? super Map.Entry<K,V>> action) {
             foldl(Unit.U, (u, e) -> { action.accept(e); return u; });
         }
 
-        public boolean equals(Object obj) {
+        default boolean equals0(Object obj) {
             if (this == obj)
                 return true;
             if (!(obj instanceof TMap))
@@ -256,16 +256,14 @@ final class TMapImpl {
             return size() == that.size() && submapOf(that, 0);
         }
 
-        public abstract int hashCode();
-
-        public String toString() {
+        default String show() {
             return foldl(new StringJoiner(",", "{", "}"),
-                         (sj, e) -> sj.add(e.toString()))
+                         (sj, e) -> sj.add(e.key + ":" + e.value))
                   .toString();
         }
     }
 
-    static final class Node<K,V> implements Map.Entry<K,V> {
+    static class Node<K,V> implements Map.Entry<K,V> {
         final K key;
         final V value;
 
@@ -308,13 +306,12 @@ final class TMapImpl {
         }
     }
 
-    static class NodeList<K,V> {
-        final Node<K,V> head;
-        final NodeList<K,V> tail;
+    static class NodeList<K,V> extends Node<K,V> {
+        final NodeList<K,V> next;
 
-        NodeList(Node<K,V> head, NodeList<K,V> tail) {
-            this.head = head;
-            this.tail = tail;
+        NodeList(K key, V value, NodeList<K,V> next) {
+            super(key, value);
+            this.next = next;
         }
 
         int size() {
@@ -322,7 +319,7 @@ final class TMapImpl {
             NodeList<K,V> p = this;
             while (p != null) {
                 sz++;
-                p = p.tail;
+                p = p.next;
             }
             return sz;
         }
@@ -330,9 +327,9 @@ final class TMapImpl {
         NodeList<K,V> find(BiPredicate<? super K, ? super V> pred) {
             NodeList<K,V> p = this;
             while (p != null) {
-                if (pred.test(p.head.key, p.head.value))
+                if (pred.test(p.key, p.value))
                     return p;
-                p = p.tail;
+                p = p.next;
             }
             return null;
         }
@@ -348,38 +345,37 @@ final class TMapImpl {
         private NodeList<K,V> consTo(NodeList<K,V> end, NodeList<K,V> res) {
             NodeList<K,V> p = this;
             while (p != end) {
-                res = cons(p.head, res);
-                p = p.tail;
+                res = cons(p.key, p.value, res);
+                p = p.next;
             }
             return res;
         }
 
         Node<K,V> lookup(Object key) {
-            NodeList<K,V> p = find((k,v) -> k.equals(key));
-            return p != null ? p.head : null;
+            return find((k,v) -> k.equals(key));
         }
 
-        NodeList<K,V> insert(Node<K,V> kv) {
-            return cons(kv, delete(kv.key));
+        NodeList<K,V> insert(K key, V value) {
+            return cons(key, value, delete(key));
         }
 
         NodeList<K,V> delete(Object key) {
             NodeList<K,V> t = find((k,v) -> k.equals(key));
-            return t == null ? this : consTo(t, t.tail);
+            return t == null ? this : consTo(t, t.next);
         }
 
         NodeList<K,V> replace(K key, V oldValue, V newValue, boolean anyValue) {
             NodeList<K,V> t = find((k,v) ->
                 k.equals(key) && (anyValue || Objects.equals(v, oldValue)));
-            return t == null ? this : consTo(t, cons(node(key, newValue), t.tail));
+            return t == null ? this : consTo(t, cons(key, newValue, t.next));
         }
 
         <U> NodeList<K,U> map(Function<Node<K,V>, ? extends U> f) {
             NodeList<K,V> p = this;
             NodeList<K,U> r = null;
             while (p != null) {
-                r = cons(node(p.head.key, f.apply(p.head)), r);
-                p = p.tail;
+                r = cons(p.key, f.apply(p), r);
+                p = p.next;
             }
             return r;
         }
@@ -390,9 +386,9 @@ final class TMapImpl {
                 return this;
             } else {
                 NodeList<K,V> r = consTo(t, null);
-                while ((t = t.tail) != null) {
-                    if (pred.test(t.head.key, t.head.value)) {
-                        r = cons(t.head, r);
+                while ((t = t.next) != null) {
+                    if (pred.test(t.key, t.value)) {
+                        r = cons(t.key, t.value, r);
                     }
                 }
                 return r;
@@ -402,22 +398,22 @@ final class TMapImpl {
         <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f) {
             NodeList<K,V> p = this;
             while (p != null) {
-                z = f.apply(z, p.head);
-                p = p.tail;
+                z = f.apply(z, p);
+                p = p.next;
             }
             return z;
         }
 
         <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r) {
-            if (tail == null) {
-                return f.apply(head, r);
+            if (next == null) {
+                return f.apply(this, r);
             } else {
-                return f.apply(head, () -> tail.foldr(f, r));
+                return f.apply(this, () -> next.foldr(f, r));
             }
         }
     }
 
-    static class Empty<K,V> extends TMap<K,V> {
+    static class Empty<K,V> implements TMap<K,V> {
         @Override
         public boolean isEmpty() {
             return true;
@@ -429,7 +425,7 @@ final class TMapImpl {
         }
 
         @Override
-        Node<K,V> get0(Object k, int hash, int level) {
+        public Node<K,V> get0(Object k, int hash, int level) {
             return null;
         }
 
@@ -439,47 +435,47 @@ final class TMapImpl {
         }
 
         @Override
-        boolean submapOf(TMap<K,V> that, int level) {
+        public boolean submapOf(TMap<K,V> that, int level) {
             return true;
         }
 
         @Override
-        TMap<K,V> put0(Node<K,V> kv, int hash, int level, boolean onlyIfAbsent, Merger<K,V> merger) {
-            return new Singleton<>(kv, hash);
+        public TMap<K,V> put0(K key, V value, int hash, int level, boolean onlyIfAbsent, Merger<K,V> merger) {
+            return new Singleton<>(key, value, hash);
         }
 
         @Override
-        TMap<K,V> remove0(Object key, int hash, int level) {
+        public TMap<K,V> remove0(Object key, int hash, int level) {
             return this;
         }
 
         @Override
-        TMap<K,V> replace0(K key, V oldValue, V newValue, int hash, int level, boolean anyValue) {
+        public TMap<K,V> replace0(K key, V oldValue, V newValue, int hash, int level, boolean anyValue) {
             return this;
         }
 
         @Override
-        <U> TMap<K,U> map0(Function<Node<K,V>, ? extends U> f) {
+        public <U> TMap<K,U> map0(Function<Node<K,V>, ? extends U> f) {
             return TMapImpl.empty();
         }
 
         @Override
-        TMap<K,V> filter0(BiPredicate<? super K, ? super V> p, int level, TMap<K,V>[] buffer, int offset0) {
+        public TMap<K,V> filter0(BiPredicate<? super K, ? super V> p, int level, TMap<K,V>[] buffer, int offset0) {
             return this;
         }
 
         @Override
-        TMap<K,V> merge0(TMap<K,V> that, int level, Merger<K,V> merger) {
+        public TMap<K,V> merge0(TMap<K,V> that, int level, Merger<K,V> merger) {
             return that;
         }
 
         @Override
-        <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f) {
+        public <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f) {
             return z;
         }
 
         @Override
-        <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r) {
+        public <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r) {
             return r.get();
         }
 
@@ -489,17 +485,26 @@ final class TMapImpl {
         }
 
         @Override
+        public boolean equals(Object obj) {
+            return equals0(obj);
+        }
+
+        @Override
         public int hashCode() {
             return 0;
         }
+
+        @Override
+        public String toString() {
+            return "{}";
+        }
     }
 
-    static class Singleton<K,V> extends TMap<K,V> {
-        private final Node<K,V> kv;
+    static class Singleton<K,V> extends Node<K,V> implements TMap<K,V> {
         private final int hash;
 
-        Singleton(Node<K,V> kv, int hash) {
-            this.kv = kv;
+        Singleton(K key, V value, int hash) {
+            super(key, value);
             this.hash = hash;
         }
 
@@ -514,96 +519,106 @@ final class TMapImpl {
         }
 
         private boolean equiv(Object key, int hash) {
-            return hash == this.hash && kv.key.equals(key);
+            return this.hash == hash && this.key.equals(key);
         }
 
         @Override
-        Node<K,V> get0(Object key, int hash, int level) {
-            return equiv(key, hash) ? kv : null;
+        public Node<K,V> get0(Object key, int hash, int level) {
+            return equiv(key, hash) ? this : null;
         }
 
         @Override
         public Optional<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
-            return p.test(kv.key, kv.value) ? Optional.of(kv) : Optional.empty();
+            return p.test(key, value) ? Optional.of(this) : Optional.empty();
         }
 
         @Override
-        boolean submapOf(TMap<K,V> that, int level) {
-            Node<K,V> node = that.get0(kv.key, hash, level);
-            return node != null && Objects.equals(kv.value, node.value);
+        public boolean submapOf(TMap<K,V> that, int level) {
+            Node<K,V> node = that.get0(key, hash, level);
+            return node != null && Objects.equals(value, node.value);
         }
 
         @Override
-        TMap<K,V> put0(Node<K,V> nkv, int hash, int level, boolean onlyIfAbsent, Merger<K,V> merger) {
-            if (equiv(nkv.key, hash)) {
+        public TMap<K,V> put0(K key, V value, int hash, int level, boolean onlyIfAbsent, Merger<K,V> merger) {
+            if (equiv(key, hash)) {
                 if (onlyIfAbsent) {
                     return this;
                 } else if (merger == null) {
-                    return new Singleton<>(nkv, hash);
+                    return new Singleton<>(key, value, hash);
                 } else {
-                    return new Singleton<>(merger.apply(kv, nkv), hash);
+                    return new Singleton<>(key, merger.apply(this.key, this.value, value), hash);
                 }
             } else {
                 if (this.hash != hash) {
-                    TMap<K,V> that = new Singleton<>(nkv, hash);
+                    TMap<K,V> that = new Singleton<>(key, value, hash);
                     return Trie.make(this.hash, this, hash, that, level, 2);
                 } else {
-                    return new Collision<>(hash, pair(kv, nkv));
+                    return new Collision<>(hash, cons(this.key, this.value, cons(key, value, null)));
                 }
             }
         }
 
         @Override
-        TMap<K,V> remove0(Object key, int hash, int level) {
+        public TMap<K,V> remove0(Object key, int hash, int level) {
             return equiv(key, hash) ? TMapImpl.empty() : this;
         }
 
         @Override
-        TMap<K,V> replace0(K key, V oldValue, V newValue, int hash, int level, boolean anyValue) {
-            if (equiv(key, hash) && (anyValue || Objects.equals(kv.value, oldValue))) {
-                return new Singleton<>(node(key, newValue), hash);
+        public TMap<K,V> replace0(K key, V oldValue, V newValue, int hash, int level, boolean anyValue) {
+            if (equiv(key, hash) && (anyValue || Objects.equals(this.value, oldValue))) {
+                return new Singleton<>(key, newValue, hash);
             } else {
                 return this;
             }
         }
 
         @Override
-        <U> TMap<K,U> map0(Function<Node<K,V>, ? extends U> f) {
-            return new Singleton<>(node(kv.key, f.apply(kv)), hash);
+        public <U> TMap<K,U> map0(Function<Node<K,V>, ? extends U> f) {
+            return new Singleton<>(key, f.apply(this), hash);
         }
 
         @Override
-        TMap<K,V> filter0(BiPredicate<? super K, ? super V> p, int level, TMap<K,V>[] buffer, int offset0) {
-            return p.test(kv.key, kv.value) ? this : TMapImpl.empty();
+        public TMap<K,V> filter0(BiPredicate<? super K, ? super V> p, int level, TMap<K,V>[] buffer, int offset0) {
+            return p.test(key, value) ? this : TMapImpl.empty();
         }
 
         @Override
-        TMap<K,V> merge0(TMap<K,V> that, int level, Merger<K,V> merger) {
-            return that.put0(kv, hash, level, false, merger.invert());
+        public TMap<K,V> merge0(TMap<K,V> that, int level, Merger<K,V> merger) {
+            return that.put0(key, value, hash, level, false, merger.invert());
         }
 
         @Override
-        <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f) {
-            return f.apply(z, kv);
+        public <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f) {
+            return f.apply(z, this);
         }
 
         @Override
-        <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r) {
-            return f.apply(kv, r);
+        public <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r) {
+            return f.apply(this, r);
         }
 
         @Override
         public PSet<K> keySet() {
-            return new TSetImpl.Singleton<>(kv.key, hash);
+            return new TSetImpl.Singleton<>(key, hash);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return equals0(obj);
         }
 
         @Override
         public int hashCode() {
-            return hash * 31 + Objects.hash(kv.value);
+            return hash * 31 + Objects.hash(value);
+        }
+
+        @Override
+        public String toString() {
+            return show();
         }
     }
 
-    static class Collision<K,V> extends TMap<K,V> {
+    static class Collision<K,V> implements TMap<K,V> {
         private final int hash;
         private final NodeList<K,V> kvs;
         private final int size;
@@ -625,18 +640,17 @@ final class TMapImpl {
         }
 
         @Override
-        Node<K,V> get0(Object key, int hash, int level) {
-            return hash == this.hash ? kvs.lookup(key) : null;
+        public Node<K,V> get0(Object key, int hash, int level) {
+            return this.hash == hash ? kvs.lookup(key) : null;
         }
 
         @Override
         public Optional<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
-            NodeList<K,V> kv = kvs.find(p);
-            return kv != null ? Optional.of(kv.head) : Optional.empty();
+            return Optional.ofNullable(kvs.find(p));
         }
 
         @Override
-        boolean submapOf(TMap<K,V> that, int level) {
+        public boolean submapOf(TMap<K,V> that, int level) {
             if (size() > that.size()) {
                 return false;
             } else {
@@ -648,24 +662,24 @@ final class TMapImpl {
         }
 
         @Override
-        TMap<K,V> put0(Node<K,V> nkv, int hash, int level, boolean onlyIfAbsent, Merger<K,V> merger) {
+        public TMap<K,V> put0(K key, V value, int hash, int level, boolean onlyIfAbsent, Merger<K,V> merger) {
             if (hash == this.hash) {
-                Node<K,V> kv = kvs.lookup(nkv.key);
+                Node<K,V> kv = kvs.lookup(key);
                 if (kv != null && onlyIfAbsent) {
                     return this;
                 } else if (merger == null || kv == null) {
-                    return new Collision<>(hash, kvs.insert(nkv));
+                    return new Collision<>(hash, kvs.insert(key, value));
                 } else {
-                    return new Collision<>(hash, kvs.insert(merger.apply(kv, nkv)));
+                    return new Collision<>(hash, kvs.insert(key, merger.apply(kv.key, kv.value, value)));
                 }
             } else {
-                TMap<K,V> that = new Singleton<>(nkv, hash);
+                TMap<K,V> that = new Singleton<>(key, value, hash);
                 return Trie.make(this.hash, this, hash, that, level, size + 1);
             }
         }
 
         @Override
-        TMap<K,V> remove0(Object key, int hash, int level) {
+        public TMap<K,V> remove0(Object key, int hash, int level) {
             if (hash == this.hash) {
                 return afterRemove(kvs.delete(key));
             } else {
@@ -678,15 +692,15 @@ final class TMapImpl {
                 return TMapImpl.empty();
             } else if (kvs1 == this.kvs) {
                 return this;
-            } else if (kvs1.tail == null) {
-                return new Singleton<>(kvs1.head, hash);
+            } else if (kvs1.next == null) {
+                return new Singleton<>(kvs1.key, kvs1.value, hash);
             } else {
                 return new Collision<>(hash, kvs1);
             }
         }
 
         @Override
-        TMap<K,V> replace0(K key, V oldValue, V newValue, int hash, int level, boolean anyValue) {
+        public TMap<K,V> replace0(K key, V oldValue, V newValue, int hash, int level, boolean anyValue) {
             if (hash == this.hash) {
                 NodeList<K,V> kvs1 = kvs.replace(key, oldValue, newValue, anyValue);
                 if (kvs1 == this.kvs) {
@@ -700,28 +714,28 @@ final class TMapImpl {
         }
 
         @Override
-        <U> TMap<K,U> map0(Function<Node<K,V>, ? extends U> f) {
+        public <U> TMap<K,U> map0(Function<Node<K,V>, ? extends U> f) {
             return new Collision<>(hash, kvs.map(f));
         }
 
         @Override
-        TMap<K,V> filter0(BiPredicate<? super K, ? super V> p, int level, TMap<K, V>[] buffer, int offset0) {
+        public TMap<K,V> filter0(BiPredicate<? super K, ? super V> p, int level, TMap<K, V>[] buffer, int offset0) {
             return afterRemove(kvs.filter(p));
         }
 
         @Override
-        TMap<K, V> merge0(TMap<K,V> that, int level, Merger<K,V> merger) {
+        public TMap<K, V> merge0(TMap<K,V> that, int level, Merger<K,V> merger) {
             Merger<K,V> invert = merger.invert();
-            return kvs.foldl(that, (m, kv) -> m.put0(kv, hash, level, false, invert));
+            return kvs.foldl(that, (m, kv) -> m.put0(kv.key, kv.value, hash, level, false, invert));
         }
 
         @Override
-        <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f) {
+        public <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f) {
             return kvs.foldl(z, f);
         }
 
         @Override
-        <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r) {
+        public <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r) {
             return kvs.foldr(f, r);
         }
 
@@ -732,12 +746,22 @@ final class TMapImpl {
         }
 
         @Override
+        public boolean equals(Object obj) {
+            return equals0(obj);
+        }
+
+        @Override
         public int hashCode() {
             return kvs.foldl(hash * 31, (Integer h, Node<K,V> kv) -> h * 31 + Objects.hashCode(kv.value));
         }
+
+        @Override
+        public String toString() {
+            return show();
+        }
     }
 
-    static class Trie<K,V> extends TMap<K,V> {
+    static class Trie<K,V> implements TMap<K,V> {
         static <K,V> Trie<K,V> make(int hash0, TMap<K,V> elem0, int hash1, TMap<K,V> elem1, int level, int size) {
             int index0 = (hash0 >>> level) & 0x1f;
             int index1 = (hash1 >>> level) & 0x1f;
@@ -783,7 +807,7 @@ final class TMapImpl {
         }
 
         @Override
-        Node<K,V> get0(Object key, int hash, int level) {
+        public Node<K,V> get0(Object key, int hash, int level) {
             int index = (hash >>> level) & 0x1f;
             int mask = (1 << index);
             if (bitmap == -1) {
@@ -807,7 +831,7 @@ final class TMapImpl {
         }
 
         @Override
-        boolean submapOf(TMap<K,V> that, int level) {
+        public boolean submapOf(TMap<K,V> that, int level) {
             if (that instanceof Trie) {
                 return submap2((Trie<K,V>)that, level);
             } else if (size() <= that.size()) {
@@ -852,13 +876,13 @@ final class TMapImpl {
         }
 
         @Override
-        TMap<K,V> put0(Node<K,V> nkv, int hash, int level, boolean onlyIfAbsent, Merger<K,V> merger) {
+        public TMap<K,V> put0(K key, V value, int hash, int level, boolean onlyIfAbsent, Merger<K,V> merger) {
             int index = (hash >>> level) & 0x1f;
             int mask = (1 << index);
             int offset = Integer.bitCount(bitmap & (mask-1));
             if ((bitmap & mask) != 0) {
                 TMap<K,V> sub = elems[offset];
-                TMap<K,V> subNew = sub.put0(nkv, hash, level + 5, onlyIfAbsent, merger);
+                TMap<K,V> subNew = sub.put0(key, value, hash, level + 5, onlyIfAbsent, merger);
                 if (subNew == sub) {
                     return this;
                 } else {
@@ -870,14 +894,14 @@ final class TMapImpl {
                 @SuppressWarnings("unchecked")
                 TMap<K,V> elemsNew[] = new TMap[elems.length + 1];
                 System.arraycopy(elems, 0, elemsNew, 0, offset);
-                elemsNew[offset] = new Singleton<>(nkv, hash);
+                elemsNew[offset] = new Singleton<>(key, value, hash);
                 System.arraycopy(elems, offset, elemsNew, offset + 1, elems.length - offset);
                 return new Trie<>(bitmap | mask, elemsNew, size + 1);
             }
         }
 
         @Override
-        TMap<K,V> remove0(Object key, int hash, int level) {
+        public TMap<K,V> remove0(Object key, int hash, int level) {
             int index = (hash >>> level) & 0x1f;
             int mask = (1 << index);
             int offset = Integer.bitCount(bitmap & (mask-1));
@@ -916,7 +940,7 @@ final class TMapImpl {
         }
 
         @Override
-        TMap<K,V> replace0(K key, V oldValue, V newValue, int hash, int level, boolean anyValue) {
+        public TMap<K,V> replace0(K key, V oldValue, V newValue, int hash, int level, boolean anyValue) {
             int index = (hash >>> level) & 0x1f;
             int mask = (1 << index);
             int offset = Integer.bitCount(bitmap & (mask-1));
@@ -936,7 +960,7 @@ final class TMapImpl {
         }
 
         @Override
-        <U> TMap<K,U> map0(Function<Node<K,V>, ? extends U> f) {
+        public <U> TMap<K,U> map0(Function<Node<K,V>, ? extends U> f) {
             @SuppressWarnings("unchecked")
             TMap<K,U> elemsNew[] = new TMap[elems.length];
             for (int i = 0; i < elemsNew.length; i++) {
@@ -946,7 +970,7 @@ final class TMapImpl {
         }
 
         @Override
-        TMap<K,V> filter0(BiPredicate<? super K, ? super V> p, int level, TMap<K,V>[] buffer, int offset0) {
+        public TMap<K,V> filter0(BiPredicate<? super K, ? super V> p, int level, TMap<K,V>[] buffer, int offset0) {
             int offset = offset0;
             int rs = 0;
             int bm = bitmap;
@@ -979,7 +1003,7 @@ final class TMapImpl {
         }
 
         @Override
-        TMap<K,V> merge0(TMap<K,V> that, int level, Merger<K,V> merger) {
+        public TMap<K,V> merge0(TMap<K,V> that, int level, Merger<K,V> merger) {
             if (that.isEmpty()) {
                 return this;
             } else if (that instanceof Trie) {
@@ -1030,7 +1054,7 @@ final class TMapImpl {
         }
 
         @Override
-        <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f) {
+        public <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f) {
             for (TMap<K,V> elem : elems) {
                 z = elem.foldl(z, f);
             }
@@ -1038,11 +1062,11 @@ final class TMapImpl {
         }
 
         @Override
-        <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r) {
+        public <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r) {
             return _foldr(0, f, r);
         }
 
-        <R> R _foldr(int i, BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r) {
+        private <R> R _foldr(int i, BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r) {
             if (i == elems.length - 1) {
                 return elems[i].foldr(f, r);
             } else {
@@ -1060,13 +1084,23 @@ final class TMapImpl {
             return new TSetImpl.Trie<>(bitmap, kels, size);
         }
 
+        private static boolean unsignedCompare(int i, int j) {
+            return (i < j) ^ (i < 0) ^ (j < 0);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return equals0(obj);
+        }
+
         @Override
         public int hashCode() {
             return Arrays.hashCode(elems);
         }
 
-        private static boolean unsignedCompare(int i, int j) {
-            return (i < j) ^ (i < 0) ^ (j < 0);
+        @Override
+        public String toString() {
+            return show();
         }
     }
 }

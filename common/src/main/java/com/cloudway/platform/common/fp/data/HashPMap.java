@@ -6,8 +6,6 @@
 
 package com.cloudway.platform.common.fp.data;
 
-import com.cloudway.platform.common.fp.function.TriFunction;
-
 /**
  * A map implementation based on hash trie.
  *
@@ -36,6 +34,13 @@ public interface HashPMap<K, V> extends PMap<K, V> {
     }
 
     /**
+     * A collision resolution function.
+     */
+    interface MergeFunction<K, V> {
+        V apply(K key, V oldValue, V newValue);
+    }
+
+    /**
      * Merges all of the mappings from the specified map to this map, using the
      * given remapping function.
      *
@@ -43,5 +48,5 @@ public interface HashPMap<K, V> extends PMap<K, V> {
      * @param mergeFunction the function to compute a value if key collision from maps
      * @return the merged map
      */
-    PMap<K,V> merge(PMap<K,V> that, TriFunction<? super K, ? super V, ? super V, ? extends V> mergeFunction);
+    PMap<K,V> merge(PMap<K,V> that, MergeFunction<K,V> mergeFunction);
 }
