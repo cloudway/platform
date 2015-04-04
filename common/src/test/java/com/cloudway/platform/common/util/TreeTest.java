@@ -13,7 +13,10 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -336,11 +339,14 @@ public class TreeTest {
 
     @Test
     public void test_keySet() {
-        PSet<String> ks = tm.keySet();
-        assertEquals(data.length, ks.size());
-        for (Integer x : data) {
-            assertTrue(ks.contains(x.toString()));
-        }
+        Set<String> expected = Stream.of(data).map(String::valueOf).collect(Collectors.toSet());
+        PSet<String> actual = tm.keySet();
+
+        assertEquals(expected.size(), actual.size());
+        for (String k : expected)
+            assertTrue(actual.contains(k));
+        for (String k : actual)
+            assertTrue(expected.contains(k));
     }
 
     @Test
@@ -363,6 +369,21 @@ public class TreeTest {
         tm.entries().forEach(t -> {
             assertSame(tm.get(t.getKey()), t.getValue());
         });
+    }
+
+    @Test
+    public void test_iterator() {
+        HashMap<String, Integer> expected = new HashMap<>();
+        for (int i : data) {
+            expected.put(String.valueOf(i), i);
+        }
+
+        HashMap<String, Integer> actual = new HashMap<>();
+        for (Map.Entry<String,Integer> e : tm) {
+            actual.put(e.getKey(), e.getValue());
+        }
+
+        assertEquals(expected, actual);
     }
 
     @Test
@@ -432,7 +453,6 @@ public class TreeTest {
             assertEquals(v, actual.get(k));
         });
     }
-
 
     @Test
     public void test_set() {

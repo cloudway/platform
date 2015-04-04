@@ -7,6 +7,8 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.function.BiFunction;
@@ -25,12 +27,39 @@ final class TSetImpl {
     }
 
     static <K> TSet<K> singleton(K k) {
-        return new Singleton<>(k, hashing(k));
+        return new Singleton<>(k, hash(k));
     }
 
-    static int hashing(Object key) {
+    static int hash(Object key) {
         int h = key.hashCode();
         return h ^ (h >>> 16);
+    }
+
+    interface Traverser<K> {
+        Traverser<K> succ();
+        K cursor();
+    }
+
+    static class SetIterator<K> implements Iterator<K> {
+        private Traverser<K> current;
+
+        SetIterator(TSet<K> t) {
+            this.current = t.traverser();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return current != null;
+        }
+
+        @Override
+        public K next() {
+            if (current == null)
+                throw new NoSuchElementException();
+            K result = current.cursor();
+            current = current.succ();
+            return result;
+        }
     }
 
     static abstract class TSet<K> implements HashPSet<K> {
@@ -44,10 +73,11 @@ final class TSetImpl {
         abstract TSet<K> diff0(TSet<K> that, int level, TSet<K>[] buffer, int offset0);
         abstract <R> R foldl(R z, BiFunction<R, ? super K, R> f);
         abstract <R> R foldr(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r);
+        abstract Traverser<K> traverser();
 
         @Override
         public boolean contains(Object key) {
-            return contains0(key, hashing(key), 0);
+            return contains0(key, hash(key), 0);
         }
 
         @Override
@@ -64,12 +94,12 @@ final class TSetImpl {
 
         @Override
         public PSet<K> add(K key) {
-            return add0(key, hashing(key), 0);
+            return add0(key, hash(key), 0);
         }
 
         @Override
         public PSet<K> remove(Object key) {
-            return remove0(key, hashing(key), 0);
+            return remove0(key, hash(key), 0);
         }
 
         @Override
@@ -116,6 +146,11 @@ final class TSetImpl {
             return foldr(f, () -> z);
         }
 
+        @Override
+        public Iterator<K> iterator() {
+            return new SetIterator<>(this);
+        }
+
         public boolean equals(Object obj) {
             if (this == obj)
                 return true;
@@ -139,11 +174,7 @@ final class TSetImpl {
         return new List<>(h, t);
     }
 
-    static <K> List<K> cons(K a, K b) {
-        return new List<>(a, new List<>(b, null));
-    }
-
-    static class List<K> {
+    static class List<K> implements Traverser<K> {
         final K key;
         final List<K> next;
 
@@ -229,6 +260,16 @@ final class TSetImpl {
                 return f.apply(key, () -> next.foldr(f, r));
             }
         }
+
+        @Override
+        public Traverser<K> succ() {
+            return next;
+        }
+
+        @Override
+        public K cursor() {
+            return key;
+        }
     }
 
     static class Empty<K> extends TSet<K> {
@@ -298,12 +339,17 @@ final class TSetImpl {
         }
 
         @Override
+        public Traverser<K> traverser() {
+            return null;
+        }
+
+        @Override
         public int hashCode() {
             return 0;
         }
     }
 
-    static class Singleton<K> extends TSet<K> {
+    static class Singleton<K> extends TSet<K> implements Traverser<K> {
         private final K key;
         private final int hash;
 
@@ -345,7 +391,7 @@ final class TSetImpl {
             } else if (this.key.equals(key)) {
                 return this;
             } else {
-                return new Collision<>(hash, cons(this.key, key));
+                return new Collision<>(hash, cons(this.key, cons(key, null)));
             }
         }
 
@@ -382,6 +428,21 @@ final class TSetImpl {
         @Override
         <R> R foldr(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r) {
             return f.apply(key, r);
+        }
+
+        @Override
+        public Traverser<K> traverser() {
+            return this;
+        }
+
+        @Override
+        public Traverser<K> succ() {
+            return null;
+        }
+
+        @Override
+        public K cursor() {
+            return key;
         }
 
         @Override
@@ -493,6 +554,11 @@ final class TSetImpl {
         }
 
         @Override
+        public Traverser<K> traverser() {
+            return keys;
+        }
+
+        @Override
         public int hashCode() {
             return hash * 31 + size;
         }
@@ -545,16 +611,22 @@ final class TSetImpl {
 
         @Override
         boolean contains0(Object key, int hash, int level) {
-            int index = (hash >>> level) & 0x1f;
-            int mask = (1 << index);
-            if (bitmap == -1) {
-                return elems[index].contains0(key, hash, level + 5);
-            } else if ((bitmap & mask) != 0) {
-                int offset = Integer.bitCount(bitmap & (mask-1));
-                return elems[offset].contains0(key, hash, level + 5);
-            } else {
-                return false;
-            }
+            TSet<K> sub = this;
+            do {
+                Trie<K> trie = (Trie<K>)sub;
+                int bits = trie.bitmap;
+                int index = (hash >>> level) & 0x1f;
+                int mask = (1 << index);
+                if (bits == -1) {
+                    sub = trie.elems[index];
+                } else if ((bits & mask) != 0) {
+                    sub = trie.elems[Integer.bitCount(bits & (mask-1))];
+                } else {
+                    return false;
+                }
+                level += 5;
+            } while (sub instanceof Trie);
+            return sub.contains0(key, hash, level);
         }
 
         @Override
@@ -666,18 +738,18 @@ final class TSetImpl {
 
         @Override
         boolean subsetOf(TSet<K> that, int level) {
-            if (that instanceof Trie) {
-                return subset2((Trie<K>)that, level);
-            } else if (this.size() <= that.size()) {
-                return allMatch(k -> that.contains0(k, hashing(k), level));
-            } else {
+            if (this.size() > that.size()) {
                 return false;
+            } else if (that instanceof Trie) {
+                return subset2((Trie<K>)that, level);
+            } else {
+                return allMatch(k -> that.contains0(k, hash(k), level));
             }
         }
 
         private boolean subset2(Trie<K> that, int level) {
-            TSet<K>[] xels = this.elems;
-            TSet<K>[] yels = that.elems;
+            TSet<K>[] xs = this.elems;
+            TSet<K>[] ys = that.elems;
             int xbm = this.bitmap;
             int ybm = that.bitmap;
 
@@ -686,11 +758,11 @@ final class TSetImpl {
             }
 
             int ix = 0, iy = 0;
-            while (ix < xels.length && iy < yels.length) {
+            while (ix < xs.length && iy < ys.length) {
                 int xlsb = xbm ^ (xbm & (xbm - 1));
                 int ylsb = ybm ^ (ybm & (ybm - 1));
                 if (xlsb == ylsb) {
-                    if (!xels[ix].subsetOf(yels[iy], level + 5))
+                    if (!xs[ix].subsetOf(ys[iy], level + 5))
                         return false;
                     xbm &= ~xlsb;
                     ybm &= ~ylsb;
@@ -720,8 +792,8 @@ final class TSetImpl {
         }
 
         private TSet<K> union2(Trie<K> that, int level) {
-            TSet<K>[] xels = this.elems;
-            TSet<K>[] yels = that.elems;
+            TSet<K>[] xs = this.elems;
+            TSet<K>[] ys = that.elems;
             int xbm = this.bitmap;
             int ybm = that.bitmap;
 
@@ -739,18 +811,18 @@ final class TSetImpl {
                 int xlsb = xbm ^ (xbm & (xbm - 1));
                 int ylsb = ybm ^ (ybm & (ybm - 1));
                 if (xlsb == ylsb) {
-                    TSet<K> sub = xels[ix++].union0(yels[iy++], level + 5);
+                    TSet<K> sub = xs[ix++].union0(ys[iy++], level + 5);
                     buffer[i] = sub;
                     totalsize += sub.size();
                     xbm &= ~xlsb;
                     ybm &= ~ylsb;
                 } else if (unsignedCompare(xlsb - 1, ylsb - 1)) {
-                    TSet<K> sub = xels[ix++];
+                    TSet<K> sub = xs[ix++];
                     buffer[i] = sub;
                     totalsize += sub.size();
                     xbm &= ~xlsb;
                 } else {
-                    TSet<K> sub = yels[iy++];
+                    TSet<K> sub = ys[iy++];
                     buffer[i] = sub;
                     totalsize += sub.size();
                     ybm &= ~ylsb;
@@ -773,8 +845,8 @@ final class TSetImpl {
         }
 
         private TSet<K> intersect2(Trie<K> that, int level, TSet<K>[] buffer, int offset0) {
-            TSet<K>[] xels = this.elems;
-            TSet<K>[] yels = that.elems;
+            TSet<K>[] xs = this.elems;
+            TSet<K>[] ys = that.elems;
             int xbm = this.bitmap;
             int ybm = that.bitmap;
 
@@ -790,7 +862,7 @@ final class TSetImpl {
                 int xlsb = xbm ^ (xbm & (xbm - 1));
                 int ylsb = ybm ^ (ybm & (ybm - 1));
                 if (xlsb == ylsb) {
-                    TSet<K> sub = xels[ix++].intersect0(yels[iy++], level + 5, buffer, offset);
+                    TSet<K> sub = xs[ix++].intersect0(ys[iy++], level + 5, buffer, offset);
                     if (!sub.isEmpty()) {
                         buffer[offset++] = sub;
                         rs += sub.size();
@@ -826,18 +898,20 @@ final class TSetImpl {
 
         @Override
         TSet<K> diff0(TSet<K> that, int level, TSet<K>[] buffer, int offset0) {
-            if (that.isEmpty()) {
+            if (that == this) {
+                return TSetImpl.empty();
+            } else if (that.isEmpty()) {
                 return this;
             } else if (that instanceof Trie) {
                 return diff2((Trie<K>)that, level, buffer, offset0);
             } else {
-                return that.foldl((TSet<K>)this, (s, k) -> s.remove0(k, hashing(k), level));
+                return that.foldl((TSet<K>)this, (s, k) -> s.remove0(k, hash(k), level));
             }
         }
 
         private TSet<K> diff2(Trie<K> that, int level, TSet<K>[] buffer, int offset0) {
-            TSet<K>[] xels = this.elems;
-            TSet<K>[] yels = that.elems;
+            TSet<K>[] xs = this.elems;
+            TSet<K>[] ys = that.elems;
             int xbm = this.bitmap;
             int ybm = that.bitmap;
 
@@ -848,7 +922,7 @@ final class TSetImpl {
                 int xlsb = xbm ^ (xbm & (xbm - 1));
                 int ylsb = ybm ^ (ybm & (ybm - 1));
                 if (xlsb == ylsb) {
-                    TSet<K> sub = xels[ix++].diff0(yels[iy++], level + 5, buffer, offset);
+                    TSet<K> sub = xs[ix++].diff0(ys[iy++], level + 5, buffer, offset);
                     if (!sub.isEmpty()) {
                         buffer[offset++] = sub;
                         rs += sub.size();
@@ -857,7 +931,7 @@ final class TSetImpl {
                     xbm &= ~xlsb;
                     ybm &= ~ylsb;
                 } else if (unsignedCompare(xlsb - 1, ylsb - 1)) {
-                    TSet<K> sub = xels[ix++];
+                    TSet<K> sub = xs[ix++];
                     buffer[offset++] = sub;
                     rs += sub.size();
                     rbm |= xlsb;
@@ -901,6 +975,54 @@ final class TSetImpl {
                 return elems[i].foldr(f, r);
             } else {
                 return elems[i].foldr(f, () -> _foldr(i+1, f, r));
+            }
+        }
+
+        @Override
+        public Traverser<K> traverser() {
+            return new TrieTraverser<>(this, null).first();
+        }
+
+        static class TrieTraverser<K> implements Traverser<K> {
+            private final Trie<K> trie;
+            private final TrieTraverser<K> parent;
+            private Traverser<K> current;
+            private int index;
+
+            TrieTraverser(Trie<K> trie, TrieTraverser<K> parent) {
+                this.trie = trie;
+                this.parent = parent;
+            }
+
+            private Traverser<K> first() {
+                return first(trie.elems[0]);
+            }
+
+            private Traverser<K> first(TSet<K> t) {
+                if (t instanceof Trie) {
+                    return new TrieTraverser<>((Trie<K>)t, this).first();
+                } else {
+                    current = t.traverser();
+                    return this;
+                }
+            }
+
+            @Override
+            public Traverser<K> succ() {
+                if (current != null && (current = current.succ()) != null) {
+                    return this;
+                } else if (++index < trie.elems.length) {
+                    return first(trie.elems[index]);
+                } else if (parent != null) {
+                    return parent.succ();
+                } else {
+                    return null;
+                }
+            }
+
+            @Override
+            public K cursor() {
+                return current.cursor();
             }
         }
 

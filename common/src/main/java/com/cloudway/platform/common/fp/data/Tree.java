@@ -23,7 +23,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import com.cloudway.platform.common.fp.control.Cont;
 import com.cloudway.platform.common.fp.function.TriFunction;
 import static com.cloudway.platform.common.fp.control.Syntax.*;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
@@ -1140,9 +1139,31 @@ final class Tree {
         public K next() {
             if (current == null)
                 throw new NoSuchElementException();
-            K k = current.key;
+            K result = current.key;
             current = succ(current);
-            return k;
+            return result;
+        }
+    }
+
+    static class MapIterator<K,V> extends PreOrder<K,V> implements Iterator<Map.Entry<K,V>> {
+        Bin<K,V> current;
+
+        public MapIterator(Bin<K,V> tree) {
+            this.current = first(tree);
+        }
+
+        @Override
+        public boolean hasNext() {
+            return current != null;
+        }
+
+        @Override
+        public Map.Entry<K,V> next() {
+            if (current == null)
+                throw new NoSuchElementException();
+            Map.Entry<K,V> result = current;
+            current = succ(current);
+            return result;
         }
     }
 
@@ -1397,12 +1418,6 @@ final class Tree {
         }
 
         @Override
-        default Iterator<Map.Entry<K,V>> iterator() {
-            return Cont.generator(Bin.foldRight(this, Cont.<Map.Entry<K,V>>finish(),
-                (e, r) -> Cont.yield(e).then(r))).iterator();
-        }
-
-        @Override
         default void forEach(Consumer<? super Map.Entry<K,V>> action) {
             Bin.foldLeft(this, Unit.U, (z, e) -> { action.accept(e); return z; });
         }
@@ -1508,6 +1523,11 @@ final class Tree {
             return this == EMPTY_MAP ? EMPTY_SET : new SetTip<>(comparator);
         }
 
+        @Override
+        public Iterator<Map.Entry<K,V>> iterator() {
+            return Collections.emptyIterator();
+        }
+
         public boolean equals(Object obj) {
             return (obj instanceof PMap) && ((PMap)obj).isEmpty();
         }
@@ -1534,7 +1554,15 @@ final class Tree {
 
         @Override
         public PSet<K> keySet() {
-            return toKeySet(this, ((MapTip<K,V>)tip).toKeySet());
+            return new KeySetView<>(this);
+        }
+
+        final SetTip<K> getSetTip() {
+            return ((MapTip<K,V>)tip).toKeySet();
+        }
+
+        final PSet<K> toKeySet() {
+            return toKeySet(this, getSetTip());
         }
 
         static <K,V> SetNode<K> toKeySet(Node<K,V> t, SetTip<K> st) {
@@ -1544,6 +1572,11 @@ final class Tree {
                 Bin<K,V> b = (Bin<K,V>)t;
                 return st.cons(b.size, b.key, Unit.U, toKeySet(b.left, st), toKeySet(b.right, st));
             }
+        }
+
+        @Override
+        public Iterator<Map.Entry<K,V>> iterator() {
+            return new MapIterator<>(this);
         }
 
         public boolean equals(Object obj) {
@@ -1564,6 +1597,64 @@ final class Tree {
             return foldLeftKV(new StringJoiner(", ", "[", "]"),
                               (sj, k, v) -> sj.add("(" + k + "," + v + ")"))
                   .toString();
+        }
+    }
+
+    @SuppressWarnings("override")
+    static class KeySetView<K,V> implements PSet<K> {
+        private final MapBin<K,V> m;
+        KeySetView(MapBin<K,V> m) {
+            this.m = m;
+        }
+
+        private PSet<K> copy() {
+            return m.toKeySet();
+        }
+
+        public int size()                   { return m.size(); }
+        public boolean isEmpty()            { return m.isEmpty(); }
+        public boolean contains(Object e)   { return m.containsKey(e); }
+        public PSet<K> add(K k)             { return copy().add(k); }
+        public PSet<K> remove(Object e)     { return copy().remove(e); }
+        public PSet<K> clear()              { return m.getSetTip(); }
+
+        public Optional<K> find(Predicate<? super K> p) {
+            return m.find((k, v) -> p.test(k)).map(Map.Entry::getKey);
+        }
+        public PSet<K> filter(Predicate<? super K> p) {
+            return copy().filter(p);
+        }
+        public boolean containsAll(PSet<? extends K> s) {
+            return copy().containsAll(s);
+        }
+        public PSet<K> union(PSet<K> s) {
+            return copy().union(s);
+        }
+        public PSet<K> difference(PSet<K> s) {
+            return copy().difference(s);
+        }
+        public PSet<K> intersection(PSet<K> s) {
+            return copy().intersection(s);
+        }
+
+        public <R> R foldRight(R z, BiFunction<? super K, Supplier<R>, R> f) {
+            return Bin.foldRight(m, z, (e, r) -> f.apply(e.getKey(), r));
+        }
+        public <R> R foldRight_(R z, BiFunction<? super K, R, R> f) {
+            return Bin.foldRight_(m, z, (e, r) -> f.apply(e.getKey(), r));
+        }
+        public <R> R foldLeft(R z, BiFunction<R, ? super K, R> f) {
+            return Bin.foldLeft(m, z, (r, e) -> f.apply(r, e.getKey()));
+        }
+
+        public Iterator<K> iterator() {
+            return new TreeIterator<>(m);
+        }
+        public Spliterator<K> spliterator() {
+            return new TreeSpliterator<>(m);
+        }
+        public void forEach(Consumer<? super K> action) {
+            Bin.foldLeft(m, Unit.U, (z, e) -> { action.accept(e.getKey()); return z; });
         }
     }
 

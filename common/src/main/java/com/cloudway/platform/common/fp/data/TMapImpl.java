@@ -17,9 +17,9 @@ import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import com.cloudway.platform.common.fp.control.Cont;
 import com.cloudway.platform.common.fp.data.HashPMap.MergeFunction;
 import com.cloudway.platform.common.fp.function.TriFunction;
 
@@ -35,10 +35,10 @@ final class TMapImpl {
     }
 
     static <K,V> TMap<K,V> singleton(K k, V v) {
-        return new Singleton<>(k, v, hashing(k));
+        return new Singleton<>(k, v, hash(k));
     }
 
-    static int hashing(Object key) {
+    static int hash(Object key) {
         int h = key.hashCode();
         return h ^ (h >>> 16);
     }
@@ -92,6 +92,11 @@ final class TMapImpl {
         return new Merger<>(f);
     }
 
+    interface Traverser<K,V> {
+        Traverser<K,V> succ();
+        Node<K,V> cursor();
+    }
+
     interface TMap<K,V> extends HashPMap<K,V> {
         Node<K,V> get0(Object key, int hash, int level);
         TMap<K,V> put0(K key, V value, int hash, int level, boolean onlyIfAbsent, Merger<K,V> merger);
@@ -103,25 +108,22 @@ final class TMapImpl {
         boolean submapOf(TMap<K,V> that, int level);
         <R> R foldl(R z, BiFunction<R, Node<K,V>, R> f);
         <R> R foldr(BiFunction<Node<K,V>, Supplier<R>, R> f, Supplier<R> r);
-
-        default Node<K,V> get0(Object key) {
-            return get0(key, hashing(key), 0);
-        }
+        Traverser<K,V> traverser();
 
         @Override
         default boolean containsKey(Object key) {
-            return get0(key) != null;
+            return get0(key, hash(key), 0) != null;
         }
 
         @Override
         default Optional<V> lookup(Object key) {
-            Node<K,V> kv = get0(key);
+            Node<K,V> kv = get0(key, hash(key), 0);
             return kv != null ? Optional.of(kv.value) : Optional.empty();
         }
 
         @Override
         default V get(Object key) {
-            Node<K,V> kv = get0(key);
+            Node<K,V> kv = get0(key, hash(key), 0);
             if (kv == null)
                 throw new NoSuchElementException();
             return kv.value;
@@ -129,33 +131,33 @@ final class TMapImpl {
 
         @Override
         default V getOrDefault(Object key, V def) {
-            Node<K,V> kv = get0(key);
+            Node<K,V> kv = get0(key, hash(key), 0);
             return kv != null ? kv.value : def;
         }
 
         @Override
         default PMap<K,V> put(K key, V value) {
-            return put0(key, value, hashing(key), 0, false, null);
+            return put0(key, value, hash(key), 0, false, null);
         }
 
         @Override
         default PMap<K,V> putIfAbsent(K key, V value) {
-            return put0(key, value, hashing(key), 0, true, null);
+            return put0(key, value, hash(key), 0, true, null);
         }
 
         @Override
         default PMap<K,V> remove(Object key) {
-            return remove0(key, hashing(key), 0);
+            return remove0(key, hash(key), 0);
         }
 
         @Override
         default PMap<K,V> replace(K key, V oldValue, V newValue) {
-            return replace0(key, oldValue, newValue, hashing(key), 0, false);
+            return replace0(key, oldValue, newValue, hash(key), 0, false);
         }
 
         @Override
         default PMap<K,V> replace(K key, V value) {
-            return replace0(key, null, value, hashing(key), 0, true);
+            return replace0(key, null, value, hash(key), 0, true);
         }
 
         @Override
@@ -183,8 +185,8 @@ final class TMapImpl {
                 return ((TMap<K,V>)that).submapOf(this, 0);
             } else {
                 return that.allMatch((k, v) -> {
-                    Node<K,V> kv;
-                    return (kv = get0(k)) != null && Objects.equals(kv.value, v);
+                    Node<K,V> kv = get0(k, hash(k), 0);
+                    return kv != null && Objects.equals(kv.value, v);
                 });
             }
         }
@@ -210,24 +212,31 @@ final class TMapImpl {
         }
 
         @Override
-        default  <R> R foldLeft(R z, BiFunction<R, ? super V, R> f) {
+        default <R> R foldLeft(R z, BiFunction<R, ? super V, R> f) {
             return foldl(z, (r, e) -> f.apply(r, e.value));
         }
 
         @Override
-        default  <R> R foldLeftKV(R z, TriFunction<R, ? super K, ? super V, R> f) {
+        default <R> R foldLeftKV(R z, TriFunction<R, ? super K, ? super V, R> f) {
             return foldl(z, (r, e) -> f.apply(r, e.key, e.value));
         }
 
         @Override
-        default  <R> R foldRight(R z, BiFunction<? super V, Supplier<R>, R> f) {
+        default <R> R foldRight(R z, BiFunction<? super V, Supplier<R>, R> f) {
             return foldr((e, r) -> f.apply(e.value, r), () -> z);
         }
 
         @Override
-        default  <R> R foldRightKV(R z, TriFunction<? super K, ? super V, Supplier<R>, R> f) {
+        default <R> R foldRightKV(R z, TriFunction<? super K, ? super V, Supplier<R>, R> f) {
             return foldr((e, r) -> f.apply(e.key, e.value, r), () -> z);
         }
+
+        @Override
+        default PSet<K> keySet() {
+            return new KeySetView<>(this);
+        }
+
+        PSet<K> toKeySet();
 
         @Override
         default Seq<Map.Entry<K,V>> entries() {
@@ -236,9 +245,7 @@ final class TMapImpl {
 
         @Override
         default Iterator<Map.Entry<K,V>> iterator() {
-            return Cont.generator(
-                foldr((e, r) -> Cont.yield(e).then(r), Cont::<Map.Entry<K,V>>finish))
-                .iterator();
+            return new MapIterator<>(this);
         }
 
         @Override
@@ -306,7 +313,7 @@ final class TMapImpl {
         }
     }
 
-    static class NodeList<K,V> extends Node<K,V> {
+    static class NodeList<K,V> extends Node<K,V> implements Traverser<K,V> {
         final NodeList<K,V> next;
 
         NodeList(K key, V value, NodeList<K,V> next) {
@@ -411,6 +418,16 @@ final class TMapImpl {
                 return f.apply(this, () -> next.foldr(f, r));
             }
         }
+
+        @Override
+        public Traverser<K,V> succ() {
+            return next;
+        }
+
+        @Override
+        public Node<K,V> cursor() {
+            return this;
+        }
     }
 
     static class Empty<K,V> implements TMap<K,V> {
@@ -480,7 +497,12 @@ final class TMapImpl {
         }
 
         @Override
-        public PSet<K> keySet() {
+        public Traverser<K,V> traverser() {
+            return null;
+        }
+
+        @Override
+        public PSet<K> toKeySet() {
             return TSetImpl.empty();
         }
 
@@ -500,7 +522,7 @@ final class TMapImpl {
         }
     }
 
-    static class Singleton<K,V> extends Node<K,V> implements TMap<K,V> {
+    static class Singleton<K,V> extends Node<K,V> implements TMap<K,V>, Traverser<K,V> {
         private final int hash;
 
         Singleton(K key, V value, int hash) {
@@ -598,7 +620,22 @@ final class TMapImpl {
         }
 
         @Override
-        public PSet<K> keySet() {
+        public Traverser<K,V> traverser() {
+            return this;
+        }
+
+        @Override
+        public Traverser<K,V> succ() {
+            return null;
+        }
+
+        @Override
+        public Node<K,V> cursor() {
+            return this;
+        }
+
+        @Override
+        public PSet<K> toKeySet() {
             return new TSetImpl.Singleton<>(key, hash);
         }
 
@@ -740,7 +777,12 @@ final class TMapImpl {
         }
 
         @Override
-        public PSet<K> keySet() {
+        public Traverser<K,V> traverser() {
+            return kvs;
+        }
+
+        @Override
+        public PSet<K> toKeySet() {
             TSetImpl.List<K> keys = kvs.foldl(null, (ks, kv) -> TSetImpl.cons(kv.key, ks));
             return new TSetImpl.Collision<>(hash, keys);
         }
@@ -808,16 +850,22 @@ final class TMapImpl {
 
         @Override
         public Node<K,V> get0(Object key, int hash, int level) {
-            int index = (hash >>> level) & 0x1f;
-            int mask = (1 << index);
-            if (bitmap == -1) {
-                return elems[index].get0(key, hash, level + 5);
-            } else if ((bitmap & mask) != 0) {
-                int offset = Integer.bitCount(bitmap & (mask-1));
-                return elems[offset].get0(key, hash, level + 5);
-            } else {
-                return null;
-            }
+            TMap<K,V> sub = this;
+            do {
+                Trie<K,V> trie = (Trie<K,V>)sub;
+                int bits = trie.bitmap;
+                int index = (hash >>> level) & 0x1f;
+                int mask = (1 << index);
+                if (bits == -1) {
+                    sub = trie.elems[index];
+                } else if ((bits & mask) != 0) {
+                    sub = trie.elems[Integer.bitCount(bits & (mask-1))];
+                } else {
+                    return null;
+                }
+                level += 5;
+            } while (sub instanceof Trie);
+            return sub.get0(key, hash, level);
         }
 
         @Override
@@ -832,21 +880,21 @@ final class TMapImpl {
 
         @Override
         public boolean submapOf(TMap<K,V> that, int level) {
-            if (that instanceof Trie) {
+            if (size() > that.size()) {
+                return false;
+            } else if (that instanceof Trie) {
                 return submap2((Trie<K,V>)that, level);
-            } else if (size() <= that.size()) {
+            } else {
                 return allMatch((k, v) -> {
-                    Node<K,V> kv = that.get0(k, hashing(k), level);
+                    Node<K,V> kv = that.get0(k, hash(k), level);
                     return kv != null && Objects.equals(v, kv.value);
                 });
-            } else {
-                return false;
             }
         }
 
         private boolean submap2(Trie<K,V> that, int level) {
-            TMap<K,V>[] xels = this.elems;
-            TMap<K,V>[] yels = that.elems;
+            TMap<K,V>[] xs = this.elems;
+            TMap<K,V>[] ys = that.elems;
             int xbm = this.bitmap;
             int ybm = that.bitmap;
 
@@ -855,11 +903,11 @@ final class TMapImpl {
             }
 
             int ix = 0, iy = 0;
-            while (ix < xels.length && iy < yels.length) {
+            while (ix < xs.length && iy < ys.length) {
                 int xlsb = xbm ^ (xbm & (xbm - 1));
                 int ylsb = ybm ^ (ybm & (ybm - 1));
                 if (xlsb == ylsb) {
-                    if (!xels[ix].submapOf(yels[iy], level + 5))
+                    if (!xs[ix].submapOf(ys[iy], level + 5))
                         return false;
                     xbm &= ~xlsb;
                     ybm &= ~ylsb;
@@ -1014,8 +1062,8 @@ final class TMapImpl {
         }
 
         private TMap<K,V> merge2(Trie<K,V> that, int level, Merger<K,V> merger) {
-            TMap<K,V>[] xels = this.elems;
-            TMap<K,V>[] yels = that.elems;
+            TMap<K,V>[] xs = this.elems;
+            TMap<K,V>[] ys = that.elems;
             int xbm = this.bitmap;
             int ybm = that.bitmap;
 
@@ -1033,18 +1081,18 @@ final class TMapImpl {
                 int xlsb = xbm ^ (xbm & (xbm - 1));
                 int ylsb = ybm ^ (ybm & (ybm - 1));
                 if (xlsb == ylsb) {
-                    TMap<K,V> sub = xels[ix++].merge0(yels[iy++], level + 5, merger);
+                    TMap<K,V> sub = xs[ix++].merge0(ys[iy++], level + 5, merger);
                     buffer[i] = sub;
                     totalsize += sub.size();
                     xbm &= ~xlsb;
                     ybm &= ~ylsb;
                 } else if (unsignedCompare(xlsb - 1, ylsb - 1)) {
-                    TMap<K,V> sub = xels[ix++];
+                    TMap<K,V> sub = xs[ix++];
                     buffer[i] = sub;
                     totalsize += sub.size();
                     xbm &= ~xlsb;
                 } else {
-                    TMap<K,V> sub = yels[iy++];
+                    TMap<K,V> sub = ys[iy++];
                     buffer[i] = sub;
                     totalsize += sub.size();
                     ybm &= ~ylsb;
@@ -1075,13 +1123,61 @@ final class TMapImpl {
         }
 
         @Override
-        public PSet<K> keySet() {
-            @SuppressWarnings("unchecked")
-            TSetImpl.TSet<K>[] kels = new TSetImpl.TSet[elems.length];
-            for (int i = 0; i < kels.length; i++) {
-                kels[i] = (TSetImpl.TSet<K>)elems[i].keySet();
+        public Traverser<K,V> traverser() {
+            return new TrieTraverser<>(this, null).first();
+        }
+
+        static class TrieTraverser<K,V> implements Traverser<K,V> {
+            private final Trie<K,V> trie;
+            private final TrieTraverser<K,V> parent;
+            private Traverser<K,V> current;
+            private int index;
+
+            TrieTraverser(Trie<K,V> trie, TrieTraverser<K,V> parent) {
+                this.trie = trie;
+                this.parent = parent;
             }
-            return new TSetImpl.Trie<>(bitmap, kels, size);
+
+            private Traverser<K,V> first() {
+                return first(trie.elems[0]);
+            }
+
+            private Traverser<K,V> first(TMap<K,V> t) {
+                if (t instanceof Trie) {
+                    return new TrieTraverser<>((Trie<K,V>)t, this).first();
+                } else {
+                    current = t.traverser();
+                    return this;
+                }
+            }
+
+            @Override
+            public Traverser<K,V> succ() {
+                if (current != null && (current = current.succ()) != null) {
+                    return this;
+                } else if (++index < trie.elems.length) {
+                    return first(trie.elems[index]);
+                } else if (parent != null) {
+                    return parent.succ();
+                } else {
+                    return null;
+                }
+            }
+
+            @Override
+            public Node<K,V> cursor() {
+                return current.cursor();
+            }
+        }
+
+        @Override
+        public PSet<K> toKeySet() {
+            @SuppressWarnings("unchecked")
+            TSetImpl.TSet<K>[] ks = new TSetImpl.TSet[elems.length];
+            for (int i = 0; i < ks.length; i++) {
+                ks[i] = (TSetImpl.TSet<K>)elems[i].keySet();
+            }
+            return new TSetImpl.Trie<>(bitmap, ks, size);
         }
 
         private static boolean unsignedCompare(int i, int j) {
@@ -1101,6 +1197,105 @@ final class TMapImpl {
         @Override
         public String toString() {
             return show();
+        }
+    }
+
+    static class MapIterator<K,V> implements Iterator<Map.Entry<K,V>> {
+        private Traverser<K,V> current;
+
+        MapIterator(TMap<K, V> t) {
+            this.current = t.traverser();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return current != null;
+        }
+
+        @Override
+        public Map.Entry<K,V> next() {
+            if (current == null)
+                throw new NoSuchElementException();
+            Map.Entry<K,V> result = current.cursor();
+            current = current.succ();
+            return result;
+        }
+    }
+
+    static class KeyIterator<K,V> implements Iterator<K> {
+        private Traverser<K,V> current;
+
+        KeyIterator(TMap<K,V> t) {
+            this.current = t.traverser();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return current != null;
+        }
+
+        @Override
+        public K next() {
+            if (current == null)
+                throw new NoSuchElementException();
+            Map.Entry<K,V> result = current.cursor();
+            current = current.succ();
+            return result.getKey();
+        }
+    }
+
+    @SuppressWarnings("override")
+    static class KeySetView<K,V> implements PSet<K> {
+        private final TMap<K,V> m;
+        KeySetView(TMap<K,V> m) {
+            this.m = m;
+        }
+
+        private PSet<K> copy() {
+            return m.toKeySet();
+        }
+
+        public int size()                   { return m.size(); }
+        public boolean isEmpty()            { return m.isEmpty(); }
+        public boolean contains(Object o)   { return m.containsKey(o); }
+        public PSet<K> add(K k)             { return copy().add(k); }
+        public PSet<K> remove(Object o)     { return copy().remove(o); }
+        public PSet<K> clear()              { return HashPSet.empty(); }
+
+        public Optional<K> find(Predicate<? super K> p) {
+            return m.find((k, v) -> p.test(k)).map(Map.Entry::getKey);
+        }
+        public PSet<K> filter(Predicate<? super K> p) {
+            return copy().filter(p);
+        }
+        public boolean containsAll(PSet<? extends K> s) {
+            return copy().containsAll(s);
+        }
+        public PSet<K> union(PSet<K> s) {
+            return copy().union(s);
+        }
+        public PSet<K> difference(PSet<K> s) {
+            return copy().difference(s);
+        }
+        public PSet<K> intersection(PSet<K> s) {
+            return copy().intersection(s);
+        }
+
+        public <R> R foldRight(R z, BiFunction<? super K, Supplier<R>, R> f) {
+            return m.foldRightKV(z, (k, v, r) -> f.apply(k, r));
+        }
+        public <R> R foldRight_(R z, BiFunction<? super K, R, R> f) {
+            return m.foldRightKV_(z, (k, v, r) -> f.apply(k, r));
+        }
+        public <R> R foldLeft(R z, BiFunction<R, ? super K, R> f) {
+            return m.foldLeftKV(z, (r, k, v) -> f.apply(r, k));
+        }
+
+        public Iterator<K> iterator() {
+            return new KeyIterator<>(m);
+        }
+        public void forEach(Consumer<? super K> action) {
+            m.foldLeftKV(Unit.U, (z, k, v) -> { action.accept(k); return z; });
         }
     }
 }

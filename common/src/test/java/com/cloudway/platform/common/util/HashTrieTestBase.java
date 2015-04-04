@@ -9,9 +9,13 @@ package com.cloudway.platform.common.util;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -180,11 +184,14 @@ public abstract class HashTrieTestBase {
 
     @Test
     public void test_keySet() {
-        PSet<Key> ks = hm.keySet();
-        assertEquals(data.length, ks.size());
-        for (int k : data) {
-            assertTrue(ks.contains(newKey(k)));
-        }
+        Set<Key> expected = Stream.of(data).map(this::newKey).collect(Collectors.toSet());
+        PSet<Key> actual = hm.keySet();
+
+        assertEquals(expected.size(), actual.size());
+        for (Key k : expected)
+            assertTrue(actual.contains(k));
+        for (Key k : actual)
+            assertTrue(expected.contains(k));
     }
 
     @Test
@@ -201,6 +208,21 @@ public abstract class HashTrieTestBase {
     @Test
     public void test_entries() {
         hm.entries().forEach(t -> assertSame(hm.get(t.getKey()), t.getValue()));
+    }
+
+    @Test
+    public void test_iterator() {
+        HashMap<Key, Integer> expected = new HashMap<>();
+        for (int i : data) {
+            expected.put(newKey(i), i);
+        }
+
+        HashMap<Key, Integer> actual = new HashMap<>();
+        for (Map.Entry<Key,Integer> e : hm) {
+            actual.put(e.getKey(), e.getValue());
+        }
+
+        assertEquals(expected, actual);
     }
 
     @Test
