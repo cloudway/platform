@@ -612,6 +612,7 @@ public interface Seq<T> extends Foldable<T>
      *
      * @return the count of elements in this list
      */
+    @Override
     default long count() {
         long count = 0;
         for (Seq<T> xs = this; !xs.isEmpty(); xs = xs.tail()) {
@@ -705,6 +706,13 @@ public interface Seq<T> extends Foldable<T>
     @SafeVarargs
     static <T> Seq<T> concat(Seq<T>... lists) {
         return flatten(of(lists));
+    }
+
+    /**
+     * Returns the list monoid.
+     */
+    static <T> Monoid<Seq<T>> monoid() {
+        return Monoid.monoid(nil(), SeqImpl::concat);
     }
 
     /**

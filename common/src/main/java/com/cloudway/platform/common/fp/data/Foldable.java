@@ -6,11 +6,14 @@
 
 package com.cloudway.platform.common.fp.data;
 
+import java.util.Comparator;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collector;
 import static java.util.Objects.requireNonNull;
@@ -92,6 +95,56 @@ public interface Foldable<T> extends Iterable<T> {
             r.isPresent() ? Optional.of(accumulator.apply(r.get(), x))
                           : Optional.of(x);
         return foldLeft(Optional.empty(), mf);
+    }
+
+    /**
+     * Combine the elements of a structure using a monoid.
+     *
+     * @param monoid the monoid used to combine the elements
+     */
+    default T fold(Monoid<T> monoid) {
+        return foldMap(monoid, Fn.id());
+    }
+
+    /**
+     * Map each element of the structure to a monoid, and combine the results.
+     *
+     * @param monoid the monoid used to combine the elements
+     * @param f the mapping function
+     */
+    default <R> R foldMap(Monoid<R> monoid, Function<? super T, ? extends R> f) {
+        return monoid.foldMap(this, f);
+    }
+
+    /**
+     * Returns the largest element of the structure.
+     *
+     * @param c the comparator that will be used to order elements
+     * @return the largest element of the structure
+     * @throws NoSuchElementException if structure is empty
+     */
+    default T maximum(Comparator<? super T> c) {
+        return foldMap(Monoid.max(c), Optional::of).get();
+    }
+
+    /**
+     * Returns the least element of the structure.
+     *
+     * @param c the comparator that will be used to order elements
+     * @return the largest element of the structure, or nothing for empty structure
+     * @throws NoSuchElementException if structure is empty
+     */
+    default T minimum(Comparator<? super T> c) {
+        return foldMap(Monoid.min(c), Optional::of).get();
+    }
+
+    /**
+     * Returns the count of elements in the structure.
+     *
+     * @return the count of elements in the structure
+     */
+    default long count() {
+        return foldMap(Monoid.longSum, Fn.pure(1L));
     }
 
     /**

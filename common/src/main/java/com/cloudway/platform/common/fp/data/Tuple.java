@@ -136,6 +136,14 @@ public class Tuple<T, U> implements Serializable, Cloneable
         return t -> p.test(t.second());
     }
 
+    /**
+     * Return the monoid for a tuple.
+     */
+    public static <T, U> Monoid<Tuple<T, U>> monoid(Monoid<T> mt, Monoid<U> mu) {
+        return Monoid.monoid_(of(mt.empty(), mu.empty()), (a1, a2) ->
+            of(mt.append(a1.first(), a2.first()), mu.append(a1.second(), a2.second())));
+    }
+
     public boolean equals(Object obj) {
         if (obj == this)
             return true;

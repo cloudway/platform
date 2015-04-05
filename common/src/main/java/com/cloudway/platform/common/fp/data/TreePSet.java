@@ -116,6 +116,25 @@ public interface TreePSet<E> extends PSet<E> {
         return list.foldLeft(empty(c), PSet::add);
     }
 
+    /**
+     * Returns the set monoid.
+     *
+     * @return the set monoid
+     */
+    static <E extends Comparable<E>> Monoid<PSet<E>> monoid() {
+        return Monoid.monoid_(empty(), PSet::union);
+    }
+
+    /**
+     * Returns the set monoid.
+     *
+     * @param c the comparator that will be used to order set elements
+     * @return the set monoid
+     */
+    static <E> Monoid<PSet<E>> monoid(Comparator<? super E> c) {
+        return Monoid.monoid_(empty(c), PSet::union);
+    }
+
     // Navigation
 
     /**

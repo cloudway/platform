@@ -44,4 +44,11 @@ public interface HashPSet<E> extends PSet<E> {
     static <E> PSet<E> fromList(Seq<E> list) {
         return list.foldLeft(empty(), PSet::add);
     }
+
+    /**
+     * Returns the set monoid.
+     */
+    static <E> Monoid<PSet<E>> monoid() {
+        return Monoid.monoid_(empty(), PSet::union);
+    }
 }

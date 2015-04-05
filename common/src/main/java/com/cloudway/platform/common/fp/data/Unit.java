@@ -15,6 +15,16 @@ public enum Unit {
      */
     U;
 
+    /**
+     * The monoid for the unit value.
+     */
+    public static final Monoid<Unit> monoid = Monoid.monoid(U, (u1, u2) -> U);
+
+    /**
+     * Returns the string representation of the unit value.
+     *
+     * @return the string representation of the unit value
+     */
     public String toString() {
         return "()";
     }
