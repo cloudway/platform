@@ -6,7 +6,6 @@
 
 package com.cloudway.platform.common.fp.data;
 
-import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -51,57 +50,6 @@ public interface PSet<E> extends Foldable<E> {
      *         specified set
      */
     boolean containsAll(PSet<? extends E> s);
-
-    /**
-     * Search for an element that satisfy the given predicate.
-     *
-     * @param predicate the predicate to be tested on element
-     * @return {@code Optional.empty()} if element not found in the set, otherwise
-     * a {@code Optional} wrapping the found element.
-     */
-    Optional<E> find(Predicate<? super E> predicate);
-
-    /**
-     * Returns whether any elements of this set match the provided
-     * predicate. May not evaluate the predicate on all elements if not
-     * necessary for determining the result. If the set is empty then
-     * {@code false} is returned and the predicate is not evaluated.
-     *
-     * @param predicate a predicate to apply to elements of this set
-     * @return {@code true} if any elements of the set match the provided
-     * predicate, other {@code false}
-     */
-    default boolean anyMatch(Predicate<? super E> predicate) {
-        return find(predicate).isPresent();
-    }
-
-    /**
-     * Returns whether all elements of this set match the provided predicate.
-     * May not evaluate the predicate on all elements if not necessary for
-     * determining the result. If the set is empty then {@code true} is returned
-     * and the predicate is not evaluated.
-     *
-     * @param predicate a predicate to apply to elements of this set
-     * @return {@code true} if either all elements of the set match the
-     * provided predicate or the set is empty, otherwise {@code false}
-     */
-    default boolean allMatch(Predicate<? super E> predicate) {
-        return !anyMatch(predicate.negate());
-    }
-
-    /**
-     * Returns whether no elements of this set match the provided predicate.
-     * May not evaluate the predicate on all elements if not necessary for
-     * determining the result. If the set is empty then {@code true} is returned
-     * and the predicate is not evaluated.
-     *
-     * @param predicate a predicate to apply to elements of this set
-     * @return {@code true} if either no elements of the stream match the
-     * provided predicate or the set is empty, otherwise {@code false}
-     */
-    default boolean noneMatch(Predicate<? super E> predicate) {
-        return !anyMatch(predicate);
-    }
 
     // Modification Operations
 

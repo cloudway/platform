@@ -514,13 +514,18 @@ public final class StateCont<A, S> {
         }
 
         @Override
-        public <R> R foldRight(R z, BiFunction<? super A, Supplier<R>, R> f) {
-            return fold(cont.runYield(state), z, f);
+        public <R> R foldRight(BiFunction<? super A, Supplier<R>, R> f, Supplier<R> r) {
+            return foldr(cont.runYield(state), f, r);
         }
 
         private static <A, R, S>
-        R fold(Optional<Yield<A, S>> yield, R z, BiFunction<? super A, Supplier<R>, R> f) {
-            return yield.map(y -> f.apply(y.result, () -> fold(y.next(), z, f))).orElse(z);
+        R foldr(Optional<Yield<A, S>> yield, BiFunction<? super A, Supplier<R>, R> f, Supplier<R> r) {
+            if (yield.isPresent()) {
+                Yield<A, S> y = yield.get();
+                return f.apply(y.result, () -> foldr(y.next(), f, r));
+            } else {
+                return r.get();
+            }
         }
 
         @Override

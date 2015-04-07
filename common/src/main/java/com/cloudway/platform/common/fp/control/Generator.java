@@ -121,18 +121,6 @@ public interface Generator<A> extends Foldable<A> {
     }
 
     /**
-     * Reduce the generator using the binary operator, from right to left. This is
-     * a lazy operation so the accumulator accept a delay evaluation of reduced
-     * result instead of a strict value.
-     *
-     * @param identity the identity value for the accumulating function
-     * @param accumulator a function for combining two values
-     * @return the result of the reduction
-     */
-    @Override
-    <R> R foldRight(R identity, BiFunction<? super A, Supplier<R>, R> accumulator);
-
-    /**
      * Reduce the generator using the binary operator, from left to right.
      *
      * @param identity the identity value for the accumulating function

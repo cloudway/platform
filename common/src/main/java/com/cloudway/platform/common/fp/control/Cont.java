@@ -488,13 +488,18 @@ public final class Cont<A> {
         }
 
         @Override
-        public <R> R foldRight(R z, BiFunction<? super A, Supplier<R>, R> f) {
-            return fold(cont.runYield(), z, f);
+        public <R> R foldRight(BiFunction<? super A, Supplier<R>, R> f, Supplier<R> r) {
+            return foldr(cont.runYield(), f, r);
         }
 
         private static <A, R>
-        R fold(Optional<Yield<A>> yield, R z, BiFunction<? super A, Supplier<R>, R> f) {
-            return yield.map(y -> f.apply(y.result, () -> fold(y.next(), z, f))).orElse(z);
+        R foldr(Optional<Yield<A>> yield, BiFunction<? super A, Supplier<R>, R> f, Supplier<R> r) {
+            if (yield.isPresent()) {
+                Yield<A> y = yield.get();
+                return f.apply(y.result, () -> foldr(y.next(), f, r));
+            } else {
+                return r.get();
+            }
         }
 
         @Override

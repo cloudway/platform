@@ -461,7 +461,17 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * accumulator accept a delay evaluation of reduced result instead of
      * a strict value.
      */
-    <R> R foldRight(R seed, BiFunction<? super V, Supplier<R>, R> accumulator);
+    <R> R foldRight(BiFunction<? super V, Supplier<R>, R> accumulator, Supplier<R> partial);
+
+    /**
+     * Reduce the map elements using the accumulator function that accept
+     * element value, from right to left. This is a lazy operation so the
+     * accumulator accept a delay evaluation of reduced result instead of
+     * a strict value.
+     */
+    default <R> R foldRight(R seed, BiFunction<? super V, Supplier<R>, R> accumulator) {
+        return foldRight(accumulator, () -> seed);
+    }
 
     /**
      * Reduce the map elements using the accumulator function that accept
@@ -469,7 +479,17 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * so the accumulator accept a delay evaluation of reduced result instead
      * of a strict value.
      */
-    <R> R foldRightKV(R seed, TriFunction<? super K, ? super V, Supplier<R>, R> accumulator);
+    <R> R foldRightKV(TriFunction<? super K, ? super V, Supplier<R>, R> accumulator, Supplier<R> partial);
+
+    /**
+     * Reduce the map elements using the accumulator function that accept
+     * element key and value, from right to left. This is a lazy operation
+     * so the accumulator accept a delay evaluation of reduced result instead
+     * of a strict value.
+     */
+    default <R> R foldRightKV(R seed, TriFunction<? super K, ? super V, Supplier<R>, R> accumulator) {
+        return foldRightKV(accumulator, () -> seed);
+    }
 
     /**
      * The strict version of {@link #foldRight(Object,BiFunction) foldRight}.

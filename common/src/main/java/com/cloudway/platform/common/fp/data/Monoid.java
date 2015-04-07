@@ -161,6 +161,8 @@ public abstract class Monoid<A> {
         return new Strict<>(empty, append);
     }
 
+    // Monoid instances
+
     /**
      * A monoid that adds integers.
      */
@@ -296,5 +298,12 @@ public abstract class Monoid<A> {
               .when(Nothing(() -> Any(y -> y)))
               .when(Just(x -> Just(y -> c.compare(x, y) <= 0 ? a1 : a2)))
               .get());
+    }
+
+    /**
+     * The monoid of endomorphisms under composition.
+     */
+    public static <A> Monoid<Function<Supplier<A>, A>> endo() {
+        return monoid(Supplier::get, (f, g) -> x -> f.apply(() -> g.get().apply(x)));
     }
 }

@@ -222,13 +222,13 @@ final class TMapImpl {
         }
 
         @Override
-        default <R> R foldRight(R z, BiFunction<? super V, Supplier<R>, R> f) {
-            return foldr((e, r) -> f.apply(e.value, r), () -> z);
+        default <R> R foldRight(BiFunction<? super V, Supplier<R>, R> f, Supplier<R> sr) {
+            return foldr((e, r) -> f.apply(e.value, r), sr);
         }
 
         @Override
-        default <R> R foldRightKV(R z, TriFunction<? super K, ? super V, Supplier<R>, R> f) {
-            return foldr((e, r) -> f.apply(e.key, e.value, r), () -> z);
+        default <R> R foldRightKV(TriFunction<? super K, ? super V, Supplier<R>, R> f, Supplier<R> sr) {
+            return foldr((e, r) -> f.apply(e.key, e.value, r), sr);
         }
 
         @Override
@@ -1281,8 +1281,8 @@ final class TMapImpl {
             return copy().intersection(s);
         }
 
-        public <R> R foldRight(R z, BiFunction<? super K, Supplier<R>, R> f) {
-            return m.foldRightKV(z, (k, v, r) -> f.apply(k, r));
+        public <R> R foldRight(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> sr) {
+            return m.foldRightKV((k, v, r) -> f.apply(k, r), sr);
         }
         public <R> R foldRight_(R z, BiFunction<? super K, R, R> f) {
             return m.foldRightKV_(z, (k, v, r) -> f.apply(k, r));

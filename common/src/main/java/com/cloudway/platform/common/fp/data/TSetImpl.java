@@ -10,7 +10,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.StringJoiner;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -71,8 +70,6 @@ final class TSetImpl {
         abstract TSet<K> union0(TSet<K> that, int level);
         abstract TSet<K> intersect0(TSet<K> that, int level, TSet<K>[] buffer, int offset0);
         abstract TSet<K> diff0(TSet<K> that, int level, TSet<K>[] buffer, int offset0);
-        abstract <R> R foldl(R z, BiFunction<R, ? super K, R> f);
-        abstract <R> R foldr(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r);
         abstract Traverser<K> traverser();
 
         @Override
@@ -137,16 +134,6 @@ final class TSetImpl {
         }
 
         @Override
-        public <R> R foldLeft(R z, BiFunction<R, ? super K, R> f) {
-            return foldl(z, f);
-        }
-
-        @Override
-        public <R> R foldRight(R z, BiFunction<? super K, Supplier<R>, R> f) {
-            return foldr(f, () -> z);
-        }
-
-        @Override
         public Iterator<K> iterator() {
             return new SetIterator<>(this);
         }
@@ -164,9 +151,7 @@ final class TSetImpl {
         public abstract int hashCode();
 
         public String toString() {
-            return foldl(new StringJoiner(",", "{", "}"),
-                         (sj, k) -> sj.add(String.valueOf(k)))
-                  .toString();
+            return show(", ", "{", "}");
         }
     }
 
@@ -329,12 +314,12 @@ final class TSetImpl {
         }
 
         @Override
-        <R> R foldl(R z, BiFunction<R, ? super K, R> f) {
+        public <R> R foldLeft(R z, BiFunction<R, ? super K, R> f) {
             return z;
         }
 
         @Override
-        <R> R foldr(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r) {
+        public <R> R foldRight(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r) {
             return r.get();
         }
 
@@ -421,12 +406,12 @@ final class TSetImpl {
         }
 
         @Override
-        <R> R foldl(R z, BiFunction<R, ? super K, R> f) {
+        public <R> R foldLeft(R z, BiFunction<R, ? super K, R> f) {
             return f.apply(z, key);
         }
 
         @Override
-        <R> R foldr(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r) {
+        public <R> R foldRight(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r) {
             return f.apply(key, r);
         }
 
@@ -544,12 +529,12 @@ final class TSetImpl {
         }
 
         @Override
-        <R> R foldl(R z, BiFunction<R, ? super K, R> f) {
+        public <R> R foldLeft(R z, BiFunction<R, ? super K, R> f) {
             return keys.foldl(z, f);
         }
 
         @Override
-        <R> R foldr(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r) {
+        public <R> R foldRight(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r) {
             return keys.foldr(f, r);
         }
 
@@ -905,7 +890,7 @@ final class TSetImpl {
             } else if (that instanceof Trie) {
                 return diff2((Trie<K>)that, level, buffer, offset0);
             } else {
-                return that.foldl((TSet<K>)this, (s, k) -> s.remove0(k, hash(k), level));
+                return that.foldLeft((TSet<K>)this, (s, k) -> s.remove0(k, hash(k), level));
             }
         }
 
@@ -958,23 +943,23 @@ final class TSetImpl {
         }
 
         @Override
-        <R> R foldl(R z, BiFunction<R, ? super K, R> f) {
+        public <R> R foldLeft(R z, BiFunction<R, ? super K, R> f) {
             for (TSet<K> elem : elems) {
-                z = elem.foldl(z, f);
+                z = elem.foldLeft(z, f);
             }
             return z;
         }
 
         @Override
-        <R> R foldr(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r) {
-            return _foldr(0, f, r);
+        public <R> R foldRight(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r) {
+            return foldr(0, f, r);
         }
 
-        <R> R _foldr(int i, BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r) {
+        <R> R foldr(int i, BiFunction<? super K, Supplier<R>, R> f, Supplier<R> r) {
             if (i == elems.length - 1) {
-                return elems[i].foldr(f, r);
+                return elems[i].foldRight(f, r);
             } else {
-                return elems[i].foldr(f, () -> _foldr(i+1, f, r));
+                return elems[i].foldRight(f, () -> foldr(i+1, f, r));
             }
         }
 

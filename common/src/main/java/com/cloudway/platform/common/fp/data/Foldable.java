@@ -10,89 +10,149 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.StringJoiner;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collector;
 import static java.util.Objects.requireNonNull;
 
 import com.cloudway.platform.common.fp.control.Cont;
+import com.cloudway.platform.common.fp.control.Trampoline;
 import static com.cloudway.platform.common.fp.control.Cont.generator;
 import static com.cloudway.platform.common.fp.control.Cont.yield;
+import static com.cloudway.platform.common.fp.control.Trampoline.suspend;
 
 /**
  * Class of data structures that can be folded to a summary value.
  *
+ * <p><strong>Minimal complete definition</strong></p>
+ * <p>
+ * {@link #foldMap(Monoid,Function) foldMap} |
+ * {@link #foldRight(BiFunction,Supplier) foldRight}
+ * </p>
+ *
  * @param <T> the type of the data structure element
  */
 public interface Foldable<T> extends Iterable<T> {
+    /**
+     * Convenient functional interface used to declare a complex fold function.
+     */
+    @FunctionalInterface
+    interface RightFoldFunction<T, R> extends BiFunction<T, Supplier<R>, R> {
+    }
+
+    /**
+     * Convenient functional interface used to declare a complex fold function.
+     */
+    @FunctionalInterface
+    interface LeftFoldFunction<T, R> extends BiFunction<Supplier<R>, T, R> {
+    }
+
     /**
      * Reduce the data structure using the binary operator, from right to left.
      * This is a lazy operation so the accumulator accept a delay evaluation of
      * reduced result instead of a strict value.
      *
      * @param <R> the type of the result
-     * @param identity the identity of the result
-     * @param accumulator an associative non-interfering function for combining
+     * @param f an associative non-interfering function for combining two values
+     * @param r the partial reduction result to the accumulator
+     * @return the result of the reduction
+     */
+    default <R> R foldRight(BiFunction<? super T, Supplier<R>, R> f, Supplier<R> r) {
+        return foldMap(Monoid.<R>endo(), Fn.curry(f)).apply(r);
+    }
+
+    /**
+     * Reduce the data structure using the binary operator, from right to left.
+     * This is a lazy operation so the accumulator accept a delay evaluation of
+     * reduced result instead of a strict value.
+     *
+     * @param <R> the type of the result
+     * @param z the identity of the result
+     * @param f an associative non-interfering function for combining
      * two values
      * @return the result of the reduction
      */
-    <R> R foldRight(R identity, BiFunction<? super T, Supplier<R>, R> accumulator);
+    default <R> R foldRight(R z, BiFunction<? super T, Supplier<R>, R> f) {
+        return foldRight(f, () -> z);
+    }
 
     /**
      * The strict version of {@link #foldRight(Object,BiFunction) foldRight}.
      *
      * @param <R> the type of the result
-     * @param identity the identity of the result
-     * @param accumulator an associative non-interfering function for combining
+     * @param z the identity of the result
+     * @param f an associative non-interfering function for combining
      * two values
      * @return the result of the reduction
      */
-    default <R> R foldRight_(R identity, BiFunction<? super T, R, R> accumulator) {
-        return asReverseList().foldLeft(identity, (r, x) -> accumulator.apply(x, r));
+    default <R> R foldRight_(R z, BiFunction<? super T, R, R> f) {
+        RightFoldFunction<T, Trampoline<R>> mf = (x, t) ->
+            suspend(() -> t.get().map(r -> f.apply(x, r)));
+        return foldRight(mf, () -> Trampoline.pure(z)).run();
     }
 
     /**
      * A variant of {@link #foldRight(Object,BiFunction) foldRight} that has no
      * starting value argument
      *
-     * @param accumulator an associative non-interfering function for combining
-     * two values
+     * @param f an associative non-interfering function for combining two values
      * @return the result of the reduction
      */
-    default Optional<T> foldRight(BiFunction<T,T,T> accumulator) {
-        requireNonNull(accumulator);
+    default Optional<T> foldRight(BiFunction<T,T,T> f) {
+        requireNonNull(f);
         BiFunction<T, Optional<T>, Optional<T>> mf = (x, r) ->
-            r.isPresent() ? Optional.of(accumulator.apply(x, r.get()))
+            r.isPresent() ? Optional.of(f.apply(x, r.get()))
                           : Optional.of(x);
         return foldRight_(Optional.empty(), mf);
     }
 
     /**
-     * Reduce the list using the binary operator, from left to right.
+     * Reduce the data structure using the binary operator, from left to right.
+     * This is a lazy operation so the accumulator accept a delay evaluation of
+     * reduced result instead of a strict value.
      *
-     * @param <R> the type of the result
-     * @param identity the identity of the result
-     * @param accumulator an associative non-interfering function for combining
-     * two values
+     * @param <R> the type the result
+     * @param f an associative non-interfering function for combining two values
+     * @param r the partial reduction result to the accumulator
      * @return the result of the reduction
      */
-    <R> R foldLeft(R identity, BiFunction<R, ? super T, R> accumulator);
+    default <R> R foldLeft(BiFunction<Supplier<R>, ? super T, R> f, Supplier<R> r) {
+        RightFoldFunction<T, Function<Supplier<R>, Trampoline<R>>>
+            mf = (x, g) -> a -> suspend(() -> g.get().apply(() -> f.apply(a, x)));
+        return foldRight(a -> Trampoline.pure(a.get()), mf).apply(r).run();
+    }
+
+    /**
+     * Reduce the data structure using the binary operator, from left to right.
+     *
+     * @param <R> the type of the result
+     * @param z the identity of the result
+     * @param f an associative non-interfering function for combining two values
+     * @return the result of the reduction
+     */
+    default <R> R foldLeft(R z, BiFunction<R, ? super T, R> f) {
+        RightFoldFunction<T, Function<R, Trampoline<R>>>
+            mf = (x, g) -> a -> suspend(() -> g.get().apply(f.apply(a, x)));
+        return foldRight(Trampoline::pure, mf).apply(z).run();
+    }
 
     /**
      * A variant of {@link #foldLeft(Object,BiFunction) foldLeft} that has no
      * starting value argument.
      *
-     * @param accumulator an associative non-interfering function for combining
+     * @param f an associative non-interfering function for combining
      * two values
      * @return the result of the reduction
      */
-    default Optional<T> foldLeft(BiFunction<T,T,T> accumulator) {
-        requireNonNull(accumulator);
+    default Optional<T> foldLeft(BiFunction<T,T,T> f) {
+        requireNonNull(f);
         BiFunction<Optional<T>, T, Optional<T>> mf = (r, x) ->
-            r.isPresent() ? Optional.of(accumulator.apply(r.get(), x))
+            r.isPresent() ? Optional.of(f.apply(r.get(), x))
                           : Optional.of(x);
         return foldLeft(Optional.empty(), mf);
     }
@@ -145,6 +205,88 @@ public interface Foldable<T> extends Iterable<T> {
      */
     default long count() {
         return foldMap(Monoid.longSum, Fn.pure(1L));
+    }
+
+    /**
+     * Search the first occurrence of an element that satisfy the given
+     * predicate.
+     *
+     * @param predicate the predicate to be tested on element
+     * @return the first occurrence of element that satisfy the given predicate,
+     * or {@code Optional.empty()} if element not found
+     */
+    default Optional<T> find(Predicate<? super T> predicate) {
+        RightFoldFunction<T, Trampoline<Optional<T>>> g = (x, r) ->
+            predicate.test(x) ? Trampoline.pure(Optional.of(x)) : suspend(r);
+        return foldRight(g, () -> Trampoline.pure(Optional.empty())).run();
+    }
+
+    /**
+     * Search for the first occurrence of an element that satisfy the given
+     * predicate.
+     *
+     * @param predicate the predicate to be tested on element
+     * @return the first occurrence of element that satisfy the given predicate,
+     * or {@code Optional.empty()} if element not found
+     */
+    default Optional<T> findFirst(Predicate<? super T> predicate) {
+        return find(predicate);
+    }
+
+    /**
+     * Search for the last occurrence of an element that satisfy the given
+     * predicate.
+     *
+     * @param predicate the predicate to be tested on element
+     * @return the last occurrence of element that satisfy the given predicate,
+     * or {@code Optional.empty()} if element not found
+     */
+    default Optional<T> findLast(Predicate<? super T> predicate) {
+        LeftFoldFunction<T, Trampoline<Optional<T>>> g = (r, x) ->
+            predicate.test(x) ? Trampoline.pure(Optional.of(x)) : suspend(r);
+        return foldLeft(g, () -> Trampoline.pure(Optional.empty())).run();
+    }
+
+    /**
+     * Returns whether any elements of structure match the provided
+     * predicate. May not evaluate the predicate on all elements if not
+     * necessary for determining the result. If the structure is empty then
+     * {@code false} is returned and the predicate is not evaluated.
+     *
+     * @param predicate a predicate to apply to elements of structure
+     * @return {@code true} if any elements of the structure match the provided
+     * predicate, other {@code false}
+     */
+    default boolean anyMatch(Predicate<? super T> predicate) {
+        return find(predicate).isPresent();
+    }
+
+    /**
+     * Returns whether all elements of structure match the provided predicate.
+     * May not evaluate the predicate on all elements if not necessary for
+     * determining the result. If the structure is empty then {@code true} is
+     * returned and the predicate is not evaluated.
+     *
+     * @param predicate a predicate to apply to elements of structure
+     * @return {@code true} if either all elements of the structure match the
+     * provided predicate or the structure is empty, otherwise {@code false}
+     */
+    default boolean allMatch(Predicate<? super T> predicate) {
+        return !anyMatch(predicate.negate());
+    }
+
+    /**
+     * Returns whether no elements of structure match the provided predicate.
+     * May not evaluate the predicate on all elements if not necessary for
+     * determining the result. If the structure is empty then {@code true} is
+     * returned and the predicate is not evaluated.
+     *
+     * @param predicate a predicate to apply to elements of structure
+     * @return {@code true} if either no elements of the stream match the
+     * provided predicate or the structure is empty, otherwise {@code false}
+     */
+    default boolean noneMatch(Predicate<? super T> predicate) {
+        return !anyMatch(predicate);
     }
 
     /**
@@ -201,11 +343,14 @@ public interface Foldable<T> extends Iterable<T> {
     }
 
     /**
-     * Fold elements as a reversed list.
+     * Returns the string representation of the data structure.
      *
-     * @return a list of elements contained in the data structure in reversed order
+     * @param delimiter the sequence of character to be used between element
+     * @param prefix the sequence of characters to be used at the beginning
+     * @param suffix the sequence of characters to be used at the end
      */
-    default Seq<T> asReverseList() {
-        return foldLeft(Seq.nil(), Fn.flip(Seq::cons));
+    default String show(CharSequence delimiter, CharSequence prefix, CharSequence suffix) {
+        return foldLeft(new StringJoiner(delimiter, prefix, suffix),
+                        (sj, x) -> sj.add(String.valueOf(x))).toString();
     }
 }

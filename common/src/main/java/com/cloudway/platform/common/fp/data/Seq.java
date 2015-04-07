@@ -486,7 +486,7 @@ public interface Seq<T> extends Foldable<T>
     @SuppressWarnings("RedundantTypeArguments")
     static <T, U> Tuple<Seq<T>, Seq<U>> unzip(Seq<Tuple<T, U>> xs) {
         return xs.foldRight(Tuple.of(Seq.<T>nil(), Seq.<U>nil()), (t, r) ->
-            Tuple.of(Seq.<T>cons(t.first(),  Fn.map(r, Tuple::first)),
+            Tuple.of(Seq.<T>cons(t.first(), Fn.map(r, Tuple::first)),
                      Seq.<U>cons(t.second(), Fn.map(r, Tuple::second))));
     }
 
@@ -496,9 +496,9 @@ public interface Seq<T> extends Foldable<T>
      * result instead of a strict value.
      */
     @Override
-    default <R> R foldRight(R identity, BiFunction<? super T, Supplier<R>, R> accumulator) {
-        return isEmpty() ? identity
-             : accumulator.apply(head(), Fn.lazy(() -> tail().foldRight(identity, accumulator)));
+    default <R> R foldRight(BiFunction<? super T, Supplier<R>, R> accumulator, Supplier<R> partial) {
+        return isEmpty() ? partial.get()
+             : accumulator.apply(head(), Fn.lazy(() -> tail().foldRight(accumulator, partial)));
     }
 
     /**
@@ -506,9 +506,10 @@ public interface Seq<T> extends Foldable<T>
      */
     @Override
     default <R> R foldLeft(R identity, BiFunction<R, ? super T, R> accumulator) {
-        R result = identity;
-        for (Seq<T> xs = this; !xs.isEmpty(); xs = xs.tail()) {
+        R result = identity; Seq<T> xs = this;
+        while (!xs.isEmpty()) {
             result = accumulator.apply(result, xs.head());
+            xs = xs.tail();
         }
         return result;
     }
@@ -516,11 +517,6 @@ public interface Seq<T> extends Foldable<T>
     @Override
     default Seq<T> asList() {
         return this;
-    }
-
-    @Override
-    default Seq<T> asReverseList() {
-        return reverse();
     }
 
     /**
@@ -622,52 +618,6 @@ public interface Seq<T> extends Foldable<T>
     }
 
     /**
-     * Returns whether any elements of this list match the provided
-     * predicate. May not evaluate the predicate on all elements if not
-     * necessary for determining the result. If the list is empty then
-     * {@code false} is returned and the predicate is not evaluated.
-     *
-     * @param predicate a predicate to apply to elements of this list
-     * @return {@code true} if any elements of the list match the provided
-     * predicate, other {@code false}
-     */
-    default boolean anyMatch(Predicate<? super T> predicate) {
-        for (Seq<T> xs = this; !xs.isEmpty(); xs = xs.tail()) {
-            if (predicate.test(xs.head()))
-                return true;
-        }
-        return false;
-    }
-
-    /**
-     * Returns whether all elements of this list match the provided predicate.
-     * May not evaluate the predicate on all elements if not necessary for
-     * determining the result. If the list is empty then {@code true} is returned
-     * and the predicate is not evaluated.
-     *
-     * @param predicate a predicate to apply to elements of this list
-     * @return {@code true} if either all elements of the list match the
-     * provided predicate or the list is empty, otherwise {@code false}
-     */
-    default boolean allMatch(Predicate<? super T> predicate) {
-        return !anyMatch(predicate.negate());
-    }
-
-    /**
-     * Returns whether no elements of this list match the provided predicate.
-     * May not evaluate the predicate on all elements if not necessary for
-     * determining the result. If the list is empty then {@code true} is returned
-     * and the predicate is not evaluated.
-     *
-     * @param predicate a predicate to apply to elements of this list
-     * @return {@code true} if either no elements of the stream match the
-     * provided predicate or the list is empty, otherwise {@code false}
-     */
-    default boolean noneMatch(Predicate<? super T> predicate) {
-        return !anyMatch(predicate);
-    }
-
-    /**
      * Search for an element that satisfy the given predicate.
      *
      * @param predicate the predicate to be tested on element
@@ -675,6 +625,7 @@ public interface Seq<T> extends Foldable<T>
      * a {@code Optional} wrapping the found element.
      * @throws NullPointerException if found the element but the element is {@code null}
      */
+    @Override
     default Optional<T> find(Predicate<? super T> predicate) {
         for (Seq<T> xs = this; !xs.isEmpty(); xs = xs.tail()) {
             T x = xs.head();
@@ -738,6 +689,7 @@ public interface Seq<T> extends Foldable<T>
      * @param prefix the sequence of characters to be used at the beginning
      * @param suffix the sequence of characters to be used at the end
      */
+    @Override
     default String show(CharSequence delimiter, CharSequence prefix, CharSequence suffix) {
         return show(Integer.MAX_VALUE, delimiter, prefix, suffix);
     }

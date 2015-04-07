@@ -472,21 +472,21 @@ final class Tree {
             return z;
         }
 
-        static <K,V,R> R foldRight(Node<K,V> t, R z, BiFunction<Map.Entry<K,V>, Supplier<R>, R> f) {
+        static <K,V,R> R foldRight(Node<K,V> t, BiFunction<Map.Entry<K,V>, Supplier<R>, R> f, Supplier<R> r) {
             if (t.isEmpty()) {
-                return z;
+                return r.get();
             } else {
                 PreOrder<K,V> st = new PreOrder<>();
-                return _foldr(st.first((Bin<K,V>)t), z, st, f);
+                return foldr(st.first((Bin<K,V>)t), st, f, r);
             }
         }
 
-        private static <K,V,R> R _foldr(Bin<K,V> t, R z, PreOrder<K,V> st,
-                BiFunction<Map.Entry<K,V>, Supplier<R>, R> f) {
+        private static <K,V,R> R foldr(Bin<K,V> t, PreOrder<K,V> st,
+                BiFunction<Map.Entry<K,V>, Supplier<R>, R> f, Supplier<R> r) {
             if (t == null) {
-                return z;
+                return r.get();
             } else {
-                return f.apply(t, () -> _foldr(st.succ(t), z, st, f));
+                return f.apply(t, () -> foldr(st.succ(t), st, f, r));
             }
         }
 
@@ -1398,13 +1398,13 @@ final class Tree {
         }
 
         @Override
-        default <R> R foldRight(R z, BiFunction<? super V, Supplier<R>, R> f) {
-            return Bin.foldRight(this, z, (b, r) -> f.apply(b.getValue(), r));
+        default <R> R foldRight(BiFunction<? super V, Supplier<R>, R> f, Supplier<R> sr) {
+            return Bin.foldRight(this, (b, r) -> f.apply(b.getValue(), r), sr);
         }
 
         @Override
-        default <R> R foldRightKV(R z, TriFunction<? super K, ? super V, Supplier<R>, R> f) {
-            return Bin.foldRight(this, z, (b, r) -> f.apply(b.getKey(), b.getValue(), r));
+        default <R> R foldRightKV(TriFunction<? super K, ? super V, Supplier<R>, R> f, Supplier<R> sr) {
+            return Bin.foldRight(this, (b, r) -> f.apply(b.getKey(), b.getValue(), r), sr);
         }
 
         @Override
@@ -1424,7 +1424,7 @@ final class Tree {
 
         @Override
         default Seq<Map.Entry<K,V>> entries() {
-            return Bin.foldRight(this, Seq.nil(), Seq::cons);
+            return Bin.foldRight(this, Seq::cons, Seq::nil);
         }
 
         @Override
@@ -1637,8 +1637,8 @@ final class Tree {
             return copy().intersection(s);
         }
 
-        public <R> R foldRight(R z, BiFunction<? super K, Supplier<R>, R> f) {
-            return Bin.foldRight(m, z, (e, r) -> f.apply(e.getKey(), r));
+        public <R> R foldRight(BiFunction<? super K, Supplier<R>, R> f, Supplier<R> sr) {
+            return Bin.foldRight(m, (e, r) -> f.apply(e.getKey(), r), sr);
         }
         public <R> R foldRight_(R z, BiFunction<? super K, R, R> f) {
             return Bin.foldRight_(m, z, (e, r) -> f.apply(e.getKey(), r));
@@ -1708,8 +1708,8 @@ final class Tree {
         }
 
         @Override
-        default <R> R foldRight(R z, BiFunction<? super E, Supplier<R>, R> f) {
-            return Bin.foldRight(this, z, (b, r) -> f.apply(b.getKey(), r));
+        default <R> R foldRight(BiFunction<? super E, Supplier<R>, R> f, Supplier<R> sr) {
+            return Bin.foldRight(this, (b, r) -> f.apply(b.getKey(), r), sr);
         }
 
         @Override
@@ -1837,9 +1837,7 @@ final class Tree {
         }
 
         public String toString() {
-            return foldLeft(new StringJoiner(",", "{", "}"),
-                            (sj, e) -> sj.add(String.valueOf(e)))
-                  .toString();
+            return show(", ", "{", "}");
         }
     }
 }
