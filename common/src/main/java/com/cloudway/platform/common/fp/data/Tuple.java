@@ -93,15 +93,17 @@ public class Tuple<T, U> implements Serializable, Cloneable
     /**
      * Apply this tuple as arguments to a function.
      */
-    public <R> R map(BiFunction<? super T, ? super U, ? extends R> fn) {
+    public <R> R as(BiFunction<? super T, ? super U, ? extends R> fn) {
         return fn.apply(first, second);
     }
 
     /**
-     * Apply this tuple as arguments to a curried function.
+     * Applies two elements as arguments to two given functions and return
+     * a new tuple with the substituted arguments.
      */
-    public <R> R map(Function<? super T, Function<? super U, ? extends R>> fn) {
-        return fn.apply(first).apply(second);
+    public <X, Y> Tuple<X, Y> map(Function<? super T, ? extends X> f,
+                                  Function<? super U, ? extends Y> g) {
+        return of(f.apply(first), g.apply(second));
     }
 
     /**

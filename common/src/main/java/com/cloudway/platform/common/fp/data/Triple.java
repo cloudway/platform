@@ -6,6 +6,8 @@
 
 package com.cloudway.platform.common.fp.data;
 
+import com.cloudway.platform.common.fp.function.TriFunction;
+
 /**
  * A tuple with three elements.
  *
@@ -52,6 +54,13 @@ public class Triple<A, B, C> extends Tuple<A, Tuple<B, C>> {
      */
     public C _3() {
         return second().second();
+    }
+
+    /**
+     * Apply this triple as arguments to a function.
+     */
+    public <R> R as(TriFunction<? super A, ? super B, ? super C, ? extends R> f) {
+        return f.apply(_1(), _2(), _3());
     }
 
     public String toString() {

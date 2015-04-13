@@ -223,6 +223,15 @@ public abstract class TrampolineIO<A> {
     }
 
     /**
+     * Returns a function that promote an IO action to a trampoline action.
+     *
+     * @retur a function that promote an IO action to a trampoline action.
+     */
+    public static <A> Function<IO<A>, TrampolineIO<A>> lift() {
+        return TrampolineIO::lift;
+    }
+
+    /**
      * Promote an IO action to a trampoline action.
      *
      * @param m the IO action

@@ -163,7 +163,7 @@ public final class MonadState<A, S> {
      * function.
      */
     public <B> MonadState<B, S> mapState(BiFunction<? super A, ? super S, Tuple<B, S>> f) {
-        return $(s -> suspend(() -> go(s).map(t -> t.map(f))));
+        return $(s -> suspend(() -> go(s).map(t -> t.as(f))));
     }
 
     /**

@@ -6,6 +6,8 @@
 
 package com.cloudway.platform.common.fp.data;
 
+import java.util.function.Function;
+
 /**
  * A pair of two elements with same type.
  *
@@ -16,5 +18,14 @@ public class Pair<T> extends Tuple<T, T> {
 
     public Pair(T first, T second) {
         super(first, second);
+    }
+
+    public <R> Pair<R> map2(Function<? super T, ? extends R> f) {
+        return map2(f, f);
+    }
+
+    public <R> Pair<R> map2(Function<? super T, ? extends R> f,
+                            Function<? super T, ? extends R> g) {
+        return new Pair<>(f.apply(first()), g.apply(second()));
     }
 }

@@ -15,6 +15,8 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.fp.control.Conditionals;
+import com.cloudway.platform.common.fp.control.TrampolineIO;
+import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.PMap;
 import com.cloudway.platform.common.fp.data.Seq;
@@ -114,30 +116,31 @@ public interface IO<A> {
      * the result.
      */
     static <A> IO<Seq<A>> flatM(Seq<IO<A>> ms) {
-        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
+        return TrampolineIO.flatM(ms.map(TrampolineIO.lift())).run();
     }
 
     /**
      * Evaluate each action in the sequence from left to right, and discard
      * the result.
      */
-    static IO<Unit> sequence(Foldable<IO<?>> ms) {
-        return ms.foldRight(pure(Unit.U), IO::<Unit>then);
+    static IO<Unit> sequence(Foldable<? extends IO<?>> ms) {
+        return ms.foldRight(TrampolineIO.unit(), (x, r) -> TrampolineIO.lift(x).then(r)).run();
     }
 
     /**
      * The {@code mapM} is analogous to {@link Seq#map(Function) map} except that
      * its result is encapsulated in an {@code IO}.
      */
-    static <A, B> IO<Seq<B>> mapM(Seq<A> xs, Function<? super A, IO<B>> f) {
+    static <A, B> IO<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends IO<B>> f) {
         return flatM(xs.map(f));
     }
 
     /**
-     * {@code mapM_} is equivalent to {@code sequence_(xs.map(f))}.
+     * Apply given function on each element in the sequence, evaluate the action
+     * result of function application, from left to right, and discard the result.
      */
-    static <A> IO<Unit> mapM_(Foldable<A> xs, Function<? super A, IO<?>> f) {
-        return xs.foldRight(unit, (x, r) -> f.apply(x).then(r));
+    static <A> IO<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends IO<?>> f) {
+        return xs.foldRight(TrampolineIO.unit(), (x, r) -> TrampolineIO.lift(f.apply(x)).then(r)).run();
     }
 
     /**
@@ -145,7 +148,7 @@ public interface IO<A> {
      * Bind the given function to the given computations with a final join.
      */
     static <A, B, C> IO<Seq<C>>
-    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, IO<C>> f) {
+    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, ? extends IO<C>> f) {
         return flatM(Seq.zip(xs, ys, f));
     }
 
@@ -154,7 +157,7 @@ public interface IO<A> {
      * final result.
      */
     static <A, B, C> IO<Unit>
-    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, IO<C>> f) {
+    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, ? extends IO<C>> f) {
         return sequence(Seq.zip(xs, ys, f));
     }
 
@@ -162,11 +165,7 @@ public interface IO<A> {
      * This generalizes the list-based filter function.
      */
     static <A> IO<Seq<A>> filterM(Seq<A> xs, Function<? super A, IO<Boolean>> p) {
-        return xs.isEmpty()
-               ? pure(Seq.nil())
-               : p.apply(xs.head()).bind(flg ->
-                 filterM(xs.tail(), p).bind(ys ->
-                 pure(flg ? Seq.cons(xs.head(), ys) : ys)));
+        return TrampolineIO.filterM(xs, Fn.compose(TrampolineIO.lift(), p)).run();
     }
 
     /**
@@ -176,7 +175,7 @@ public interface IO<A> {
      * is required, the input list should be reversed.
      */
     static <A, B> IO<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, IO<B>> f) {
-        return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
+        return TrampolineIO.foldM(r0, xs, Fn.compose(TrampolineIO.lift(), f)).run();
     }
 
     /**
@@ -213,6 +212,20 @@ public interface IO<A> {
     static <A, B, C> BiFunction<IO<A>, IO<B>, IO<C>>
     liftM2(BiFunction<? super A, ? super B, ? extends C> f) {
         return (m1, m2) -> m1.bind(x1 -> m2.map(x2 -> f.apply(x1, x2)));
+    }
+
+    /**
+     * Promote a native I/O function to an I/O action function.
+     */
+    static <A, B> Function<A, IO<B>> lift(IOFunction<? super A, ? extends B> f) {
+        return x -> () -> f.evaluate(x);
+    }
+
+    /**
+     * Promote a native I/O function to an I/O action function.
+     */
+    static <A> Function<A, IO<Unit>> lift_(IOConsumer<? super A> f) {
+        return x -> (VoidIO)() -> f.consume(x);
     }
 
     // The naive methods that work around Java lambda exception handling

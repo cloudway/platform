@@ -75,6 +75,18 @@ public final class Fn {
     }
 
     /**
+     * Binary function composition.
+     *
+     * @param f the function to compose with other one
+     * @param g the function to apply before <tt>f</tt> is applied
+     * @return a composed function that first applies the function <tt>g</tt>
+     * and then applies function <tt>f</tt>
+     */
+    public static <A, B, C, D> BiFunction<A, B, D> compose(Function<C, D> f, BiFunction<A, B, C> g) {
+        return g.andThen(f);
+    }
+
+    /**
      * Function argument flipping.
      *
      * @param f the function to flip
