@@ -18,6 +18,7 @@ import com.cloudway.platform.common.fp.control.StateCont;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
+import com.cloudway.platform.common.fp.typeclass.$;
 
 import static com.cloudway.platform.common.fp.control.Conditionals.as;
 import static com.cloudway.platform.common.fp.control.StateCont.callCC;
@@ -36,7 +37,7 @@ public class GeneratorTest {
         }
 
         private static Cont<Integer> fibonacci_(int a, int b) {
-            return do_(Cont.yield(a), () -> fibonacci_(b, a+b));
+            return Cont.yield(a).then(() -> fibonacci_(b, a+b));
         }
 
         static Generator<Integer> factorial(int max) {
@@ -44,7 +45,7 @@ public class GeneratorTest {
         }
 
         private static Cont<Integer> factorial_(int i, int n, int max) {
-            return i <= max ? do_(Cont.yield(i*n), () -> factorial_(i+1, i*n, max))
+            return i <= max ? Cont.yield(i*n).then(() -> factorial_(i+1, i*n, max))
                             : Cont.finish();
         }
     }
@@ -154,7 +155,7 @@ public class GeneratorTest {
         // utility methods to help type inference
 
         private static StateCont<Unit, Seq<Character>>
-        readChar(Function<Character, StateCont<Unit, Seq<Character>>> f) {
+        readChar(Function<Character, $<StateCont.µ<Seq<Character>>, Unit>> f) {
             return StateCont.<Character, Seq<Character>>yield(DUMMY).bind(f);
         }
 

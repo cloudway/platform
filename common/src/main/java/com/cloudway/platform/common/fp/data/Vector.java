@@ -20,6 +20,10 @@ import java.util.function.UnaryOperator;
 
 import com.cloudway.platform.common.fp.control.Trampoline;
 import com.cloudway.platform.common.fp.function.TriFunction;
+import com.cloudway.platform.common.fp.typeclass.$;
+import com.cloudway.platform.common.fp.typeclass.Applicative;
+import com.cloudway.platform.common.fp.typeclass.Monad;
+import com.cloudway.platform.common.fp.typeclass.Traversable;
 
 /**
  * Provides an immutable finite vector, implemented as a finger tree. This
@@ -28,7 +32,7 @@ import com.cloudway.platform.common.fp.function.TriFunction;
  *
  * @param <A> The element type of the vector
  */
-public interface Vector<A> extends Foldable<A> {
+public interface Vector<A> extends $<Vector.µ, A>, Foldable<A> {
     /**
      * Construct an empty vector.
      *
@@ -137,15 +141,6 @@ public interface Vector<A> extends Foldable<A> {
      */
     static <A> Vector<A> replicate(int n, A value) {
         return iterate(n, i -> value);
-    }
-
-    /**
-     * Returns the vector monoid.
-     *
-     * @return the vector monoid
-     */
-    static <A> Monoid<Vector<A>> monoid() {
-        return Monoid.monoid_(empty(), Vector::append);
     }
 
     /**
@@ -322,17 +317,6 @@ public interface Vector<A> extends Foldable<A> {
     }
 
     /**
-     * Returns a vector consisting of the results of applying the given function
-     * to the elements of this vector.
-     *
-     * @param <B> the element type of the new vector
-     * @param f a function to apply to each element
-     * @return a vector consisting of the results of applying the given function
-     * to the elements of this vector
-     */
-    <B> Vector<B> map(Function<? super A, ? extends B> f);
-
-    /**
      * Returns a vector consisting of the elements of this vector that match the
      * given predicate.
      *
@@ -344,6 +328,37 @@ public interface Vector<A> extends Foldable<A> {
     default Vector<A> filter(Predicate<? super A> p) {
         return foldLeft(empty(), (xs, x) -> p.test(x) ? xs.snoc(x) : xs);
     }
+
+    /**
+     * Returns a vector consisting of the results of applying the given function
+     * to the elements of this vector.
+     *
+     * @param <B> the element type of the new vector
+     * @param f a function to apply to each element
+     * @return a vector consisting of the results of applying the given function
+     * to the elements of this vector
+     */
+    <B> Vector<B> map(Function<? super A, ? extends B> f);
+
+    /**
+     * Returns a vector consisting of the results of replacing each element of
+     * this list with contents of a mapped vector produced by applying the
+     * provided mapping function to each element.
+     *
+     * @param <B> the element type of the result vector
+     * @param f a function to apply to each element which produces a vector
+     * of new values
+     * @return the new vector
+     */
+    default <B> Vector<B> flatMap(Function<? super A, Vector<B>> f) {
+        return foldLeft(empty(), (ys, x) -> ys.append(f.apply(x)));
+    }
+
+    /**
+     * Map each element of a structure to an action, evaluate these actions from
+     * left to right, and collect the results.
+     */
+    <F, B> $<F, Vector<B>> traverse(Applicative<F> m, Function<? super A, ? extends $<F, B>> f);
 
     /**
      * Reverse elements in this vector.
@@ -524,5 +539,98 @@ public interface Vector<A> extends Foldable<A> {
      */
     default boolean contains(Object o) {
         return indexOf(o) != -1;
+    }
+
+    // Type Classes
+
+    /**
+     * Returns the vector monoid.
+     *
+     * @return the vector monoid
+     */
+    static <A> Monoid<Vector<A>> monoid() {
+        return Monoid.monoid_(empty(), Vector::append);
+    }
+
+    /**
+     * Typeclass definition for Vector.
+     */
+    class µ implements Monad<µ>, Traversable<µ> {
+        private µ() {}
+
+        @Override
+        public <A> Vector<A> pure(A a) {
+            return singleton(a);
+        }
+
+        @Override
+        public <A, B> Vector<B> map($<µ,A> a, Function<? super A, ? extends B> f) {
+            return narrow(a).map(f);
+        }
+
+        @Override
+        public <A, B> Vector<B> bind($<µ,A> a, Function<? super A, ? extends $<µ,B>> k) {
+            return narrow(a).flatMap(x -> narrow(k.apply(x)));
+        }
+
+        @Override
+        public <F, A, B> $<F, Vector<B>>
+        traverse(Applicative<F> m, $<µ,A> a, Function<? super A, ? extends $<F,B>> f) {
+            return narrow(a).traverse(m, f);
+        }
+    }
+
+    /**
+     * Narrow a generic type to concrete type.
+     */
+    static <A> Vector<A> narrow($<µ, A> value) {
+        return (Vector<A>)value;
+    }
+
+    /**
+     * The singleton typeclass instance.
+     */
+    µ tclass = new µ();
+
+    /**
+     * Returns the typeclass of Vector.
+     */
+    @Override
+    default µ getTypeClass() {
+        return tclass;
+    }
+
+    // Convenient static monad methods
+
+    static <A> Vector<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+        return narrow(tclass.flatM(ms));
+    }
+
+    static <A> Vector<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
+        return narrow(tclass.sequence(ms));
+    }
+
+    static <A, B> Vector<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
+    }
+
+    static <A, B> Vector<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM_(xs, f));
+    }
+
+    static <A> Vector<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+        return narrow(tclass.filterM(xs, p));
+    }
+
+    static <A, B> Vector<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.foldM(r0, xs, f));
+    }
+
+    static <A> Vector<Seq<A>> replicateM(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM(n, a));
+    }
+
+    static <A> Vector<Unit> replicateM_(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM_(n, a));
     }
 }

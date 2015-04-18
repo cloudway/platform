@@ -18,6 +18,8 @@ import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
+import com.cloudway.platform.common.fp.typeclass.Monad;
+import com.cloudway.platform.common.fp.typeclass.$;
 
 /**
  * A {@code Generator} is a special routine that can be used to control the
@@ -32,7 +34,7 @@ import com.cloudway.platform.common.fp.data.Unit;
  *
  * @param <A> the type of yielded value
  */
-public interface Generator<A> extends Foldable<A> {
+public interface Generator<A> extends $<Generator.µ, A>, Foldable<A> {
     /**
      * A channel to communicate between generators.
      *
@@ -98,7 +100,7 @@ public interface Generator<A> extends Foldable<A> {
      * of new values
      * @return the new generator
      */
-    <B> Generator<B> bind(Function<? super A, ? extends Generator<B>> mapper);
+    <B> Generator<B> bind(Function<? super A, ? extends $<µ, B>> mapper);
 
     /**
      * Transfer a generator by discarding the intermediate value.
@@ -106,7 +108,7 @@ public interface Generator<A> extends Foldable<A> {
      * @param b the new generator transformation
      * @return a generator that transfers this generator to the given generator
      */
-    default <B> Generator<B> then(Generator<B> b) {
+    default <B> Generator<B> then($<µ, B> b) {
         return bind(Fn.pure(b));
     }
 
@@ -116,7 +118,7 @@ public interface Generator<A> extends Foldable<A> {
      * @param b the new generator transformation
      * @return a generator that transfers this generator to the given generator
      */
-    default <B> Generator<B> then(Supplier<Generator<B>> b) {
+    default <B> Generator<B> then(Supplier<? extends $<µ, B>> b) {
         return bind(x -> b.get());
     }
 
@@ -163,111 +165,77 @@ public interface Generator<A> extends Foldable<A> {
         return a.zip(b, zipper);
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and collect
-     * the result.
-     */
-    static <A> Generator<Seq<A>> flatM(Seq<Generator<A>> ms) {
-        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
+    // Monad
+
+    interface µ extends Monad<µ> {
+        @Override
+        default <A> Generator<A> pure(A a) {
+            return Generator.pure(a);
+        }
+
+        @Override
+        default <A, B> Generator<B> map($<µ, A> a, Function<? super A, ? extends B> f) {
+            return narrow(a).map(f);
+        }
+
+        @Override
+        default <A, B> Generator<B> bind($<µ, A> a, Function<? super A, ? extends $<µ, B>> k) {
+            return narrow(a).bind(k);
+        }
+
+        @Override
+        default <A, B> Generator<B> seqR($<µ, A> a, $<µ, B> b) {
+            return narrow(a).then(b);
+        }
+
+        @Override
+        default <A, B> Generator<B> seqR($<µ, A> a, Supplier<? extends $<µ, B>> b) {
+            return narrow(a).then(b);
+        }
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and ignore
-     * the result.
-     */
-    static <A> Generator<Unit> sequence(Foldable<Generator<A>> ms) {
-        return ms.foldRight(pure(Unit.U), Generator::then);
+    static <A> Generator<A> narrow($<µ, A> value) {
+        return (Generator<A>)value;
     }
 
-    /**
-     * The {@code mapM} is analogous to {@link Seq#map(Function) map} except that
-     * its result is encapsulated in a {@code Generator}.
-     */
-    static <A, B> Generator<Seq<B>> mapM(Seq<A> xs, Function<? super A, Generator<B>> f) {
-        return flatM(xs.map(f));
+    µ tclass = new µ() {};
+
+    @Override
+    default µ getTypeClass() {
+        return tclass;
     }
 
-    /**
-     * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
-     */
-    static <A, B> Generator<Unit> mapM_(Foldable<A> xs, Function<? super A, Generator<B>> f) {
-        return xs.foldRight(pure(Unit.U), (x, r) -> f.apply(x).then(r));
+    // Convenient static monad methods
+
+    static <A> Generator<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+        return narrow(tclass.flatM(ms));
     }
 
-    /**
-     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
-     * Bind the given function to the given generators with a final join.
-     */
-    static <A, B, C> Generator<Seq<C>> zipM(Seq<A> xs, Seq<B> ys,
-                BiFunction<? super A, ? super B, Generator<C>> f) {
-        return flatM(Seq.zip(xs, ys, f));
+    static <A> Generator<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
+        return narrow(tclass.sequence(ms));
     }
 
-    /**
-     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
-     * final result.
-     */
-    static <A, B, C> Generator<Unit> zipM_(Seq<A> xs, Seq<B> ys,
-                BiFunction<? super A, ? super B, Generator<C>> f) {
-        return sequence(Seq.zip(xs, ys, f));
+    static <A, B> Generator<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
     }
 
-    /**
-     * This generalizes the list-based filter function.
-     */
-    static <A> Generator<Seq<A>> filterM(Seq<A> xs, Function<? super A, Generator<Boolean>> p) {
-        return xs.isEmpty()
-               ? pure(Seq.nil())
-               : p.apply(xs.head()).bind(flg ->
-                 filterM(xs.tail(), p).bind(ys ->
-                 pure(flg ? Seq.cons(xs.head(), ys) : ys)));
+    static <A, B> Generator<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM_(xs, f));
     }
 
-    /**
-     * The {@code foldM} is analogous to {@link Seq#foldLeft(Object,BiFunction) foldLeft},
-     * except that its result is encapsulated in a {@code Generator}. Note that
-     * {@code foldM} works from left-to-right over the lists arguments. If right-to-left
-     * evaluation is required, the input list should be reversed.
-     */
-    static <A, B> Generator<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, Generator<B>> f) {
-        return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
+    static <A> Generator<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+        return narrow(tclass.filterM(xs, p));
     }
 
-    /**
-     * Performs the action n times, gathering the results.
-     */
-    static <A> Generator<Seq<A>> replicateM(int n, Generator<A> a) {
-        return flatM(Seq.replicate(n, a));
+    static <A, B> Generator<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.foldM(r0, xs, f));
     }
 
-    /**
-     * Performs the action n times, discards the result.
-     */
-    static <A> Generator<Unit> replicateM_(int n, Generator<A> a) {
-        return sequence(Seq.replicate(n, a));
+    static <A> Generator<Seq<A>> replicateM(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM(n, a));
     }
 
-    /**
-     * Kleisli composition of monads.
-     */
-    static <A, B, C> Function<A, Generator<C>>
-    kleisli(Function<A, Generator<B>> f, Function<B, Generator<C>> g) {
-        return x -> f.apply(x).bind(g);
-    }
-
-    /**
-     * Promote a function to a generator function.
-     */
-    static <A, B> Function<Generator<A>, Generator<B>>
-    liftM(Function<? super A, ? extends B> f) {
-        return m -> m.map(f);
-    }
-
-    /**
-     * Promote a function to a generator function.
-     */
-    static <A, B, C> BiFunction<Generator<A>, Generator<B>, Generator<C>>
-    liftM2(BiFunction<? super A, ? super B, ? extends C> f) {
-        return (m1, m2) -> m1.bind(x1 -> m2.map(x2 -> f.apply(x1, x2)));
+    static <A> Generator<Unit> replicateM_(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM_(n, a));
     }
 }

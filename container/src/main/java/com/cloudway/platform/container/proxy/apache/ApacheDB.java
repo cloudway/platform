@@ -79,10 +79,10 @@ final class ApacheDB {
     public void write(Function<PMap<String, String>, PMap<String, String>> action)
         throws IOException
     {
-        atomically(
+        atomically(StateIO.narrow(
             do_(load(), oldmap ->
             let(action.apply(oldmap), newmap ->
-            unless(oldmap.equals(newmap), store(newmap))))
+            unless(oldmap.equals(newmap), store(newmap)))))
         );
     }
 
@@ -111,10 +111,11 @@ final class ApacheDB {
     }
 
     private StateIO<PMap<String,String>, MapFile> load() {
-        return do_(get(), oldfile ->
-               do_(readMap(oldfile), newfile ->
-               do_(put(newfile),
-               do_(pure(newfile.map)))));
+        return StateIO.narrow(
+            do_(get(), oldfile ->
+            do_(readMap(oldfile), newfile ->
+            do_(put(newfile),
+            do_(pure(newfile.map))))));
     }
 
     private StateIO<MapFile, MapFile> readMap(MapFile oldfile) {
@@ -151,12 +152,13 @@ final class ApacheDB {
     }
 
     private StateIO<Unit, MapFile> store(PMap<String, String> map) {
-        return do_(lift(() -> mkdir(basedir())), base ->
-               let(base.resolve(mapname + SUFFIX), txt ->
-               let(base.resolve(mapname + ".db"), dbm ->
-               do_(writeMap(txt, map), modtime ->
-               do_(unless(nodbm, writeDBM(base, dbm, txt)),
-               do_(put(new MapFile(map, modtime))))))));
+        return StateIO.narrow(
+            do_(lift(() -> mkdir(basedir())), base ->
+            let(base.resolve(mapname + SUFFIX), txt ->
+            let(base.resolve(mapname + ".db"), dbm ->
+            do_(writeMap(txt, map), modtime ->
+            do_(unless(nodbm, writeDBM(base, dbm, txt)),
+            do_(put(new MapFile(map, modtime)))))))));
     }
 
     private static StateIO<Long, MapFile> writeMap(Path file, PMap<String, String> map) {

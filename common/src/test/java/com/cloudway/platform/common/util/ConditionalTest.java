@@ -1022,19 +1022,16 @@ public class ConditionalTest
             BREADTH_FIRST {
                 @Override
                 public <T> Generator<T> walk(Tree<T> tree) {
-                    return StateCont.generator(Seq.of(tree), walk_());
-                }
-
-                private <T> StateCont<T, Seq<Tree<T>>> walk_() {
-                    return loop(again ->
+                  return StateCont.generator(Seq.of(tree),
+                    loop(again ->
                       do_(StateCont.get(), queue ->
-                      inCaseOf(queue, Cons((tree, remaining) ->
-                        do_(inCaseOf(tree, Node((a, x, b) ->
+                      inCaseOf(queue, Cons((current, remaining) ->
+                        do_(inCaseOf(current, Node((a, x, b) ->
                           do_(StateCont.yield(x),
                           do_(StateCont.put(remaining.append(Seq.of(a, b)))))),
                         otherwise(StateCont.put(remaining))),
                         again)),
-                      otherwise(StateCont.finish()))));
+                      otherwise(StateCont.finish())))));
                 }
             };
 

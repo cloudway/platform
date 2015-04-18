@@ -15,7 +15,9 @@ import com.cloudway.platform.common.fp.data.Either;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.function.TriFunction;
+import com.cloudway.platform.common.fp.typeclass.Monad;
+import com.cloudway.platform.common.fp.typeclass.$;
+
 import static com.cloudway.platform.common.fp.control.Conditionals.with;
 import static com.cloudway.platform.common.fp.data.Either.*;
 
@@ -26,7 +28,7 @@ import static com.cloudway.platform.common.fp.data.Either.*;
  *
  * @param <A> the type of computation result
  */
-public abstract class Trampoline<A> {
+public abstract class Trampoline<A> implements $<Trampoline.µ, A> {
     /**
      * A Normal Trampoline is either done or suspended, and is allowed to be a
      * subcomputation of a Codense.  This is the pointed functor part of the
@@ -36,7 +38,7 @@ public abstract class Trampoline<A> {
         protected abstract <R> R foldNormal(Function<A, R> pure, Function<Supplier<Trampoline<A>>, R> k);
 
         @Override
-        public <B> Trampoline<B> bind(Function<? super A, ? extends Trampoline<B>> f) {
+        public <B> Trampoline<B> bind(Function<? super A, ? extends $<µ, B>> f) {
             return codense(this, f);
         }
     }
@@ -67,7 +69,7 @@ public abstract class Trampoline<A> {
          * `sub`, and Kleisli-composes the continuations.
          */
         @Override
-        public <B> Trampoline<B> bind(Function<? super A, ? extends Trampoline<B>> f) {
+        public <B> Trampoline<B> bind(Function<? super A, ? extends $<µ, B>> f) {
             return codense(sub, x -> suspend(() -> cont.apply(x).bind(f)));
         }
 
@@ -168,7 +170,7 @@ public abstract class Trampoline<A> {
     }
 
     @SuppressWarnings("unchecked")
-    private static <A, B> Codense<B> codense(Normal<A> a, Function<? super A, ? extends Trampoline<B>> k) {
+    private static <A, B> Codense<B> codense(Normal<A> a, Function<? super A, ? extends $<µ, B>> k) {
         return new Codense<>((Normal<Object>)a, (Function<Object, Trampoline<B>>)k);
     }
 
@@ -222,8 +224,9 @@ public abstract class Trampoline<A> {
      * @param a a trampoline suspended in a thunk
      * @return a trampoline whose next step runs the given thunk
      */
-    public static <A> Trampoline<A> suspend(Supplier<Trampoline<A>> a) {
-        return new Suspend<>(a);
+    @SuppressWarnings("unchecked")
+    public static <A> Trampoline<A> suspend(Supplier<? extends $<µ, A>> a) {
+        return new Suspend<>((Supplier<Trampoline<A>>)a);
     }
 
     /**
@@ -235,7 +238,7 @@ public abstract class Trampoline<A> {
      * @return the chained trampoline
      */
     public static <A, B> Trampoline<B>
-    suspend(Supplier<Trampoline<A>> a, Function<? super A, ? extends Trampoline<B>> f) {
+    suspend(Supplier<Trampoline<A>> a, Function<? super A, ? extends $<µ, B>> f) {
         return suspend(a).bind(f);
     }
 
@@ -282,7 +285,7 @@ public abstract class Trampoline<A> {
      * @return  a new trampoline that runs this trampoline, then continues with
      *          the given function
      */
-    public abstract <B> Trampoline<B> bind(Function<? super A, ? extends Trampoline<B>> f);
+    public abstract <B> Trampoline<B> bind(Function<? super A, ? extends $<µ, B>> f);
 
     /**
      * Transfer a trampoline by discarding the intermediate value.
@@ -290,7 +293,7 @@ public abstract class Trampoline<A> {
      * @param b the new trampoline transformation
      * @return a trampoline that transfers this trampoline to the given trampoline
      */
-    public <B> Trampoline<B> then(Trampoline<B> b) {
+    public <B> Trampoline<B> then($<µ, B> b) {
         return bind(__ -> b);
     }
 
@@ -300,7 +303,7 @@ public abstract class Trampoline<A> {
      * @param b the new trampoline transformation
      * @return a trampoline that transfers this trampoline to the given trampoline
      */
-    public <B> Trampoline<B> then(Supplier<Trampoline<B>> b) {
+    public <B> Trampoline<B> then(Supplier<? extends $<µ, B>> b) {
         return bind(__ -> suspend(b));
     }
 
@@ -323,123 +326,77 @@ public abstract class Trampoline<A> {
             .get();
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and collect
-     * the result.
-     */
-    public static <A> Trampoline<Seq<A>> flatM(Seq<Trampoline<A>> ms) {
-        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
+    // Monad
+
+    public static final class µ implements Monad<µ> {
+        @Override
+        public <A> Trampoline<A> pure(A a) {
+            return Trampoline.pure(a);
+        }
+
+        @Override
+        public <A, B> Trampoline<B> map($<µ, A> a, Function<? super A, ? extends B> f) {
+            return narrow(a).map(f);
+        }
+
+        @Override
+        public <A, B> Trampoline<B> bind($<µ, A> a, Function<? super A, ? extends $<µ, B>> k) {
+            return narrow(a).bind(k);
+        }
+
+        @Override
+        public <A, B> Trampoline<B> seqR($<µ, A> a, $<µ, B> b) {
+            return narrow(a).then(b);
+        }
+
+        @Override
+        public <A, B> Trampoline<B> seqR($<µ, A> a, Supplier<? extends $<µ, B>> b) {
+            return narrow(a).then(b);
+        }
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and ignore
-     * the result.
-     */
-    public static <A> Trampoline<Unit> sequence(Foldable<Trampoline<A>> ms) {
-        return ms.foldRight(unit(), Trampoline::then);
+    public static <A> Trampoline<A> narrow($<µ, A> value) {
+        return (Trampoline<A>)value;
     }
 
-    /**
-     * The {@code mapM} is analogous to {@link Seq#map(Function) map} except that
-     * its result is encapsulated in a {@code Trampoline}.
-     */
-    public static <A, B> Trampoline<Seq<B>>
-    mapM(Seq<A> xs, Function<? super A, ? extends Trampoline<B>> f) {
-        return flatM(xs.map(f));
+    public static final µ tclass = new µ();
+
+    @Override
+    public µ getTypeClass() {
+        return tclass;
     }
 
-    /**
-     * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
-     */
-    public static <A, B> Trampoline<Unit>
-    mapM_(Foldable<A> xs, Function<? super A, ? extends Trampoline<B>> f) {
-        return xs.foldRight(unit(), (x, r) -> f.apply(x).then(r));
+    // Convenient static monad methods
+
+    public static <A> Trampoline<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+        return narrow(tclass.flatM(ms));
     }
 
-    /**
-     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
-     * Bind the given function to the given computations with a final join.
-     */
-    public static <A, B, C> Trampoline<Seq<C>>
-    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, Trampoline<C>> f) {
-        return flatM(Seq.zip(xs, ys, f));
+    public static <A> Trampoline<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
+        return narrow(tclass.sequence(ms));
     }
 
-    /**
-     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
-     * final result.
-     */
-    public static <A, B, C> Trampoline<Unit>
-    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, Trampoline<C>> f) {
-        return sequence(Seq.zip(xs, ys, f));
+    public static <A, B> Trampoline<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
     }
 
-    /**
-     * This generalizes the list-based filter function.
-     */
-    public static <A> Trampoline<Seq<A>>
-    filterM(Seq<A> xs, Function<? super A, ? extends Trampoline<Boolean>> p) {
-        return xs.isEmpty()
-            ? pure(Seq.nil())
-            : p.apply(xs.head()).bind(flg ->
-              filterM(xs.tail(), p).bind(ys ->
-              pure(flg ? Seq.cons(xs.head(), ys) : ys)));
+    public static <A, B> Trampoline<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM_(xs, f));
     }
 
-    /**
-     * The {@code foldM} is analogous to {@link Seq#foldLeft(Object,BiFunction) foldLeft},
-     * except that its result is encapsulated in an {@code Trampoline}. Note that
-     * {@code foldM} works from left-to-right over the lists arguments. If right-to-left
-     * evaluation is required, the input list should be reversed.
-     */
-    public static <A, B> Trampoline<B>
-    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, Trampoline<B>> f) {
-        return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
+    public static <A> Trampoline<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+        return narrow(tclass.filterM(xs, p));
     }
 
-    /**
-     * Perform the action n times, gathering the results.
-     */
-    public static <A> Trampoline<Seq<A>> replicateM(int n, Trampoline<A> a) {
-        return flatM(Seq.replicate(n, a));
+    public static <A, B> Trampoline<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.foldM(r0, xs, f));
     }
 
-    /**
-     * Perform the action n times, discards the result.
-     */
-    public static <A> Trampoline<Unit> replicateM_(int n, Trampoline<A> a) {
-        return sequence(Seq.replicate(n, a));
+    public static <A> Trampoline<Seq<A>> replicateM(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM(n, a));
     }
 
-    /**
-     * Kleisli composition of monads.
-     */
-    public static <A, B, C> Function<A, Trampoline<C>>
-    kleisli(Function<A, Trampoline<B>> f, Function<B, Trampoline<C>> g) {
-        return x -> f.apply(x).bind(g);
-    }
-
-    /**
-     * Promote a function to a trampoline function.
-     */
-    public static <A, B> Function<Trampoline<A>, Trampoline<B>>
-    liftM(Function<? super A, ? extends B> f) {
-        return m -> m.map(f);
-    }
-
-    /**
-     * Promote a function to a trampoline function.
-     */
-    public static <A, B, C> BiFunction<Trampoline<A>, Trampoline<B>, Trampoline<C>>
-    liftM2(BiFunction<? super A, ? super B, ? extends C> f) {
-        return (m1, m2) -> m1.bind(x1 -> m2.map(x2 -> f.apply(x1, x2)));
-    }
-
-    /**
-     * Promote a function to a trampoline function.
-     */
-    public static <A, B, C, D> TriFunction<Trampoline<A>, Trampoline<B>, Trampoline<C>, Trampoline<D>>
-    liftM3(TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
-        return (m1, m2, m3) -> m1.bind(x1 -> m2.bind(x2 -> m3.map(x3 -> f.apply(x1, x2, x3))));
+    public static <A> Trampoline<Unit> replicateM_(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM_(n, a));
     }
 }

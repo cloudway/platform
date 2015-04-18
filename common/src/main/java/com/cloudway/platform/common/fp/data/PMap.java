@@ -18,6 +18,8 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.function.TriFunction;
+import com.cloudway.platform.common.fp.typeclass.Applicative;
+import com.cloudway.platform.common.fp.typeclass.$;
 
 /**
  * The PMap (P stands for Pure or Persistent) is an analogy of java.util.Map.
@@ -334,6 +336,19 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param f the function to apply to each entry
      */
     <R> PMap<K,R> mapKV(BiFunction<? super K, ? super V, ? extends R> f);
+
+    /**
+     * Map each element of this map to an action, evaluate these actions from
+     * left to right, and collect the results.  (Optional operation).
+     *
+     * @param m an {@code Applicative} to collect the result
+     * @param f a function maps key and value to an action
+     * @throws UnsupportedOperationException if this operation is not supported
+     */
+    default <R, T> $<T, PMap<K,R>> traverse(Applicative<T> m,
+            BiFunction<? super K, ? super V, ? extends $<T, R>> f) {
+        throw new UnsupportedOperationException();
+    }
 
     /**
      * Returns a map consisting of the mappings of this map that matches

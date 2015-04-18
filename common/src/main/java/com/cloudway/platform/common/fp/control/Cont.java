@@ -18,7 +18,8 @@ import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.function.TriFunction;
+import com.cloudway.platform.common.fp.typeclass.Monad;
+import com.cloudway.platform.common.fp.typeclass.$;
 
 /**
  * <p>Continuation monad.</p>
@@ -33,7 +34,7 @@ import com.cloudway.platform.common.fp.function.TriFunction;
  *
  * @param <A> the type of intermediate result of computation
  */
-public final class Cont<A> {
+public final class Cont<A> implements $<Cont.µ, A> {
     // the CPS transfer type: (a -> r) -> r
     @FunctionalInterface
     private interface K<A, R> {
@@ -148,8 +149,8 @@ public final class Cont<A> {
      *          to a new continuation
      * @return the new continuation applying the transfer function
      */
-    public <B> Cont<B> bind(Function<? super A, Cont<B>> k) {
-        return $(c -> run(a -> k.apply(a).run(c)));
+    public <B> Cont<B> bind(Function<? super A, ? extends $<µ, B>> k) {
+        return $(c -> run(a -> narrow(k.apply(a)).run(c)));
     }
 
     /**
@@ -158,8 +159,8 @@ public final class Cont<A> {
      * @param b the new continuation transformation
      * @return a continuation that transfers this continuation to the given continuation
      */
-    public <B> Cont<B> then(Cont<B> b) {
-        return $(c -> run(a -> b.run(c)));
+    public <B> Cont<B> then($<µ, B> b) {
+        return $(c -> run(a -> narrow(b).run(c)));
     }
 
     /**
@@ -168,8 +169,8 @@ public final class Cont<A> {
      * @param b the new continuation transformation
      * @return a continuation that transfers this continuation to the given continuation
      */
-    public <B> Cont<B> then(Supplier<Cont<B>> b) {
-        return $(c -> run(a -> b.get().run(c)));
+    public <B> Cont<B> then(Supplier<? extends $<µ, B>> b) {
+        return $(c -> run(a -> narrow(b.get()).run(c)));
     }
 
     /**
@@ -222,7 +223,7 @@ public final class Cont<A> {
      * @param f the function that passing the current continuation
      * @return a continuation that may or may not escaped from current continuation
      */
-    public static <A> Cont<A> callCC(Function<Exit<A>, Cont<A>> f) {
+    public static <A> Cont<A> callCC(Function<Exit<A>, ? extends $<µ, A>> f) {
         // Note: the compacted code is as:
         //     $(c -> f.apply(a -> $(__ -> c.apply(a))).run(c))
         // but generic method can not be represented as a lambda expression
@@ -232,7 +233,7 @@ public final class Cont<A> {
                     return $(__ -> c.apply(a));
                 }
             };
-            return f.apply(exit).run(c);
+            return narrow(f.apply(exit)).run(c);
         });
     }
 
@@ -240,138 +241,90 @@ public final class Cont<A> {
      * Delimits the continuation of any {@link #shift(Function) shift} inside current
      * continuation.
      */
-    public static <A> Cont<A> reset(Cont<A> m) {
-        return $(k -> k.apply(m.eval()));
+    public static <A> Cont<A> reset($<µ, A> m) {
+        return $(k -> k.apply(narrow(m).eval()));
     }
 
     /**
-     * Captures the continuation up to the nearest enclosing {@link #reset(Cont) reset}
+     * Captures the continuation up to the nearest enclosing {@link #reset}
      * and passes it to the given function.
      */
-    public static <A, R> Cont<A> shift(Function<Function<A, R>, Cont<R>> f) {
-        return $((Function<A, R> k) -> f.apply(k).eval());
+    public static <A, R> Cont<A> shift(Function<Function<A, R>, ? extends $<µ, R>> f) {
+        return $((Function<A, R> k) -> narrow(f.apply(k)).eval());
     }
 
     // Monad
 
-    /**
-     * Evaluate each action in the sequence from left to right, and collect
-     * the result.
-     */
-    public static <A> Cont<Seq<A>> flatM(Seq<Cont<A>> ms) {
-        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
+    public static final class µ implements Monad<µ> {
+        @Override
+        public <A> Cont<A> pure(A a) {
+            return Cont.pure(a);
+        }
+
+        @Override
+        public <A, B> Cont<B> map($<µ, A> a, Function<? super A, ? extends B> f) {
+            return narrow(a).map(f);
+        }
+
+        @Override
+        public <A, B> Cont<B> bind($<µ, A> a, Function<? super A, ? extends $<µ, B>> k) {
+            return narrow(a).bind(k);
+        }
+
+        @Override
+        public <A, B> Cont<B> seqR($<µ, A> a, $<µ, B> b) {
+            return narrow(a).then(b);
+        }
+
+        @Override
+        public <A, B> Cont<B> seqR($<µ, A> a, Supplier<? extends $<µ, B>> b) {
+            return narrow(a).then(b);
+        }
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and ignore
-     * the result.
-     */
-    public static <A> Cont<Unit> sequence(Foldable<Cont<A>> ms) {
-        return ms.foldRight(unit(), Cont::then);
+    public static <A> Cont<A> narrow($<µ, A> value) {
+        return (Cont<A>)value;
     }
 
-    /**
-     * The {@code mapM} is analogous to {@link Seq#map(Function) map} except that
-     * its result is encapsulated in a {@code Continuation}.
-     */
-    public static <A, B> Cont<Seq<B>>
-    mapM(Seq<A> xs, Function<? super A, Cont<B>> f) {
-        return flatM(xs.map(f));
+    public static final µ tclass = new µ();
+
+    @Override
+    public µ getTypeClass() {
+        return tclass;
     }
 
-    /**
-     * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
-     */
-    public static <A, B> Cont<Unit>
-    mapM_(Foldable<A> xs, Function<? super A, Cont<B>> f) {
-        return xs.foldRight(unit(), (x, r) -> f.apply(x).then(r));
+    // Convenient static monad methods
+
+    public static <A> Cont<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+        return narrow(tclass.flatM(ms));
     }
 
-    /**
-     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
-     * Bind the given function to the given computations with a final join.
-     */
-    public static <A, B, C> Cont<Seq<C>>
-    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, Cont<C>> f) {
-        return flatM(Seq.zip(xs, ys, f));
+    public static <A> Cont<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
+        return narrow(tclass.sequence(ms));
     }
 
-    /**
-     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
-     * final result.
-     */
-    public static <A, B, C> Cont<Unit>
-    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, Cont<C>> f) {
-        return sequence(Seq.zip(xs, ys, f));
+    public static <A, B> Cont<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
     }
 
-    /**
-     * This generalizes the list-based filter function.
-     */
-    public static <A> Cont<Seq<A>>
-    filterM(Seq<A> xs, Function<? super A, Cont<Boolean>> p) {
-        return xs.isEmpty()
-               ? pure(Seq.nil())
-               : p.apply(xs.head()).bind(flg ->
-                 filterM(xs.tail(), p).bind(ys ->
-                 pure(flg ? Seq.cons(xs.head(), ys) : ys)));
+    public static <A, B> Cont<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM_(xs, f));
     }
 
-    /**
-     * The {@code foldM} is analogous to {@link Seq#foldLeft(Object,BiFunction) foldLeft},
-     * except that its result is encapsulated in a {@code Continuation}. Note that
-     * {@code foldM} works from left-to-right over the lists arguments. If right-to-left
-     * evaluation is required, the input list should be reversed.
-     */
-    public static <A, B> Cont<B>
-    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, Cont<B>> f) {
-        return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
+    public static <A> Cont<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+        return narrow(tclass.filterM(xs, p));
     }
 
-    /**
-     * Perform the action n times, gathering the results.
-     */
-    public static <A> Cont<Seq<A>> replicateM(int n, Cont<A> a) {
-        return flatM(Seq.replicate(n, a));
+    public static <A, B> Cont<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.foldM(r0, xs, f));
     }
 
-    /**
-     * Perform the action n times, discards the result.
-     */
-    public static <A> Cont<Unit> replicateM_(int n, Cont<A> a) {
-        return sequence(Seq.replicate(n, a));
+    public static <A> Cont<Seq<A>> replicateM(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM(n, a));
     }
 
-    /**
-     * Kleisli composition of monads.
-     */
-    public static <A, B, C> Function<A, Cont<C>>
-    kleisli(Function<A, Cont<B>> f, Function<B, Cont<C>> g) {
-        return x -> f.apply(x).bind(g);
-    }
-
-    /**
-     * Promote a function to a CPS computation function.
-     */
-    public static <A, B> Function<Cont<A>, Cont<B>>
-    liftM(Function<? super A, ? extends B> f) {
-        return m -> m.map(f);
-    }
-
-    /**
-     * Promote a function to a CPS computation function.
-     */
-    public static <A, B, C> BiFunction<Cont<A>, Cont<B>, Cont<C>>
-    liftM2(BiFunction<? super A, ? super B, ? extends C> f) {
-        return (m1, m2) -> m1.bind(x1 -> m2.map(x2 -> f.apply(x1, x2)));
-    }
-
-    /**
-     * Promote a function to a CPS computation function.
-     */
-    public static <A, B, C, D> TriFunction<Cont<A>, Cont<B>, Cont<C>, Cont<D>>
-    liftM3(TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
-        return (m1, m2, m3) -> m1.bind(x1 -> m2.bind(x2 -> m3.map(x3 -> f.apply(x1, x2, x3))));
+    public static <A> Cont<Unit> replicateM_(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM_(n, a));
     }
 
     // Generator
@@ -429,8 +382,8 @@ public final class Cont<A> {
         return (Cont<A>)_finish; // no NPE since null will be discarded
     }
 
-    public static <A> Generator<A> generator(Cont<A> k) {
-        return new Gen<A>(k);
+    public static <A> Generator<A> generator($<µ, A> k) {
+        return new Gen<A>(narrow(k));
     }
 
     private static class Gen<A> implements Generator<A> {
@@ -483,8 +436,9 @@ public final class Cont<A> {
         }
 
         @Override
-        public <B> Generator<B> bind(Function<? super A, ? extends Generator<B>> f) {
-            return generator(foldRight(finish(), (x, r) -> yieldFrom(f.apply(x)).then(r)));
+        public <B> Generator<B> bind(Function<? super A, ? extends $<µ, B>> f) {
+            return generator(foldRight(finish(), (x, r) ->
+                yieldFrom(Generator.narrow(f.apply(x))).then(r)));
         }
 
         @Override

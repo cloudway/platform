@@ -18,7 +18,6 @@ import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.fp.data.Either;
 import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Ref;
 import com.cloudway.platform.common.fp.data.IntSeq;
@@ -26,6 +25,8 @@ import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.fp.io.VoidIO;
+import com.cloudway.platform.common.fp.typeclass.Monad;
+import com.cloudway.platform.common.fp.typeclass.$;
 
 /**
  * This class contains keywords for functional DSL.
@@ -428,415 +429,51 @@ public final class Syntax {
     // on monads.
 
     /**
-     * Helper method to chain lists together.
+     * Helper method to chain monad actions together.
      */
-    public static <A, B> Seq<B>
-    do_(Seq<A> a, Function<? super A, Seq<B>> f) {
-        return a.flatMap(f);
+    public static <M extends Monad<M>, A, B> $<M, B>
+    do_($<M, A> a, Function<? super A, ? extends $<M, B>> f) {
+        return a.getTypeClass().bind(a, f);
     }
 
     /**
-     * Helper method to chain lists together, discard intermediate result.
+     * Helper method to chain monad actions together, discard intermediate result.
      */
-    public static <A, B> Seq<B>
-    do_(Seq<A> a, Seq<B> b) {
-        return a.flatMap(Fn.pure(b));
-    }
-
-    /**
-     * Helper method to chain lists together, discard intermediate result.
-     */
-    public static <A, B> Seq<B>
-    do_(Seq<A> a, Supplier<Seq<B>> b) {
-        return a.flatMap(__ -> b.get());
-    }
-
-    /**
-     * Helper method to chain optional actions together.
-     */
-    public static <A, B> Optional<B>
-    do_(Optional<A> a, Function<? super A, Optional<B>> f) {
-        return a.flatMap(f);
-    }
-
-    /**
-     * Helper method to chain optionals together, discard intermediate result.
-     */
-    public static <A, B> Optional<B>
-    do_(Optional<A> a, Optional<B> b) {
-        return a.flatMap(Fn.pure(b));
-    }
-
-    /**
-     * Helper method to chain optionals together, discard intermediate result.
-     */
-    public static <A, B> Optional<B>
-    do_(Optional<A> a, Supplier<Optional<B>> b) {
-        return a.flatMap(__ -> b.get());
-    }
-
-    /**
-     * Helper method to chain either actions together.
-     */
-    public static <T, A, B> Either<T, B>
-    do_(Either<T, A> a, Function<? super A, Either<T, B>> f) {
-        return a.flatMap(f);
-    }
-
-    /**
-     * Helper method to chain IO actions together.
-     */
-    public static <A, B> IO<B> do_(IO<A> a, Function<? super A, ? extends IO<B>> f) {
-        return a.bind(f);
-    }
-
-    /**
-     * Helper method to chain IO actions together, discard intermediate result.
-     */
-    public static <A, B> IO<B> do_(IO<A> a, IO<B> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Helper method to chain IO actions together, discard intermediate result.
-     */
-    public static <A, B> IO<B> do_(IO<A> a, Supplier<IO<B>> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Conditional execution of IO action.
-     */
-    public static IO<Unit> when(boolean test, IO<Unit> then) {
-        return test ? then : IO.unit;
-    }
-
-    /**
-     * The reverse of when.
-     */
-    public static IO<Unit> unless(boolean test, IO<Unit> orElse) {
-        return test ? IO.unit : orElse;
-    }
-
-    /**
-     * Repeats the action infinitely.
-     */
-    public static <A, B> IO<B> forever(IO<A> a) {
-        return loop(a::then);
-    }
-
-    /**
-     * Helper method to wrap an IO action.
-     */
-    public static <A> IO<A> io(IO<A> a) {
-        return a;
-    }
-
-    /**
-     * Helper method to wrap an IO action that has no return value.
-     */
-    public static IO<Unit> io_(VoidIO a) {
-        return a;
-    }
-
-    /**
-     * Helper method to chain state actions together.
-     */
-    public static <A, B, S> MonadState<B, S>
-    do_(MonadState<A, S> a, Function<? super A, MonadState<B, S>> f) {
-        return a.bind(f);
+    public static <M extends Monad<M>, A, B> $<M, B>
+    do_($<M, A> a, $<M, B> b) {
+        return a.getTypeClass().seqR(a, b);
     }
 
     /**
      * Helper method to chain state actions together, discard intermediate result.
      */
-    public static <A, B, S> MonadState<B, S>
-    do_(MonadState<A, S> a, MonadState<B, S> b) {
-        return a.then(b);
+    public static <M extends Monad<M>, A, B> $<M, B>
+    do_($<M, A> a, Supplier<? extends $<M, B>> b) {
+        return a.getTypeClass().seqR(a, b);
     }
 
     /**
-     * Helper method to chain state actions together, discard intermediate result.
+     * Conditional execution of monad action.
      */
-    public static <A, B, S> MonadState<B, S>
-    do_(MonadState<A, S> a, Supplier<MonadState<B, S>> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Conditional execution of state action.
-     */
-    public static <S> MonadState<Unit, S> when(boolean test, MonadState<Unit, S> then) {
-        return test ? then : MonadState.unit();
+    public static <M extends Monad<M>> $<M, Unit>
+    when(boolean test, $<M, Unit> then) {
+        return test ? then : then.getTypeClass().pure(Unit.U);
     }
 
     /**
      * The reverse of when.
      */
-    public static <S> MonadState<Unit, S> unless(boolean test, MonadState<Unit, S> orElse) {
-        return test ? MonadState.unit() : orElse;
+    public static <M extends Monad<M>> $<M, Unit>
+    unless(boolean test, $<M, Unit> orElse) {
+        return test ? orElse.getTypeClass().pure(Unit.U) : orElse;
     }
 
     /**
      * Repeats the action infinitely.
      */
-    public static <A, B, S> MonadState<B, S> forever(MonadState<A, S> a) {
-        return loop(a::then);
-    }
-
-    /**
-     * Helper method to chain stateful IO actions together.
-     */
-    public static <A, B, S> StateIO<B, S>
-    do_(StateIO<A, S> a, Function<? super A, StateIO<B, S>> f) {
-        return a.bind(f);
-    }
-
-    /**
-     * Helper method to chain stateful IO actions together, discard intermediate result.
-     */
-    public static <A, B, S> StateIO<B, S>
-    do_(StateIO<A, S> a, StateIO<B, S> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Helper method to chain stateful IO actions together, discard intermediate result.
-     */
-    public static <A, B, S> StateIO<B, S>
-    do_(StateIO<A, S> a, Supplier<StateIO<B, S>> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Conditional execution of IO action.
-     */
-    public static <S> StateIO<Unit, S> when(boolean test, StateIO<Unit, S> then) {
-        return test ? then : StateIO.unit();
-    }
-
-    /**
-     * The reverse of when.
-     */
-    public static <S> StateIO<Unit, S> unless(boolean test, StateIO<Unit, S> orElse) {
-        return test ? StateIO.unit() : orElse;
-    }
-
-    /**
-     * Repeats the action infinitely.
-     */
-    public static <A, B, S> StateIO<B, S> forever(StateIO<A, S> a) {
-        return loop(a::then);
-    }
-
-    /**
-     * Helper method to chain trampoline actions together.
-     */
-    public static <A, B> Trampoline<B>
-    do_(Trampoline<A> a, Function<? super A, Trampoline<B>> f) {
-        return a.bind(f);
-    }
-
-    /**
-     * Helper method to chain trampoline actions together, discard intermediate result.
-     */
-    public static <A, B> Trampoline<B>
-    do_(Trampoline<A> a, Trampoline<B> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Helper method to chain trampoline actions together, discard intermediate result.
-     */
-    public static <A, B> Trampoline<B>
-    do_(Trampoline<A> a, Supplier<Trampoline<B>> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Conditional execution of trampoline action.
-     */
-    public static Trampoline<Unit> when(boolean test, Trampoline<Unit> then) {
-        return test ? then : Trampoline.unit();
-    }
-
-    /**
-     * The reverse of when.
-     */
-    public static Trampoline<Unit> unless(boolean test, Trampoline<Unit> orElse) {
-        return test ? Trampoline.unit() : orElse;
-    }
-
-    /**
-     * Helper method to chain trampoline actions together.
-     */
-    public static <A, B> TrampolineIO<B>
-    do_(TrampolineIO<A> a, Function<? super A, TrampolineIO<B>> f) {
-        return a.bind(f);
-    }
-
-    /**
-     * Helper method to chain trampoline actions together, discard intermediate result.
-     */
-    public static <A, B> TrampolineIO<B> do_(TrampolineIO<A> a, TrampolineIO<B> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Helper method to chain trampoline actions together, discard intermediate result.
-     */
-    public static <A, B> TrampolineIO<B>
-    do_(TrampolineIO<A> a, Supplier<TrampolineIO<B>> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Conditional execution of trampoline action.
-     */
-    public static TrampolineIO<Unit> when(boolean test, TrampolineIO<Unit> then) {
-        return test ? then : TrampolineIO.unit();
-    }
-
-    /**
-     * The reverse of when.
-     */
-    public static TrampolineIO<Unit> unless(boolean test, TrampolineIO<Unit> orElse) {
-        return test ? TrampolineIO.unit() : orElse;
-    }
-
-    /**
-     * Helper method to chain CPS actions together.
-     */
-    public static <A, B> Cont<B>
-    do_(Cont<A> a, Function<? super A, Cont<B>> f) {
-        return a.bind(f);
-    }
-
-    /**
-     * Helper method to chain CPS actions together, discard intermediate result.
-     */
-    public static <A, B> Cont<B>
-    do_(Cont<A> a, Cont<B> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Helper method to chain CPS actions together, discard intermediate result.
-     */
-    public static <A, B> Cont<B>
-    do_(Cont<A> a, Supplier<Cont<B>> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Conditional execution of continuation action.
-     */
-    public static Cont<Unit> when(boolean test, Cont<Unit> then) {
-        return test ? then : Cont.unit();
-    }
-
-    /**
-     * The reverse of when.
-     */
-    public static Cont<Unit> unless(boolean test, Cont<Unit> orElse) {
-        return test ? Cont.unit() : orElse;
-    }
-
-    /**
-     * Repeats the action infinitely.
-     */
-    public static <A, B> Cont<B> forever(Cont<A> a) {
-        return loop(a::then);
-    }
-
-    /**
-     * Helper method to chain CPS actions together.
-     */
-    public static <A, B, S> StateCont<B, S>
-    do_(StateCont<A, S> a, Function<? super A, StateCont<B, S>> f) {
-        return a.bind(f);
-    }
-
-    /**
-     * Helper method to chain CPS actions together, discard intermediate result.
-     */
-    public static <A, B, S> StateCont<B, S>
-    do_(StateCont<A, S> a, StateCont<B, S> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Helper method to chain CPS actions together, discard intermediate result.
-     */
-    public static <A, B, S> StateCont<B, S>
-    do_(StateCont<A, S> a, Supplier<StateCont<B, S>> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Conditional execution of continuation action.
-     */
-    public static <S> StateCont<Unit, S> when(boolean test, StateCont<Unit, S> then) {
-        return test ? then : StateCont.unit();
-    }
-
-    /**
-     * The reverse of when.
-     */
-    public static <S> StateCont<Unit, S> unless(boolean test, StateCont<Unit, S> orElse) {
-        return test ? StateCont.unit() : orElse;
-    }
-
-    /**
-     * Repeats the action infinitely.
-     */
-    public static <A, B, S> StateCont<B, S> forever(StateCont<A, S> a) {
-        return loop(a::then);
-    }
-
-    /**
-     * Helper method to chain generator actions together.
-     */
-    public static <A, B> Generator<B>
-    do_(Generator<A> a, Function<? super A, Generator<B>> f) {
-        return a.bind(f);
-    }
-
-    /**
-     * Helper method to chain generator actions together, discard intermediate result.
-     */
-    public static <A, B> Generator<B>
-    do_(Generator<A> a, Generator<B> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Helper method to chain generator actions together, discard intermediate result.
-     */
-    public static <A, B> Generator<B>
-    do_(Generator<A> a, Supplier<Generator<B>> b) {
-        return a.then(b);
-    }
-
-    /**
-     * Conditional execution of generator action.
-     */
-    public static Generator<Unit> when(boolean test, Generator<Unit> then) {
-        return test ? then : Generator.pure(Unit.U);
-    }
-
-    /**
-     * The reverse of when.
-     */
-    public static Generator<Unit> unless(boolean test, Generator<Unit> orElse) {
-        return test ? Generator.pure(Unit.U) : orElse;
-    }
-
-    /**
-     * Repeats the action infinitely.
-     */
-    public static <A, B> Generator<B> forever(Generator<A> a) {
-        return loop(a::then);
+    public static <M extends Monad<M>, A, B> $<M, B>
+    forever($<M, A> a) {
+        return loop(r -> a.getTypeClass().seqR(a, r));
     }
 
     /**
@@ -850,6 +487,20 @@ public final class Syntax {
      * Helper method to wrap a lazy action.
      */
     public static <A> Supplier<A> do_(Supplier<A> a) {
+        return a;
+    }
+
+    /**
+     * Helper method to wrap an IO action.
+     */
+    public static <A> IO<A> io(IO<A> a) {
+        return a;
+    }
+
+    /**
+     * Helper method to wrap an IO action that has no return value.
+     */
+    public static IO<Unit> io_(VoidIO a) {
         return a;
     }
 }

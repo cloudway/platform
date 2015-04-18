@@ -24,6 +24,9 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.function.TriFunction;
+import com.cloudway.platform.common.fp.typeclass.Applicative;
+import com.cloudway.platform.common.fp.typeclass.$;
+
 import static com.cloudway.platform.common.fp.control.Syntax.*;
 
 // @formatter:off
@@ -51,8 +54,9 @@ final class Tree {
         Node<K,V> __compute(K k, BiFunction<? super K, Optional<V>, Optional<? extends V>> f);
         Node<K,V> __merge(K k, V v, BiFunction<? super V, ? super V, ? extends V> f);
 
-        <R> Node<K,R> __map(Function<Map.Entry<K,V>, ? extends R> f);
         Node<K,V> __filter(Predicate<Map.Entry<K,V>> p);
+        <R> Node<K,R> __map(Function<Map.Entry<K,V>, ? extends R> f);
+        <R,T> $<T, Node<K,R>> __traverse(Applicative<T> m, Function<Map.Entry<K,V>, $<T,R>> f);
 
         boolean valid();
     }
@@ -140,6 +144,12 @@ final class Tree {
         @Override
         public Node<K,V> __filter(Predicate<Map.Entry<K,V>> p) {
             return this;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <R,T> $<T, Node<K,R>> __traverse(Applicative<T> m, Function<Map.Entry<K,V>, $<T,R>> f) {
+            return m.pure((Node<K,R>)this);
         }
 
         @Override
@@ -292,6 +302,17 @@ final class Tree {
                 return link(left.__filter(p), right.__filter(p));
             } else {
                 return merge(left.__filter(p), right.__filter(p));
+            }
+        }
+
+        @Override
+        public <R,T> $<T, Node<K,R>> __traverse(Applicative<T> m, Function<Map.Entry<K,V>, $<T, R>> f) {
+            @SuppressWarnings("unchecked") Tip<K,R> t = (Tip<K,R>)tip;
+            if (size == 1) {
+                return m.map(f.apply(this), v -> t.cons(1, key, v, t, t));
+            } else {
+                return m.ap3((Node<K,R> l, R v, Node<K,R> r) -> t.cons(size, key, v, l, r),
+                             left.__traverse(m, f), f.apply(this), right.__traverse(m, f));
             }
         }
 
@@ -1366,6 +1387,16 @@ final class Tree {
         }
 
         @Override
+        default PMap<K,V> filter(Predicate<? super V> p) {
+            return (PMap<K,V>)__filter(b -> p.test(b.getValue()));
+        }
+
+        @Override
+        default PMap<K,V> filterKV(BiPredicate<? super K, ? super V> p) {
+            return (PMap<K,V>)__filter(b -> p.test(b.getKey(), b.getValue()));
+        }
+
+        @Override
         default <R> PMap<K,R> map(Function<? super V, ? extends R> f) {
             return (PMap<K,R>)__map(b -> f.apply(b.getValue()));
         }
@@ -1376,13 +1407,9 @@ final class Tree {
         }
 
         @Override
-        default PMap<K,V> filter(Predicate<? super V> p) {
-            return (PMap<K,V>)__filter(b -> p.test(b.getValue()));
-        }
-
-        @Override
-        default PMap<K,V> filterKV(BiPredicate<? super K, ? super V> p) {
-            return (PMap<K,V>)__filter(b -> p.test(b.getKey(), b.getValue()));
+        default <R,T> $<T, PMap<K,R>>
+        traverse(Applicative<T> m, BiFunction<? super K, ? super V, ? extends $<T,R>> f) {
+            return ($)__traverse(m, b -> f.apply(b.getKey(), b.getValue()));
         }
 
         @Override
@@ -1592,8 +1619,8 @@ final class Tree {
         }
 
         public String toString() {
-            return foldLeftKV(new StringJoiner(", ", "[", "]"),
-                              (sj, k, v) -> sj.add("(" + k + "," + v + ")"))
+            return foldLeftKV(new StringJoiner(", ", "TreeMap[", "]"),
+                              (sj, k, v) -> sj.add(k + "=>" + v))
                   .toString();
         }
     }

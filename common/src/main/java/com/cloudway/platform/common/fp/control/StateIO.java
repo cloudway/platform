@@ -14,9 +14,10 @@ import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.function.TriFunction;
 import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.fp.io.VoidIO;
+import com.cloudway.platform.common.fp.typeclass.Monad;
+import com.cloudway.platform.common.fp.typeclass.$;
 
 import static com.cloudway.platform.common.fp.control.TrampolineIO.*;
 
@@ -26,7 +27,7 @@ import static com.cloudway.platform.common.fp.control.TrampolineIO.*;
  * @param <A> the type of result of computation
  * @param <S> the type of state passing to the computation
  */
-public final class StateIO<A, S> {
+public final class StateIO<A, S> implements $<StateIO.µ<S>, A> {
     // the state transfer function
     private final Function<S, TrampolineIO<Tuple<A, S>>> sf;
 
@@ -157,22 +158,22 @@ public final class StateIO<A, S> {
     /**
      * Transfer a state computation by feeding the value to the given function.
      */
-    public <B> StateIO<B, S> bind(Function<? super A, StateIO<B, S>> f) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> f.apply(t.first()).go(t.second())))));
+    public <B> StateIO<B, S> bind(Function<? super A, ? extends $<µ<S>, B>> f) {
+        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(f.apply(t.first())).go(t.second())))));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> StateIO<B, S> then(Supplier<StateIO<B, S>> next) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> next.get().go(t.second())))));
+    public <B> StateIO<B, S> then(Supplier<? extends $<µ<S>, B>> next) {
+        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(next.get()).go(t.second())))));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> StateIO<B, S> then(StateIO<B, S> next) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> next.go(t.second())))));
+    public <B> StateIO<B, S> then($<µ<S>, B> next) {
+        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(next).go(t.second())))));
     }
 
     /**
@@ -200,8 +201,8 @@ public final class StateIO<A, S> {
     /**
      * Fetch the current value of the state and bind the value to the given function.
      */
-    public static <B, S> StateIO<B,S> get(Function<? super S, StateIO<B, S>> f) {
-        return $(s -> suspend(() -> f.apply(s).go(s))); // get().bind(f)
+    public static <B, S> StateIO<B,S> get(Function<? super S, ? extends $<µ<S>, B>> f) {
+        return $(s -> suspend(() -> narrow(f.apply(s)).go(s))); // get().bind(f)
     }
 
     /**
@@ -225,123 +226,82 @@ public final class StateIO<A, S> {
         return $(s -> immediate(Tuple.of(f.apply(s), s)));
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and collect
-     * the result.
-     */
-    public static <A, S> StateIO<Seq<A>, S> flatM(Seq<StateIO<A, S>> ms) {
-        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
+    // Monad
+
+    public static final class µ<S> implements Monad<µ<S>> {
+        @Override
+        public <A> StateIO<A, S> pure(A a) {
+            return StateIO.pure(a);
+        }
+
+        @Override
+        public <A, B> StateIO<B, S> map($<µ<S>, A> a, Function<? super A, ? extends B> f) {
+            return narrow(a).map(f);
+        }
+
+        @Override
+        public <A, B> StateIO<B, S> bind($<µ<S>, A> a, Function<? super A, ? extends $<µ<S>, B>> k) {
+            return narrow(a).bind(k);
+        }
+
+        @Override
+        public <A, B> StateIO<B, S> seqR($<µ<S>, A> a, $<µ<S>, B> b) {
+            return narrow(a).then(b);
+        }
+
+        @Override
+        public <A, B> StateIO<B, S> seqR($<µ<S>, A> a, Supplier<? extends $<µ<S>, B>> b) {
+            return narrow(a).then(b);
+        }
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and ignore
-     * the result.
-     */
-    public static <A, S> StateIO<Unit, S> sequence(Foldable<StateIO<A, S>> ms) {
-        return ms.foldRight(pure(Unit.U), StateIO::then);
+    public static <A, S> StateIO<A, S> narrow($<µ<S>, A> value) {
+        return (StateIO<A, S>)value;
     }
 
-    /**
-     * The {@code mapM} is analogous to {@link Seq#map(Function) map} except that
-     * its result is encapsulated in an {@code StateIO}.
-     */
-    public static <A, B, S> StateIO<Seq<B>, S>
-    mapM(Seq<A> xs, Function<? super A, StateIO<B,S>> f) {
-        return flatM(xs.map(f));
+    private static final µ<?> _TCLASS = new µ<>();
+
+    @SuppressWarnings("unchecked")
+    public static <S> µ<S> tclass() {
+        return (µ<S>)_TCLASS;
     }
 
-    /**
-     * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
-     */
-    public static <A, B, S> StateIO<Unit, S>
-    mapM_(Foldable<A> xs, Function<? super A, StateIO<B,S>> f) {
-        return xs.foldRight(unit(), (x, r) -> f.apply(x).then(r));
+    @Override
+    public µ<S> getTypeClass() {
+        return tclass();
     }
 
-    /**
-     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
-     * Bind the given function to the given computations with a final join.
-     */
-    public static <A, B, C, S> StateIO<Seq<C>, S>
-    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, StateIO<C, S>> f) {
-        return flatM(Seq.zip(xs, ys, f));
+    // Convenient static monad methods
+
+    public static <A, S> StateIO<Seq<A>, S> flatM(Seq<? extends $<µ<S>, A>> ms) {
+        return narrow(StateIO.<S>tclass().flatM(ms));
     }
 
-    /**
-     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
-     * final result.
-     */
-    public static <A, B, C, S> StateIO<Unit, S>
-    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, StateIO<C, S>> f) {
-        return sequence(Seq.zip(xs, ys, f));
+    public static <A, S> StateIO<Unit, S> sequence(Foldable<? extends $<µ<S>, A>> ms) {
+        return narrow(StateIO.<S>tclass().sequence(ms));
     }
 
-    /**
-     * This generalizes the list-based filter function.
-     */
-    public static <A, S> StateIO<Seq<A>, S>
-    filterM(Seq<A> xs, Function<? super A, StateIO<Boolean,S>> p) {
-        return xs.isEmpty()
-            ? pure(Seq.nil())
-            : p.apply(xs.head()).bind(flg ->
-              filterM(xs.tail(), p).bind(ys ->
-              pure(flg ? Seq.cons(xs.head(), ys) : ys)));
+    public static <A, B, S> StateIO<Seq<B>, S> mapM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(StateIO.<S>tclass().mapM(xs, f));
     }
 
-    /**
-     * The {@code foldM} is analogous to {@link Seq#foldLeft(Object,BiFunction) foldLeft},
-     * except that its result is encapsulated in a {@code StateIO}. Note that
-     * {@code foldM} works from left-to-right over the lists arguments. If right-to-left
-     * evaluation is required, the input list should be reversed.
-     */
-    public static <A, B, S> StateIO<B, S>
-    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, StateIO<B, S>> f) {
-        return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
+    public static <A, B, S> StateIO<Unit, S> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(StateIO.<S>tclass().mapM_(xs, f));
     }
 
-    /**
-     * Perform the action n times, gathering the results.
-     */
-    public static <A, S> StateIO<Seq<A>, S> replicateM(int n, StateIO<A, S> a) {
-        return flatM(Seq.replicate(n, a));
+    public static <A, S> StateIO<Seq<A>, S> filterM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, Boolean>> p) {
+        return narrow(StateIO.<S>tclass().filterM(xs, p));
     }
 
-    /**
-     * Perform the action n times, discards the result.
-     */
-    public static <A, S> StateIO<Unit, S> replicateM_(int n, StateIO<A, S> a) {
-        return sequence(Seq.replicate(n, a));
+    public static <A, B, S> StateIO<B, S> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(StateIO.<S>tclass().foldM(r0, xs, f));
     }
 
-    /**
-     * Kleisli composition of monads.
-     */
-    public static <A, B, C, S> Function<A, StateIO<C, S>>
-    kleisli(Function<A, StateIO<B, S>> f, Function<B, StateIO<C, S>> g) {
-        return x -> f.apply(x).bind(g);
+    public static <A, S> StateIO<Seq<A>, S> replicateM(int n, $<µ<S>, A> a) {
+        return narrow(StateIO.<S>tclass().replicateM(n, a));
     }
 
-    /**
-     * Promote a function to a monad state function.
-     */
-    public static <A, B, S> Function<StateIO<A, S>, StateIO<B, S>>
-    liftM(Function<? super A, ? extends B> f) {
-        return m -> m.map(f);
-    }
-
-    /**
-     * Promote a function to a monad state function.
-     */
-    public static <A, B, C, S> BiFunction<StateIO<A,S>, StateIO<B,S>, StateIO<C,S>>
-    liftM2(BiFunction<? super A, ? super B, ? extends C> f) {
-        return (m1, m2) -> m1.bind(x1 -> m2.map(x2 -> f.apply(x1, x2)));
-    }
-
-    /**
-     * Promote a function to a monad state function.
-     */
-    public static <A, B, C, D, S> TriFunction<StateIO<A,S>, StateIO<B,S>, StateIO<C,S>, StateIO<D,S>>
-    liftM3(TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
-        return (m1, m2, m3) -> m1.bind(x1 -> m2.bind(x2 -> m3.map(x3 -> f.apply(x1, x2, x3))));
+    public static <A, S> StateIO<Unit, S> replicateM_(int n, $<µ<S>, A> a) {
+        return narrow(StateIO.<S>tclass().replicateM_(n, a));
     }
 }

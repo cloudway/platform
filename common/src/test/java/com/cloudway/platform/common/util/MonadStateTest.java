@@ -209,8 +209,9 @@ public class MonadStateTest {
         }
 
         private static MonadState<State, Door> action(Action action, State state) {
-            return do_(MonadState.modify(s -> s.transfer(state, action)),
-                   do_(MonadState.pure(state)));
+            return MonadState.narrow(
+                do_(MonadState.modify(s -> s.transfer(state, action)),
+                do_(MonadState.pure(state))));
         }
 
         public static MonadState<State, Door> open() {
@@ -259,9 +260,10 @@ public class MonadStateTest {
         private Game() {}
 
         public static MonadState<Integer, GameState> play(String input) {
-            return do_(MonadState.mapM_(Seq.wrap(input), Game::scan),
-                   do_(MonadState.get(), as(GameState((on, score) ->
-                   do_(MonadState.pure(score))))));
+            return MonadState.narrow(
+                do_(MonadState.mapM_(Seq.wrap(input), Game::scan),
+                do_(MonadState.get(), as(GameState((on, score) ->
+                do_(MonadState.pure(score)))))));
         }
 
         static MonadState<Unit, GameState> scan(char x) {

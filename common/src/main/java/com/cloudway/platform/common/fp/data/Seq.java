@@ -27,13 +27,17 @@ import com.cloudway.platform.common.fp.function.ExceptionFunction;
 import com.cloudway.platform.common.fp.function.ExceptionSupplier;
 import com.cloudway.platform.common.fp.function.ExceptionTriFunction;
 import com.cloudway.platform.common.fp.control.ConditionCase;
+import com.cloudway.platform.common.fp.typeclass.$;
+import com.cloudway.platform.common.fp.typeclass.Applicative;
+import com.cloudway.platform.common.fp.typeclass.Monad;
+import com.cloudway.platform.common.fp.typeclass.Traversable;
 
 /**
  * A sequential, ordered, and potentially lazied list.
  *
  * @param <T> the element type
  */
-public interface Seq<T> extends Foldable<T>
+public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>
 {
     /**
      * Returns {@code true} if this list contains no elements.
@@ -361,6 +365,20 @@ public interface Seq<T> extends Foldable<T>
     }
 
     /**
+     * Map each element of this list to an action, evaluate these actions from
+     * left to right, and collect the results.
+     */
+    @SuppressWarnings("unchecked")
+    default <R, F> $<F, Seq<R>> traverse(Applicative<F> m, Function<? super T, ? extends $<F,R>> f) {
+        if (m instanceof Monad) {
+            return ((Monad<F>)m).mapM(this, f);
+        } else {
+            BiFunction<R, Seq<R>, Seq<R>> cf = Seq::cons;
+            return foldRight_(m.pure(nil()), (x, ys) -> m.ap2(cf, f.apply(x), ys));
+        }
+    }
+
+    /**
      * Transposes the rows and columns of its argument. For example.
      * <pre>{@code
      *     transpose [[1,2,3],[4,5,6]] == [[1,4],[2,5],[3,6]]
@@ -659,11 +677,97 @@ public interface Seq<T> extends Foldable<T>
         return flatten(of(lists));
     }
 
+    // Type classes
+
     /**
-     * Returns the list monoid.
+     * Returns the {@link Monoid} typeclass.
      */
     static <T> Monoid<Seq<T>> monoid() {
         return Monoid.monoid(nil(), SeqImpl::concat);
+    }
+
+    /**
+     * Typeclass definition for Seq.
+     */
+    class µ implements Monad<µ>, Traversable<µ> {
+        private µ() {}
+
+        @Override
+        public <A> Seq<A> pure(A a) {
+            return of(a);
+        }
+
+        @Override
+        public <A, B> Seq<B> map($<µ,A> a, Function<? super A, ? extends B> f) {
+            return narrow(a).map(f);
+        }
+
+        @Override
+        public <A, B> Seq<B> bind($<µ,A> a, Function<? super A, ? extends $<µ,B>> k) {
+            return narrow(a).flatMap(x -> narrow(k.apply(x)));
+        }
+
+        @Override
+        public <F, A, B> $<F, Seq<B>>
+        traverse(Applicative<F> m, $<µ,A> a, Function<? super A, ? extends $<F,B>> f) {
+            return narrow(a).traverse(m, f);
+        }
+
+        @Override
+        public <A> Seq<A> fail(String s) {
+            return nil();
+        }
+    }
+
+    static <T> Seq<T> narrow($<µ, T> value) {
+        return (Seq<T>)value;
+    }
+
+    /**
+     * The singleton type class instance.
+     */
+    µ tclass = new µ();
+
+    /**
+     * Returns the type class of Seq.
+     */
+    @Override
+    default µ getTypeClass() {
+        return tclass;
+    }
+
+    // Convenient static monad methods
+
+    static <A> Seq<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+        return narrow(tclass.flatM(ms));
+    }
+
+    static <A> Seq<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
+        return narrow(tclass.sequence(ms));
+    }
+
+    static <A, B> Seq<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
+    }
+
+    static <A, B> Seq<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM_(xs, f));
+    }
+
+    static <A> Seq<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+        return narrow(tclass.filterM(xs, p));
+    }
+
+    static <A, B> Seq<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.foldM(r0, xs, f));
+    }
+
+    static <A> Seq<Seq<A>> replicateM(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM(n, a));
+    }
+
+    static <A> Seq<Unit> replicateM_(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM_(n, a));
     }
 
     /**

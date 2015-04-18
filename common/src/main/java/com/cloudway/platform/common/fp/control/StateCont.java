@@ -17,7 +17,8 @@ import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.function.TriFunction;
+import com.cloudway.platform.common.fp.typeclass.Monad;
+import com.cloudway.platform.common.fp.typeclass.$;
 
 /**
  * A stateful CPS computation.
@@ -27,11 +28,11 @@ import com.cloudway.platform.common.fp.function.TriFunction;
  *
  * @see Cont
  */
-public final class StateCont<A, S> {
+public final class StateCont<A, S> implements $<StateCont.µ<S>, A> {
     // the CPS transfer type
     @FunctionalInterface
     private interface K<A, S, R> {
-        MonadState<R, S> apply(Function<A, MonadState<R, S>> f);
+        $<MonadState.µ<S>, R> apply(Function<? super A, ? extends $<MonadState.µ<S>, R>> f);
     }
 
     // the CPS transfer function
@@ -54,8 +55,8 @@ public final class StateCont<A, S> {
      * @return the final result of computation
      */
     @SuppressWarnings("unchecked")
-    public <R> MonadState<R, S> run(Function<A, MonadState<R, S>> k) {
-        return ((K<A,S,R>)kf).apply(k);
+    public <R> MonadState<R, S> run(Function<? super A, ? extends $<MonadState.µ<S>, R>> k) {
+        return MonadState.narrow(((K<A,S,R>)kf).apply(k));
     }
 
     /**
@@ -113,7 +114,7 @@ public final class StateCont<A, S> {
      * @return the continuation that yield the result of function application
      */
     public <B> StateCont<B, S> map(Function<? super A, ? extends B> f) {
-        return $(c -> run(c.compose(f)));
+        return $(c -> run(x -> c.apply(f.apply(x))));
     }
 
     /**
@@ -124,8 +125,8 @@ public final class StateCont<A, S> {
      *          to a new continuation
      * @return the new continuation applying the transfer function
      */
-    public <B> StateCont<B, S> bind(Function<? super A, StateCont<B, S>> k) {
-        return $(c -> run(a -> k.apply(a).run(c)));
+    public <B> StateCont<B, S> bind(Function<? super A, ? extends $<µ<S>, B>> k) {
+        return $(c -> run(a -> narrow(k.apply(a)).run(c)));
     }
 
     /**
@@ -134,8 +135,8 @@ public final class StateCont<A, S> {
      * @param b the new continuation transformation
      * @return a continuation that transfers this continuation to the given continuation
      */
-    public <B> StateCont<B, S> then(StateCont<B, S> b) {
-        return $(c -> run(a -> b.run(c)));
+    public <B> StateCont<B, S> then($<µ<S>, B> b) {
+        return $(c -> run(a -> narrow(b).run(c)));
     }
 
     /**
@@ -144,8 +145,8 @@ public final class StateCont<A, S> {
      * @param b the new continuation transformation
      * @return a continuation that transfers this continuation to the given continuation
      */
-    public <B> StateCont<B, S> then(Supplier<StateCont<B, S>> b) {
-        return $(c -> run(a -> b.get().run(c)));
+    public <B> StateCont<B, S> then(Supplier<? extends $<µ<S>, B>> b) {
+        return $(c -> run(a -> narrow(b.get()).run(c)));
     }
 
     /**
@@ -154,8 +155,8 @@ public final class StateCont<A, S> {
      * @param f the function that transform the result of computation
      * @return a continuation applying the transfer function
      */
-    public <R> StateCont<A, S> mapCont(Function<MonadState<R, S>, MonadState<R, S>> f) {
-        return $((Function<A, MonadState<R, S>> c) -> f.apply(run(c)));
+    public <R> StateCont<A, S> mapCont(Function<MonadState<R, S>, ? extends $<MonadState.µ<S>, R>> f) {
+        return StateCont.<A,S,R>$(c -> f.apply(run(c)));
     }
 
     /**
@@ -166,8 +167,9 @@ public final class StateCont<A, S> {
      * @return a continuation applying the transfer function
      */
     public <B, R> StateCont<B, S>
-    withCont(Function<Function<B, MonadState<R, S>>, Function<A, MonadState<R, S>>> f) {
-        return $((Function<B, MonadState<R, S>> c) -> run(f.apply(c)));
+    withCont(Function<Function<? super B, ? extends $<MonadState.µ<S>, R>>,
+                      Function<? super A, ? extends $<MonadState.µ<S>, R>>> f) {
+        return StateCont.<B,S,R>$(c -> run(f.apply(c)));
     }
 
     /**
@@ -180,7 +182,7 @@ public final class StateCont<A, S> {
     /**
      * Fetch the current value of the state and bind the value to the given function.
      */
-    public static <B, S> StateCont<B, S> get(Function<? super S, StateCont<B, S>> f) {
+    public static <B, S> StateCont<B, S> get(Function<? super S, ? extends $<µ<S>, B>> f) {
         return StateCont.<S>get().bind(f);
     }
 
@@ -227,7 +229,7 @@ public final class StateCont<A, S> {
      * @param f the function that passing the current continuation
      * @return a continuation that may or may not escaped from current continuation
      */
-    public static <A, S> StateCont<A, S> callCC(Function<Exit<A, S>, StateCont<A, S>> f) {
+    public static <A, S> StateCont<A, S> callCC(Function<Exit<A, S>, ? extends $<µ<S>, A>> f) {
         // Note: the compacted code is as:
         //     $(c -> f.apply(a -> $(__ -> c.apply(a))).run(c))
         // but generic method can not be represented as a lambda expression
@@ -237,7 +239,7 @@ public final class StateCont<A, S> {
                     return $(__ -> c.apply(a));
                 }
             };
-            return f.apply(exit).run(c);
+            return narrow(f.apply(exit)).run(c);
         });
     }
 
@@ -247,146 +249,104 @@ public final class StateCont<A, S> {
      * @param m the state computation
      * @return the prompted stateful CPS computation
      */
-    public static <A, S> StateCont<A, S> lift(MonadState<A, S> m) {
-        return $(m::bind);
+    public static <A, S> StateCont<A, S> lift($<MonadState.µ<S>, A> m) {
+        return $(MonadState.narrow(m)::bind);
     }
 
     /**
      * Delimits the continuation of any {@link #shift(Function) shift} inside current
      * continuation.
      */
-    public static <A, S> StateCont<A, S> reset(StateCont<A, S> m) {
-        return $(k -> m.eval().bind(k));
+    public static <A, S> StateCont<A, S> reset($<µ<S>, A> m) {
+        return $(k -> narrow(m).eval().bind(k));
     }
 
     /**
-     * Captures the continuation up to the nearest enclosing {@link #reset(StateCont) reset}
+     * Captures the continuation up to the nearest enclosing {@link #reset}
      * and passes it to the given function.
      */
-    public static <A, R, S> StateCont<A, S> shift(Function<Function<A, MonadState<R, S>>, StateCont<R, S>> f) {
-        return $((Function<A, MonadState<R, S>> k) -> f.apply(k).eval());
+    public static <A, R, S> StateCont<A, S>
+    shift(Function<Function<A, MonadState<R, S>>, ? extends $<µ<S>, R>> f) {
+        return StateCont.<A,S,R>$(k -> narrow(f.apply(a -> MonadState.narrow(k.apply(a)))).eval());
     }
 
     // Monad
 
-    /**
-     * Evaluate each action in the sequence from left to right, and collect
-     * the result.
-     */
-    public static <A, S> StateCont<Seq<A>, S> flatM(Seq<StateCont<A, S>> ms) {
-        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
+    public static final class µ<S> implements Monad<µ<S>> {
+        @Override
+        public <A> StateCont<A, S> pure(A a) {
+            return StateCont.pure(a);
+        }
+
+        @Override
+        public <A, B> StateCont<B, S> map($<µ<S>, A> a, Function<? super A, ? extends B> f) {
+            return narrow(a).map(f);
+        }
+
+        @Override
+        public <A, B> StateCont<B, S> bind($<µ<S>, A> a, Function<? super A, ? extends $<µ<S>, B>> k) {
+            return narrow(a).bind(k);
+        }
+
+        @Override
+        public <A, B> StateCont<B, S> seqR($<µ<S>, A> a, $<µ<S>, B> b) {
+            return narrow(a).then(b);
+        }
+
+        @Override
+        public <A, B> StateCont<B, S> seqR($<µ<S>, A> a, Supplier<? extends $<µ<S>, B>> b) {
+            return narrow(a).then(b);
+        }
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and ignore
-     * the result.
-     */
-    public static <A, S> StateCont<Unit, S> sequence(Foldable<StateCont<A, S>> ms) {
-        return ms.foldRight(unit(), StateCont::then);
+    public static <A, S> StateCont<A, S> narrow($<µ<S>, A> value) {
+        return (StateCont<A, S>)value;
     }
 
-    /**
-     * The {@code mapM} is analogous to {@link Seq#map(Function) map} except that
-     * its result is encapsulated in a {@code Continuation}.
-     */
-    public static <A, B, S> StateCont<Seq<B>, S>
-    mapM(Seq<A> xs, Function<? super A, StateCont<B, S>> f) {
-        return flatM(xs.map(f));
+    private static final µ<?> _TCLASS = new µ<>();
+
+    @SuppressWarnings("unchecked")
+    public static <S> µ<S> tclass() {
+        return (µ<S>)_TCLASS;
     }
 
-    /**
-     * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
-     */
-    public static <A, B, S> StateCont<Unit, S>
-    mapM_(Foldable<A> xs, Function<? super A, StateCont<B, S>> f) {
-        return xs.foldRight(unit(), (x, r) -> f.apply(x).then(r));
+    @Override
+    public µ<S> getTypeClass() {
+        return tclass();
     }
 
-    /**
-     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
-     * Bind the given function to the given computations with a final join.
-     */
-    public static <A, B, C, S> StateCont<Seq<C>, S>
-    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, StateCont<C, S>> f) {
-        return flatM(Seq.zip(xs, ys, f));
+    // Convenient static monad methods
+
+    public static <A, S> StateCont<Seq<A>, S> flatM(Seq<? extends $<µ<S>, A>> ms) {
+        return narrow(StateCont.<S>tclass().flatM(ms));
     }
 
-    /**
-     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
-     * final result.
-     */
-    public static <A, B, C, S> StateCont<Unit, S>
-    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, StateCont<C, S>> f) {
-        return sequence(Seq.zip(xs, ys, f));
+    public static <A, S> StateCont<Unit, S> sequence(Foldable<? extends $<µ<S>, A>> ms) {
+        return narrow(StateCont.<S>tclass().sequence(ms));
     }
 
-    /**
-     * This generalizes the list-based filter function.
-     */
-    public static <A, S> StateCont<Seq<A>, S>
-    filterM(Seq<A> xs, Function<? super A, StateCont<Boolean, S>> p) {
-        return xs.isEmpty()
-               ? pure(Seq.nil())
-               : p.apply(xs.head()).bind(flg ->
-                 filterM(xs.tail(), p).bind(ys ->
-                 pure(flg ? Seq.cons(xs.head(), ys) : ys)));
+    public static <A, B, S> StateCont<Seq<B>, S> mapM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(StateCont.<S>tclass().mapM(xs, f));
     }
 
-    /**
-     * The {@code foldM} is analogous to {@link Seq#foldLeft(Object,BiFunction) foldLeft},
-     * except that its result is encapsulated in a {@code Continuation}. Note that
-     * {@code foldM} works from left-to-right over the lists arguments. If right-to-left
-     * evaluation is required, the input list should be reversed.
-     */
-    public static <A, B, S> StateCont<B, S>
-    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, StateCont<B, S>> f) {
-        return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
+    public static <A, B, S> StateCont<Unit, S> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(StateCont.<S>tclass().mapM_(xs, f));
     }
 
-    /**
-     * Perform the action n times, gathering the results.
-     */
-    public static <A, S> StateCont<Seq<A>, S> replicateM(int n, StateCont<A, S> a) {
-        return flatM(Seq.replicate(n, a));
+    public static <A, S> StateCont<Seq<A>, S> filterM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, Boolean>> p) {
+        return narrow(StateCont.<S>tclass().filterM(xs, p));
     }
 
-    /**
-     * Perform the action n times, discards the result.
-     */
-    public static <A, S> StateCont<Unit, S> replicateM_(int n, StateCont<A, S> a) {
-        return sequence(Seq.replicate(n, a));
+    public static <A, B, S> StateCont<B, S> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(StateCont.<S>tclass().foldM(r0, xs, f));
     }
 
-    /**
-     * Kleisli composition of monads.
-     */
-    public static <A, B, C, S> Function<A, StateCont<C, S>>
-    kleisli(Function<A, StateCont<B, S>> f, Function<B, StateCont<C, S>> g) {
-        return x -> f.apply(x).bind(g);
+    public static <A, S> StateCont<Seq<A>, S> replicateM(int n, $<µ<S>, A> a) {
+        return narrow(StateCont.<S>tclass().replicateM(n, a));
     }
 
-    /**
-     * Promote a function to a CPS computation function.
-     */
-    public static <A, B, S> Function<StateCont<A, S>, StateCont<B, S>>
-    liftM(Function<? super A, ? extends B> f) {
-        return m -> m.map(f);
-    }
-
-    /**
-     * Promote a function to a CPS computation function.
-     */
-    public static <A, B, C, S> BiFunction<StateCont<A, S>, StateCont<B, S>, StateCont<C, S>>
-    liftM2(BiFunction<? super A, ? super B, ? extends C> f) {
-        return (m1, m2) -> m1.bind(x1 -> m2.map(x2 -> f.apply(x1, x2)));
-    }
-
-    /**
-     * Promote a function to a CPS computation function.
-     */
-    public static <A, B, C, D, S> TriFunction<StateCont<A, S>, StateCont<B, S>, StateCont<C, S>, StateCont<D, S>>
-    liftM3(TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
-        return (m1, m2, m3) -> m1.bind(x1 -> m2.bind(x2 -> m3.map(x3 -> f.apply(x1, x2, x3))));
+    public static <A, S> StateCont<Unit, S> replicateM_(int n, $<µ<S>, A> a) {
+        return narrow(StateCont.<S>tclass().replicateM_(n, a));
     }
 
     // Generator
@@ -449,8 +409,8 @@ public final class StateCont<A, S> {
         return (StateCont<A,S>)_finish; // no NPE since null will be discarded
     }
 
-    public static <A, S> Generator<A> generator(S s, StateCont<A, S> k) {
-        return new Gen<>(s, k);
+    public static <A, S> Generator<A> generator(S s, $<µ<S>, A> k) {
+        return new Gen<>(s, narrow(k));
     }
 
     private static class Gen<A, S> implements Generator<A> {
@@ -507,9 +467,9 @@ public final class StateCont<A, S> {
         }
 
         @Override
-        public <B> Generator<B> bind(Function<? super A, ? extends Generator<B>> f) {
+        public <B> Generator<B> bind(Function<? super A, ? extends $<µ, B>> f) {
             return generator(state, foldRight(finish(), (x, r) ->
-                StateCont.<B,S>yieldFrom(f.apply(x)).then(r)
+                StateCont.<B,S>yieldFrom(Generator.narrow(f.apply(x))).then(r)
             ));
         }
 

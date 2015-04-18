@@ -504,14 +504,15 @@ public class FunctionalTest
         }
 
         private static MonadState<BigInteger, PMap<Integer, BigInteger>> fibmemo_(int n) {
-            return do_(MonadState.get(), memo ->
-                       memo.containsKey(n)
-                       ? MonadState.pure(memo.get(n))
-                       : do_(fibmemo_(n - 1), (BigInteger a) ->
-                         do_(fibmemo_(n - 2), (BigInteger b) ->
-                         let(a.add(b), (BigInteger c) ->
-                         do_(MonadState.modify(m -> m.put(n, c)),
-                         do_(MonadState.pure(c)))))));
+            return MonadState.narrow(
+                do_(MonadState.get(), memo ->
+                    memo.containsKey(n)
+                    ? MonadState.pure(memo.get(n))
+                    : do_(fibmemo_(n - 1), (BigInteger a) ->
+                      do_(fibmemo_(n - 2), (BigInteger b) ->
+                      let(a.add(b), (BigInteger c) ->
+                      do_(MonadState.modify(m -> m.put(n, c)),
+                      do_(MonadState.pure(c))))))));
         }
     }
 
@@ -717,8 +718,8 @@ public class FunctionalTest
 
         private static StateCont<Integer, GoodCPS> ask(String prompt) {
             return StateCont.<Integer, Unit, GoodCPS>shift(k ->
-                do_(StateCont.modify(state -> state.save(k)),
-                do_(log(prompt))));
+                  do_(StateCont.modify(state -> state.save(k)),
+                  do_(log(prompt))));
         }
 
         private static StateCont<Unit, GoodCPS> log(String message) {

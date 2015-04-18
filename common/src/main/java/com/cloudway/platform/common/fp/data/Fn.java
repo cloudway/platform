@@ -121,6 +121,17 @@ public final class Fn {
     }
 
     /**
+     * Curry a function of arity-3.
+     *
+     * @param f the function to curry
+     * @return a curried form of the given function
+     */
+    public static <A, B, C, D> Function<A, Function<B, Function<C, D>>>
+    curry3(TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
+        return a -> b -> c -> f.apply(a, b, c);
+    }
+
+    /**
      * Uncurry a function of arity-2.
      *
      * @param f the function to uncurry

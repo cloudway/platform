@@ -15,7 +15,8 @@ import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.function.TriFunction;
+import com.cloudway.platform.common.fp.typeclass.Monad;
+import com.cloudway.platform.common.fp.typeclass.$;
 
 import static com.cloudway.platform.common.fp.control.Trampoline.immediate;
 import static com.cloudway.platform.common.fp.control.Trampoline.suspend;
@@ -26,7 +27,7 @@ import static com.cloudway.platform.common.fp.control.Trampoline.suspend;
  * @param <A> the type of result of computation
  * @param <S> the type of state passing to the computation
  */
-public final class MonadState<A, S> {
+public final class MonadState<A, S> implements $<MonadState.µ<S>, A> {
     // the state transfer function
     private final Function<S, Trampoline<Tuple<A, S>>> sf;
 
@@ -132,22 +133,22 @@ public final class MonadState<A, S> {
     /**
      * Transfer a state computation by feeding the value to the given function.
      */
-    public <B> MonadState<B, S> bind(Function<? super A, MonadState<B, S>> f) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> f.apply(t.first()).go(t.second())))));
+    public <B> MonadState<B, S> bind(Function<? super A, ? extends $<µ<S>, B>> f) {
+        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(f.apply(t.first())).go(t.second())))));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> MonadState<B, S> then(Supplier<MonadState<B, S>> next) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> next.get().go(t.second())))));
+    public <B> MonadState<B, S> then(Supplier<? extends $<µ<S>, B>> next) {
+        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(next.get()).go(t.second())))));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> MonadState<B, S> then(MonadState<B, S> next) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> next.go(t.second())))));
+    public <B> MonadState<B, S> then($<µ<S>, B> next) {
+        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(next).go(t.second())))));
     }
 
     /**
@@ -183,8 +184,8 @@ public final class MonadState<A, S> {
     /**
      * Fetch the current value of the state and bind the value to the given function.
      */
-    public static <B,S> MonadState<B,S> get(Function<? super S, MonadState<B, S>> f) {
-        return $(s -> suspend(() -> f.apply(s).go(s))); // get().bind(f)
+    public static <B,S> MonadState<B,S> get(Function<? super S, ? extends $<µ<S>, B>> f) {
+        return $(s -> suspend(() -> narrow(f.apply(s)).go(s))); // get().bind(f)
     }
 
     /**
@@ -208,123 +209,82 @@ public final class MonadState<A, S> {
         return $(s -> immediate(Tuple.of(f.apply(s), s)));
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and collect
-     * the result.
-     */
-    public static <A, S> MonadState<Seq<A>, S> flatM(Seq<MonadState<A, S>> ms) {
-        return ms.foldRight_(pure(Seq.nil()), liftM2(Seq::cons));
+    // Monad
+
+    public static final class µ<S> implements Monad<µ<S>> {
+        @Override
+        public <A> MonadState<A, S> pure(A a) {
+            return MonadState.pure(a);
+        }
+
+        @Override
+        public <A, B> MonadState<B, S> map($<µ<S>, A> a, Function<? super A, ? extends B> f) {
+            return narrow(a).map(f);
+        }
+
+        @Override
+        public <A, B> MonadState<B, S> bind($<µ<S>, A> a, Function<? super A, ? extends $<µ<S>, B>> k) {
+            return narrow(a).bind(k);
+        }
+
+        @Override
+        public <A, B> MonadState<B, S> seqR($<µ<S>, A> a, $<µ<S>, B> b) {
+            return narrow(a).then(b);
+        }
+
+        @Override
+        public <A, B> MonadState<B, S> seqR($<µ<S>, A> a, Supplier<? extends $<µ<S>, B>> b) {
+            return narrow(a).then(b);
+        }
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and ignore
-     * the result.
-     */
-    public static <A, S> MonadState<Unit, S> sequence(Foldable<MonadState<A, S>> ms) {
-        return ms.foldRight(pure(Unit.U), MonadState::then);
+    public static <A, S> MonadState<A, S> narrow($<µ<S>, A> value) {
+        return (MonadState<A, S>)value;
     }
 
-    /**
-     * The {@code mapM} is analogous to {@link Seq#map(Function) map} except that
-     * its result is encapsulated in an {@code MonadState}.
-     */
-    public static <A, B, S> MonadState<Seq<B>, S>
-    mapM(Seq<A> xs, Function<? super A, MonadState<B,S>> f) {
-        return flatM(xs.map(f));
+    private static final µ<?> _TCLASS = new µ<>();
+
+    @SuppressWarnings("unchecked")
+    public static <S> µ<S> tclass() {
+        return (µ<S>)_TCLASS;
     }
 
-    /**
-     * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
-     */
-    public static <A, B, S> MonadState<Unit, S>
-    mapM_(Foldable<A> xs, Function<? super A, MonadState<B,S>> f) {
-        return xs.foldRight(unit(), (x, r) -> f.apply(x).then(r));
+    @Override
+    public µ<S> getTypeClass() {
+        return tclass();
     }
 
-    /**
-     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
-     * Bind the given function to the given computations with a final join.
-     */
-    public static <A, B, C, S> MonadState<Seq<C>, S>
-    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, MonadState<C, S>> f) {
-        return flatM(Seq.zip(xs, ys, f));
+    // Convenient static monad methods
+
+    public static <A, S> MonadState<Seq<A>, S> flatM(Seq<? extends $<µ<S>, A>> ms) {
+        return narrow(MonadState.<S>tclass().flatM(ms));
     }
 
-    /**
-     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
-     * final result.
-     */
-    public static <A, B, C, S> MonadState<Unit, S>
-    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, MonadState<C, S>> f) {
-        return sequence(Seq.zip(xs, ys, f));
+    public static <A, S> MonadState<Unit, S> sequence(Foldable<? extends $<µ<S>, A>> ms) {
+        return narrow(MonadState.<S>tclass().sequence(ms));
     }
 
-    /**
-     * This generalizes the list-based filter function.
-     */
-    public static <A, S> MonadState<Seq<A>, S>
-    filterM(Seq<A> xs, Function<? super A, MonadState<Boolean,S>> p) {
-        return xs.isEmpty()
-            ? pure(Seq.nil())
-            : p.apply(xs.head()).bind(flg ->
-              filterM(xs.tail(), p).bind(ys ->
-              pure(flg ? Seq.cons(xs.head(), ys) : ys)));
+    public static <A, B, S> MonadState<Seq<B>, S> mapM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(MonadState.<S>tclass().mapM(xs, f));
     }
 
-    /**
-     * The {@code foldM} is analogous to {@link Seq#foldLeft(Object,BiFunction) foldLeft},
-     * except that its result is encapsulated in a {@code MonadState}. Note that
-     * {@code foldM} works from left-to-right over the lists arguments. If right-to-left
-     * evaluation is required, the input list should be reversed.
-     */
-    public static <A, B, S> MonadState<B, S>
-    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, MonadState<B, S>> f) {
-        return xs.foldLeft(pure(r0), (m, x) -> m.bind(r -> f.apply(r, x)));
+    public static <A, B, S> MonadState<Unit, S> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(MonadState.<S>tclass().mapM_(xs, f));
     }
 
-    /**
-     * Perform the action n times, gathering the results.
-     */
-    public static <A, S> MonadState<Seq<A>, S> replicateM(int n, MonadState<A, S> a) {
-        return flatM(Seq.replicate(n, a));
+    public static <A, S> MonadState<Seq<A>, S> filterM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, Boolean>> p) {
+        return narrow(MonadState.<S>tclass().filterM(xs, p));
     }
 
-    /**
-     * Perform the action n times, discards the result.
-     */
-    public static <A, S> MonadState<Unit, S> replicateM_(int n, MonadState<A, S> a) {
-        return sequence(Seq.replicate(n, a));
+    public static <A, B, S> MonadState<B, S> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(MonadState.<S>tclass().foldM(r0, xs, f));
     }
 
-    /**
-     * Kleisli composition of monads.
-     */
-    public static <A, B, C, S> Function<A, MonadState<C, S>>
-    kleisli(Function<A, MonadState<B, S>> f, Function<B, MonadState<C, S>> g) {
-        return x -> f.apply(x).bind(g);
+    public static <A, S> MonadState<Seq<A>, S> replicateM(int n, $<µ<S>, A> a) {
+        return narrow(MonadState.<S>tclass().replicateM(n, a));
     }
 
-    /**
-     * Promote a function to a monad state function.
-     */
-    public static <A, B, S> Function<MonadState<A, S>, MonadState<B, S>>
-    liftM(Function<? super A, ? extends B> f) {
-        return m -> m.map(f);
-    }
-
-    /**
-     * Promote a function to a monad state function.
-     */
-    public static <A, B, C, S> BiFunction<MonadState<A,S>, MonadState<B,S>, MonadState<C,S>>
-    liftM2(BiFunction<? super A, ? super B, ? extends C> f) {
-        return (m1, m2) -> m1.bind(x1 -> m2.map(x2 -> f.apply(x1, x2)));
-    }
-
-    /**
-     * Promote a function to a monad state function.
-     */
-    public static <A, B, C, D, S> TriFunction<MonadState<A,S>, MonadState<B,S>, MonadState<C,S>, MonadState<D,S>>
-    liftM3(TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
-        return (m1, m2, m3) -> m1.bind(x1 -> m2.bind(x2 -> m3.map(x3 -> f.apply(x1, x2, x3))));
+    public static <A, S> MonadState<Unit, S> replicateM_(int n, $<µ<S>, A> a) {
+        return narrow(MonadState.<S>tclass().replicateM_(n, a));
     }
 }

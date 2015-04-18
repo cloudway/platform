@@ -14,6 +14,8 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 import com.cloudway.platform.common.fp.function.TriFunction;
+import com.cloudway.platform.common.fp.typeclass.$;
+import com.cloudway.platform.common.fp.typeclass.Applicative;
 
 // @formatter:off
 
@@ -228,6 +230,7 @@ final class VectorImpl {
         abstract Digit<A> modify(int i, IndexFunction<A> f);
         abstract Split<Digit<A>,A> split(int i);
         abstract <B> Digit<B> map(Function<? super A, ? extends B> f);
+        abstract <F,B> $<F,Digit<B>> traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f);
         abstract Digit<A> reverse(Function<A,A> f);
         abstract <B,S> Digit<B> splitMap(S s, BiFunction<Integer,S,Pair<S>> splt, BiFunction<S,A,B> f);
         abstract FTree<A> toTree();
@@ -271,6 +274,11 @@ final class VectorImpl {
 
         @Override <B> Digit<B> map(Function<? super A, ? extends B> f) {
             return one(f.apply(a));
+        }
+
+        @Override <F,B> $<F, Digit<B>>
+        traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
+            return m.map(f.apply(a), VectorImpl::one);
         }
 
         @Override Digit<A> reverse(Function<A,A> f) {
@@ -345,6 +353,11 @@ final class VectorImpl {
 
         @Override <B> Digit<B> map(Function<? super A, ? extends B> f) {
             return two(f.apply(a), f.apply(b));
+        }
+
+        @Override <F,B> $<F, Digit<B>>
+        traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
+            return m.ap2(VectorImpl::two, f.apply(a), f.apply(b));
         }
 
         @Override Digit<A> reverse(Function<A,A> f) {
@@ -427,6 +440,11 @@ final class VectorImpl {
 
         @Override <B> Digit<B> map(Function<? super A, ? extends B> f) {
             return three(f.apply(a), f.apply(b), f.apply(c));
+        }
+
+        @Override <F,B> $<F, Digit<B>>
+        traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
+            return m.ap3(VectorImpl::three, f.apply(a), f.apply(b), f.apply(c));
         }
 
         @Override Digit<A> reverse(Function<A,A> f) {
@@ -519,6 +537,13 @@ final class VectorImpl {
             return four(f.apply(a), f.apply(b), f.apply(c), f.apply(d));
         }
 
+        @Override <F,B> $<F, Digit<B>>
+        traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
+            Function<B, Function<B, Function<B, Function<B, Digit<B>>>>> four_f =
+                a -> b -> c -> d -> four(a, b, c, d);
+            return m.ap(m.ap(m.ap(m.map(f.apply(a), four_f), f.apply(b)), f.apply(c)), f.apply(d));
+        }
+
         @Override Digit<A> reverse(Function<A,A> f) {
             return four(f.apply(d), f.apply(c), f.apply(b), f.apply(a));
         }
@@ -565,6 +590,7 @@ final class VectorImpl {
         abstract Node<A> modify(int i, IndexFunction<A> f);
         abstract Split<Digit<A>,A> split(int i);
         abstract <B> Node<B> map(Function<? super A, ? extends B> f);
+        abstract <F,B> $<F,Node<B>> traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f);
         abstract Node<A> reverse(Function<A,A> f);
         abstract <B,S> Node<B> splitMap(S s, BiFunction<Integer,S,Pair<S>> splt, BiFunction<S,A,B> f);
         abstract Digit<A> toDigit();
@@ -608,6 +634,11 @@ final class VectorImpl {
 
         @Override <B> Node<B> map(Function<? super A, ? extends B> f) {
             return node2(size, f.apply(a), f.apply(b));
+        }
+
+        @Override <F,B> $<F, Node<B>>
+        traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
+            return m.ap2((x, y) -> node2(size, x, y), f.apply(a), f.apply(b));
         }
 
         @Override Node<A> reverse(Function<A,A> f) {
@@ -686,6 +717,11 @@ final class VectorImpl {
 
         @Override <B> Node<B> map(Function<? super A, ? extends B> f) {
             return node3(size, f.apply(a), f.apply(b), f.apply(c));
+        }
+
+        @Override <F,B> $<F,Node<B>>
+        traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
+            return m.ap3((x, y, z) -> node3(size, x, y, z), f.apply(a), f.apply(b), f.apply(c));
         }
 
         @Override Node<A> reverse(Function<A,A> f) {
@@ -895,6 +931,12 @@ final class VectorImpl {
         }
 
         @Override
+        public <F,B> $<F, Vector<B>>
+        traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
+            return m.pure(emptyTree());
+        }
+
+        @Override
         FTree<A> reverseTree(Function<A,A> f) {
             return this;
         }
@@ -1000,6 +1042,12 @@ final class VectorImpl {
         @Override
         <B> FTree<B> mapTree(Function<? super A, ? extends B> f) {
             return singleTree(f.apply(a));
+        }
+
+        @Override
+        public <F,B> $<F, Vector<B>>
+        traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
+            return m.map(f.apply(a), VectorImpl::singleTree);
         }
 
         @Override
@@ -1161,6 +1209,16 @@ final class VectorImpl {
         @Override
         <B> FTree<B> mapTree(Function<? super A, ? extends B> f) {
             return deep(size, pr.map(f), mi.mapTree(n -> n.map(f)), sf.map(f));
+        }
+
+        @Override
+        public <F,B> $<F, Vector<B>>
+        traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
+            TriFunction<Digit<B>, Vector<Node<B>>, Digit<B>, Vector<B>> deep_f =
+                (px, mx, sx) -> deep(size, px, (FTree<Node<B>>)mx, sx);
+            return m.ap3(deep_f, pr.traverse(m, f),
+                                 mi.traverse(m, n -> n.traverse(m, f)),
+                                 sf.traverse(m, f));
         }
 
         @Override

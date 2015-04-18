@@ -16,11 +16,12 @@ import java.util.stream.Stream;
 
 import com.cloudway.platform.common.fp.control.Conditionals;
 import com.cloudway.platform.common.fp.control.TrampolineIO;
-import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.PMap;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
+import com.cloudway.platform.common.fp.typeclass.Monad;
+import com.cloudway.platform.common.fp.typeclass.$;
 
 /**
  * A value of type IO is a computation which, when performed, does some I/O
@@ -33,7 +34,7 @@ import com.cloudway.platform.common.fp.data.Unit;
  * @param <A> the type of computation value
  */
 @FunctionalInterface
-public interface IO<A> {
+public interface IO<A> extends $<IO.µ, A> {
     /**
      * Run the I/O action.
      *
@@ -87,8 +88,8 @@ public interface IO<A> {
      * @param f a function that bind the I/O action result
      * @return a new I/O action that returns the result of binding
      */
-    default <B> IO<B> bind(Function<? super A, ? extends IO<B>> f) {
-        return () -> f.apply(runIO()).runIO();
+    default <B> IO<B> bind(Function<? super A, ? extends $<µ, B>> f) {
+        return () -> narrow(f.apply(runIO())).runIO();
     }
 
     /**
@@ -97,8 +98,8 @@ public interface IO<A> {
      * @param other the another I/O action that performed after this I/O action
      * @return a new I/O action that sequentially perform I/O actions
      */
-    default <B> IO<B> then(IO<B> other) {
-        return () -> { runIO(); return other.runIO(); };
+    default <B> IO<B> then($<µ, B> other) {
+        return () -> { runIO(); return narrow(other).runIO(); };
     }
 
     /**
@@ -107,112 +108,114 @@ public interface IO<A> {
      * @param other the another I/O action that performed after this I/O action
      * @return a new I/O action that sequentially perform I/O actions
      */
-    default <B> IO<B> then(Supplier<IO<B>> other) {
-        return () -> { runIO(); return other.get().runIO(); };
+    default <B> IO<B> then(Supplier<? extends $<µ, B>> other) {
+        return () -> { runIO(); return narrow(other.get()).runIO(); };
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and collect
-     * the result.
-     */
-    static <A> IO<Seq<A>> flatM(Seq<IO<A>> ms) {
-        return TrampolineIO.flatM(ms.map(TrampolineIO.lift())).run();
+    // Monad
+
+    interface µ extends Monad<µ> {
+        @Override
+        default <A> IO<A> pure(A a) {
+            return IO.pure(a);
+        }
+
+        @Override
+        default <A, B> IO<B> map($<µ, A> a, Function<? super A, ? extends B> f) {
+            return narrow(a).map(f);
+        }
+
+        @Override
+        default <A, B> IO<B> bind($<µ, A> a, Function<? super A, ? extends $<µ, B>> k) {
+            return narrow(a).bind(k);
+        }
+
+        @Override
+        default <A, B> IO<B> seqR($<µ, A> a, $<µ, B> b) {
+            return narrow(a).then(b);
+        }
+
+        @Override
+        default <A, B> IO<B> seqR($<µ, A> a, Supplier<? extends $<µ, B>> b) {
+            return narrow(a).then(b);
+        }
+
+        @Override
+        default <A> IO<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+            return TrampolineIO.flatM(ms.map(a -> TrampolineIO.lift(narrow(a)))).run();
+        }
+
+        @Override
+        default <A> IO<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
+            return ms.foldRight(TrampolineIO.unit(), (x, r) ->
+                TrampolineIO.lift(narrow(x)).then(r)).run();
+        }
+
+        @Override
+        default <A, B> IO<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+            return xs.foldRight(TrampolineIO.unit(), (x, r) ->
+                TrampolineIO.lift(narrow(f.apply(x))).then(r)).run();
+        }
+
+        @Override
+        default <A> IO<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+            return TrampolineIO.filterM(xs, x ->
+                TrampolineIO.lift(narrow(p.apply(x)))).run();
+        }
+
+        @Override
+        default <A, B> IO<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+            return TrampolineIO.foldM(r0, xs, (m, x) ->
+                TrampolineIO.lift(narrow(f.apply(m, x)))).run();
+        }
     }
 
-    /**
-     * Evaluate each action in the sequence from left to right, and discard
-     * the result.
-     */
-    static IO<Unit> sequence(Foldable<? extends IO<?>> ms) {
-        return ms.foldRight(TrampolineIO.unit(), (x, r) -> TrampolineIO.lift(x).then(r)).run();
+    static <A> IO<A> narrow($<µ, A> value) {
+        return (IO<A>)value;
     }
 
-    /**
-     * The {@code mapM} is analogous to {@link Seq#map(Function) map} except that
-     * its result is encapsulated in an {@code IO}.
-     */
-    static <A, B> IO<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends IO<B>> f) {
-        return flatM(xs.map(f));
+    µ tclass = new µ() {};
+
+    @Override
+    default µ getTypeClass() {
+        return tclass;
     }
 
-    /**
-     * Apply given function on each element in the sequence, evaluate the action
-     * result of function application, from left to right, and discard the result.
-     */
-    static <A> IO<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends IO<?>> f) {
-        return xs.foldRight(TrampolineIO.unit(), (x, r) -> TrampolineIO.lift(f.apply(x)).then(r)).run();
+    // Convenient static monad methods
+
+    static <A> IO<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+        return tclass.flatM(ms);
     }
 
-    /**
-     * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
-     * Bind the given function to the given computations with a final join.
-     */
-    static <A, B, C> IO<Seq<C>>
-    zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, ? extends IO<C>> f) {
-        return flatM(Seq.zip(xs, ys, f));
+    static <A> IO<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
+        return tclass.sequence(ms);
     }
 
-    /**
-     * The extension of {@link #zipM(Seq,Seq,BiFunction) zipM} which ignores the
-     * final result.
-     */
-    static <A, B, C> IO<Unit>
-    zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, ? extends IO<C>> f) {
-        return sequence(Seq.zip(xs, ys, f));
+    static <A, B> IO<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
     }
 
-    /**
-     * This generalizes the list-based filter function.
-     */
-    static <A> IO<Seq<A>> filterM(Seq<A> xs, Function<? super A, IO<Boolean>> p) {
-        return TrampolineIO.filterM(xs, Fn.compose(TrampolineIO.lift(), p)).run();
+    static <A, B> IO<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return tclass.mapM_(xs, f);
     }
 
-    /**
-     * The {@code foldM} is analogous to {@link Seq#foldLeft(Object,BiFunction) foldLeft},
-     * except that its result is encapsulated in a {@code IO}. Note that {@code foldM}
-     * works from left-to-right over the lists arguments, If right-to-left evaluation
-     * is required, the input list should be reversed.
-     */
-    static <A, B> IO<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, IO<B>> f) {
-        return TrampolineIO.foldM(r0, xs, Fn.compose(TrampolineIO.lift(), f)).run();
+    static <A, S> IO<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+        return narrow(tclass.filterM(xs, p));
     }
 
-    /**
-     * Perform the action n times, gathering the results.
-     */
-    static <A> IO<Seq<A>> replicateM(int n, IO<A> a) {
-        return flatM(Seq.replicate(n, a));
+    static <A, B> IO<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+        return tclass.foldM(r0, xs, f);
     }
 
-    /**
-     * Perform the action n times, discards the result.
-     */
-    static <A> IO<Unit> replicateM_(int n, IO<A> a) {
-        return sequence(Seq.replicate(n, a));
+    static <A> IO<Seq<A>> replicateM(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM(n, a));
     }
 
-    /**
-     * Kleisli composition of monads.
-     */
-    static <A, B, C> Function<A, IO<C>> kleisli(Function<A, IO<B>> f, Function<B, IO<C>> g) {
-        return x -> f.apply(x).bind(g);
+    static <A> IO<Unit> replicateM_(int n, $<µ, A> a) {
+        return narrow(tclass.replicateM_(n, a));
     }
 
-    /**
-     * Promote a function to an I/O action.
-     */
-    static <A, B> Function<IO<A>, IO<B>> liftM(Function<? super A, ? extends B> f) {
-        return m -> m.map(f);
-    }
-
-    /**
-     * Promote a function to an I/O action.
-     */
-    static <A, B, C> BiFunction<IO<A>, IO<B>, IO<C>>
-    liftM2(BiFunction<? super A, ? super B, ? extends C> f) {
-        return (m1, m2) -> m1.bind(x1 -> m2.map(x2 -> f.apply(x1, x2)));
-    }
+    // The naive methods that work around Java lambda exception handling
 
     /**
      * Promote a native I/O function to an I/O action function.
@@ -227,8 +230,6 @@ public interface IO<A> {
     static <A> Function<A, IO<Unit>> lift_(IOConsumer<? super A> f) {
         return x -> (VoidIO)() -> f.consume(x);
     }
-
-    // The naive methods that work around Java lambda exception handling
 
     static <T> T run(IOSupplier<? extends T> action) throws IOException {
         try {

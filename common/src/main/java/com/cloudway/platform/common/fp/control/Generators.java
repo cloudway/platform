@@ -13,6 +13,8 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.typeclass.$;
+
 final class Generators {
     private Generators() {}
 
@@ -55,7 +57,7 @@ final class Generators {
         }
 
         @Override
-        public <B> Generator<B> bind(Function<? super A, ? extends Generator<B>> f) {
+        public <B> Generator<B> bind(Function<? super A, ? extends $<µ, B>> f) {
             return empty();
         }
 
@@ -124,8 +126,8 @@ final class Generators {
         }
 
         @Override
-        public <B> Generator<B> bind(Function<? super A, ? extends Generator<B>> f) {
-            return f.apply(value);
+        public <B> Generator<B> bind(Function<? super A, ? extends $<µ, B>> f) {
+            return Generator.narrow(f.apply(value));
         }
 
         @Override
