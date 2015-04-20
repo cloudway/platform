@@ -12,12 +12,12 @@ import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.Traversable;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.fp.io.VoidIO;
-import com.cloudway.platform.common.fp.typeclass.Monad;
-import com.cloudway.platform.common.fp.typeclass.$;
+import com.cloudway.platform.common.fp.$;
 
 import static com.cloudway.platform.common.fp.control.TrampolineIO.*;
 
@@ -273,27 +273,43 @@ public final class StateIO<A, S> implements $<StateIO.µ<S>, A> {
 
     // Convenient static monad methods
 
-    public static <A, S> StateIO<Seq<A>, S> flatM(Seq<? extends $<µ<S>, A>> ms) {
+    public static <T, A, S> StateIO<? extends Traversable<T, A>, S>
+    flatM(Traversable<T, ? extends $<µ<S>, A>> ms) {
         return narrow(StateIO.<S>tclass().flatM(ms));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A, S> StateIO<Seq<A>, S> flatM(Seq<? extends $<µ<S>, A>> ms) {
+        return (StateIO<Seq<A>, S>)StateIO.<S>tclass().flatM(ms);
+    }
+
+    public static <T, A, B, S> StateIO<? extends Traversable<T, B>, S>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(StateIO.<S>tclass().mapM(xs, f));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A, B, S> StateIO<Seq<B>, S>
+    mapM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+        return (StateIO<Seq<B>, S>)StateIO.<S>tclass().mapM(xs, f);
     }
 
     public static <A, S> StateIO<Unit, S> sequence(Foldable<? extends $<µ<S>, A>> ms) {
         return narrow(StateIO.<S>tclass().sequence(ms));
     }
 
-    public static <A, B, S> StateIO<Seq<B>, S> mapM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
-        return narrow(StateIO.<S>tclass().mapM(xs, f));
-    }
-
-    public static <A, B, S> StateIO<Unit, S> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+    public static <A, B, S> StateIO<Unit, S>
+    mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
         return narrow(StateIO.<S>tclass().mapM_(xs, f));
     }
 
-    public static <A, S> StateIO<Seq<A>, S> filterM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, Boolean>> p) {
+    public static <A, S> StateIO<Seq<A>, S>
+    filterM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, Boolean>> p) {
         return narrow(StateIO.<S>tclass().filterM(xs, p));
     }
 
-    public static <A, B, S> StateIO<B, S> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<S>, B>> f) {
+    public static <A, B, S> StateIO<B, S>
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<S>, B>> f) {
         return narrow(StateIO.<S>tclass().foldM(r0, xs, f));
     }
 

@@ -13,10 +13,10 @@ import java.util.function.Supplier;
 import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.Traversable;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.typeclass.Monad;
-import com.cloudway.platform.common.fp.typeclass.$;
+import com.cloudway.platform.common.fp.$;
 
 import static com.cloudway.platform.common.fp.control.Trampoline.immediate;
 import static com.cloudway.platform.common.fp.control.Trampoline.suspend;
@@ -256,27 +256,45 @@ public final class MonadState<A, S> implements $<MonadState.µ<S>, A> {
 
     // Convenient static monad methods
 
-    public static <A, S> MonadState<Seq<A>, S> flatM(Seq<? extends $<µ<S>, A>> ms) {
+    public static <T, A, S> MonadState<? extends Traversable<T, A>, S>
+    flatM(Traversable<T, ? extends $<µ<S>, A>> ms) {
         return narrow(MonadState.<S>tclass().flatM(ms));
     }
 
-    public static <A, S> MonadState<Unit, S> sequence(Foldable<? extends $<µ<S>, A>> ms) {
-        return narrow(MonadState.<S>tclass().sequence(ms));
+    @SuppressWarnings("unchecked")
+    public static <A, S> MonadState<Seq<A>, S>
+    flatM(Seq<? extends $<µ<S>, A>> ms) {
+        return (MonadState<Seq<A>, S>)MonadState.<S>tclass().flatM(ms);
     }
 
-    public static <A, B, S> MonadState<Seq<B>, S> mapM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+    public static <T, A, B, S> MonadState<? extends Traversable<T, B>, S>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
         return narrow(MonadState.<S>tclass().mapM(xs, f));
     }
 
-    public static <A, B, S> MonadState<Unit, S> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+    @SuppressWarnings("unchecked")
+    public static <A, B, S> MonadState<Seq<B>, S>
+    mapM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+        return (MonadState<Seq<B>, S>)MonadState.<S>tclass().mapM(xs, f);
+    }
+
+    public static <A, S> MonadState<Unit, S>
+    sequence(Foldable<? extends $<µ<S>, A>> ms) {
+        return narrow(MonadState.<S>tclass().sequence(ms));
+    }
+
+    public static <A, B, S> MonadState<Unit, S>
+    mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
         return narrow(MonadState.<S>tclass().mapM_(xs, f));
     }
 
-    public static <A, S> MonadState<Seq<A>, S> filterM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, Boolean>> p) {
+    public static <A, S> MonadState<Seq<A>, S>
+    filterM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, Boolean>> p) {
         return narrow(MonadState.<S>tclass().filterM(xs, p));
     }
 
-    public static <A, B, S> MonadState<B, S> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<S>, B>> f) {
+    public static <A, B, S> MonadState<B, S>
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<S>, B>> f) {
         return narrow(MonadState.<S>tclass().foldM(r0, xs, f));
     }
 

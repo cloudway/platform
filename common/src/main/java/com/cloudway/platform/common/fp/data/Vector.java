@@ -20,10 +20,9 @@ import java.util.function.UnaryOperator;
 
 import com.cloudway.platform.common.fp.control.Trampoline;
 import com.cloudway.platform.common.fp.function.TriFunction;
-import com.cloudway.platform.common.fp.typeclass.$;
-import com.cloudway.platform.common.fp.typeclass.Applicative;
-import com.cloudway.platform.common.fp.typeclass.Monad;
-import com.cloudway.platform.common.fp.typeclass.Traversable;
+import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Applicative;
+import com.cloudway.platform.common.fp.control.Monad;
 
 /**
  * Provides an immutable finite vector, implemented as a finger tree. This
@@ -32,7 +31,7 @@ import com.cloudway.platform.common.fp.typeclass.Traversable;
  *
  * @param <A> The element type of the vector
  */
-public interface Vector<A> extends $<Vector.µ, A>, Foldable<A> {
+public interface Vector<A> extends $<Vector.µ, A>, Foldable<A>, Traversable<Vector.µ, A> {
     /**
      * Construct an empty vector.
      *
@@ -358,6 +357,7 @@ public interface Vector<A> extends $<Vector.µ, A>, Foldable<A> {
      * Map each element of a structure to an action, evaluate these actions from
      * left to right, and collect the results.
      */
+    @Override
     <F, B> $<F, Vector<B>> traverse(Applicative<F> m, Function<? super A, ? extends $<F, B>> f);
 
     /**
@@ -555,7 +555,7 @@ public interface Vector<A> extends $<Vector.µ, A>, Foldable<A> {
     /**
      * Typeclass definition for Vector.
      */
-    class µ implements Monad<µ>, Traversable<µ> {
+    class µ implements Monad<µ> {
         private µ() {}
 
         @Override
@@ -571,12 +571,6 @@ public interface Vector<A> extends $<Vector.µ, A>, Foldable<A> {
         @Override
         public <A, B> Vector<B> bind($<µ,A> a, Function<? super A, ? extends $<µ,B>> k) {
             return narrow(a).flatMap(x -> narrow(k.apply(x)));
-        }
-
-        @Override
-        public <F, A, B> $<F, Vector<B>>
-        traverse(Applicative<F> m, $<µ,A> a, Function<? super A, ? extends $<F,B>> f) {
-            return narrow(a).traverse(m, f);
         }
     }
 
@@ -602,27 +596,43 @@ public interface Vector<A> extends $<Vector.µ, A>, Foldable<A> {
 
     // Convenient static monad methods
 
-    static <A> Vector<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+    static <T, A> Vector<? extends Traversable<T, A>>
+    flatM(Traversable<T, ? extends $<µ, A>> ms) {
         return narrow(tclass.flatM(ms));
+    }
+
+    @SuppressWarnings("unchecked")
+    static <A> Vector<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+        return (Vector<Seq<A>>)tclass.flatM(ms);
+    }
+
+    static <T, A, B> Vector<? extends Traversable<T, B>>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
+    }
+
+    @SuppressWarnings("unchecked")
+    static <A, B> Vector<Seq<B>>
+    mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return (Vector<Seq<B>>)tclass.mapM(xs, f);
     }
 
     static <A> Vector<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
         return narrow(tclass.sequence(ms));
     }
 
-    static <A, B> Vector<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
-        return narrow(tclass.mapM(xs, f));
-    }
-
-    static <A, B> Vector<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+    static <A, B> Vector<Unit>
+    mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.mapM_(xs, f));
     }
 
-    static <A> Vector<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+    static <A> Vector<Seq<A>>
+    filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
         return narrow(tclass.filterM(xs, p));
     }
 
-    static <A, B> Vector<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+    static <A, B> Vector<B>
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.foldM(r0, xs, f));
     }
 

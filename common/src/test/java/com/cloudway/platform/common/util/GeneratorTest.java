@@ -18,7 +18,7 @@ import com.cloudway.platform.common.fp.control.StateCont;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.typeclass.$;
+import com.cloudway.platform.common.fp.$;
 
 import static com.cloudway.platform.common.fp.control.Conditionals.as;
 import static com.cloudway.platform.common.fp.control.StateCont.callCC;

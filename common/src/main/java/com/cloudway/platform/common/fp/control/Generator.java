@@ -17,9 +17,9 @@ import java.util.function.Supplier;
 import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.Traversable;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.typeclass.Monad;
-import com.cloudway.platform.common.fp.typeclass.$;
+import com.cloudway.platform.common.fp.$;
 
 /**
  * A {@code Generator} is a special routine that can be used to control the
@@ -207,27 +207,43 @@ public interface Generator<A> extends $<Generator.µ, A>, Foldable<A> {
 
     // Convenient static monad methods
 
-    static <A> Generator<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+    static <T, A> Generator<? extends Traversable<T, A>>
+    flatM(Traversable<T, ? extends $<µ, A>> ms) {
         return narrow(tclass.flatM(ms));
+    }
+
+    @SuppressWarnings("unchecked")
+    static <A> Generator<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+        return (Generator<Seq<A>>)tclass.flatM(ms);
+    }
+
+    static <T, A, B> Generator<? extends Traversable<T, B>>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
+    }
+
+    @SuppressWarnings("unchecked")
+    static <A, B> Generator<Seq<B>>
+    mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return (Generator<Seq<B>>)tclass.mapM(xs, f);
     }
 
     static <A> Generator<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
         return narrow(tclass.sequence(ms));
     }
 
-    static <A, B> Generator<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
-        return narrow(tclass.mapM(xs, f));
-    }
-
-    static <A, B> Generator<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+    static <A, B> Generator<Unit>
+    mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.mapM_(xs, f));
     }
 
-    static <A> Generator<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+    static <A> Generator<Seq<A>>
+    filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
         return narrow(tclass.filterM(xs, p));
     }
 
-    static <A, B> Generator<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+    static <A, B> Generator<B>
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.foldM(r0, xs, f));
     }
 

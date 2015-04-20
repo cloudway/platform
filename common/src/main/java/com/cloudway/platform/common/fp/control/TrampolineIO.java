@@ -14,11 +14,11 @@ import java.util.function.Supplier;
 import com.cloudway.platform.common.fp.data.Either;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.Traversable;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.fp.io.VoidIO;
-import com.cloudway.platform.common.fp.typeclass.Monad;
-import com.cloudway.platform.common.fp.typeclass.$;
+import com.cloudway.platform.common.fp.$;
 
 import static com.cloudway.platform.common.fp.data.Either.*;
 
@@ -379,27 +379,43 @@ public abstract class TrampolineIO<A> implements $<TrampolineIO.µ, A> {
 
     // Convenient static monad methods
 
-    public static <A> TrampolineIO<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+    public static <T, A> TrampolineIO<? extends Traversable<T, A>>
+    flatM(Traversable<T, ? extends $<µ, A>> ms) {
         return narrow(tclass.flatM(ms));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A> TrampolineIO<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+        return (TrampolineIO<Seq<A>>)tclass.flatM(ms);
+    }
+
+    public static <T, A, B> TrampolineIO<? extends Traversable<T, B>>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A, B> TrampolineIO<Seq<B>>
+    mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return (TrampolineIO<Seq<B>>)tclass.mapM(xs, f);
     }
 
     public static <A> TrampolineIO<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
         return narrow(tclass.sequence(ms));
     }
 
-    public static <A, B> TrampolineIO<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
-        return narrow(tclass.mapM(xs, f));
-    }
-
-    public static <A, B> TrampolineIO<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+    public static <A, B> TrampolineIO<Unit>
+    mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.mapM_(xs, f));
     }
 
-    public static <A> TrampolineIO<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+    public static <A> TrampolineIO<Seq<A>>
+    filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
         return narrow(tclass.filterM(xs, p));
     }
 
-    public static <A, B> TrampolineIO<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+    public static <A, B> TrampolineIO<B>
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.foldM(r0, xs, f));
     }
 

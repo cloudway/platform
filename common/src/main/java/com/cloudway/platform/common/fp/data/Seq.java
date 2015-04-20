@@ -26,17 +26,16 @@ import com.cloudway.platform.common.fp.function.ExceptionFunction;
 import com.cloudway.platform.common.fp.function.ExceptionSupplier;
 import com.cloudway.platform.common.fp.function.ExceptionTriFunction;
 import com.cloudway.platform.common.fp.control.ConditionCase;
-import com.cloudway.platform.common.fp.typeclass.$;
-import com.cloudway.platform.common.fp.typeclass.Applicative;
-import com.cloudway.platform.common.fp.typeclass.Monad;
-import com.cloudway.platform.common.fp.typeclass.Traversable;
+import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Applicative;
+import com.cloudway.platform.common.fp.control.Monad;
 
 /**
  * A sequential, ordered, and potentially lazied list.
  *
  * @param <T> the element type
  */
-public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>
+public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T>
 {
     /**
      * Returns {@code true} if this list contains no elements.
@@ -368,14 +367,11 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>
      * Map each element of this list to an action, evaluate these actions from
      * left to right, and collect the results.
      */
+    @Override
     @SuppressWarnings("unchecked")
-    default <R, F> $<F, Seq<R>> traverse(Applicative<F> m, Function<? super T, ? extends $<F,R>> f) {
-        if (m instanceof Monad) {
-            return ((Monad<F>)m).mapM(this, f);
-        } else {
-            BiFunction<R, Seq<R>, Seq<R>> cf = Seq::cons;
-            return foldRight_(m.pure(nil()), (x, ys) -> m.ap2(cf, f.apply(x), ys));
-        }
+    default <F, R> $<F, Seq<R>> traverse(Applicative<F> m, Function<? super T, ? extends $<F,R>> f) {
+        BiFunction<R, Seq<R>, Seq<R>> cons_f = Seq::cons;
+        return foldRight_(m.pure(nil()), (x, ys) -> m.ap2(cons_f, f.apply(x), ys));
     }
 
     /**
@@ -689,7 +685,7 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>
     /**
      * Typeclass definition for Seq.
      */
-    class µ implements Monad<µ>, Traversable<µ> {
+    class µ implements Monad<µ> {
         private µ() {}
 
         @Override
@@ -705,12 +701,6 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>
         @Override
         public <A, B> Seq<B> bind($<µ,A> a, Function<? super A, ? extends $<µ,B>> k) {
             return narrow(a).flatMap(x -> narrow(k.apply(x)));
-        }
-
-        @Override
-        public <F, A, B> $<F, Seq<B>>
-        traverse(Applicative<F> m, $<µ,A> a, Function<? super A, ? extends $<F,B>> f) {
-            return narrow(a).traverse(m, f);
         }
 
         @Override
@@ -738,27 +728,43 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>
 
     // Convenient static monad methods
 
-    static <A> Seq<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+    static <T, A> Seq<? extends Traversable<T, A>>
+    flatM(Traversable<T, ? extends $<µ, A>> ms) {
         return narrow(tclass.flatM(ms));
+    }
+
+    @SuppressWarnings("unchecked")
+    static <A> Seq<Seq<A>> flatM(Seq<Seq<A>> ms) {
+        return (Seq<Seq<A>>)tclass.flatM(ms);
+    }
+
+    static <T, A, B> Seq<? extends Traversable<T, B>>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
+    }
+
+    @SuppressWarnings("unchecked")
+    static <A, B> Seq<Seq<B>>
+    mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return (Seq<Seq<B>>)tclass.mapM(xs, f);
     }
 
     static <A> Seq<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
         return narrow(tclass.sequence(ms));
     }
 
-    static <A, B> Seq<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
-        return narrow(tclass.mapM(xs, f));
-    }
-
-    static <A, B> Seq<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+    static <A, B> Seq<Unit>
+    mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.mapM_(xs, f));
     }
 
-    static <A> Seq<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+    static <A> Seq<Seq<A>>
+    filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
         return narrow(tclass.filterM(xs, p));
     }
 
-    static <A, B> Seq<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+    static <A, B> Seq<B>
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.foldM(r0, xs, f));
     }
 

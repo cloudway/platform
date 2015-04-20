@@ -4,11 +4,11 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.typeclass;
+package com.cloudway.platform.common.fp.data;
 
 import java.util.function.Function;
 
-import com.cloudway.platform.common.fp.data.Fn;
+import com.cloudway.platform.common.fp.$;
 
 /**
  * Uniform action over a parameterized type, generalizing the map function
@@ -21,6 +21,7 @@ import com.cloudway.platform.common.fp.data.Fn;
  * map id == id
  * map (f . g) == map f . map g
  * }</pre>
+ *
  * @param <F> type functor typeclass
  */
 public interface Functor<F> {
@@ -28,9 +29,9 @@ public interface Functor<F> {
      * Returns a container consisting of the results of applying the given
      * function to the elements of given container.
      *
-     * <pre>{@code map :: (a -> b) -> f a -> f b}</pre>
+     * <pre>{@code map :: f a -> (a -> b) -> f b}</pre>
      */
-    <A, B> $<F,B> map($<F,A> a, Function<? super A, ? extends B> f);
+    <A, B> $<F, B> map($<F, A> a, Function<? super A, ? extends B> f);
 
     /**
      * Replace all locations in the input with the same value. The default
@@ -39,7 +40,7 @@ public interface Functor<F> {
      *
      * <pre>{@code (<$) :: f a -> b -> f b}</pre>
      */
-    default <A, B> $<F,B> fill($<F,A> a, B b) {
+    default <A, B> $<F, B> fill($<F, A> a, B b) {
         return map(a, Fn.pure(b));
     }
 }

@@ -19,9 +19,10 @@ import com.cloudway.platform.common.fp.control.TrampolineIO;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.PMap;
 import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.Traversable;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.typeclass.Monad;
-import com.cloudway.platform.common.fp.typeclass.$;
+import com.cloudway.platform.common.fp.control.Monad;
+import com.cloudway.platform.common.fp.$;
 
 /**
  * A value of type IO is a computation which, when performed, does some I/O
@@ -141,11 +142,6 @@ public interface IO<A> extends $<IO.µ, A> {
         }
 
         @Override
-        default <A> IO<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
-            return TrampolineIO.flatM(ms.map(a -> TrampolineIO.lift(narrow(a)))).run();
-        }
-
-        @Override
         default <A> IO<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
             return ms.foldRight(TrampolineIO.unit(), (x, r) ->
                 TrampolineIO.lift(narrow(x)).then(r)).run();
@@ -183,28 +179,44 @@ public interface IO<A> extends $<IO.µ, A> {
 
     // Convenient static monad methods
 
+    static <T, A> IO<? extends Traversable<T, A>>
+    flatM(Traversable<T, ? extends $<µ, A>> ms) {
+        return narrow(tclass.flatM(ms));
+    }
+
+    @SuppressWarnings("unchecked")
     static <A> IO<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
-        return tclass.flatM(ms);
+        return (IO<Seq<A>>)tclass.flatM(ms);
     }
 
-    static <A> IO<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
-        return tclass.sequence(ms);
-    }
-
-    static <A, B> IO<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+    static <T, A, B> IO<? extends Traversable<T, B>>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.mapM(xs, f));
     }
 
-    static <A, B> IO<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
-        return tclass.mapM_(xs, f);
+    @SuppressWarnings("unchecked")
+    static <A, B> IO<Seq<B>>
+    mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return (IO<Seq<B>>)tclass.mapM(xs, f);
     }
 
-    static <A, S> IO<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+    static <A> IO<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
+        return narrow(tclass.sequence(ms));
+    }
+
+    static <A, B> IO<Unit>
+    mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM_(xs, f));
+    }
+
+    static <A, S> IO<Seq<A>>
+    filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
         return narrow(tclass.filterM(xs, p));
     }
 
-    static <A, B> IO<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
-        return tclass.foldM(r0, xs, f);
+    static <A, B> IO<B>
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.foldM(r0, xs, f));
     }
 
     static <A> IO<Seq<A>> replicateM(int n, $<µ, A> a) {

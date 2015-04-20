@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.typeclass;
+package com.cloudway.platform.common.fp;
 
 /**
  * An interface for "lifting" a type constructors to type parameter level in

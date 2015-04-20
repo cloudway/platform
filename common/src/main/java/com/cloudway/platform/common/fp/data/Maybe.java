@@ -18,10 +18,9 @@ import java.util.function.Supplier;
 import com.cloudway.platform.common.fp.control.ConditionCase;
 import com.cloudway.platform.common.fp.function.ExceptionFunction;
 import com.cloudway.platform.common.fp.function.ExceptionSupplier;
-import com.cloudway.platform.common.fp.typeclass.$;
-import com.cloudway.platform.common.fp.typeclass.Applicative;
-import com.cloudway.platform.common.fp.typeclass.Monad;
-import com.cloudway.platform.common.fp.typeclass.Traversable;
+import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Applicative;
+import com.cloudway.platform.common.fp.control.Monad;
 
 import static com.cloudway.platform.common.fp.control.Conditionals.Any;
 import static com.cloudway.platform.common.fp.control.Conditionals.with;
@@ -37,7 +36,7 @@ import static com.cloudway.platform.common.fp.control.Conditionals.with;
  * {@link #ifPresent(java.util.function.Consumer) ifPresent()} (execute a block
  * of code if the value is present).
  */
-public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A> {
+public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<Maybe.µ, A> {
     /**
      * Common instance for {@code empty()}.
      */
@@ -223,7 +222,8 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A> {
      * Map each element of a structure to an action, evaluate these actions
      * from left to right, and collect the results.
      */
-    public <F, B> $<F, Maybe<B>> traverse(Applicative<F> m, Function<? super A, ? extends $<F, B>> f) {
+    @Override
+    public <F, B> $<F, Maybe<B>> traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
         return isPresent() ? m.map(f.apply(value), Maybe::of) : m.pure(empty());
     }
 
@@ -355,6 +355,11 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A> {
     }
 
     @Override
+    public Maybe<A> foldRight(BiFunction<A, A, A> f) {
+        return this;
+    }
+
+    @Override
     public <R> R foldLeft(BiFunction<Supplier<R>, ? super A, R> f, Supplier<R> r) {
         return isPresent() ? f.apply(r, value) : r.get();
     }
@@ -362,6 +367,11 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A> {
     @Override
     public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
         return isPresent() ? f.apply(z, value) : z;
+    }
+
+    @Override
+    public Maybe<A> foldLeft(BiFunction<A, A, A> f) {
+        return this;
     }
 
     // Type Classes
@@ -375,7 +385,7 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A> {
               .get());
     }
 
-    public static final class µ implements Monad<µ>, Traversable<µ> {
+    public static final class µ implements Monad<µ> {
         @Override
         public <A> Maybe<A> pure(A a) {
             return of(a);
@@ -411,12 +421,6 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A> {
         public <A, B> $<µ, B> seqR($<µ, A> a, Supplier<? extends $<µ, B>> b) {
             return narrow(a).isPresent() ? narrow(b.get()) : empty();
         }
-
-        @Override
-        public <F, A, B> $<F, Maybe<B>>
-        traverse(Applicative<F> m, $<µ, A> a, Function<? super A, ? extends $<F, B>> f) {
-            return narrow(a).traverse(m, f);
-        }
     }
 
     public static <A> Maybe<A> narrow($<µ, A> value) {
@@ -432,27 +436,43 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A> {
 
     // Convenient static monad methods
 
-    public static <A> Maybe<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+    public static <T, A> Maybe<? extends Traversable<T, A>>
+    flatM(Traversable<T, ? extends $<µ, A>> ms) {
         return narrow(tclass.flatM(ms));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A> Maybe<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+        return (Maybe<Seq<A>>)tclass.flatM(ms);
+    }
+
+    public static <T, A, B> Maybe<? extends Traversable<T, B>>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A, B> Maybe<Seq<B>>
+    mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return (Maybe<Seq<B>>)tclass.mapM(xs, f);
     }
 
     public static <A> Maybe<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
         return narrow(tclass.sequence(ms));
     }
 
-    public static <A, B> Maybe<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
-        return narrow(tclass.mapM(xs, f));
-    }
-
-    public static <A, B> Maybe<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+    public static <A, B> Maybe<Unit>
+    mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.mapM_(xs, f));
     }
 
-    public static <A, S> Maybe<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+    public static <A, S> Maybe<Seq<A>>
+    filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
         return narrow(tclass.filterM(xs, p));
     }
 
-    public static <A, B> Maybe<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+    public static <A, B> Maybe<B>
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.foldM(r0, xs, f));
     }
 

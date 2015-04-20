@@ -4,14 +4,17 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.typeclass;
+package com.cloudway.platform.common.fp.control;
 
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.Traversable;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.function.TriFunction;
 
@@ -126,15 +129,19 @@ public interface Monad<M> extends Applicative<M> {
     /**
      * Evaluate each action in the list from left to right, and collect the
      * result.
+     *
+     * <pre>{@code flatM :: (Traversable t, Monad m) => t (m a) -> m (t a)}</pre>
      */
-    default <A> $<M, Seq<A>> flatM(Seq<? extends $<M, A>> ms) {
-        BiFunction<A, Seq<A>, Seq<A>> cf = Seq::cons;
-        return ms.foldRight_(pure(Seq.nil()), liftM2(cf));
+    default <T, A> $<M, ? extends Traversable<T, A>>
+    flatM(Traversable<T, ? extends $<M, A>> ms) {
+        return ms.traverse(this, Fn.<$<M,A>>id());
     }
 
     /**
      * Evaluate each action in the list from left to right, and ignore the
      * result.
+     *
+     * <pre>{@code sequence :: (Foldable t, Monad m) => t (m a) -> m ()}</pre>
      */
     default <A> $<M, Unit> sequence(Foldable<? extends $<M, A>> ms) {
         return ms.foldRight(pure(Unit.U), this::seqR);
@@ -143,14 +150,18 @@ public interface Monad<M> extends Applicative<M> {
     /**
      * The {@code mapM} is analogous to {@link Seq#map(Function) map} except
      * that its result is encapsulated in a {@code Monad}.
+     *
+     * <pre>{@code mapM :: (Traversable t, Monad m) => t a -> (a -> m b) -> m (t b)}</pre>
      */
-    default <A, B> $<M, Seq<B>>
-    mapM(Seq<A> xs, Function<? super A, ? extends $<M, B>> f) {
-        return flatM(xs.map(f));
+    default <T, A, B> $<M, ? extends Traversable<T, B>>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<M, B>> f) {
+        return xs.traverse(this, f);
     }
 
     /**
      * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
+     *
+     * <pre>{@code mapM_ :: (Foldable t, Monad m) => t a -> (a -> m b) -> m ()}</pre>
      */
     default <A, B> $<M, Unit>
     mapM_(Foldable<A> xs, Function<? super A, ? extends $<M, B>> f) {
@@ -160,14 +171,19 @@ public interface Monad<M> extends Applicative<M> {
     /**
      * Generalizes {@link Seq#zip(Seq,BiFunction)} to arbitrary monads.
      * Bind the given function to the given computations with a final join.
+     *
+     * <pre>{@code zipM :: Monad m => [a] -> [b] -> (a -> b -> m c) -> m [c]}</pre>
      */
+    @SuppressWarnings("unchecked")
     default <A, B, C> $<M, Seq<C>>
     zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, ? extends $<M, C>> f) {
-        return flatM(Seq.zip(xs, ys, f));
+        return ($<M, Seq<C>>)flatM(Seq.zip(xs, ys, f));
     }
 
     /**
      * The extension of {@link #zipM} which ignores the final result.
+     *
+     * <pre>{@code zipM_ :: Monad m => [a] -> [b] -> (a -> b -> m c) -> m ()}</pre>
      */
     default <A, B, C> $<M, Unit>
     zipM_(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, ? extends $<M, C>> f) {
@@ -176,6 +192,8 @@ public interface Monad<M> extends Applicative<M> {
 
     /**
      * This generalizes the list-based filter function.
+     *
+     * <pre>{@code filterM :: Monad m => [a] -> (a -> m Bool) -> m [a]}</pre>
      */
     default <A> $<M, Seq<A>>
     filterM(Seq<A> xs, Function<? super A, ? extends $<M, Boolean>> p) {
@@ -191,6 +209,8 @@ public interface Monad<M> extends Applicative<M> {
      * foldLeft}, except that its result is encapsulated in a {@code Monad}. Note
      * hat {@code foldM} works from left-to-right over the list arguments, If
      * right-to-left evaluation is required, the input list should be reversed.
+     *
+     * <pre>{@code foldM :: (Foldable t, Monad m) => b -> t a -> (b -> a -> m b) -> m b}</pre>
      */
     default <A, B> $<M, B>
     foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<M, B>> f) {
@@ -199,13 +219,18 @@ public interface Monad<M> extends Applicative<M> {
 
     /**
      * Perform the action n times, gathering the results.
+     *
+     * <pre>{@code replicateM :: Monad m => Int -> m a -> m [a]}</pre>
      */
+    @SuppressWarnings("unchecked")
     default <A> $<M, Seq<A>> replicateM(int n, $<M, A> a) {
-        return flatM(Seq.replicate(n, a));
+        return ($<M, Seq<A>>)flatM(Seq.replicate(n, a));
     }
 
     /**
      * Perform the action n times, discarding the result.
+     *
+     * <pre>{@code replicateM_ :: Monad m => Int -> m a -> m ()}</pre>
      */
     default <A> $<M, Unit> replicateM_(int n, $<M, A> a) {
         return sequence(Seq.replicate(n, a));

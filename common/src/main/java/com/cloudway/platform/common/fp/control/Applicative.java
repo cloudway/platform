@@ -4,11 +4,14 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.typeclass;
+package com.cloudway.platform.common.fp.control;
 
 import java.util.function.BiFunction;
 import java.util.function.Function;
+
+import com.cloudway.platform.common.fp.$;
 import com.cloudway.platform.common.fp.data.Fn;
+import com.cloudway.platform.common.fp.data.Functor;
 import com.cloudway.platform.common.fp.function.TriFunction;
 
 /**
@@ -18,8 +21,8 @@ import com.cloudway.platform.common.fp.function.TriFunction;
  *
  * <ul>
  * <li>it has more instances.</li>
- * <li>it is sufficient for may uses, e.g. context-free parsing, or the
- * {@link Traversable} class.</li>
+ * <li>it is sufficient for many uses, e.g. context-free parsing, or the
+ * {@code Traversable} class.</li>
  * <li>instances can perform analysis of computations before they are executed,
  * and thus produce shared optimizations.</li>
  * </ul>
@@ -61,7 +64,7 @@ public interface Applicative<F> extends Functor<F> {
     /**
      * Lift a value.
      *
-     * <pre>{@code pure :: a -> fa}</pre>
+     * <pre>{@code pure :: a -> f a}</pre>
      */
     <A> $<F,A> pure(A a);
 

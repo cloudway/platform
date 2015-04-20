@@ -14,9 +14,9 @@ import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Either;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.Traversable;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.typeclass.Monad;
-import com.cloudway.platform.common.fp.typeclass.$;
+import com.cloudway.platform.common.fp.$;
 
 import static com.cloudway.platform.common.fp.control.Conditionals.with;
 import static com.cloudway.platform.common.fp.data.Either.*;
@@ -368,27 +368,43 @@ public abstract class Trampoline<A> implements $<Trampoline.µ, A> {
 
     // Convenient static monad methods
 
-    public static <A> Trampoline<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+    public static <T, A> Trampoline<? extends Traversable<T, A>>
+    flatM(Traversable<T, ? extends $<µ, A>> ms) {
         return narrow(tclass.flatM(ms));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A> Trampoline<Seq<A>> flatM(Seq<? extends $<µ, A>> ms) {
+        return (Trampoline<Seq<A>>)tclass.flatM(ms);
+    }
+
+    public static <T, A, B> Trampoline<? extends Traversable<T, B>>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return narrow(tclass.mapM(xs, f));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A, B> Trampoline<Seq<B>>
+    mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+        return (Trampoline<Seq<B>>)tclass.mapM(xs, f);
     }
 
     public static <A> Trampoline<Unit> sequence(Foldable<? extends $<µ, A>> ms) {
         return narrow(tclass.sequence(ms));
     }
 
-    public static <A, B> Trampoline<Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ, B>> f) {
-        return narrow(tclass.mapM(xs, f));
-    }
-
-    public static <A, B> Trampoline<Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
+    public static <A, B> Trampoline<Unit>
+    mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.mapM_(xs, f));
     }
 
-    public static <A> Trampoline<Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
+    public static <A> Trampoline<Seq<A>>
+    filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
         return narrow(tclass.filterM(xs, p));
     }
 
-    public static <A, B> Trampoline<B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
+    public static <A, B> Trampoline<B>
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ, B>> f) {
         return narrow(tclass.foldM(r0, xs, f));
     }
 

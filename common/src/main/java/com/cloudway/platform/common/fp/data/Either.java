@@ -12,10 +12,9 @@ import java.util.function.Function;
 
 import com.cloudway.platform.common.fp.function.ExceptionFunction;
 import com.cloudway.platform.common.fp.control.ConditionCase;
-import com.cloudway.platform.common.fp.typeclass.$;
-import com.cloudway.platform.common.fp.typeclass.Applicative;
-import com.cloudway.platform.common.fp.typeclass.Monad;
-import com.cloudway.platform.common.fp.typeclass.Traversable;
+import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Applicative;
+import com.cloudway.platform.common.fp.control.Monad;
 
 /**
  * The {@code Either} class represents values with two possibilities: a value of
@@ -29,7 +28,7 @@ import com.cloudway.platform.common.fp.typeclass.Traversable;
  * @param <A> the type of the left value
  * @param <B> the type of the right value
  */
-public abstract class Either<A, B> implements $<Either.µ<A>, B> {
+public abstract class Either<A, B> implements $<Either.µ<A>, B>, Traversable<Either.µ<A>, B> {
     private static class Left<A, B> extends Either<A, B> {
         private final A a;
 
@@ -163,8 +162,9 @@ public abstract class Either<A, B> implements $<Either.µ<A>, B> {
      * Map each element of a structure to an action, evaluate these actions from
      * left to right, and collect the results.
      */
+    @Override
     @SuppressWarnings("unchecked")
-    public <F, C> $<F, Either<A, C>> traverse(Applicative<F> m, Function<? super B, ? extends $<F, C>> f) {
+    public <F, C> $<F, Either<A, C>> traverse(Applicative<F> m, Function<? super B, ? extends $<F,C>> f) {
         return isLeft() ? m.pure((Either<A,C>)this)
                         : m.map(f.apply(right()), Either::right);
     }
@@ -191,7 +191,7 @@ public abstract class Either<A, B> implements $<Either.µ<A>, B> {
 
     // Type Classes
 
-    public static final class µ<A> implements Monad<µ<A>>, Traversable<µ<A>> {
+    public static final class µ<A> implements Monad<µ<A>> {
         @Override
         public <B> Either<A, B> pure(B b) {
             return right(b);
@@ -205,12 +205,6 @@ public abstract class Either<A, B> implements $<Either.µ<A>, B> {
         @Override
         public <B, C> Either<A, C> bind($<µ<A>, B> a, Function<? super B, ? extends $<µ<A>, C>> k) {
             return narrow(a).flatMap(k);
-        }
-
-        @Override
-        public <F, B, C> $<F, Either<A, C>>
-        traverse(Applicative<F> m, $<µ<A>, B> a, Function<? super B, ? extends $<F,C>> f) {
-            return narrow(a).traverse(m, f);
         }
     }
 
@@ -232,27 +226,43 @@ public abstract class Either<A, B> implements $<Either.µ<A>, B> {
 
     // Convenient static monad methods
 
-    public static <E, A> Either<E, Seq<A>> flatM(Seq<? extends $<µ<E>, A>> ms) {
+    public static <T, E, A> Either<E, ? extends Traversable<T, A>>
+    flatM(Traversable<T, ? extends $<µ<E>, A>> ms) {
         return narrow(Either.<E>tclass().flatM(ms));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <E, A> Either<E, Seq<A>> flatM(Seq<? extends $<µ<E>, A>> ms) {
+        return (Either<E, Seq<A>>)Either.<E>tclass().flatM(ms);
+    }
+
+    public static <T, E, A, B> Either<E, ? extends Traversable<T, B>>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ<E>, B>> f) {
+        return narrow(Either.<E>tclass().mapM(xs, f));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <E, A, B> Either<E, Seq<B>>
+    mapM(Seq<A> xs, Function<? super A, ? extends $<µ<E>, B>> f) {
+        return (Either<E, Seq<B>>)Either.<E>tclass().mapM(xs, f);
     }
 
     public static <E, A> Either<E, Unit> sequence(Foldable<? extends $<µ<E>, A>> ms) {
         return narrow(Either.<E>tclass().sequence(ms));
     }
 
-    public static <E, A, B> Either<E, Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<µ<E>, B>> f) {
-        return narrow(Either.<E>tclass().mapM(xs, f));
-    }
-
-    public static <E, A, B> Either<E, Unit> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<E>, A>> f) {
+    public static <E, A, B> Either<E, Unit>
+    mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<E>, A>> f) {
         return narrow(Either.<E>tclass().mapM_(xs, f));
     }
 
-    public static <E, A> Either<E, Seq<A>> filterM(Seq<A> xs, Function<? super A, ? extends $<µ<E>, Boolean>> p) {
+    public static <E, A> Either<E, Seq<A>>
+    filterM(Seq<A> xs, Function<? super A, ? extends $<µ<E>, Boolean>> p) {
         return narrow(Either.<E>tclass().filterM(xs, p));
     }
 
-    public static <E, A, B> Either<E, B> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<E>, B>> f) {
+    public static <E, A, B> Either<E, B>
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<E>, B>> f) {
         return narrow(Either.<E>tclass().foldM(r0, xs, f));
     }
 

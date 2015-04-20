@@ -16,9 +16,9 @@ import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.platform.common.fp.data.Traversable;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.typeclass.Monad;
-import com.cloudway.platform.common.fp.typeclass.$;
+import com.cloudway.platform.common.fp.$;
 
 /**
  * A stateful CPS computation.
@@ -317,27 +317,43 @@ public final class StateCont<A, S> implements $<StateCont.µ<S>, A> {
 
     // Convenient static monad methods
 
-    public static <A, S> StateCont<Seq<A>, S> flatM(Seq<? extends $<µ<S>, A>> ms) {
+    public static <T, A, S> StateCont<? extends Traversable<T, A>, S>
+    flatM(Traversable<T, ? extends $<µ<S>, A>> ms) {
         return narrow(StateCont.<S>tclass().flatM(ms));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A, S> StateCont<Seq<A>, S> flatM(Seq<? extends $<µ<S>, A>> ms) {
+        return (StateCont<Seq<A>, S>)StateCont.<S>tclass().flatM(ms);
+    }
+
+    public static <T, A, B, S> StateCont<? extends Traversable<T, B>, S>
+    mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(StateCont.<S>tclass().mapM(xs, f));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A, B, S> StateCont<Seq<B>, S>
+    mapM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+        return (StateCont<Seq<B>, S>)StateCont.<S>tclass().mapM(xs, f);
     }
 
     public static <A, S> StateCont<Unit, S> sequence(Foldable<? extends $<µ<S>, A>> ms) {
         return narrow(StateCont.<S>tclass().sequence(ms));
     }
 
-    public static <A, B, S> StateCont<Seq<B>, S> mapM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
-        return narrow(StateCont.<S>tclass().mapM(xs, f));
-    }
-
-    public static <A, B, S> StateCont<Unit, S> mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
+    public static <A, B, S> StateCont<Unit, S>
+    mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
         return narrow(StateCont.<S>tclass().mapM_(xs, f));
     }
 
-    public static <A, S> StateCont<Seq<A>, S> filterM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, Boolean>> p) {
+    public static <A, S> StateCont<Seq<A>, S>
+    filterM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, Boolean>> p) {
         return narrow(StateCont.<S>tclass().filterM(xs, p));
     }
 
-    public static <A, B, S> StateCont<B, S> foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<S>, B>> f) {
+    public static <A, B, S> StateCont<B, S>
+    foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<S>, B>> f) {
         return narrow(StateCont.<S>tclass().foldM(r0, xs, f));
     }
 

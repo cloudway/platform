@@ -14,8 +14,8 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 import com.cloudway.platform.common.fp.function.TriFunction;
-import com.cloudway.platform.common.fp.typeclass.$;
-import com.cloudway.platform.common.fp.typeclass.Applicative;
+import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Applicative;
 
 // @formatter:off
 
