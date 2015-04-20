@@ -9,7 +9,6 @@ package com.cloudway.platform.common.fp.data;
 import java.util.Comparator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * <p>An efficient implementation of sets</p>
@@ -139,43 +138,43 @@ public interface TreePSet<E> extends PSet<E> {
 
     /**
      * Returns the greatest element in this set strictly less than the given
-     * element, or {@code Optional.empty()} if there is no such element.
+     * element, or an empty {@code Maybe} if there is no such element.
      *
      * @param e the value to match
-     * @return the greatest element less than {@code e} or {@code Optional.empty()}
+     * @return the greatest element less than {@code e} or an empty {@code Maybe}
      *         if there is no such element
      */
-    Optional<E> lower(E e);
+    Maybe<E> lower(E e);
 
     /**
      * Returns the greatest element in this set less than or equal to the given
-     * element, or {@code Optional.empty()} if there is no such element.
+     * element, or an empty {@code Maybe} if there is no such element.
      *
      * @param e the value to match
      * @return the greatest element less than or equal to {@code e}, or
-     *         {@code Optional.empty()} if there is no such element
+     *         an empty {@code Maybe} if there is no such element
      */
-    Optional<E> floor(E e);
+    Maybe<E> floor(E e);
 
     /**
      * Returns the least element in this set greater than or equal to the given
-     * element, or {@code Optional.empty()} if there is no such element.
+     * element, or an empty {@code Maybe} if there is no such element.
      *
      * @param e the value to match
      * @return the least element greater than or equal to {@code e}, or
-     *         {@code Optional.empty()} if there is no such element
+     *         an empty {@code Maybe} if there is no such element
      */
-    Optional<E> ceiling(E e);
+    Maybe<E> ceiling(E e);
 
     /**
      * Returns the least element in this set strictly greater than the given
-     * element, or {@code Optional.empty()} if there is no such element.
+     * element, or an empty {@code Maybe} if there is no such element.
      *
      * @param e the value to match
-     * @return the least element greater than {@code e}, or {@code Optional.empty()}
+     * @return the least element greater than {@code e}, or an empty {@code Maybe}
      *         if there is no such element
      */
-    Optional<E> higher(E e);
+    Maybe<E> higher(E e);
 
     /**
      * Returns the first (lowest) element in this set.

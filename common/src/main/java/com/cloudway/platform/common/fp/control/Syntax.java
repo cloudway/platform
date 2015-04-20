@@ -7,7 +7,6 @@
 package com.cloudway.platform.common.fp.control;
 
 import java.util.Collection;
-import java.util.Optional;
 import java.util.function.DoubleFunction;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -19,6 +18,7 @@ import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.fp.data.Fn;
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.Ref;
 import com.cloudway.platform.common.fp.data.IntSeq;
 import com.cloudway.platform.common.fp.data.Seq;
@@ -105,15 +105,15 @@ public final class Syntax {
             }
         },
 
-        OPTIONAL {
+        MAYBE {
             @Override
-            public Optional empty() {
-                return Optional.empty();
+            public Maybe empty() {
+                return Maybe.empty();
             }
 
             @Override
-            public Optional pure(Object value) {
-                return Optional.of(value);
+            public Maybe pure(Object value) {
+                return Maybe.of(value);
             }
         },
 
@@ -253,20 +253,20 @@ public final class Syntax {
     }
 
     /**
-     * Generate comprehension from optional.
+     * Generate comprehension from {@code Maybe}.
      */
-    public static <T, R> Qualifier<R, Optional<R>>
-    from(Optional<T> optional, Function<? super T, ? extends Qualifier<R, Optional<R>>> mapper) {
-        return new Qualifier<R, Optional<R>>() {
+    public static <T, R> Qualifier<R, Maybe<R>>
+    from(Maybe<T> maybe, Function<? super T, ? extends Qualifier<R, Maybe<R>>> mapper) {
+        return new Qualifier<R, Maybe<R>>() {
             @Override
             @SuppressWarnings("unchecked")
-            protected Optional<R> select() {
-                return build(Builders.OPTIONAL);
+            protected Maybe<R> select() {
+                return build(Builders.MAYBE);
             }
 
             @Override
-            protected Optional<R> build(Builder<R, Optional<R>> builder) {
-                return optional.flatMap(t -> builder.build(mapper.apply(t)));
+            protected Maybe<R> build(Builder<R, Maybe<R>> builder) {
+                return maybe.flatMap(t -> builder.build(mapper.apply(t)));
             }
         };
     }
@@ -353,11 +353,11 @@ public final class Syntax {
         }
 
         /**
-         * @see Syntax#from(Optional,Function)
+         * @see Syntax#from(Maybe,Function)
          */
-        public static <T, R> Optional<R>
-        from(Optional<T> optional, Function<? super T, ? extends Qualifier<R, Optional<R>>> mapper) {
-            return Syntax.from(optional, mapper).select();
+        public static <T, R> Maybe<R>
+        from(Maybe<T> maybe, Function<? super T, ? extends Qualifier<R, Maybe<R>>> mapper) {
+            return Syntax.from(maybe, mapper).select();
         }
 
         /**

@@ -19,7 +19,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -32,6 +31,7 @@ import jnr.constants.platform.Signal;
 import static java.nio.file.StandardCopyOption.*;
 import static java.util.stream.Collectors.*;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.fp.io.IOBiConsumer;
 import com.cloudway.platform.common.fp.io.IOFunction;
@@ -184,10 +184,10 @@ class LinuxCgroup implements LibCgroup
         }
     }
 
-    private Optional<Path> cgpath(String user, String subsys) {
-        return Optional.ofNullable(cg_paths.get(subsys))
-                       .map(path -> path.resolve(user))
-                       .filter(Files::exists);
+    private Maybe<Path> cgpath(String user, String subsys) {
+        return Maybe.ofNullable(cg_paths.get(subsys))
+                    .map(path -> path.resolve(user))
+                    .filter(Files::exists);
     }
 
     @Override
@@ -256,7 +256,7 @@ class LinuxCgroup implements LibCgroup
     }
 
     @Override
-    public Optional<Object> fetch(String user, String key) throws IOException {
+    public Maybe<Object> fetch(String user, String key) throws IOException {
         String subsys = key.substring(0, key.indexOf('.'));
         return IO.run(() -> cgpath(user, subsys)
             .map(path -> path.resolve(key))

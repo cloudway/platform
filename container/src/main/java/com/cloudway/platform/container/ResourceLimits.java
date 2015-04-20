@@ -10,13 +10,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
-import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.util.ExtendedProperties;
-import com.cloudway.platform.common.fp.data.Optionals;
 
 public final class ResourceLimits
 {
@@ -46,19 +45,19 @@ public final class ResourceLimits
         this.limits = limits;
     }
 
-    public Optional<String> getProperty(String profile, String key) {
-        Optional<String> value = limits.getOptionalProperty(profile, key);
+    public Maybe<String> getProperty(String profile, String key) {
+        Maybe<String> value = limits.getOptionalProperty(profile, key);
         return value.isPresent() ? value : limits.getOptionalProperty(key);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public Optional<Object> getProperty(String profile, String key, Supplier<Optional<Object>> supplier) {
-        Optional value = getProperty(profile, key);
+    public Maybe<Object> getProperty(String profile, String key, Supplier<Maybe<Object>> supplier) {
+        Maybe value = getProperty(profile, key);
         return value.isPresent() ? value : supplier.get();
     }
     
     public int getIntProperty(String profile, String key, int deflt) {
-        return getProperty(profile, key).flatMap(Optionals.of(Integer::parseInt)).orElse(deflt);
+        return getProperty(profile, key).flatMap(Maybe.adapt(Integer::parseInt)).orElse(deflt);
     }
 
     public String getGlobalProperty(String key, String deflt) {

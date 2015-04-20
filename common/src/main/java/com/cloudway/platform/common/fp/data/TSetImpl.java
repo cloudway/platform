@@ -9,7 +9,6 @@ package com.cloudway.platform.common.fp.data;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -274,8 +273,8 @@ final class TSetImpl {
         }
 
         @Override
-        public Optional<K> find(Predicate<? super K> p) {
-            return Optional.empty();
+        public Maybe<K> find(Predicate<? super K> p) {
+            return Maybe.empty();
         }
 
         @Override
@@ -359,8 +358,8 @@ final class TSetImpl {
         }
 
         @Override
-        public Optional<K> find(Predicate<? super K> p) {
-            return p.test(key) ? Optional.of(key) : Optional.empty();
+        public Maybe<K> find(Predicate<? super K> p) {
+            return p.test(key) ? Maybe.of(key) : Maybe.empty();
         }
 
         @Override
@@ -463,9 +462,9 @@ final class TSetImpl {
         }
 
         @Override
-        public Optional<K> find(Predicate<? super K> p) {
+        public Maybe<K> find(Predicate<? super K> p) {
             List<K> t = keys.find(p);
-            return t != null ? Optional.of(t.key) : Optional.empty();
+            return t != null ? Maybe.of(t.key) : Maybe.empty();
         }
 
         @Override
@@ -615,13 +614,13 @@ final class TSetImpl {
         }
 
         @Override
-        public Optional<K> find(Predicate<? super K> p) {
+        public Maybe<K> find(Predicate<? super K> p) {
             for (TSet<K> el : elems) {
-                Optional<K> k = el.find(p);
+                Maybe<K> k = el.find(p);
                 if (k.isPresent())
                     return k;
             }
-            return Optional.empty();
+            return Maybe.empty();
         }
 
         @Override

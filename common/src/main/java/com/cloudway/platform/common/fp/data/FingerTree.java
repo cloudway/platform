@@ -7,7 +7,6 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
@@ -191,7 +190,7 @@ public interface FingerTree<V, A> extends Foldable<A> {
      * @return an element at the satisfied point in the tree
      * @throws NoSuchElementException if no such point found
      */
-    Optional<A> lookup(Predicate<? super V> p);
+    Maybe<A> lookup(Predicate<? super V> p);
 
     /**
      * Replaces the element in the tree at a point where the predicate on the

@@ -8,9 +8,9 @@ package com.cloudway.platform.container;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.os.Exec;
 import com.cloudway.platform.container.adapters.UnixContainerAdapter;
 
@@ -37,7 +37,7 @@ public class FakeContainerAdapter extends UnixContainerAdapter
     }
 
     @Override
-    protected void createUser(String id, int uid, Path home, String skel, String shell, String gecos, Optional<String> groups)
+    protected void createUser(String id, int uid, Path home, String skel, String shell, String gecos, Maybe<String> groups)
         throws IOException
     {
         assertThat(shell, is(SHELL.get()));

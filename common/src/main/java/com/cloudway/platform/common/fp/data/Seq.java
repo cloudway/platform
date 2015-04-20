@@ -11,7 +11,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -61,15 +60,15 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>
     Seq<T> tail();
 
     /**
-     * Peek the head element as an optional.
+     * Peek the head element as a {@code Maybe}.
      *
-     * @return {@code Optional.empty()} if the sequence is empty, otherwise
-     * an optional wrapping the head value.
+     * @return an empty {@code Maybe} if the sequence is empty, otherwise
+     * a {@code Maybe} wrapping the head value.
      * @throws NullPointerException if the sequence is not empty but the head
      * element is {@code null}.
      */
-    default Optional<T> peek() {
-        return isEmpty() ? Optional.empty() : Optional.of(head());
+    default Maybe<T> peek() {
+        return isEmpty() ? Maybe.empty() : Maybe.of(head());
     }
 
     /**
@@ -176,10 +175,11 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>
     }
 
     /**
-     * Wrap an optional as a sequence. The sequence contains one element if optional
-     * contains a value, otherwise the sequence is empty if optional is empty.
+     * Wrap a {@code Maybe} as a sequence. The sequence contains one element if
+     * {@code Maybe} contains a value, otherwise the sequence is empty if
+     * {@code Maybe} is empty.
      */
-    static <T> Seq<T> wrap(Optional<? extends T> opt) {
+    static <T> Seq<T> wrap(Maybe<? extends T> opt) {
         return opt.map(Seq::of).orElse(nil());
     }
 
@@ -639,19 +639,19 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>
      * Search for an element that satisfy the given predicate.
      *
      * @param predicate the predicate to be tested on element
-     * @return {@code Optional.empty()} if element not found in the list, otherwise
-     * a {@code Optional} wrapping the found element.
+     * @return an empty {@code Maybe} if element not found in the list, otherwise
+     * a {@code Maybe} wrapping the found element.
      * @throws NullPointerException if found the element but the element is {@code null}
      */
     @Override
-    default Optional<T> find(Predicate<? super T> predicate) {
+    default Maybe<T> find(Predicate<? super T> predicate) {
         for (Seq<T> xs = this; !xs.isEmpty(); xs = xs.tail()) {
             T x = xs.head();
             if (predicate.test(x)) {
-                return Optional.of(x);
+                return Maybe.of(x);
             }
         }
-        return Optional.empty();
+        return Maybe.empty();
     }
 
     /**

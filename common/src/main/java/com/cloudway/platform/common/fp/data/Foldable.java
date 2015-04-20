@@ -9,7 +9,6 @@ package com.cloudway.platform.common.fp.data;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -103,12 +102,12 @@ public interface Foldable<T> extends Iterable<T> {
      * @param f an associative non-interfering function for combining two values
      * @return the result of the reduction
      */
-    default Optional<T> foldRight(BiFunction<T,T,T> f) {
+    default Maybe<T> foldRight(BiFunction<T,T,T> f) {
         requireNonNull(f);
-        BiFunction<T, Optional<T>, Optional<T>> mf = (x, r) ->
-            r.isPresent() ? Optional.of(f.apply(x, r.get()))
-                          : Optional.of(x);
-        return foldRight_(Optional.empty(), mf);
+        BiFunction<T, Maybe<T>, Maybe<T>> mf = (x, r) ->
+            r.isPresent() ? Maybe.of(f.apply(x, r.get()))
+                          : Maybe.of(x);
+        return foldRight_(Maybe.empty(), mf);
     }
 
     /**
@@ -149,12 +148,12 @@ public interface Foldable<T> extends Iterable<T> {
      * two values
      * @return the result of the reduction
      */
-    default Optional<T> foldLeft(BiFunction<T,T,T> f) {
+    default Maybe<T> foldLeft(BiFunction<T,T,T> f) {
         requireNonNull(f);
-        BiFunction<Optional<T>, T, Optional<T>> mf = (r, x) ->
-            r.isPresent() ? Optional.of(f.apply(r.get(), x))
-                          : Optional.of(x);
-        return foldLeft(Optional.empty(), mf);
+        BiFunction<Maybe<T>, T, Maybe<T>> mf = (r, x) ->
+            r.isPresent() ? Maybe.of(f.apply(r.get(), x))
+                          : Maybe.of(x);
+        return foldLeft(Maybe.empty(), mf);
     }
 
     /**
@@ -184,7 +183,7 @@ public interface Foldable<T> extends Iterable<T> {
      * @throws NoSuchElementException if structure is empty
      */
     default T maximum(Comparator<? super T> c) {
-        return foldMap(Monoid.max(c), Optional::of).get();
+        return foldMap(Monoid.max(c), Maybe::of).get();
     }
 
     /**
@@ -195,7 +194,7 @@ public interface Foldable<T> extends Iterable<T> {
      * @throws NoSuchElementException if structure is empty
      */
     default T minimum(Comparator<? super T> c) {
-        return foldMap(Monoid.min(c), Optional::of).get();
+        return foldMap(Monoid.min(c), Maybe::of).get();
     }
 
     /**
@@ -213,12 +212,12 @@ public interface Foldable<T> extends Iterable<T> {
      *
      * @param predicate the predicate to be tested on element
      * @return the first occurrence of element that satisfy the given predicate,
-     * or {@code Optional.empty()} if element not found
+     * or empty {@code Maybe} if element not found
      */
-    default Optional<T> find(Predicate<? super T> predicate) {
-        RightFoldFunction<T, Trampoline<Optional<T>>> g = (x, r) ->
-            predicate.test(x) ? Trampoline.pure(Optional.of(x)) : suspend(r);
-        return foldRight(g, () -> Trampoline.pure(Optional.empty())).run();
+    default Maybe<T> find(Predicate<? super T> predicate) {
+        RightFoldFunction<T, Trampoline<Maybe<T>>> g = (x, r) ->
+            predicate.test(x) ? Trampoline.pure(Maybe.of(x)) : suspend(r);
+        return foldRight(g, () -> Trampoline.pure(Maybe.empty())).run();
     }
 
     /**
@@ -227,9 +226,9 @@ public interface Foldable<T> extends Iterable<T> {
      *
      * @param predicate the predicate to be tested on element
      * @return the first occurrence of element that satisfy the given predicate,
-     * or {@code Optional.empty()} if element not found
+     * or empty {@code Maybe} if element not found
      */
-    default Optional<T> findFirst(Predicate<? super T> predicate) {
+    default Maybe<T> findFirst(Predicate<? super T> predicate) {
         return find(predicate);
     }
 
@@ -239,12 +238,12 @@ public interface Foldable<T> extends Iterable<T> {
      *
      * @param predicate the predicate to be tested on element
      * @return the last occurrence of element that satisfy the given predicate,
-     * or {@code Optional.empty()} if element not found
+     * or empty {@code Maybe} if element not found
      */
-    default Optional<T> findLast(Predicate<? super T> predicate) {
-        LeftFoldFunction<T, Trampoline<Optional<T>>> g = (r, x) ->
-            predicate.test(x) ? Trampoline.pure(Optional.of(x)) : suspend(r);
-        return foldLeft(g, () -> Trampoline.pure(Optional.empty())).run();
+    default Maybe<T> findLast(Predicate<? super T> predicate) {
+        LeftFoldFunction<T, Trampoline<Maybe<T>>> g = (r, x) ->
+            predicate.test(x) ? Trampoline.pure(Maybe.of(x)) : suspend(r);
+        return foldLeft(g, () -> Trampoline.pure(Maybe.empty())).run();
     }
 
     /**

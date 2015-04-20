@@ -56,7 +56,7 @@ import com.google.common.collect.ImmutableMap;
 
 import static java.nio.file.Files.*;
 import static com.cloudway.platform.common.util.MoreFiles.*;
-import static com.cloudway.platform.common.fp.data.Optionals.or;
+import static com.cloudway.platform.common.fp.data.Maybe.or;
 
 // @formatter:off
 public class AddonControlTest

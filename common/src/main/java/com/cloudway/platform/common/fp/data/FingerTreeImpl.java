@@ -7,7 +7,6 @@
 package com.cloudway.platform.common.fp.data;
 
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -755,11 +754,11 @@ final class FingerTreeImpl {
         @Override public abstract FTree<V,A> snoc(A a);
 
         @Override
-        public Optional<A> lookup(Predicate<? super V> p) {
+        public Maybe<A> lookup(Predicate<? super V> p) {
             if (isEmpty() || !p.test(measure())) {
-                return Optional.empty();
+                return Maybe.empty();
             } else {
-                return Optional.of(lookupTree(p, m.zero()).result);
+                return Maybe.of(lookupTree(p, m.zero()).result);
             }
         }
 

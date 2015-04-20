@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.base.Ticker;
@@ -19,6 +18,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.util.ExtendedProperties;
 
 import static java.nio.file.Files.*;
@@ -33,8 +33,8 @@ class DefaultConfiguration extends ExtendedProperties implements Configuration
     private long load_time, check_time;
 
     @Override
-    public Optional<String> getProperty(String name) {
-        Optional<String> val = Optional.ofNullable(System.getProperty(name));
+    public Maybe<String> getProperty(String name) {
+        Maybe<String> val = Maybe.ofNullable(System.getProperty(name));
         return val.isPresent() ? val : getOptionalProperty(name);
     }
 

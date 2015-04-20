@@ -16,7 +16,6 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
 import java.util.stream.IntStream;
@@ -39,6 +38,7 @@ import org.junit.Test;
 import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.os.AuthorizedKey;
 import com.cloudway.platform.common.os.Configuration;
@@ -92,9 +92,9 @@ public class ApplicationContainerTest
         Configuration.Provider provider = context.mock(Configuration.Provider.class);
         context.checking(new Expectations() {{
             allowing(configuration).getProperty(Config.VAR_DIR_KEY);
-                will(returnValue(Optional.of(temporary.getRoot().toString())));
+                will(returnValue(Maybe.of(temporary.getRoot().toString())));
             allowing(configuration).getProperty(with(any(String.class)));
-                will(returnValue(Optional.empty()));
+                will(returnValue(Maybe.empty()));
             allowing(provider).load("container.conf");
                 will(returnValue(configuration));
         }});

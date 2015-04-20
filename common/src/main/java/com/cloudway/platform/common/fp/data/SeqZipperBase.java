@@ -6,8 +6,6 @@
 
 package com.cloudway.platform.common.fp.data;
 
-import java.util.Optional;
-
 /**
  * Sequence zipper with O(1) get element at cursor, insert at cursor,
  * delete at cursor, move right, and move left operations.
@@ -59,7 +57,7 @@ public abstract class SeqZipperBase<T, Z extends SeqZipperBase<T, Z>> {
     /**
      * Like {@link #get()} but total.
      */
-    public Optional<T> peek() {
+    public Maybe<T> peek() {
         return rear.peek();
     }
 

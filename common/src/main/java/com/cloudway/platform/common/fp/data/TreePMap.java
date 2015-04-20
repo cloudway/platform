@@ -10,7 +10,6 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.BiFunction;
 
 /**
@@ -76,86 +75,86 @@ public interface TreePMap<K, V> extends PMap<K, V> {
 
     /**
      * Returns a key-value mapping associated with the greatest key strictly
-     * less than the given key, or {@code Optional.empty()} if there is no
+     * less than the given key, or an empty {@code Maybe} if there is no
      * such key.
      *
      * @param key the key
      * @return an entry with the greatest key less than {@code key}, or
-     *         {@code Optional.empty()} if there is no such key
+     *         an {@code Maybe} if there is no such key
      */
-    Optional<Map.Entry<K, V>> lowerEntry(K key);
+    Maybe<Map.Entry<K, V>> lowerEntry(K key);
 
     /**
      * Returns the greatest key strictly less than the given key, or
-     * {@code Optional.empty()} if there is no such key.
+     * an empty {@code Maybe} if there is no such key.
      *
      * @param key the key
-     * @return the greatest key less than {@code key}, or {@code Optional.empty}
+     * @return the greatest key less than {@code key}, or an empty {@code Maybe}
      *         if there is no such key
      */
-    Optional<K> lowerKey(K key);
+    Maybe<K> lowerKey(K key);
 
     /**
      * Returns a key-value mapping associated with the greatest key less than
-     * or equal to the given key, or {@code Optional.empty()} if there is no
+     * or equal to the given key, or an empty {@code Maybe} if there is no
      * such key.
      *
      * @param key the key
      * @return an entry with the greatest key less than or equal to {@code key},
-     *         or {@code Optional.empty()} if there is no such key
+     *         or an empty {@code Maybe} if there is no such key
      */
-    Optional<Map.Entry<K, V>> floorEntry(K key);
+    Maybe<Map.Entry<K, V>> floorEntry(K key);
 
     /**
      * Returns the greatest key less than or equal to the given key, or
-     * {@code Optional.empty()} if there is no such key.
+     * an {@code Maybe} if there is no such key.
      *
      * @param key the key
      * @return the greatest key less than or equal to {@code key}, or
-     *         {@code Optional.empty()} if there is no such key
+     *         an empty {@code Maybe} if there is no such key
      */
-    Optional<K> floorKey(K key);
+    Maybe<K> floorKey(K key);
 
     /**
      * Returns a key-value mapping associated with the least key greater than
-     * or equal to the given key, or {@code Optional.empty()} if there is no
+     * or equal to the given key, or an empty {@code Maybe} if there is no
      * such key.
      *
      * @param key the key
      * @return an entry with the least key greater than or equal to {@code key},
-     *         or {@code Optional.empty()} if there is no such key
+     *         or an empty {@code Maybe} if there is no such key
      */
-    Optional<Map.Entry<K, V>> ceilingEntry(K key);
+    Maybe<Map.Entry<K, V>> ceilingEntry(K key);
 
     /**
      * Returns the least key greater than or equal to the given key, or
-     * {@code Optional.empty()} if there is no such key.
+     * an empty {@code Maybe} if there is no such key.
      *
      * @param key the key
      * @return the least key greater than or equal to {@code key}, or
-     *         {@code Optional.empty()} if there is no such key
+     *         an empty {@code Maybe} if there is no such key
      */
-    Optional<K> ceilingKey(K key);
+    Maybe<K> ceilingKey(K key);
 
     /**
      * Returns a key-value mapping associated with the least key strictly greater
-     * than the given key, or {@code Optional.empty()} if there is no such key.
+     * than the given key, or an empty {@code Maybe} if there is no such key.
      *
      * @param key the key
      * @return an entry with the least key greater than {@code key}, or
-     *         {@code Optional.empty()} if there is no such key
+     *         an empty {@code Maybe} if there is no such key
      */
-    Optional<Map.Entry<K, V>> higherEntry(K key);
+    Maybe<Map.Entry<K, V>> higherEntry(K key);
 
     /**
      * Returns the least key strictly greater than the given key, or
-     * {@code Optional.empty()} if there is no such key.
+     * an empty {@code Maybe} if there is no such key.
      *
      * @param key the key
-     * @return the least key greater than {@code key}, or {@code Optional.empty()}
+     * @return the least key greater than {@code key}, or an empty {@code Maybe}
      *         if there is no such key
      */
-    Optional<K> higherKey(K key);
+    Maybe<K> higherKey(K key);
 
     /**
      * Returns a key-value mapping associated with the least key in this map.

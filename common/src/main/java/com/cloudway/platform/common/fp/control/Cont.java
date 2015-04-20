@@ -7,7 +7,6 @@
 package com.cloudway.platform.common.fp.control;
 
 import java.util.Iterator;
-import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -16,6 +15,7 @@ import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.typeclass.Monad;
@@ -331,32 +331,32 @@ public final class Cont<A> implements $<Cont.µ, A> {
 
     private static class Yield<A> {
         final A result;
-        final Function<A, Optional<Yield<A>>> cont;
+        final Function<A, Maybe<Yield<A>>> cont;
 
-        Yield(A e, Function<A, Optional<Yield<A>>> k) {
+        Yield(A e, Function<A, Maybe<Yield<A>>> k) {
             result = e;
             cont = k;
         }
 
-        Optional<Yield<A>> next() {
+        Maybe<Yield<A>> next() {
             return cont.apply(result);
         }
 
-        Optional<Yield<A>> send(A value) {
+        Maybe<Yield<A>> send(A value) {
             return cont.apply(value);
         }
     }
 
-    Optional<Yield<A>> runYield() {
-        return reset(map(__ -> Optional.<Yield<A>>empty())).eval();
+    Maybe<Yield<A>> runYield() {
+        return reset(map(__ -> Maybe.<Yield<A>>empty())).eval();
     }
 
     public static <A> Cont<A> yield(A a) {
-        return Cont.<A, Optional<Yield<A>>>shift(k -> pure(Optional.of(new Yield<A>(a, k))));
+        return Cont.<A, Maybe<Yield<A>>>shift(k -> pure(Maybe.of(new Yield<A>(a, k))));
     }
 
     public static <A> Cont<A> yield(Supplier<A> a) {
-        return Cont.<A, Optional<Yield<A>>>shift(k -> pure(Optional.of(new Yield<A>(a.get(), k))));
+        return Cont.<A, Maybe<Yield<A>>>shift(k -> pure(Maybe.of(new Yield<A>(a.get(), k))));
     }
 
     public static <A> Cont<A> yieldFrom(Generator<A> g) {
@@ -401,7 +401,7 @@ public final class Cont<A> implements $<Cont.µ, A> {
         @Override
         public Channel<A> start() {
             return new Channel<A>() {
-                private Optional<Yield<A>> ch = cont.runYield();
+                private Maybe<Yield<A>> ch = cont.runYield();
 
                 @Override
                 public boolean hasNext() {
@@ -447,7 +447,7 @@ public final class Cont<A> implements $<Cont.µ, A> {
         }
 
         private static <A, R>
-        R foldr(Optional<Yield<A>> yield, BiFunction<? super A, Supplier<R>, R> f, Supplier<R> r) {
+        R foldr(Maybe<Yield<A>> yield, BiFunction<? super A, Supplier<R>, R> f, Supplier<R> r) {
             if (yield.isPresent()) {
                 Yield<A> y = yield.get();
                 return f.apply(y.result, () -> foldr(y.next(), f, r));
@@ -461,7 +461,7 @@ public final class Cont<A> implements $<Cont.µ, A> {
             return generator(zip_(cont.runYield(), yieldFrom(b).runYield(), f));
         }
 
-        private static <A, B, C> Cont<C> zip_(Optional<Yield<A>> ya, Optional<Yield<B>> yb,
+        private static <A, B, C> Cont<C> zip_(Maybe<Yield<A>> ya, Maybe<Yield<B>> yb,
                     BiFunction<? super A, ? super B, ? extends C> f) {
             if (ya.isPresent() && yb.isPresent()) {
                 Yield<A> a = ya.get(); Yield<B> b = yb.get();

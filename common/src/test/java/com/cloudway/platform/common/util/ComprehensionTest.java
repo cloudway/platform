@@ -6,7 +6,6 @@
 
 package com.cloudway.platform.common.util;
 
-import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -14,35 +13,36 @@ import org.junit.Test;
 import static java.util.stream.Collectors.joining;
 import static org.junit.Assert.assertEquals;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
 import static com.cloudway.platform.common.fp.control.Syntax.*;
-import static com.cloudway.platform.common.fp.data.Optionals.Just;
+import static com.cloudway.platform.common.fp.data.Maybe.Just;
 import static com.cloudway.platform.common.fp.data.Tuple.Tuple_;
 
 // @formatter:off
 public class ComprehensionTest
 {
     @Test
-    public void comprehensionFromOptional() {
-        Optional<String> empty = Optional.empty();
-        assertEquals(Optional.of("hello, world"), concatOptionals("hello", "world"));
-        assertEquals(empty, concatOptionals("hello", null));
-        assertEquals(empty, concatOptionals("hello", ""));
-        assertEquals(empty, concatOptionals(null, "world"));
-        assertEquals(empty, concatOptionals("", "world"));
-        assertEquals(empty, concatOptionals(null, null));
-        assertEquals(empty, concatOptionals("", ""));
-        assertEquals(empty, concatOptionals(null, ""));
-        assertEquals(empty, concatOptionals("", null));
+    public void comprehensionFromMaybe() {
+        Maybe<String> empty = Maybe.empty();
+        assertEquals(Maybe.of("hello, world"), concatMaybes("hello", "world"));
+        assertEquals(empty, concatMaybes("hello", null));
+        assertEquals(empty, concatMaybes("hello", ""));
+        assertEquals(empty, concatMaybes(null, "world"));
+        assertEquals(empty, concatMaybes("", "world"));
+        assertEquals(empty, concatMaybes(null, null));
+        assertEquals(empty, concatMaybes("", ""));
+        assertEquals(empty, concatMaybes(null, ""));
+        assertEquals(empty, concatMaybes("", null));
     }
 
-    static Optional<String> concatOptionals(String first, String second) {
+    static Maybe<String> concatMaybes(String first, String second) {
         return select.
-               from(Optional.ofNullable(first), (String a) ->
-               from(Optional.ofNullable(second), (String b) ->
+               from(Maybe.ofNullable(first), (String a) ->
+               from(Maybe.ofNullable(second), (String b) ->
                where(!a.isEmpty() && !b.isEmpty(),
                yield(a + ", " + b))));
     }
@@ -57,9 +57,9 @@ public class ComprehensionTest
     }
 
     @Test
-    public void comprehensionPatternMatchingOptionals() {
-        @SuppressWarnings("unchecked") Optional<String>[] source = new Optional[] {
-            Optional.of("hello"), Optional.empty(), Optional.of("world"), Optional.of("")
+    public void comprehensionPatternMatchingMaybes() {
+        @SuppressWarnings("unchecked") Maybe<String>[] source = new Maybe[] {
+            Maybe.of("hello"), Maybe.empty(), Maybe.of("world"), Maybe.of("")
         };
         String result;
 
@@ -77,7 +77,7 @@ public class ComprehensionTest
 
         result = Stream.of(source)
                        .filter(on(Just((String x) -> !x.isEmpty())))
-                       .map(Optional::get)
+                       .map(Maybe::get)
                        .collect(joining(", "));
         assertEquals("hello, world", result);
     }
@@ -101,9 +101,9 @@ public class ComprehensionTest
     }
 
     @Test
-    public void comprehensionPatternMatchingOptionalTuples() {
-        @SuppressWarnings("unchecked") Optional<Tuple<String,Integer>>[] source = new Optional[] {
-            Optional.of(Tuple.of("a", 1)), Optional.empty(), Optional.of(Tuple.of("c", 3))
+    public void comprehensionPatternMatchingMaybeTuples() {
+        @SuppressWarnings("unchecked") Maybe<Tuple<String,Integer>>[] source = new Maybe[] {
+            Maybe.of(Tuple.of("a", 1)), Maybe.empty(), Maybe.of(Tuple.of("c", 3))
         };
         String result;
 

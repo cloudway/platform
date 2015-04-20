@@ -11,7 +11,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.StringJoiner;
@@ -21,6 +20,7 @@ import org.junit.Test;
 import static java.util.stream.Collectors.*;
 import static org.junit.Assert.*;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
@@ -200,23 +200,23 @@ public class SequenceTest
         assertEquals(1,  (int)Seq.of(1).foldRight(0, (x, acc) -> x - acc.get()));
         assertEquals(1,  (int)Seq.of(1).foldRight_(0, (x, acc) -> x - acc));
 
-        assertEquals(Optional.of(6),  Seq.of(1, 2, 3).foldLeft((acc, x) -> acc + x));
-        assertEquals(Optional.of(6),  Seq.of(1, 2, 3).foldRight((x, acc) -> x + acc));
-        assertEquals(Optional.of(-4), Seq.of(1, 2, 3).foldLeft((acc, x) -> acc - x));
-        assertEquals(Optional.of(2),  Seq.of(1, 2, 3).foldRight((x, acc) -> x - acc));
+        assertEquals(Maybe.of(6),  Seq.of(1, 2, 3).foldLeft((acc, x) -> acc + x));
+        assertEquals(Maybe.of(6),  Seq.of(1, 2, 3).foldRight((x, acc) -> x + acc));
+        assertEquals(Maybe.of(-4), Seq.of(1, 2, 3).foldLeft((acc, x) -> acc - x));
+        assertEquals(Maybe.of(2),  Seq.of(1, 2, 3).foldRight((x, acc) -> x - acc));
 
-        assertEquals(Optional.<Integer>empty(), Seq.<Integer>nil().foldLeft((acc, x) -> acc + x));
-        assertEquals(Optional.<Integer>empty(), Seq.<Integer>nil().foldRight((x, acc) -> x + acc));
+        assertEquals(Maybe.<Integer>empty(), Seq.<Integer>nil().foldLeft((acc, x) -> acc + x));
+        assertEquals(Maybe.<Integer>empty(), Seq.<Integer>nil().foldRight((x, acc) -> x + acc));
 
-        assertEquals(Optional.of(1),  Seq.of(1).foldLeft((acc, x) -> acc + x));
-        assertEquals(Optional.of(1),  Seq.of(1).foldRight((x, acc) -> x + acc));
-        assertEquals(Optional.of(1),  Seq.of(1).foldLeft((acc, x) -> acc - x));
-        assertEquals(Optional.of(1),  Seq.of(1).foldRight((x, acc) -> x - acc));
+        assertEquals(Maybe.of(1),  Seq.of(1).foldLeft((acc, x) -> acc + x));
+        assertEquals(Maybe.of(1),  Seq.of(1).foldRight((x, acc) -> x + acc));
+        assertEquals(Maybe.of(1),  Seq.of(1).foldLeft((acc, x) -> acc - x));
+        assertEquals(Maybe.of(1),  Seq.of(1).foldRight((x, acc) -> x - acc));
 
-        assertEquals(Optional.of(3),  Seq.of(1, 2).foldLeft((acc, x) -> acc + x));
-        assertEquals(Optional.of(3),  Seq.of(1, 2).foldRight((x, acc) -> x + acc));
-        assertEquals(Optional.of(-1), Seq.of(1, 2).foldLeft((acc, x) -> acc - x));
-        assertEquals(Optional.of(-1), Seq.of(1, 2).foldRight((x, acc) -> x - acc));
+        assertEquals(Maybe.of(3),  Seq.of(1, 2).foldLeft((acc, x) -> acc + x));
+        assertEquals(Maybe.of(3),  Seq.of(1, 2).foldRight((x, acc) -> x + acc));
+        assertEquals(Maybe.of(-1), Seq.of(1, 2).foldLeft((acc, x) -> acc - x));
+        assertEquals(Maybe.of(-1), Seq.of(1, 2).foldRight((x, acc) -> x - acc));
 
         assertEquals("abc", Seq.of("a", "b", "c").foldLeft("", String::concat));
         assertEquals("abc", Seq.of("a", "b", "c").foldLeft(new StringBuilder(), StringBuilder::append).toString());

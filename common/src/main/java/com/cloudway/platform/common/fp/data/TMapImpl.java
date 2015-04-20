@@ -11,7 +11,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
@@ -116,9 +115,9 @@ final class TMapImpl {
         }
 
         @Override
-        default Optional<V> lookup(Object key) {
+        default Maybe<V> lookup(Object key) {
             Node<K,V> kv = get0(key, hash(key), 0);
-            return kv != null ? Optional.of(kv.value) : Optional.empty();
+            return kv != null ? Maybe.of(kv.value) : Maybe.empty();
         }
 
         @Override
@@ -447,8 +446,8 @@ final class TMapImpl {
         }
 
         @Override
-        public Optional<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
-            return Optional.empty();
+        public Maybe<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
+            return Maybe.empty();
         }
 
         @Override
@@ -550,8 +549,8 @@ final class TMapImpl {
         }
 
         @Override
-        public Optional<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
-            return p.test(key, value) ? Optional.of(this) : Optional.empty();
+        public Maybe<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
+            return p.test(key, value) ? Maybe.of(this) : Maybe.empty();
         }
 
         @Override
@@ -682,8 +681,8 @@ final class TMapImpl {
         }
 
         @Override
-        public Optional<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
-            return Optional.ofNullable(kvs.find(p));
+        public Maybe<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
+            return Maybe.ofNullable(kvs.find(p));
         }
 
         @Override
@@ -869,13 +868,13 @@ final class TMapImpl {
         }
 
         @Override
-        public Optional<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
+        public Maybe<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
             for (TMap<K,V> el : elems) {
-                Optional<Map.Entry<K,V>> kv = el.find(p);
+                Maybe<Map.Entry<K,V>> kv = el.find(p);
                 if (kv.isPresent())
                     return kv;
             }
-            return Optional.empty();
+            return Maybe.empty();
         }
 
         @Override
@@ -1262,7 +1261,7 @@ final class TMapImpl {
         public PSet<K> remove(Object o)     { return copy().remove(o); }
         public PSet<K> clear()              { return HashPSet.empty(); }
 
-        public Optional<K> find(Predicate<? super K> p) {
+        public Maybe<K> find(Predicate<? super K> p) {
             return m.find((k, v) -> p.test(k)).map(Map.Entry::getKey);
         }
         public PSet<K> filter(Predicate<? super K> p) {

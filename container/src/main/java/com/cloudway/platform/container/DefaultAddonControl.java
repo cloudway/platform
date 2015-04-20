@@ -19,7 +19,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -28,6 +27,7 @@ import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.os.Etc;
 import com.cloudway.platform.common.os.Exec;
 import com.cloudway.platform.common.util.MoreFiles;
@@ -79,13 +79,15 @@ public class DefaultAddonControl implements AddonControl
     }
 
     @Override
-    public Optional<Addon> addon(String name) {
-        return Optional.ofNullable(addons().get(name));
+    public Maybe<Addon> addon(String name) {
+        return Maybe.ofNullable(addons().get(name));
     }
 
     @Override
-    public Optional<Addon> getFrameworkAddon() {
-        return validAddons().filter(having(Addon::getType, is(FRAMEWORK))).findFirst();
+    public Maybe<Addon> getFrameworkAddon() {
+        return Maybe.fromOptional(
+            validAddons().filter(having(Addon::getType, is(FRAMEWORK)))
+                         .findFirst());
     }
 
     @Override

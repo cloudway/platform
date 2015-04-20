@@ -6,7 +6,7 @@
 
 package com.cloudway.platform.common.os;
 
-import java.util.Optional;
+import com.cloudway.platform.common.fp.data.Maybe;
 
 /**
  * The Configuration interface maintains all properties read from
@@ -18,9 +18,9 @@ public interface Configuration
      * Get a property as an optional value.
      *
      * @param name the property name
-     * @return the property value encapsulate in an Optional
+     * @return the property value encapsulate in a {@code Maybe}
      */
-    Optional<String> getProperty(String name);
+    Maybe<String> getProperty(String name);
 
     /**
      * The provider interface that responsible to load properties from

@@ -11,9 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.IntStream;
 
 import static java.util.stream.Collectors.*;
@@ -22,6 +20,7 @@ import static com.cloudway.platform.common.fp.control.StringPredicates.*;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableTable;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Etc;
 import com.cloudway.platform.common.os.Exec;
@@ -293,7 +292,7 @@ public class LinuxContainerAdapter extends UnixContainerAdapter
     {
         int curblocks = 0, curfiles = 0;
 
-        Optional<String[]> quota = get_quota();
+        Maybe<String[]> quota = get_quota();
         if (quota.isPresent()) {
             String[] cur_quota = quota.get();
             curblocks = Integer.parseInt(cur_quota[1]);
@@ -317,12 +316,12 @@ public class LinuxContainerAdapter extends UnixContainerAdapter
 
     }
 
-    private Optional<String[]> get_quota() throws IOException {
+    private Maybe<String[]> get_quota() throws IOException {
         String out = Exec.args("quota", "-pw", container.getId()).silentIO().subst();
-        return Arrays.stream(out.split("\n"))
+        return Seq.of(out.split("\n"))
             .filter(matches("^.*/dev/.*"))
-            .findFirst()
-            .map(line -> line.split("\\s+"));
+            .map(line -> line.split("\\s+"))
+            .peek();
     }
 
     private static Path get_mountpoint(Path path) {

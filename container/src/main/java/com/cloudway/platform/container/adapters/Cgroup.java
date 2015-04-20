@@ -8,7 +8,7 @@ package com.cloudway.platform.container.adapters;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
+import com.cloudway.platform.common.fp.data.Maybe;
 
 public class Cgroup
 {
@@ -42,7 +42,7 @@ public class Cgroup
         cg.delete(user);
     }
 
-    public Optional<Object> fetch(String key) throws IOException {
+    public Maybe<Object> fetch(String key) throws IOException {
         return cg.fetch(user, key);
     }
 

@@ -10,8 +10,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Optional;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.os.Exec;
 import com.cloudway.platform.container.ApplicationContainer;
 import static com.cloudway.platform.common.util.MoreFiles.*;
@@ -25,7 +25,7 @@ public class MacOSContainerAdapter extends UnixContainerAdapter
     }
 
     @Override
-    protected void createUser(String name, int uid, Path home, String skel, String shell, String gecos, Optional<String> groups)
+    protected void createUser(String name, int uid, Path home, String skel, String shell, String gecos, Maybe<String> groups)
         throws IOException
     {
         String grouppath = "/Groups/" + name;

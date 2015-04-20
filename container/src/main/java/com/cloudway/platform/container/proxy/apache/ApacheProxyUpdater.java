@@ -10,11 +10,11 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import com.google.common.collect.ImmutableSet;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.PMap;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.container.proxy.HttpProxyUpdater;
@@ -90,9 +90,9 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
                 .collect(Collectors.joining("|"));
             if (newValue.isEmpty()) {
                 removed.set(true);
-                return Optional.empty();
+                return Maybe.empty();
             } else {
-                return Optional.of(newValue);
+                return Maybe.of(newValue);
             }
         }));
 

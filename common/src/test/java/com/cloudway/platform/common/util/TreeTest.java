@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -23,6 +22,7 @@ import org.junit.Test;
 import static java.util.Comparator.*;
 import static org.junit.Assert.*;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.MutablePMap;
 import com.cloudway.platform.common.fp.data.IntSeq;
 import com.cloudway.platform.common.fp.data.PMap;
@@ -287,7 +287,7 @@ public class TreeTest {
                     return v.filter(x -> x % 2 == 0).map(x -> x * 2);
                 } else {
                     int x = Integer.parseInt(k);
-                    return x % 2 == 0 ? Optional.of(x * 2) : Optional.empty();
+                    return x % 2 == 0 ? Maybe.of(x * 2) : Maybe.empty();
                 }
             }));
         }
@@ -398,26 +398,26 @@ public class TreeTest {
         assertEquals(Integer.valueOf(100), tm.lastKey());
 
         assertEntryEquals(40, 40, tm.lowerEntry(42));
-        assertEquals(Optional.of(40), tm.lowerKey(42));
+        assertEquals(Maybe.of(40), tm.lowerKey(42));
         assertEntryEquals(40, 40, tm.lowerEntry(41));
-        assertEquals(Optional.of(40), tm.lowerKey(41));
+        assertEquals(Maybe.of(40), tm.lowerKey(41));
         assertEntryEquals(42, 42, tm.floorEntry(42));
-        assertEquals(Optional.of(42), tm.floorKey(42));
+        assertEquals(Maybe.of(42), tm.floorKey(42));
         assertEntryEquals(40, 40, tm.floorEntry(41));
-        assertEquals(Optional.of(40), tm.floorKey(41));
+        assertEquals(Maybe.of(40), tm.floorKey(41));
         assertEntryEquals(42, 42, tm.ceilingEntry(42));
-        assertEquals(Optional.of(42), tm.ceilingKey(42));
+        assertEquals(Maybe.of(42), tm.ceilingKey(42));
         assertEntryEquals(42, 42, tm.ceilingEntry(41));
-        assertEquals(Optional.of(42), tm.ceilingKey(41));
+        assertEquals(Maybe.of(42), tm.ceilingKey(41));
         assertEntryEquals(44, 44, tm.higherEntry(42));
-        assertEquals(Optional.of(44), tm.higherKey(42));
+        assertEquals(Maybe.of(44), tm.higherKey(42));
         assertEntryEquals(42, 42, tm.higherEntry(41));
-        assertEquals(Optional.of(42), tm.higherKey(41));
+        assertEquals(Maybe.of(42), tm.higherKey(41));
 
-        assertEquals(Optional.<Map.Entry<Integer,Integer>>empty(), tm.lowerEntry(0));
-        assertEquals(Optional.<Integer>empty(), tm.lowerKey(0));
-        assertEquals(Optional.<Map.Entry<Integer,Integer>>empty(), tm.higherEntry(100));
-        assertEquals(Optional.<Integer>empty(), tm.higherKey(100));
+        assertEquals(Maybe.<Map.Entry<Integer,Integer>>empty(), tm.lowerEntry(0));
+        assertEquals(Maybe.<Integer>empty(), tm.lowerKey(0));
+        assertEquals(Maybe.<Map.Entry<Integer,Integer>>empty(), tm.higherEntry(100));
+        assertEquals(Maybe.<Integer>empty(), tm.higherKey(100));
     }
 
     static <K,V> void assertEntryEquals(K k, V v, Map.Entry<K,V> e) {
@@ -425,7 +425,7 @@ public class TreeTest {
         assertEquals(v, e.getValue());
     }
 
-    static <K,V> void assertEntryEquals(K k, V v, Optional<Map.Entry<K,V>> e) {
+    static <K,V> void assertEntryEquals(K k, V v, Maybe<Map.Entry<K,V>> e) {
         assertTrue(e.isPresent());
         assertEquals(k, e.get().getKey());
         assertEquals(v, e.get().getValue());

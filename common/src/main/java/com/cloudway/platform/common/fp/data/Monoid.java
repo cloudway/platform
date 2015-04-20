@@ -8,16 +8,15 @@ package com.cloudway.platform.common.fp.data;
 
 import java.math.BigInteger;
 import java.util.Comparator;
-import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import static com.cloudway.platform.common.fp.control.Conditionals.Any;
 import static com.cloudway.platform.common.fp.control.Conditionals.with;
-import static com.cloudway.platform.common.fp.data.Optionals.Just;
-import static com.cloudway.platform.common.fp.data.Optionals.Nothing;
+import static com.cloudway.platform.common.fp.control.Conditionals.Any;
+import static com.cloudway.platform.common.fp.data.Maybe.Just;
+import static com.cloudway.platform.common.fp.data.Maybe.Nothing;
 
 /**
  * A class for monoids (types with an associative binary operation that has
@@ -251,37 +250,25 @@ public abstract class Monoid<A> {
     }
 
     /**
-     * A monoid for optional values.
+     * A monoid for {@code Maybe}s that take the first available value.
      */
-    public static <A> Monoid<Optional<A>> ofOptional(Monoid<A> ma) {
-        return monoid_(Optional.empty(), (a1, a2) ->
-            with(a1, a2).<Optional<A>>get()
-              .when(Any(x -> Nothing(() -> x)))
-              .when(Nothing(() -> Any(y -> y)))
-              .when(Just(x -> Just(y -> Optional.of(ma.append(x, y)))))
-              .get());
+    public static <A> Monoid<Maybe<A>> first() {
+        return monoid_(Maybe.empty(), (a1, a2) -> a1.isPresent() ? a1 : a2);
     }
 
     /**
-     * A monoid for optionals that take the first available value.
+     * A monoid for {@code Maybe}s that take the last available value.
      */
-    public static <A> Monoid<Optional<A>> first() {
-        return monoid_(Optional.empty(), (a1, a2) -> a1.isPresent() ? a1 : a2);
+    public static <A> Monoid<Maybe<A>> last() {
+        return monoid_(Maybe.empty(), (a1, a2) -> a2.isPresent() ? a2 : a1);
     }
 
     /**
-     * A monoid for optionals that take the last available value.
+     * A monoid for {@code Maybe}s that take the maximum value.
      */
-    public static <A> Monoid<Optional<A>> last() {
-        return monoid_(Optional.empty(), (a1, a2) -> a2.isPresent() ? a2 : a1);
-    }
-
-    /**
-     * A monoid for optionals that take the maximum value.
-     */
-    public static <A> Monoid<Optional<A>> max(Comparator<? super A> c) {
-        return monoid_(Optional.empty(), (a1, a2) ->
-            with(a1, a2).<Optional<A>>get()
+    public static <A> Monoid<Maybe<A>> max(Comparator<? super A> c) {
+        return monoid_(Maybe.empty(), (a1, a2) ->
+            with(a1, a2).<Maybe<A>>get()
               .when(Any(x -> Nothing(() -> x)))
               .when(Nothing(() -> Any(y -> y)))
               .when(Just(x -> Just(y -> c.compare(x, y) >= 0 ? a1 : a2)))
@@ -289,11 +276,11 @@ public abstract class Monoid<A> {
     }
 
     /**
-     * A monoid for optionals that take the minimum value.
+     * A monoid for {@cide Maybe}s that take the minimum value.
      */
-    public static <A> Monoid<Optional<A>> min(Comparator<? super A> c) {
-        return monoid_(Optional.empty(), (a1, a2) ->
-            with(a1, a2).<Optional<A>>get()
+    public static <A> Monoid<Maybe<A>> min(Comparator<? super A> c) {
+        return monoid_(Maybe.empty(), (a1, a2) ->
+            with(a1, a2).<Maybe<A>>get()
               .when(Any(x -> Nothing(() -> x)))
               .when(Nothing(() -> Any(y -> y)))
               .when(Just(x -> Just(y -> c.compare(x, y) <= 0 ? a1 : a2)))

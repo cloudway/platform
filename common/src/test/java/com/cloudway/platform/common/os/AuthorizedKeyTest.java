@@ -6,14 +6,13 @@
 
 package com.cloudway.platform.common.os;
 
-import java.util.Optional;
-
 import org.junit.Test;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeMatcher;
 import static org.junit.Assert.assertThat;
 import static org.hamcrest.CoreMatchers.*;
+import com.cloudway.platform.common.fp.data.Maybe;
 
 public class AuthorizedKeyTest
 {
@@ -177,33 +176,33 @@ public class AuthorizedKeyTest
         assertThat(pubkey.toString(), is("ssh-rsa XXX myname"));
     }
 
-    static <T> Matcher<Optional<T>> just(Matcher<? extends T> elemenetMatcher) {
-        return new Maybe<>(elemenetMatcher);
+    static <T> Matcher<Maybe<T>> just(Matcher<? extends T> elemenetMatcher) {
+        return new MaybeMatcher<>(elemenetMatcher);
     }
 
-    static <T> Matcher<Optional<T>> just(T element) {
+    static <T> Matcher<Maybe<T>> just(T element) {
         return just(equalTo(element));
     }
 
     @SuppressWarnings("unchecked")
-    static <T> Matcher<Optional<?>> present() {
+    static <T> Matcher<Maybe<?>> present() {
         return (Matcher)just(anything());
     }
 
-    static <T> Matcher<Optional<?>> nothing() {
+    static <T> Matcher<Maybe<?>> nothing() {
         return not(present());
     }
 
-    static class Maybe<T> extends TypeSafeMatcher<Optional<T>> {
+    static class MaybeMatcher<T> extends TypeSafeMatcher<Maybe<T>> {
         private final Matcher<? extends T> elementMatcher;
 
-        public Maybe(Matcher<? extends T> elementMatcher) {
+        public MaybeMatcher(Matcher<? extends T> elementMatcher) {
             this.elementMatcher = elementMatcher;
         }
 
         @Override
-        public boolean matchesSafely(Optional<T> optional) {
-            return optional.map(elementMatcher::matches).orElse(false);
+        public boolean matchesSafely(Maybe<T> maybe) {
+            return maybe.map(elementMatcher::matches).orElse(false);
         }
 
         @Override

@@ -10,12 +10,12 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Optional;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 import com.google.common.collect.ImmutableSet;
 import static java.lang.String.format;
 
+import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Exec;
 
@@ -64,10 +64,10 @@ class GitRepository implements ApplicationRepository
             return;
         }
 
-        Optional<Path> t = Stream.of(TEMPLATES)
+        Maybe<Path> t = Seq.of(TEMPLATES)
             .map(basedir::resolve)
             .filter(Files::isDirectory)
-            .findFirst();
+            .peek();
 
         if (t.isPresent()) {
             Path template = t.get();

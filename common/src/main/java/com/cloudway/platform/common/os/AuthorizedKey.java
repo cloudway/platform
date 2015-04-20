@@ -8,10 +8,11 @@ package com.cloudway.platform.common.os;
 
 import java.io.Serializable;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import static java.util.Objects.requireNonNull;
+
+import com.cloudway.platform.common.fp.data.Maybe;
 
 /**
  * <p>The authorized_keys file contains public keys for public key authentication.
@@ -32,16 +33,16 @@ public final class AuthorizedKey implements Serializable
         return ID_PREFIX + requireNonNull(id) + "-" + requireNonNull(name);
     }
 
-    private static Optional<String> extractId(Optional<String> comment, int group) {
+    private static Maybe<String> extractId(Maybe<String> comment, int group) {
         return comment.map(ID_PATTERN::matcher).filter(Matcher::matches).map(m -> m.group(group));
     }
 
     private final String type;
     private final String bits;
-    private final Optional<String> options;
-    private final Optional<String> comment;
+    private final Maybe<String> options;
+    private final Maybe<String> comment;
 
-    private AuthorizedKey(String type, String bits, Optional<String> options, Optional<String> comment) {
+    private AuthorizedKey(String type, String bits, Maybe<String> options, Maybe<String> comment) {
         this.type = requireNonNull(type);
         this.bits = requireNonNull(bits);
         this.options = requireNonNull(options);
@@ -56,24 +57,24 @@ public final class AuthorizedKey implements Serializable
         return bits;
     }
 
-    public Optional<String> getOptions() {
+    public Maybe<String> getOptions() {
         return options;
     }
 
-    public Optional<String> getComment() {
+    public Maybe<String> getComment() {
         return comment;
     }
 
-    public Optional<String> getId() {
+    public Maybe<String> getId() {
         return extractId(comment, 1);
     }
 
-    public Optional<String> getName() {
+    public Maybe<String> getName() {
         return extractId(comment, 2);
     }
 
     public AuthorizedKey toPublicKey() {
-        return new AuthorizedKey(type, bits, Optional.empty(), getName());
+        return new AuthorizedKey(type, bits, Maybe.empty(), getName());
     }
 
     public boolean equals(Object obj) {
@@ -113,20 +114,20 @@ public final class AuthorizedKey implements Serializable
     }
 
     public static class Parser {
-        private Optional<String> options = Optional.empty();
-        private Optional<String> comment = Optional.empty();
+        private Maybe<String> options = Maybe.empty();
+        private Maybe<String> comment = Maybe.empty();
 
         public Parser withId(String id, String name) {
             return withComment(composeId(id, name));
         }
 
         public Parser withOptions(String options) {
-            this.options = Optional.of(options);
+            this.options = Maybe.of(options);
             return this;
         }
 
         public Parser withComment(String comment) {
-            this.comment = Optional.of(comment);
+            this.comment = Maybe.of(comment);
             return this;
         }
 
@@ -151,14 +152,14 @@ public final class AuthorizedKey implements Serializable
             if (pubkey == null) {
                 throw new IllegalArgumentException("Invalid authorized key");
             }
-            return parse(pubkey, Optional.ofNullable(options), Optional.empty());
+            return parse(pubkey, Maybe.ofNullable(options), Maybe.empty());
         }
 
         public AuthorizedKey parsePublicKey(String key) {
             return parse(requireNonNull(key), this.options, this.comment);
         }
 
-        private static AuthorizedKey parse(String key, Optional<String> options, Optional<String> comment) {
+        private static AuthorizedKey parse(String key, Maybe<String> options, Maybe<String> comment) {
             String[] splits = key.trim().split("\\s+");
             if (splits.length != 2 && splits.length != 3)
                 throw new IllegalArgumentException("Invalid SSH public key");
@@ -166,7 +167,7 @@ public final class AuthorizedKey implements Serializable
             String type = splits[0];
             String bits = splits[1];
             if (!comment.isPresent() && splits.length == 3)
-                comment = Optional.of(splits[2]);
+                comment = Maybe.of(splits[2]);
             return new AuthorizedKey(type, bits, options, comment);
         }
     }

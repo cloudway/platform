@@ -7,7 +7,6 @@
 package com.cloudway.platform.common.fp.control;
 
 import java.util.Iterator;
-import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -15,6 +14,7 @@ import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.typeclass.Monad;
@@ -354,35 +354,35 @@ public final class StateCont<A, S> implements $<StateCont.µ<S>, A> {
     private static class Yield<A, S> {
         final A result;
         final S state;
-        final Function<A, MonadState<Optional<Yield<A, S>>, S>> cont;
+        final Function<A, MonadState<Maybe<Yield<A, S>>, S>> cont;
 
-        Yield(A a, S s, Function<A, MonadState<Optional<Yield<A, S>>, S>> k) {
+        Yield(A a, S s, Function<A, MonadState<Maybe<Yield<A, S>>, S>> k) {
             result = a;
             state = s;
             cont = k;
         }
 
-        Optional<Yield<A, S>> next() {
+        Maybe<Yield<A, S>> next() {
             return cont.apply(result).eval(state);
         }
 
-        Optional<Yield<A, S>> send(A value) {
+        Maybe<Yield<A, S>> send(A value) {
             return cont.apply(value).eval(state);
         }
     }
 
-    Optional<Yield<A, S>> runYield(S s) {
-        return reset(map(__ -> Optional.<Yield<A,S>>empty())).eval().eval(s);
+    Maybe<Yield<A, S>> runYield(S s) {
+        return reset(map(__ -> Maybe.<Yield<A,S>>empty())).eval().eval(s);
     }
 
     public static <A, S> StateCont<A, S> yield(A a) {
-        return StateCont.<A, Optional<Yield<A, S>>, S>shift(k ->
-            StateCont.<S>get().map(s -> Optional.of(new Yield<>(a, s, k))));
+        return StateCont.<A, Maybe<Yield<A, S>>, S>shift(k ->
+            StateCont.<S>get().map(s -> Maybe.of(new Yield<>(a, s, k))));
     }
 
     public static <A, S> StateCont<A, S> yield(Supplier<A> a) {
-        return StateCont.<A, Optional<Yield<A, S>>, S>shift(k ->
-            StateCont.<S>get().map(s -> Optional.of(new Yield<>(a.get(), s, k))));
+        return StateCont.<A, Maybe<Yield<A, S>>, S>shift(k ->
+            StateCont.<S>get().map(s -> Maybe.of(new Yield<>(a.get(), s, k))));
     }
 
     @SuppressWarnings("unchecked")
@@ -430,7 +430,7 @@ public final class StateCont<A, S> implements $<StateCont.µ<S>, A> {
         @Override
         public Channel<A> start() {
             return new Channel<A>() {
-                private Optional<Yield<A, S>> ch = cont.runYield(state);
+                private Maybe<Yield<A, S>> ch = cont.runYield(state);
 
                 @Override
                 public boolean hasNext() {
@@ -479,7 +479,7 @@ public final class StateCont<A, S> implements $<StateCont.µ<S>, A> {
         }
 
         private static <A, R, S>
-        R foldr(Optional<Yield<A, S>> yield, BiFunction<? super A, Supplier<R>, R> f, Supplier<R> r) {
+        R foldr(Maybe<Yield<A, S>> yield, BiFunction<? super A, Supplier<R>, R> f, Supplier<R> r) {
             if (yield.isPresent()) {
                 Yield<A, S> y = yield.get();
                 return f.apply(y.result, () -> foldr(y.next(), f, r));
@@ -495,7 +495,7 @@ public final class StateCont<A, S> implements $<StateCont.µ<S>, A> {
             return generator(state, zip_(cont.runYield(state), kb.runYield(state), f));
         }
 
-        private static <A, B, C, S> StateCont<C,S> zip_(Optional<Yield<A,S>> ya, Optional<Yield<B,S>> yb,
+        private static <A, B, C, S> StateCont<C,S> zip_(Maybe<Yield<A,S>> ya, Maybe<Yield<B,S>> yb,
                     BiFunction<? super A, ? super B, ? extends C> f) {
             if (ya.isPresent() && yb.isPresent()) {
                 Yield<A,S> a = ya.get(); Yield<B,S> b = yb.get();

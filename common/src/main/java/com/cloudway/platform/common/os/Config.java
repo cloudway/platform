@@ -8,11 +8,10 @@ package com.cloudway.platform.common.os;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Optional;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.util.MoreFiles;
-import com.cloudway.platform.common.fp.data.Optionals;
 
 public final class Config
 {
@@ -33,7 +32,7 @@ public final class Config
         return new Config("container.conf");
     }
 
-    public Optional<String> get(String name) {
+    public Maybe<String> get(String name) {
         return conf.getProperty(name);
     }
 
@@ -46,7 +45,7 @@ public final class Config
     }
 
     public int getInt(String name, int deflt) {
-        return get(name).flatMap(Optionals.of(Integer::parseInt)).orElse(deflt);
+        return get(name).flatMap(Maybe.adapt(Integer::parseInt)).orElse(deflt);
     }
 
     public String toString() {
@@ -82,7 +81,7 @@ public final class Config
     }
 
     private static String getProperty(String key, String defaultValue) {
-        return Optionals.or(System.getProperty(key), () -> Optionals.or(System.getenv(key), defaultValue));
+        return Maybe.or(System.getProperty(key), () -> Maybe.or(System.getenv(key), defaultValue));
     }
 
     public static PathProperty path(String key, String deflt) {

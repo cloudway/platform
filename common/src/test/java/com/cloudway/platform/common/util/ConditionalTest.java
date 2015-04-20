@@ -15,7 +15,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Random;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -29,6 +28,7 @@ import com.google.common.collect.ImmutableMap;
 import com.cloudway.platform.common.fp.control.ConditionCase;
 import com.cloudway.platform.common.fp.control.Generator;
 import com.cloudway.platform.common.fp.control.StateCont;
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.function.TriFunction;
@@ -43,7 +43,8 @@ import static com.cloudway.platform.common.fp.control.Cont.generator;
 import static com.cloudway.platform.common.fp.control.Cont.yield;
 import static com.cloudway.platform.common.fp.control.Cont.yieldFrom;
 import static com.cloudway.platform.common.fp.control.Cont.finish;
-import static com.cloudway.platform.common.fp.data.Optionals.*;
+import static com.cloudway.platform.common.fp.data.Maybe.Just;
+import static com.cloudway.platform.common.fp.data.Maybe.Nothing;
 import static com.cloudway.platform.common.fp.data.Seq.Cons;
 import static com.cloudway.platform.common.fp.data.Tuple.Tuple_;
 import static java.util.stream.Collectors.*;
@@ -199,13 +200,13 @@ public class ConditionalTest
     // ----------------------------------------------------------------------
 
     @Test
-    public void matchOptionalTest() {
-        assertEquals("Just hello", matchOptional(Optional.of(Optional.of("hello"))));
-        assertEquals("Nothing", matchOptional(Optional.of(Optional.empty())));
-        assertEquals("Empty", matchOptional(Optional.empty()));
+    public void matchMaybeTest() {
+        assertEquals("Just hello", matchMaybe(Maybe.of(Maybe.of("hello"))));
+        assertEquals("Nothing", matchMaybe(Maybe.of(Maybe.empty())));
+        assertEquals("Empty", matchMaybe(Maybe.empty()));
     }
 
-    private static String matchOptional(Optional<Optional<String>> thing) {
+    private static String matchMaybe(Maybe<Maybe<String>> thing) {
         return with(thing).<String>get()
             .when(in(Just(Just(x -> "Just " + x))))
             .when(in(Just(Nothing(() -> "Nothing"))))
@@ -214,15 +215,15 @@ public class ConditionalTest
     }
 
     @Test
-    public void matchOptionalPairTest() {
-        Optional<String> a = Optional.of("hello");
-        Optional<String> b = Optional.of("world");
-        Optional<String> empty = Optional.empty();
+    public void matchMaybePairTest() {
+        Maybe<String> a = Maybe.of("hello");
+        Maybe<String> b = Maybe.of("world");
+        Maybe<String> empty = Maybe.empty();
 
-        assertEquals("hello, world", matchOptionalPair(a, b));
-        assertEquals("hello", matchOptionalPair(a, empty));
-        assertEquals("world", matchOptionalPair(empty, b));
-        assertEquals("", matchOptionalPair(empty, empty));
+        assertEquals("hello, world", matchMaybePair(a, b));
+        assertEquals("hello", matchMaybePair(a, empty));
+        assertEquals("world", matchMaybePair(empty, b));
+        assertEquals("", matchMaybePair(empty, empty));
 
         assertEquals("hello, world", matchAnyPair(a, b));
         assertEquals("hello", matchAnyPair(a, empty));
@@ -230,7 +231,7 @@ public class ConditionalTest
         assertEquals("", matchAnyPair(empty, empty));
     }
 
-    private static String matchOptionalPair(Optional<String> a, Optional<String> b) {
+    private static String matchMaybePair(Maybe<String> a, Maybe<String> b) {
         return with(a, b).<String>get()
             .when(Just(x -> Just(y -> x + ", " + y)))
             .when(Just(x -> Nothing(() -> x)))
@@ -239,7 +240,7 @@ public class ConditionalTest
             .get();
     }
 
-    private static String matchAnyPair(Optional<String> a, Optional<String> b) {
+    private static String matchAnyPair(Maybe<String> a, Maybe<String> b) {
         return with(a, b).<String>get()
             .when(Just(x -> Just(y -> x + ", " + y)))
             .when(Just(x -> Any(() -> x)))
@@ -249,12 +250,12 @@ public class ConditionalTest
     }
 
     @Test
-    public void matchOptionalTupleTest() {
-        assertEquals("xy", matchOptionalTuple(Optional.of(Tuple.of("x", "y"))));
-        assertEquals("Nothing", matchOptionalTuple(Optional.empty()));
+    public void matchMaybeTupleTest() {
+        assertEquals("xy", matchMaybeTuple(Maybe.of(Tuple.of("x", "y"))));
+        assertEquals("Nothing", matchMaybeTuple(Maybe.empty()));
     }
 
-    private static String matchOptionalTuple(Optional<Tuple<String,String>> thing) {
+    private static String matchMaybeTuple(Maybe<Tuple<String,String>> thing) {
         return with(thing).<String>get()
             .when(in(Just(Tuple_((x, y) -> x + y))))
             .orElse("Nothing");
@@ -279,14 +280,14 @@ public class ConditionalTest
     }
 
     @Test
-    public void optionalActionTest() {
-        assertEquals("Just hello", optionalAction(Optional.of("hello")));
-        assertEquals("Nothing", optionalAction(Optional.empty()));
-        assertEquals("Just hello", optionalDoing(Optional.of("hello")));
-        assertEquals("Nothing", optionalDoing(Optional.empty()));
+    public void maybeActionTest() {
+        assertEquals("Just hello", maybeAction(Maybe.of("hello")));
+        assertEquals("Nothing", maybeAction(Maybe.empty()));
+        assertEquals("Just hello", maybeDoing(Maybe.of("hello")));
+        assertEquals("Nothing", maybeDoing(Maybe.empty()));
     }
 
-    private static String optionalAction(Optional<String> thing) {
+    private static String maybeAction(Maybe<String> thing) {
         StringBuilder buf = new StringBuilder();
         with(thing)
             .when(Just(x -> buf.append("Just ").append(x)))
@@ -294,7 +295,7 @@ public class ConditionalTest
         return buf.toString();
     }
 
-    private static String optionalDoing(Optional<String> thing) {
+    private static String maybeDoing(Maybe<String> thing) {
         StringBuilder buf = new StringBuilder();
         with(thing)
             .when(Just(doing(x -> buf.append("Just ").append(x))))

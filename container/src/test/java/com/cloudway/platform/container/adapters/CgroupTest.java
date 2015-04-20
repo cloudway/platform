@@ -6,7 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -19,9 +18,9 @@ import org.junit.Test;
 import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.util.ExtendedProperties;
-import com.cloudway.platform.common.fp.data.Optionals;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ResourceLimits;
 import com.cloudway.platform.container.TemporaryDirectory;
@@ -154,16 +153,16 @@ public class CgroupTest {
         write_cgparam(APP_USER, "other.value", "foo");
 
         Cgroup cg = mockCgroup();
-        assertThat(cg.fetch("memory.limits"), is(Optional.of("2048M")));
-        assertThat(cg.fetch("other.value"), is(Optional.empty()));
+        assertThat(cg.fetch("memory.limits"), is(Maybe.of("2048M")));
+        assertThat(cg.fetch("other.value"), is(Maybe.empty()));
 
         Map<String,Object> vals = ImmutableMap.of(
             "memory.limits", "4096M",
             "other.value",   "bar"
         );
         cg.store(vals);
-        assertThat(cg.fetch("memory.limits"), is(Optional.of("4096M")));
-        assertThat(cg.fetch("other.value"), is(Optional.empty()));
+        assertThat(cg.fetch("memory.limits"), is(Maybe.of("4096M")));
+        assertThat(cg.fetch("other.value"), is(Maybe.empty()));
     }
 
     @Test
@@ -187,11 +186,11 @@ public class CgroupTest {
 
         assertThat(read_cgparam(APP_USER, "memory.limits"), is("2048M"));
         assertThat(read_cgparam(APP_USER, "other.value"), is(nullValue()));
-        assertThat(cg.fetch("other.value"), is(Optional.empty()));
+        assertThat(cg.fetch("other.value"), is(Maybe.empty()));
 
         IO.forEach(TEST_PARAMETERS, (k, v) -> {
-            Object value = Optionals.firstNonNull(params.get(k), v);
-            assertThat(cg.fetch(k), is(Optional.of(value)));
+            Object value = Maybe.firstNonNull(params.get(k), v);
+            assertThat(cg.fetch(k), is(Maybe.of(value)));
         });
 
         check_cgrules(APP_USER);
@@ -205,7 +204,7 @@ public class CgroupTest {
             assertFalse(Files.exists(cgpath(subsys, APP_USER)));
         });
 
-        assertThat(cg.fetch("memory.limits"), is(Optional.empty()));
+        assertThat(cg.fetch("memory.limits"), is(Maybe.empty()));
 
         check_cgrules(null);
         check_cgconfig(null, null);
@@ -245,9 +244,9 @@ public class CgroupTest {
     public void freeze_and_thaw() throws IOException {
         Cgroup cg = mockCgroup();
         cg.freeze();
-        assertThat(cg.fetch("freezer.state"), is(Optional.of("FROZEN")));
+        assertThat(cg.fetch("freezer.state"), is(Maybe.of("FROZEN")));
         cg.thaw();
-        assertThat(cg.fetch("freezer.state"), is(Optional.of("THAWED")));
+        assertThat(cg.fetch("freezer.state"), is(Maybe.of("THAWED")));
     }
 
     @Test

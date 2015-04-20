@@ -12,7 +12,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.StringJoiner;
@@ -44,14 +43,14 @@ final class Tree {
         boolean isEmpty();
         int size();
         V __lookup(K k);
-        Optional<Map.Entry<K,V>> __find(BiPredicate<? super K, ? super V> p);
+        Maybe<Map.Entry<K,V>> __find(BiPredicate<? super K, ? super V> p);
 
         Node<K,V> __put(K k, V v);
         Node<K,V> __remove(K k);
         Node<K,V> __putIfAbsent(K k, V v);
         Node<K,V> __computeIfAbsent(K k, Function<? super K, ? extends V> f);
-        Node<K,V> __computeIfPresent(K k, BiFunction<? super K, ? super V, Optional<? extends V>> f);
-        Node<K,V> __compute(K k, BiFunction<? super K, Optional<V>, Optional<? extends V>> f);
+        Node<K,V> __computeIfPresent(K k, BiFunction<? super K, ? super V, Maybe<? extends V>> f);
+        Node<K,V> __compute(K k, BiFunction<? super K, Maybe<V>, Maybe<? extends V>> f);
         Node<K,V> __merge(K k, V v, BiFunction<? super V, ? super V, ? extends V> f);
 
         Node<K,V> __filter(Predicate<Map.Entry<K,V>> p);
@@ -94,8 +93,8 @@ final class Tree {
         }
 
         @Override
-        public Optional<Map.Entry<K,V>> __find(BiPredicate<? super K, ? super V> p) {
-            return Optional.empty();
+        public Maybe<Map.Entry<K,V>> __find(BiPredicate<? super K, ? super V> p) {
+            return Maybe.empty();
         }
 
         @Override
@@ -119,13 +118,13 @@ final class Tree {
         }
 
         @Override
-        public Node<K,V> __computeIfPresent(K k, BiFunction<? super K, ? super V, Optional<? extends V>> f) {
+        public Node<K,V> __computeIfPresent(K k, BiFunction<? super K, ? super V, Maybe<? extends V>> f) {
             return this;
         }
 
         @Override
-        public Node<K,V> __compute(K k, BiFunction<? super K, Optional<V>, Optional<? extends V>> f) {
-            return f.apply(k, Optional.empty())
+        public Node<K,V> __compute(K k, BiFunction<? super K, Maybe<V>, Maybe<? extends V>> f) {
+            return f.apply(k, Maybe.empty())
                     .map(x -> __put(k, x))
                     .orElse(this);
         }
@@ -225,11 +224,11 @@ final class Tree {
         }
 
         @Override
-        public Optional<Map.Entry<K,V>> __find(BiPredicate<? super K, ? super V> p) {
+        public Maybe<Map.Entry<K,V>> __find(BiPredicate<? super K, ? super V> p) {
             if (p.test(key, value)) {
-                return Optional.of(this);
+                return Maybe.of(this);
             } else {
-                Optional<Map.Entry<K,V>> e = left.__find(p);
+                Maybe<Map.Entry<K,V>> e = left.__find(p);
                 return e.isPresent() ? e : right.__find(p);
             }
         }
@@ -267,7 +266,7 @@ final class Tree {
         }
 
         @Override
-        public Node<K,V> __computeIfPresent(K k, BiFunction<? super K, ? super V, Optional<? extends V>> f) {
+        public Node<K,V> __computeIfPresent(K k, BiFunction<? super K, ? super V, Maybe<? extends V>> f) {
             int cmp = compare(k, key);
             return cmp < 0 ? balanceL(left.__computeIfPresent(k, f), right) :
                    cmp > 0 ? balanceR(left, right.__computeIfPresent(k, f))
@@ -275,11 +274,11 @@ final class Tree {
         }
 
         @Override
-        public Node<K,V> __compute(K k, BiFunction<? super K, Optional<V>, Optional<? extends V>> f) {
+        public Node<K,V> __compute(K k, BiFunction<? super K, Maybe<V>, Maybe<? extends V>> f) {
             int cmp = compare(k, key);
             return cmp < 0 ? balance(left.__compute(k, f), right) :
                    cmp > 0 ? balance(left, right.__compute(k, f))
-                           : f.apply(key, Optional.of(value)).map(this::modify).orElseGet(this::delete);
+                           : f.apply(key, Maybe.of(value)).map(this::modify).orElseGet(this::delete);
         }
 
         @Override
@@ -316,7 +315,7 @@ final class Tree {
             }
         }
 
-        static <K,V> Optional<Map.Entry<K,V>> lookupLT(Node<K,V> t, K k) {
+        static <K,V> Maybe<Map.Entry<K,V>> lookupLT(Node<K,V> t, K k) {
             Bin<K,V> lt = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
@@ -327,10 +326,10 @@ final class Tree {
                     t = b.right;
                 }
             }
-            return Optional.ofNullable(lt);
+            return Maybe.ofNullable(lt);
         }
 
-        static <K,V> Optional<Map.Entry<K,V>> lookupGT(Node<K,V> t, K k) {
+        static <K,V> Maybe<Map.Entry<K,V>> lookupGT(Node<K,V> t, K k) {
             Bin<K,V> gt = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
@@ -341,10 +340,10 @@ final class Tree {
                     t = b.left;
                 }
             }
-            return Optional.ofNullable(gt);
+            return Maybe.ofNullable(gt);
         }
 
-        static <K,V> Optional<Map.Entry<K,V>> lookupLE(Node<K,V> t, K k) {
+        static <K,V> Maybe<Map.Entry<K,V>> lookupLE(Node<K,V> t, K k) {
             Bin<K,V> le = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
@@ -359,10 +358,10 @@ final class Tree {
                     break;
                 }
             }
-            return Optional.ofNullable(le);
+            return Maybe.ofNullable(le);
         }
 
-        static <K,V> Optional<Map.Entry<K,V>> lookupGE(Node<K,V> t, K k) {
+        static <K,V> Maybe<Map.Entry<K,V>> lookupGE(Node<K,V> t, K k) {
             Bin<K,V> ge = null;
             while (!t.isEmpty()) {
                 Bin<K,V> b = (Bin<K,V>)t;
@@ -377,7 +376,7 @@ final class Tree {
                     break;
                 }
             }
-            return Optional.ofNullable(ge);
+            return Maybe.ofNullable(ge);
         }
 
         static <K,V> Map.Entry<K,V> findFirst(Node<K,V> t) {
@@ -1081,9 +1080,9 @@ final class Tree {
             return realsize(t).filter(sz -> sz == t.size()).isPresent();
         }
 
-        private static <K, V> Optional<Integer> realsize(Node<K,V> t) {
+        private static <K, V> Maybe<Integer> realsize(Node<K,V> t) {
             if (t.isEmpty()) {
-                return Optional.of(0);
+                return Maybe.of(0);
             } else {
                 Bin<K,V> b = (Bin<K,V>)t;
                 return select.from(realsize(b.left), n ->
@@ -1302,8 +1301,8 @@ final class Tree {
         }
 
         @Override
-        default Optional<V> lookup(Object k) {
-            return Optional.ofNullable(__lookup((K)k));
+        default Maybe<V> lookup(Object k) {
+            return Maybe.ofNullable(__lookup((K)k));
         }
 
         @Override
@@ -1321,7 +1320,7 @@ final class Tree {
         }
 
         @Override
-        default Optional<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
+        default Maybe<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> p) {
             return __find(p);
         }
 
@@ -1348,12 +1347,12 @@ final class Tree {
         }
 
         @Override
-        default PMap<K,V> computeIfPresent(K k, BiFunction<? super K, ? super V, Optional<? extends V>> f) {
+        default PMap<K,V> computeIfPresent(K k, BiFunction<? super K, ? super V, Maybe<? extends V>> f) {
             return (PMap<K,V>)__computeIfPresent(k, f);
         }
 
         @Override
-        default PMap<K,V> compute(K k, BiFunction<? super K, Optional<V>, Optional<? extends V>> f) {
+        default PMap<K,V> compute(K k, BiFunction<? super K, Maybe<V>, Maybe<? extends V>> f) {
             return (PMap<K,V>)__compute(k, f);
         }
 
@@ -1453,42 +1452,42 @@ final class Tree {
         }
 
         @Override
-        default Optional<Map.Entry<K, V>> lowerEntry(K k) {
+        default Maybe<Map.Entry<K, V>> lowerEntry(K k) {
             return Bin.lookupLT(this, k);
         }
 
         @Override
-        default Optional<K> lowerKey(K k) {
+        default Maybe<K> lowerKey(K k) {
             return Bin.lookupLT(this, k).map(Map.Entry::getKey);
         }
 
         @Override
-        default Optional<Map.Entry<K,V>> floorEntry(K k) {
+        default Maybe<Map.Entry<K,V>> floorEntry(K k) {
             return Bin.lookupLE(this, k);
         }
 
         @Override
-        default Optional<K> floorKey(K k) {
+        default Maybe<K> floorKey(K k) {
             return Bin.lookupLE(this, k).map(Map.Entry::getKey);
         }
 
         @Override
-        default Optional<Map.Entry<K,V>> ceilingEntry(K k) {
+        default Maybe<Map.Entry<K,V>> ceilingEntry(K k) {
             return Bin.lookupGE(this, k);
         }
 
         @Override
-        default Optional<K> ceilingKey(K k) {
+        default Maybe<K> ceilingKey(K k) {
             return Bin.lookupGE(this, k).map(Map.Entry::getKey);
         }
 
         @Override
-        default Optional<Map.Entry<K,V>> higherEntry(K k) {
+        default Maybe<Map.Entry<K,V>> higherEntry(K k) {
             return Bin.lookupGT(this, k);
         }
 
         @Override
-        default Optional<K> higherKey(K k) {
+        default Maybe<K> higherKey(K k) {
             return Bin.lookupGT(this, k).map(Map.Entry::getKey);
         }
 
@@ -1643,7 +1642,7 @@ final class Tree {
         public PSet<K> remove(Object e)     { return copy().remove(e); }
         public PSet<K> clear()              { return m.getSetTip(); }
 
-        public Optional<K> find(Predicate<? super K> p) {
+        public Maybe<K> find(Predicate<? super K> p) {
             return m.find((k, v) -> p.test(k)).map(Map.Entry::getKey);
         }
         public PSet<K> filter(Predicate<? super K> p) {
@@ -1697,7 +1696,7 @@ final class Tree {
         }
 
         @Override
-        default Optional<E> find(Predicate<? super E> p) {
+        default Maybe<E> find(Predicate<? super E> p) {
             return __find((k, v) -> p.test(k)).map(Map.Entry::getKey);
         }
 
@@ -1758,22 +1757,22 @@ final class Tree {
         }
 
         @Override
-        default Optional<E> lower(E e) {
+        default Maybe<E> lower(E e) {
             return Bin.lookupLT(this, e).map(Map.Entry::getKey);
         }
 
         @Override
-        default Optional<E> floor(E e) {
+        default Maybe<E> floor(E e) {
             return Bin.lookupLE(this, e).map(Map.Entry::getKey);
         }
 
         @Override
-        default Optional<E> ceiling(E e) {
+        default Maybe<E> ceiling(E e) {
             return Bin.lookupGE(this, e).map(Map.Entry::getKey);
         }
 
         @Override
-        default Optional<E> higher(E e) {
+        default Maybe<E> higher(E e) {
             return Bin.lookupGT(this, e).map(Map.Entry::getKey);
         }
 

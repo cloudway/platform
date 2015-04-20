@@ -5,7 +5,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Stream;
 
 import com.google.common.collect.ImmutableList;
@@ -18,6 +17,7 @@ import org.junit.Test;
 import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.os.Configuration;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import com.cloudway.platform.common.os.Config;
@@ -45,9 +45,9 @@ public class ApacheProxyUpdaterTest
         Configuration.Provider provider = context.mock(Configuration.Provider.class);
         context.checking(new Expectations() {{
             allowing(configuration).getProperty(Config.VAR_DIR_KEY);
-                will(returnValue(Optional.of(temporary.getRoot().toString())));
+                will(returnValue(Maybe.of(temporary.getRoot().toString())));
             allowing(configuration).getProperty(with(any(String.class)));
-                will(returnValue(Optional.empty()));
+                will(returnValue(Maybe.empty()));
             allowing(provider).load("container.conf");
                 will(returnValue(configuration));
         }});

@@ -12,7 +12,6 @@ import java.io.Reader;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -24,7 +23,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 
-import com.cloudway.platform.common.fp.data.Optionals;
+import com.cloudway.platform.common.fp.data.Maybe;
 
 /**
  * The {@code ExtendedProperties} class represents a persistent set of
@@ -68,15 +67,15 @@ public class ExtendedProperties implements Serializable
             return (val == null && defaults != null) ? defaults.get(key) : val;
         }
 
-        public Optional<String> getOptional(Object key) {
-            return Optional.ofNullable(get(key));
+        public Maybe<String> getOptional(Object key) {
+            return Maybe.ofNullable(get(key));
         }
 
         public String get(String key, String deflt) {
             return getOptional(key).orElse(deflt);
         }
 
-        public Optional<Boolean> getBool(String key) {
+        public Maybe<Boolean> getBool(String key) {
             return getOptional(key).map(Boolean::valueOf);
         }
 
@@ -84,8 +83,8 @@ public class ExtendedProperties implements Serializable
             return getBool(key).orElse(deflt);
         }
 
-        public Optional<Integer> getInt(String key) {
-            return getOptional(key).flatMap(Optionals.of(Integer::parseInt));
+        public Maybe<Integer> getInt(String key) {
+            return getOptional(key).flatMap(Maybe.adapt(Integer::parseInt));
         }
 
         public int getInt(String key, int deflt) {
@@ -169,7 +168,7 @@ public class ExtendedProperties implements Serializable
      * @return the property list associated to the given category
      */
     public PropertyMap category(String name) {
-        return Optionals.firstNonNull(categories.get(name), EMPTY);
+        return Maybe.firstNonNull(categories.get(name), EMPTY);
     }
 
     /**
@@ -185,12 +184,12 @@ public class ExtendedProperties implements Serializable
      * Returns the property with the specified key in the global property list.
      * If the key is not found in the global property list, the default property
      * list, and its defaults, recursively, are then checked. The method returns
-     * {@code Optional.empty()} if the property is not found.
+     * an empty {@code Maybe} if the property is not found.
      *
      * @param key the property key
      * @return the value in the global property list with the specified key value
      */
-    public Optional<String> getOptionalProperty(String key) {
+    public Maybe<String> getOptionalProperty(String key) {
         return global.getOptional(key);
     }
 
@@ -212,13 +211,13 @@ public class ExtendedProperties implements Serializable
      * Returns the property with the specified key in the given category.
      * If the key is not found in the category property list, the default property
      * list, and its defaults, recursively, are then checked. The method returns
-     * {@code Optional.empty()} if the property is not found.
+     * an empty {@code Maybe} if the property is not found.
      *
      * @param category the category name
      * @param key the property key
      * @return the value in the category property list with the specified key value
      */
-    public Optional<String> getOptionalProperty(String category, String key) {
+    public Maybe<String> getOptionalProperty(String category, String key) {
         return category(category).getOptional(key);
     }
 

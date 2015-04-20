@@ -20,7 +20,6 @@ import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -32,6 +31,7 @@ import com.google.common.collect.ImmutableList;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.io.IOAction;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Etc;
@@ -126,16 +126,16 @@ class DefaultApplicationContainer implements ApplicationContainer
         return new DefaultApplicationContainer(id, appname, namespace, capacity, pwent);
     }
 
-    static Optional<Etc.PASSWD> pwent(String id) {
+    static Maybe<Etc.PASSWD> pwent(String id) {
         if (id == null) {
-            return Optional.empty();
+            return Maybe.empty();
         }
 
         Etc.PASSWD pwent = Etc.getpwnam(id);
         if (pwent == null || !Config.GECOS.get().equals(pwent.pw_gecos)) {
-            return Optional.empty();
+            return Maybe.empty();
         } else {
-            return Optional.of(pwent);
+            return Maybe.of(pwent);
         }
     }
 

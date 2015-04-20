@@ -9,8 +9,8 @@ package com.cloudway.platform.container;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Stream;
+import com.cloudway.platform.common.fp.data.Maybe;
 
 public interface AddonControl
 {
@@ -27,12 +27,12 @@ public interface AddonControl
     /**
      * Get an addon by name.
      */
-    Optional<Addon> addon(String name);
+    Maybe<Addon> addon(String name);
 
     /**
      * Get the framework addon in the container.
      */
-    Optional<Addon> getFrameworkAddon();
+    Maybe<Addon> getFrameworkAddon();
 
     /**
      * Install a new addon from given path, and populate application repository.

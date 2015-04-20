@@ -8,7 +8,6 @@ package com.cloudway.platform.common.util;
 
 import java.math.BigInteger;
 import java.util.Arrays;
-import java.util.Optional;
 import java.util.Random;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -27,6 +26,7 @@ import com.cloudway.platform.common.fp.control.MonadState;
 import com.cloudway.platform.common.fp.control.StateCont;
 import com.cloudway.platform.common.fp.control.Trampoline;
 import com.cloudway.platform.common.fp.data.IntSeq;
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.PMap;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Pair;
@@ -135,26 +135,26 @@ public class FunctionalTest
         return a.compareTo(b) > 0 ? a : b;
     }
 
-    private static <T extends Comparable<T>> Optional<T> maximum(Seq<T> list) {
-        return with(list).<Optional<T>>get()
-            .when(Nil(Optional::empty))
-            .when(Single(Optional::of))
+    private static <T extends Comparable<T>> Maybe<T> maximum(Seq<T> list) {
+        return with(list).<Maybe<T>>get()
+            .when(Nil(Maybe::empty))
+            .when(Single(Maybe::of))
             .when(Cons((x, y, ys) -> maximum(Seq.cons(max(x, y), ys))))
             .get();
     }
 
     @Test
     public void maximumTest() {
-        assertEquals(Optional.<String>empty(), maximum(Seq.<String>nil()));
-        assertEquals(Optional.of("apple"), maximum(Seq.of("apple")));
-        assertEquals(Optional.of("mango"), maximum(Seq.of("apple", "mango")));
-        assertEquals(Optional.of("mango"), maximum(Seq.of("mango", "apple")));
+        assertEquals(Maybe.<String>empty(), maximum(Seq.<String>nil()));
+        assertEquals(Maybe.of("apple"), maximum(Seq.of("apple")));
+        assertEquals(Maybe.of("mango"), maximum(Seq.of("apple", "mango")));
+        assertEquals(Maybe.of("mango"), maximum(Seq.of("mango", "apple")));
 
         String[] fruits = { "apple", "mango", "orange" };
         IntStream.range(0, fruits.length).forEach(i ->
         IntStream.range(0, fruits.length).filter(j -> j != i).forEach(j ->
         IntStream.range(0, fruits.length).filter(k -> k != i && k != j).forEach(k ->
-            assertEquals(Optional.of("orange"), maximum(Seq.of(fruits[i], fruits[j], fruits[k])))
+            assertEquals(Maybe.of("orange"), maximum(Seq.of(fruits[i], fruits[j], fruits[k])))
         )));
     }
 

@@ -7,7 +7,6 @@
 package com.cloudway.platform.common.util;
 
 import java.util.Arrays;
-import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -19,7 +18,7 @@ import static org.junit.Assert.*;
 import com.cloudway.platform.common.fp.control.ConditionCase;
 import com.cloudway.platform.common.fp.control.MonadState;
 import com.cloudway.platform.common.fp.data.IntSeq;
-import com.cloudway.platform.common.fp.data.Optionals;
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.SeqZipper;
 import com.cloudway.platform.common.fp.data.Tuple;
@@ -30,7 +29,7 @@ import static com.cloudway.platform.common.fp.control.Syntax.*;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
 import static com.cloudway.platform.common.fp.data.IntSeq.IntCons;
 import static com.cloudway.platform.common.fp.data.IntSeq.IntSingle;
-import static com.cloudway.platform.common.fp.data.Optionals.Just;
+import static com.cloudway.platform.common.fp.data.Maybe.Just;
 
 // @formatter:off
 public class MonadStateTest {
@@ -57,26 +56,26 @@ public class MonadStateTest {
         private SafeRPN() {}
 
         public static OptionalInt solve(String expression) {
-            Optional<IntSeq> stack = Optionals.foldM(IntSeq.nil(), Seq.of(SPACES.split(expression)), SafeRPN::scan);
+            Maybe<IntSeq> stack = Maybe.foldM(IntSeq.nil(), Seq.of(SPACES.split(expression)), SafeRPN::scan);
             return inCaseOf(stack, in(Just(IntSingle(OptionalInt::of))), otherwise(OptionalInt.empty()));
         }
 
-        static Optional<IntSeq> scan(IntSeq stack, String item) {
-            return with(stack, item).<Optional<IntSeq>>get()
-                .when(IntCons((x, y, ys) -> $("+", () -> Optional.of(IntSeq.cons(y + x, ys)))))
-                .when(IntCons((x, y, ys) -> $("-", () -> Optional.of(IntSeq.cons(y - x, ys)))))
-                .when(IntCons((x, y, ys) -> $("*", () -> Optional.of(IntSeq.cons(y * x, ys)))))
-                .when(IntCons((x, y, ys) -> $("/", () -> x == 0 ? Optional.empty()
-                                                                : Optional.of(IntSeq.cons(y / x, ys)))))
+        static Maybe<IntSeq> scan(IntSeq stack, String item) {
+            return with(stack, item).<Maybe<IntSeq>>get()
+                .when(IntCons((x, y, ys) -> $("+", () -> Maybe.of(IntSeq.cons(y + x, ys)))))
+                .when(IntCons((x, y, ys) -> $("-", () -> Maybe.of(IntSeq.cons(y - x, ys)))))
+                .when(IntCons((x, y, ys) -> $("*", () -> Maybe.of(IntSeq.cons(y * x, ys)))))
+                .when(IntCons((x, y, ys) -> $("/", () -> x == 0 ? Maybe.empty()
+                                                                : Maybe.of(IntSeq.cons(y / x, ys)))))
                 .orElseGet(() -> parseIntOpt(item).map(n -> IntSeq.cons(n, stack)));
         }
     }
 
-    static Optional<Integer> parseIntOpt(String str) {
+    static Maybe<Integer> parseIntOpt(String str) {
         try {
-            return Optional.of(Integer.parseInt(str));
+            return Maybe.of(Integer.parseInt(str));
         } catch (NumberFormatException ex) {
-            return Optional.empty();
+            return Maybe.empty();
         }
     }
 
@@ -114,46 +113,46 @@ public class MonadStateTest {
         public static OptionalInt solve(String expression) {
             return Seq.of(SPACES.split(expression))
                       .foldRight(getResult(), (item, next) -> scan(item).then(next))
-                      .eval(Optional.of(IntSeq.nil()));
+                      .eval(Maybe.of(IntSeq.nil()));
         }
 
-        static MonadState<Unit, Optional<IntSeq>> scan(String item) {
+        static MonadState<Unit, Maybe<IntSeq>> scan(String item) {
             switch (item) {
             case "+": return pop().bind(x -> pop().bind(y -> push(y + x)));
             case "-": return pop().bind(x -> pop().bind(y -> push(y - x)));
             case "*": return pop().bind(x -> pop().bind(y -> push(y * x)));
-            case "/": return pop().bind(x -> x == 0 ? push(Optional.empty())
+            case "/": return pop().bind(x -> x == 0 ? push(Maybe.empty())
                                                     : pop().bind(y -> push(y / x)));
             default:  return push(parseIntOpt(item));
             }
         }
 
-        static MonadState<Unit, Optional<IntSeq>> push(int x) {
-            return MonadState.modify((Optional<IntSeq> stack) ->
+        static MonadState<Unit, Maybe<IntSeq>> push(int x) {
+            return MonadState.modify((Maybe<IntSeq> stack) ->
                 select.from(stack, xs ->
-                       yield(Optional.of(IntSeq.cons(x, xs))))
-                      .orElse(Optional.<IntSeq>empty()));
+                       yield(Maybe.of(IntSeq.cons(x, xs))))
+                      .orElse(Maybe.<IntSeq>empty()));
         }
 
-        static MonadState<Unit, Optional<IntSeq>> push(Optional<Integer> item) {
-            return MonadState.modify((Optional<IntSeq> stack) ->
+        static MonadState<Unit, Maybe<IntSeq>> push(Maybe<Integer> item) {
+            return MonadState.modify((Maybe<IntSeq> stack) ->
                 select.from(stack, xs -> from(item, x ->
-                       yield(Optional.of(IntSeq.cons(x, xs)))))
-                      .orElse(Optional.<IntSeq>empty()));
+                       yield(Maybe.of(IntSeq.cons(x, xs)))))
+                      .orElse(Maybe.<IntSeq>empty()));
         }
 
-        static MonadState<Integer, Optional<IntSeq>> pop() {
-            return MonadState.state((Optional<IntSeq> stack) ->
+        static MonadState<Integer, Maybe<IntSeq>> pop() {
+            return MonadState.state((Maybe<IntSeq> stack) ->
                 select.from(stack, as(IntCons((x, xs) ->
-                       yield(Tuple.of(x, Optional.of(xs))))))
-                      .orElseGet(() -> Tuple.of(0, Optional.empty())));
+                       yield(Tuple.of(x, Maybe.of(xs))))))
+                      .orElseGet(() -> Tuple.of(0, Maybe.empty())));
         }
 
-        static MonadState<OptionalInt, Optional<IntSeq>> getResult() {
+        static MonadState<OptionalInt, Maybe<IntSeq>> getResult() {
             return pop().mapState((result, stack) ->
                 select.from(stack, (IntSeq xs) -> where(xs.isEmpty(),
-                       yield(Tuple.of(OptionalInt.of(result), Optional.<IntSeq>empty()))))
-                      .orElseGet(() -> Tuple.of(OptionalInt.empty(), Optional.<IntSeq>empty())));
+                       yield(Tuple.of(OptionalInt.of(result), Maybe.<IntSeq>empty()))))
+                      .orElseGet(() -> Tuple.of(OptionalInt.empty(), Maybe.<IntSeq>empty())));
         }
     }
 

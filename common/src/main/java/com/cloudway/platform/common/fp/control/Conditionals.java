@@ -8,12 +8,12 @@ package com.cloudway.platform.common.fp.control;
 
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.function.ExceptionAction;
 import com.cloudway.platform.common.fp.function.ExceptionBiConsumer;
 import com.cloudway.platform.common.fp.function.ExceptionBiFunction;
@@ -155,13 +155,13 @@ public final class Conditionals {
      * Deconstruct nested pattern to get final result.
      *
      * <p>The following example illustrated a typical pattern matching use case
-     * that deconstruct the element contained in an {@code Optional} in which
-     * the {@code Optional} element is an instance of a {@code Tuple}. The
+     * that deconstruct the element contained in an {@code Maybe} in which
+     * the {@code Maybe} element is an instance of a {@code Tuple}. The
      * {@code Tuple()} method deconstruct the tuple elements into arguments to
      * a lambda expression.</p>
      *
      * <pre>{@code
-     *     void test(Optional<Tuple> obj) {
+     *     void test(Maybe<Tuple> obj) {
      *         with(obj)
      *           .when(in(Just(Tuple((x, y) -> ...))));
      *     }
@@ -393,10 +393,10 @@ public final class Conditionals {
         }
 
         /**
-         * Returns an optional to encapsulate result of execution.
+         * Returns an {@code Maybe} to encapsulate result of execution.
          */
-        default Optional<R> asOptional() {
-            return Optional.empty();
+        default Maybe<R> asMaybe() {
+            return Maybe.empty();
         }
 
         /**
@@ -449,8 +449,8 @@ public final class Conditionals {
         }
 
         @Override
-        default Optional<R> asOptional() {
-            return Optional.of(get());
+        default Maybe<R> asMaybe() {
+            return Maybe.of(get());
         }
 
         @Override

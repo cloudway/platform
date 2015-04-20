@@ -9,7 +9,6 @@ package com.cloudway.platform.common.fp.data;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
@@ -58,14 +57,14 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
 
     /**
      * Lookup the value to which the specified key is mapped.  Returns
-     * {@code Optional.empty()} if this map contains no mapping for the key.
+     * an empty {@code Maybe} if this map contains no mapping for the key.
      *
      * @param key the key whose associated value is to be returned
      * @return the value to which the specified key is mapped, or
-     *         {@code Optional.empty()} if this map contains no mapping
+     *         an empty {@code Maybe} if this map contains no mapping
      *         for the key
      */
-    Optional<V> lookup(Object key);
+    Maybe<V> lookup(Object key);
 
     /**
      * Returns the value to which the specified key is mapped. If this map contains
@@ -95,10 +94,10 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * Search for an element that satisfy the given predicate.
      *
      * @param predicate the predicate to be tested on element
-     * @return {@code Optional.empty()} if element not found in the map, otherwise
-     * a {@code Optional} wrapping the found element
+     * @return an empty {@code Maybe} if element not found in the map, otherwise
+     * a {@code Maybe} wrapping the found element
      */
-    Optional<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> predicate);
+    Maybe<Map.Entry<K,V>> find(BiPredicate<? super K, ? super V> predicate);
 
     /**
      * Returns whether any elements of this map match the provided
@@ -172,7 +171,7 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      */
     default PMap<K, V> replace(K key, V oldValue, V newValue) {
         return computeIfPresent(key, (k, v) ->
-            Optional.of(v.equals(oldValue) ? newValue : oldValue));
+            Maybe.of(v.equals(oldValue) ? newValue : oldValue));
     }
 
     /**
@@ -183,7 +182,7 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param value value to be associated with the specified key
      */
     default PMap<K, V> replace(K key, V value) {
-        return computeIfPresent(key, (k, v) -> Optional.of(value));
+        return computeIfPresent(key, (k, v) -> Maybe.of(value));
     }
 
     /**
@@ -218,7 +217,7 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * If the value for the specified key is present, attempt to compute a new
      * mapping given the key and its current mapped value.
      *
-     * <p>If the function returns {@code Optional.empty()}, the mapping is removed.
+     * <p>If the function returns an empty {@code Maybe}, the mapping is removed.
      * If the function itself throws an (unchecked) exception, the exception
      * is rethrown.</p>
      *
@@ -226,10 +225,10 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param remappingFunction the function to compute a value
      */
     default PMap<K, V> computeIfPresent(K key,
-            BiFunction<? super K, ? super V, Optional<? extends V>> remappingFunction) {
-        Optional<V> oldValue = lookup(key);
+            BiFunction<? super K, ? super V, Maybe<? extends V>> remappingFunction) {
+        Maybe<V> oldValue = lookup(key);
         if (oldValue.isPresent()) {
-            Optional<? extends V> newValue = remappingFunction.apply(key, oldValue.get());
+            Maybe<? extends V> newValue = remappingFunction.apply(key, oldValue.get());
             if (newValue.isPresent()) {
                 return put(key, newValue.get());
             } else {
@@ -244,7 +243,7 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * Attempts to compute a mapping for the specified key and its current mapped
      * mapped value.
      *
-     * <p>If the function returns {@code Optional.empty()}, the mapping is removed
+     * <p>If the function returns an empty {@code Maybe}, the mapping is removed
      * (or remains absent if initially absent). If the function itself throws an
      * (unchecked) exception, the exception is rethrown.</p>
      *
@@ -252,9 +251,9 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      * @param remappingFunction the function to compute a value
      */
     default PMap<K, V> compute(K key,
-            BiFunction<? super K, Optional<V>, Optional<? extends V>> remappingFunction) {
-        Optional<V> oldValue = lookup(key);
-        Optional<? extends V> newValue = remappingFunction.apply(key, oldValue);
+            BiFunction<? super K, Maybe<V>, Maybe<? extends V>> remappingFunction) {
+        Maybe<V> oldValue = lookup(key);
+        Maybe<? extends V> newValue = remappingFunction.apply(key, oldValue);
         if (newValue.isPresent()) {
             return put(key, newValue.get());
         } else if (oldValue.isPresent()) {
@@ -284,7 +283,7 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      */
     default PMap<K, V> merge(K key, V value,
             BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
-        Optional<V> oldValue = lookup(key);
+        Maybe<V> oldValue = lookup(key);
         V newValue = oldValue.isPresent()
             ? remappingFunction.apply(oldValue.get(), value)
             : value;

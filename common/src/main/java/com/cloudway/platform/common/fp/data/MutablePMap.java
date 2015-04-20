@@ -13,7 +13,6 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -139,12 +138,12 @@ public class MutablePMap<K, V> extends AbstractMap<K, V> implements java.io.Seri
 
     @Override
     public V computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> f) {
-        return update(key, t -> t.computeIfPresent(key, (k, v) -> Optional.ofNullable(f.apply(k, v))));
+        return update(key, t -> t.computeIfPresent(key, (k, v) -> Maybe.ofNullable(f.apply(k, v))));
     }
 
     @Override
     public V compute(K key, BiFunction<? super K, ? super V, ? extends V> f) {
-        return update(key, t -> t.compute(key, (k, v) -> Optional.ofNullable(f.apply(k, v.orElse(null)))));
+        return update(key, t -> t.compute(key, (k, v) -> Maybe.ofNullable(f.apply(k, v.orElse(null)))));
     }
 
     @Override
@@ -300,7 +299,7 @@ public class MutablePMap<K, V> extends AbstractMap<K, V> implements java.io.Seri
             Object value = entry.getValue();
             int oldSize = size();
             update(t -> t.computeIfPresent((K)entry.getKey(), (k, v) ->
-                Objects.equals(v, value) ? Optional.empty() : Optional.of(v)));
+                Objects.equals(v, value) ? Maybe.empty() : Maybe.of(v)));
             return size() != oldSize;
         }
 

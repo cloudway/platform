@@ -9,11 +9,11 @@ package com.cloudway.platform.container.adapters;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableTable;
+import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.container.ResourceLimits;
 import static com.cloudway.platform.common.fp.control.StringPredicates.*;
 
@@ -63,7 +63,7 @@ public interface LibCgroup
         // load configuration for each cgroup profiles
         limits.profiles().forEach(profile -> keys.forEach(key -> {
             String ck = key.substring(Cgroup.CG_KEY_PREFIX.length());
-            limits.getProperty(profile, key, () -> Optional.ofNullable(parameters().get(ck)))
+            limits.getProperty(profile, key, () -> Maybe.ofNullable(parameters().get(ck)))
                   .ifPresent(v -> profiles.put(profile, ck, v));
         }));
 
@@ -84,7 +84,7 @@ public interface LibCgroup
     /**
      * Fetch a parameter for a specific user.
      */
-    Optional<Object> fetch(String user, String key) throws IOException;
+    Maybe<Object> fetch(String user, String key) throws IOException;
 
     /**
      * Store cgroup parameters for a specific user.
