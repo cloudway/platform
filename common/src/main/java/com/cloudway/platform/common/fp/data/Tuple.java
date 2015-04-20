@@ -12,7 +12,10 @@ import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Applicative;
 import com.cloudway.platform.common.fp.function.ExceptionBiFunction;
 import com.cloudway.platform.common.fp.control.ConditionCase;
 import com.cloudway.platform.common.fp.function.ExceptionTriFunction;
@@ -20,12 +23,14 @@ import com.cloudway.platform.common.fp.function.ExceptionTriFunction;
 /**
  * A tuple with two elements.
  */
-public class Tuple<T, U> implements Serializable, Cloneable
+public class Tuple<A, B> implements
+    $<Tuple.µ<A>, B>, Foldable<B>, Traversable<Tuple.µ<A>, B>,
+    Serializable, Cloneable
 {
     private static final long serialVersionUID = 6021746465072972306L;
 
-    private final T first;
-    private final U second;
+    private final A first;
+    private final B second;
 
     /**
      * Construct a new Tuple with two arguments.
@@ -33,7 +38,7 @@ public class Tuple<T, U> implements Serializable, Cloneable
      * @param first the first argument
      * @param second the second argument
      */
-    public Tuple(T first, U second) {
+    public Tuple(A first, B second) {
         this.first = first;
         this.second = second;
     }
@@ -44,7 +49,7 @@ public class Tuple<T, U> implements Serializable, Cloneable
      * @param first the first argument
      * @param second the second argument
      */
-    public static <T, U> Tuple<T, U> of(T first, U second) {
+    public static <A, B> Tuple<A, B> of(A first, B second) {
         return new Tuple<>(first, second);
     }
 
@@ -54,7 +59,7 @@ public class Tuple<T, U> implements Serializable, Cloneable
      * @param first the first argument
      * @param second the second argument
      */
-    public static <T> Pair<T> pair(T first, T second) {
+    public static <A> Pair<A> pair(A first, A second) {
         return new Pair<>(first, second);
     }
 
@@ -72,28 +77,28 @@ public class Tuple<T, U> implements Serializable, Cloneable
     /**
      * Returns the first element.
      */
-    public T first() {
+    public A first() {
         return first;
     }
 
     /**
      * Returns the second element.
      */
-    public U second() {
+    public B second() {
         return second;
     }
 
     /**
      * Get a tuple with two elements swapped.
      */
-    public Tuple<U, T> swap() {
+    public Tuple<B, A> swap() {
         return new Tuple<>(second, first);
     }
 
     /**
      * Apply this tuple as arguments to a function.
      */
-    public <R> R as(BiFunction<? super T, ? super U, ? extends R> fn) {
+    public <R> R as(BiFunction<? super A, ? super B, ? extends R> fn) {
         return fn.apply(first, second);
     }
 
@@ -101,8 +106,8 @@ public class Tuple<T, U> implements Serializable, Cloneable
      * Applies two elements as arguments to two given functions and return
      * a new tuple with the substituted arguments.
      */
-    public <X, Y> Tuple<X, Y> map(Function<? super T, ? extends X> f,
-                                  Function<? super U, ? extends Y> g) {
+    public <X, Y> Tuple<X, Y> map(Function<? super A, ? extends X> f,
+                                  Function<? super B, ? extends Y> g) {
         return of(f.apply(first), g.apply(second));
     }
 
@@ -110,7 +115,7 @@ public class Tuple<T, U> implements Serializable, Cloneable
      * Apply first element as argument to a function and return a new tuple
      * with the substituted argument.
      */
-    public <R> Tuple<R, U> mapFirst(Function<? super T, ? extends R> fn) {
+    public <R> Tuple<R, B> mapFirst(Function<? super A, ? extends R> fn) {
         return of(fn.apply(first), second);
     }
 
@@ -118,7 +123,7 @@ public class Tuple<T, U> implements Serializable, Cloneable
      * Apply second element as argument to a function and return a new tuple
      * with the substituted argument.
      */
-    public <R> Tuple<T, R> mapSecond(Function<? super U, ? extends R> fn) {
+    public <R> Tuple<A, R> mapSecond(Function<? super B, ? extends R> fn) {
         return of(first, fn.apply(second));
     }
 
@@ -126,7 +131,7 @@ public class Tuple<T, U> implements Serializable, Cloneable
      * Returns a predicate that evaluate first element as argument to the
      * given predicate.
      */
-    public static <T, U> Predicate<Tuple<T, U>> first(Predicate<? super T> p) {
+    public static <A, B> Predicate<Tuple<A, B>> first(Predicate<? super A> p) {
         return t -> p.test(t.first());
     }
 
@@ -134,16 +139,8 @@ public class Tuple<T, U> implements Serializable, Cloneable
      * Returns a predicate that evaluate second element as argument to the
      * given predicate.
      */
-    public static <T, U> Predicate<Tuple<T, U>> second(Predicate<? super U> p) {
+    public static <A, B> Predicate<Tuple<A, B>> second(Predicate<? super B> p) {
         return t -> p.test(t.second());
-    }
-
-    /**
-     * Return the monoid for a tuple.
-     */
-    public static <T, U> Monoid<Tuple<T, U>> monoid(Monoid<T> mt, Monoid<U> mu) {
-        return Monoid.monoid_(of(mt.empty(), mu.empty()), (a1, a2) ->
-            of(mt.append(a1.first(), a2.first()), mu.append(a1.second(), a2.second())));
     }
 
     public boolean equals(Object obj) {
@@ -165,26 +162,26 @@ public class Tuple<T, U> implements Serializable, Cloneable
         return "(" + first + "," + second + ")";
     }
 
-    public static <T extends Comparable<T>, U extends Comparable<U>>
-    Comparator<Tuple<T, U>> comparator() {
-        return Comparator.<Tuple<T, U>, T>comparing(Tuple::first).thenComparing(Tuple::second);
+    public static <A extends Comparable<A>, B extends Comparable<B>>
+    Comparator<Tuple<A, B>> comparator() {
+        return Comparator.<Tuple<A, B>, A>comparing(Tuple::first).thenComparing(Tuple::second);
     }
 
-    public static <T> Comparator<Tuple<T, T>>
-    comparator(Comparator<? super T> comparator) {
-        return Comparator.<Tuple<T, T>, T>comparing(Tuple::first, comparator)
+    public static <A> Comparator<Tuple<A, A>>
+    comparator(Comparator<? super A> comparator) {
+        return Comparator.<Tuple<A, A>, A>comparing(Tuple::first, comparator)
             .thenComparing(Tuple::second, comparator);
     }
 
-    public static <T, U> Comparator<Tuple<T, U>>
-    comparator(Comparator<? super T> firstComparator, Comparator<? super U> secondComparator) {
-        return Comparator.<Tuple<T, U>, T>comparing(Tuple::first, firstComparator)
+    public static <A, B> Comparator<Tuple<A, B>>
+    comparator(Comparator<? super A> firstComparator, Comparator<? super B> secondComparator) {
+        return Comparator.<Tuple<A, B>, A>comparing(Tuple::first, firstComparator)
             .thenComparing(Tuple::second, secondComparator);
     }
 
     @Override
     @SuppressWarnings({"rawtypes", "unchecked", "CloneDoesntDeclareCloneNotSupportedException"})
-    public Tuple<T, U> clone() {
+    public Tuple<A, B> clone() {
         try {
             return (Tuple)super.clone();
         } catch (CloneNotSupportedException ex) {
@@ -202,8 +199,8 @@ public class Tuple<T, U> implements Serializable, Cloneable
      *     when(Tuple((m, v) -> m*v*v/2))
      * }</pre>
      */
-    public static <T, U, R, X extends Throwable> ConditionCase<Tuple<T, U>, R, X>
-    Tuple_(ExceptionBiFunction<? super T, ? super U, ? extends R, X> mapper) {
+    public static <A, B, R, X extends Throwable> ConditionCase<Tuple<A, B>, R, X>
+    Tuple_(ExceptionBiFunction<? super A, ? super B, ? extends R, X> mapper) {
         return t -> () -> mapper.evaluate(t.first(), t.second());
     }
 
@@ -213,5 +210,107 @@ public class Tuple<T, U> implements Serializable, Cloneable
     public static <A, B, C, R, X extends Throwable> ConditionCase<Triple<A, B, C>, R, X>
     Triple_(ExceptionTriFunction<A, B, C, R, X> mapper) {
         return t -> () -> mapper.evaluate(t._1(), t._2(), t._3());
+    }
+
+    // Type Classes -----------------------------------------------------------
+
+    @Override
+    public <R> R foldMap(Monoid<R> monoid, Function<? super B, ? extends R> f) {
+        return f.apply(second);
+    }
+
+    @Override
+    public <R> R foldRight(BiFunction<? super B, Supplier<R>, R> f, Supplier<R> r) {
+        return f.apply(second, r);
+    }
+
+    @Override
+    public <R> R foldRight_(R z, BiFunction<? super B, R, R> f) {
+        return f.apply(second, z);
+    }
+
+    @Override
+    public Maybe<B> foldRight(BiFunction<B, B, B> f) {
+        return Maybe.of(second);
+    }
+
+    @Override
+    public <R> R foldLeft(BiFunction<Supplier<R>, ? super B, R> f, Supplier<R> r) {
+        return f.apply(r, second);
+    }
+
+    @Override
+    public <R> R foldLeft(R z, BiFunction<R, ? super B, R> f) {
+        return f.apply(z, second);
+    }
+
+    @Override
+    public Maybe<B> foldLeft(BiFunction<B, B, B> f) {
+        return Maybe.of(second);
+    }
+
+    @Override
+    public <F, B1> $<F, Tuple<A, B1>>
+    traverse(Applicative<F> m, Function<? super B, ? extends $<F, B1>> f) {
+        return m.map(f.apply(second), y -> of(first, y));
+    }
+
+    /**
+     * Return the monoid for a tuple.
+     */
+    public static <A, B> Monoid<Tuple<A,B>> monoid(Monoid<A> ma, Monoid<B> mb) {
+        return Monoid.monoid_(of(ma.empty(), mb.empty()), (a1, a2) ->
+            of(ma.append(a1.first(), a2.first()), mb.append(a1.second(), a2.second())));
+    }
+
+    /**
+     * The typeclass definition for Tuple.
+     */
+    public static final class µ<A> implements Functor<µ<A>> {
+        @Override
+        public <B, C> Tuple<A, C> map($<µ<A>, B> a, Function<? super B, ? extends C> f) {
+            return narrow(a).mapSecond(f);
+        }
+    }
+
+    public static <A, B> Tuple<A, B> narrow($<µ<A>, B> value) {
+        return (Tuple<A,B>)value;
+    }
+
+    private static final µ<?> _TCLASS = new µ<>();
+
+    @SuppressWarnings("unchecked")
+    public static <A> µ<A> tclass() {
+        return (µ<A>)_TCLASS;
+    }
+
+    @Override
+    public µ<A> getTypeClass() {
+        return tclass();
+    }
+
+    /**
+     * Returns a typeclass that implement {@link Applicative} by giving
+     * a {@link Monoid} for the first element of the tuple.
+     */
+    public static <A> Applicative<µ<A>> tclass(Monoid<A> m) {
+        return new Applicative<µ<A>>() {
+            @Override
+            public <B> Tuple<A, B> pure(B b) {
+                return of(m.empty(), b);
+            }
+
+            @Override
+            public <B, C> Tuple<A, C> map($<µ<A>, B> a, Function<? super B, ? extends C> f) {
+                return narrow(a).mapSecond(f);
+            }
+
+            @Override
+            public <B, C> $<µ<A>, C> ap($<µ<A>, Function<? super B, ? extends C>> fs, $<µ<A>, B> a) {
+                Tuple<A, Function<? super B, ? extends C>> f = narrow(fs);
+                Tuple<A, B> t = narrow(a);
+                return of(m.append(f.first, t.first), f.second.apply(t.second));
+            }
+        };
     }
 }
