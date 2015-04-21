@@ -154,17 +154,17 @@ public class GeneratorTest {
 
         // utility methods to help type inference
 
-        private static StateCont<Unit, Seq<Character>>
+        private static StateCont<Seq<Character>, Unit>
         readChar(Function<Character, $<StateCont.µ<Seq<Character>>, Unit>> f) {
-            return StateCont.<Character, Seq<Character>>yield(DUMMY).bind(f);
+            return StateCont.<Seq<Character>, Character>yield(DUMMY).bind(f);
         }
 
-        private static StateCont<Unit, Seq<Character>>
+        private static StateCont<Seq<Character>, Unit>
         putChar(Character c) {
             return StateCont.modify(frame -> frame.append(c));
         }
 
-        private static StateCont<Unit, Seq<Character>>
+        private static StateCont<Seq<Character>, Unit>
         sendFrame(Generator.Channel<Seq<Character>> target) {
             return StateCont.<Seq<Character>>get().bind(frame -> StateCont.sendTo(target, frame));
         }

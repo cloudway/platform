@@ -10,16 +10,12 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import com.cloudway.platform.common.fp.data.Fn;
+import com.cloudway.platform.common.fp.$;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Traversable;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.$;
-
-import static com.cloudway.platform.common.fp.control.Trampoline.immediate;
-import static com.cloudway.platform.common.fp.control.Trampoline.suspend;
 
 /**
  * The state monad, passing an updatable state through a computation.
@@ -27,23 +23,9 @@ import static com.cloudway.platform.common.fp.control.Trampoline.suspend;
  * @param <A> the type of result of computation
  * @param <S> the type of state passing to the computation
  */
-public final class MonadState<A, S> implements $<MonadState.µ<S>, A> {
-    // the state transfer function
-    private final Function<S, Trampoline<Tuple<A, S>>> sf;
-
-    // construct a monad state
-    private MonadState(Function<S, Trampoline<Tuple<A, S>>> f) {
-        this.sf = f;
-    }
-
-    // helper method to construct a monad state from a transfer function
-    static <A, S> MonadState<A, S> $(Function<S, Trampoline<Tuple<A, S>>> f) {
-        return new MonadState<>(f);
-    }
-
-    // single step the state transfer
-    Trampoline<Tuple<A, S>> go(S s) {
-        return sf.apply(s);
+public final class MonadState<S, A> extends StateT.Monadic<MonadState.µ<S>, S, Trampoline.µ, A> {
+    private MonadState(Function<S, $<Trampoline.µ, Tuple<A,S>>> f) {
+        super(f);
     }
 
     /**
@@ -52,8 +34,8 @@ public final class MonadState<A, S> implements $<MonadState.µ<S>, A> {
      * @param f the state transfer function
      * @return the state monad
      */
-    public static <A, S> MonadState<A, S> state(Function<? super S, Tuple<A, S>> f) {
-        return $(s -> immediate(f.apply(s)));
+    public static <S, A> MonadState<S, A> state(Function<? super S, Tuple<A, S>> f) {
+        return narrow(MonadState.<S>tclass().state(f));
     }
 
     /**
@@ -62,18 +44,15 @@ public final class MonadState<A, S> implements $<MonadState.µ<S>, A> {
      * @param a the final result
      * @return the state monad that hold the final result
      */
-    public static <A, S> MonadState<A, S> pure(A a) {
-        return $(s -> immediate(Tuple.of(a, s)));
+    public static <S, A> MonadState<S, A> pure(A a) {
+        return narrow(MonadState.<S>tclass().pure(a));
     }
-
-    private static final MonadState<Unit,?> _unit = pure(Unit.U);
 
     /**
      * Returns a do nothing computation.
      */
-    @SuppressWarnings("unchecked")
-    public static <S> MonadState<Unit, S> unit() {
-        return (MonadState<Unit,S>)_unit;
+    public static <S> MonadState<S, Unit> unit() {
+        return pure(Unit.U);
     }
 
     /**
@@ -83,16 +62,15 @@ public final class MonadState<A, S> implements $<MonadState.µ<S>, A> {
      * @param a a thunk that eventually produce computation result
      * @return the state monad that hold the computation
      */
-    public static <A, S> MonadState<A, S> lazy(Supplier<A> a) {
-        Supplier<A> t = Fn.lazy(a);
-        return $(s -> immediate(Tuple.of(t.get(), s)));
+    public static <S, A> MonadState<S, A> lazy(Supplier<A> a) {
+        return narrow(MonadState.<S>tclass().lazy(a));
     }
 
     /**
      * Constructs a computation that performs the given action with no result.
      */
-    public static <S> MonadState<Unit, S> action(Runnable a) {
-        return $(s -> { a.run(); return immediate(Tuple.of(Unit.U, s)); });
+    public static <S> MonadState<S, Unit> action(Runnable a) {
+        return narrow(MonadState.<S>tclass().action(a));
     }
 
     /**
@@ -103,7 +81,7 @@ public final class MonadState<A, S> implements $<MonadState.µ<S>, A> {
      * @return the tuple of final value and final state
      */
     public Tuple<A, S> run(S s) {
-        return go(s).run();
+        return Trampoline.narrow(MonadState.<S>tclass().runState(this, s)).run();
     }
 
     /**
@@ -126,120 +104,100 @@ public final class MonadState<A, S> implements $<MonadState.µ<S>, A> {
      * Transfer a state computation by feeding the value to the given function
      * and wrapping the result to new state.
      */
-    public <B> MonadState<B, S> map(Function<? super A, ? extends B> f) {
-        return $(s -> suspend(() -> go(s).map(t -> t.mapFirst(f))));
+    public <B> MonadState<S, B> map(Function<? super A, ? extends B> f) {
+        return narrow(MonadState.<S>tclass().map(this, f));
     }
 
     /**
      * Transfer a state computation by feeding the value to the given function.
      */
-    public <B> MonadState<B, S> bind(Function<? super A, ? extends $<µ<S>, B>> f) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(f.apply(t.first())).go(t.second())))));
+    public <B> MonadState<S, B> bind(Function<? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(MonadState.<S>tclass().bind(this, f));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> MonadState<B, S> then(Supplier<? extends $<µ<S>, B>> next) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(next.get()).go(t.second())))));
+    public <B> MonadState<S, B> then(Supplier<? extends $<µ<S>, B>> next) {
+        return narrow(MonadState.<S>tclass().seqR(this, next));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> MonadState<B, S> then($<µ<S>, B> next) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(next).go(t.second())))));
+    public <B> MonadState<S, B> then($<µ<S>, B> next) {
+        return narrow(MonadState.<S>tclass().seqR(this, next));
     }
 
     /**
      * Map both the return value and final state of computation using the given
      * function.
      */
-    public <B> MonadState<B, S> mapState(Function<Tuple<A, S>, Tuple<B, S>> f) {
-        return $(s -> suspend(() -> go(s).map(f)));
+    public <B> MonadState<S, B> mapState(Function<Tuple<A, S>, Tuple<B, S>> f) {
+        return narrow(MonadState.<S>tclass().mapState(this, t -> Trampoline.narrow(t).map(f)));
     }
 
     /**
      * Map both the return value and final state of computation using the given
      * function.
      */
-    public <B> MonadState<B, S> mapState(BiFunction<? super A, ? super S, Tuple<B, S>> f) {
-        return $(s -> suspend(() -> go(s).map(t -> t.as(f))));
+    public <B> MonadState<S, B> mapState(BiFunction<? super A, ? super S, Tuple<B, S>> f) {
+        return mapState(t -> t.as(f));
     }
 
     /**
      * Executes action on a state modified by applying function.
      */
-    public MonadState<A, S> withState(Function<S, S> f) {
-        return $(s -> suspend(() -> go(f.apply(s))));
+    public MonadState<S, A> withState(Function<S, S> f) {
+        return narrow(MonadState.<S>tclass().withState(this, f));
     }
 
     /**
      * Fetch the current value of the state within the monad.
      */
-    public static <S> MonadState<S,S> get() {
-        return $(s -> immediate(Tuple.of(s, s)));
+    public static <S> MonadState<S, S> get() {
+        return narrow(MonadState.<S>tclass().get());
     }
 
     /**
      * Fetch the current value of the state and bind the value to the given function.
      */
-    public static <B,S> MonadState<B,S> get(Function<? super S, ? extends $<µ<S>, B>> f) {
-        return $(s -> suspend(() -> narrow(f.apply(s)).go(s))); // get().bind(f)
+    public static <S, B> MonadState<S, B> get(Function<? super S, ? extends $<µ<S>, B>> f) {
+        return narrow(MonadState.<S>tclass().get(f));
     }
 
     /**
      * Sets the state within the monad.
      */
-    public static <S> MonadState<Unit, S> put(S s) {
-        return $(__ -> immediate(Tuple.of(Unit.U, s)));
+    public static <S> MonadState<S, Unit> put(S s) {
+        return narrow(MonadState.<S>tclass().put(s));
     }
 
     /**
      * Updates the state to the result of applying a function to the current state.
      */
-    public static <S> MonadState<Unit, S> modify(Function<S, S> f) {
-        return $(s -> immediate(Tuple.of(Unit.U, f.apply(s))));
+    public static <S> MonadState<S, Unit> modify(Function<S, S> f) {
+        return narrow(MonadState.<S>tclass().modify(f));
     }
 
     /**
      * Get a specific component of the state, using a projection function supplied.
      */
-    public static <A, S> MonadState<A, S> gets(Function<S, A> f) {
-        return $(s -> immediate(Tuple.of(f.apply(s), s)));
+    public static <S, A> MonadState<S, A> gets(Function<S, A> f) {
+        return narrow(MonadState.<S>tclass().gets(f));
     }
 
     // Monad
 
-    public static final class µ<S> implements Monad<µ<S>> {
-        @Override
-        public <A> MonadState<A, S> pure(A a) {
-            return MonadState.pure(a);
+    public static final class µ<S> extends StateT<µ<S>, S, Trampoline.µ> {
+        private µ() {
+            super(Trampoline.tclass);
         }
-
+        
         @Override
-        public <A, B> MonadState<B, S> map($<µ<S>, A> a, Function<? super A, ? extends B> f) {
-            return narrow(a).map(f);
+        protected <A> MonadState<S, A> $(Function<S, $<Trampoline.µ, Tuple<A, S>>> f) {
+            return new MonadState<>(f);
         }
-
-        @Override
-        public <A, B> MonadState<B, S> bind($<µ<S>, A> a, Function<? super A, ? extends $<µ<S>, B>> k) {
-            return narrow(a).bind(k);
-        }
-
-        @Override
-        public <A, B> MonadState<B, S> seqR($<µ<S>, A> a, $<µ<S>, B> b) {
-            return narrow(a).then(b);
-        }
-
-        @Override
-        public <A, B> MonadState<B, S> seqR($<µ<S>, A> a, Supplier<? extends $<µ<S>, B>> b) {
-            return narrow(a).then(b);
-        }
-    }
-
-    public static <A, S> MonadState<A, S> narrow($<µ<S>, A> value) {
-        return (MonadState<A, S>)value;
     }
 
     private static final µ<?> _TCLASS = new µ<>();
@@ -254,55 +212,71 @@ public final class MonadState<A, S> implements $<MonadState.µ<S>, A> {
         return tclass();
     }
 
+    public static <S, A> MonadState<S, A> narrow($<µ<S>, A> value) {
+        return (MonadState<S,A>)value;
+    }
+
+    public static <S, A> Tuple<A, S> runState($<µ<S>, A> m, S s) {
+        return narrow(m).run(s);
+    }
+
+    public static <S, A> A evalState($<µ<S>, A> m, S s) {
+        return narrow(m).eval(s);
+    }
+
+    public static <S, A> S execState($<µ<S>, A> m, S s) {
+        return narrow(m).exec(s);
+    }
+
     // Convenient static monad methods
 
-    public static <T, A, S> MonadState<? extends Traversable<T, A>, S>
+    public static <T, S, A> MonadState<S, ? extends Traversable<T, A>>
     flatM(Traversable<T, ? extends $<µ<S>, A>> ms) {
         return narrow(MonadState.<S>tclass().flatM(ms));
     }
 
     @SuppressWarnings("unchecked")
-    public static <A, S> MonadState<Seq<A>, S>
+    public static <S, A> MonadState<S, Seq<A>>
     flatM(Seq<? extends $<µ<S>, A>> ms) {
-        return (MonadState<Seq<A>, S>)MonadState.<S>tclass().flatM(ms);
+        return (MonadState<S, Seq<A>>)MonadState.<S>tclass().flatM(ms);
     }
 
-    public static <T, A, B, S> MonadState<? extends Traversable<T, B>, S>
+    public static <T, S, A, B> MonadState<S, ? extends Traversable<T, B>>
     mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
         return narrow(MonadState.<S>tclass().mapM(xs, f));
     }
 
     @SuppressWarnings("unchecked")
-    public static <A, B, S> MonadState<Seq<B>, S>
+    public static <S, A, B> MonadState<S, Seq<B>>
     mapM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
-        return (MonadState<Seq<B>, S>)MonadState.<S>tclass().mapM(xs, f);
+        return (MonadState<S, Seq<B>>)MonadState.<S>tclass().mapM(xs, f);
     }
 
-    public static <A, S> MonadState<Unit, S>
+    public static <S, A> MonadState<S, Unit>
     sequence(Foldable<? extends $<µ<S>, A>> ms) {
         return narrow(MonadState.<S>tclass().sequence(ms));
     }
 
-    public static <A, B, S> MonadState<Unit, S>
+    public static <S, A, B> MonadState<S, Unit>
     mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
         return narrow(MonadState.<S>tclass().mapM_(xs, f));
     }
 
-    public static <A, S> MonadState<Seq<A>, S>
+    public static <S, A> MonadState<S, Seq<A>>
     filterM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, Boolean>> p) {
         return narrow(MonadState.<S>tclass().filterM(xs, p));
     }
 
-    public static <A, B, S> MonadState<B, S>
+    public static <S, A, B> MonadState<S, B>
     foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<S>, B>> f) {
         return narrow(MonadState.<S>tclass().foldM(r0, xs, f));
     }
 
-    public static <A, S> MonadState<Seq<A>, S> replicateM(int n, $<µ<S>, A> a) {
+    public static <S, A> MonadState<S, Seq<A>> replicateM(int n, $<µ<S>, A> a) {
         return narrow(MonadState.<S>tclass().replicateM(n, a));
     }
 
-    public static <A, S> MonadState<Unit, S> replicateM_(int n, $<µ<S>, A> a) {
+    public static <S, A> MonadState<S, Unit> replicateM_(int n, $<µ<S>, A> a) {
         return narrow(MonadState.<S>tclass().replicateM_(n, a));
     }
 }

@@ -503,7 +503,7 @@ public class FunctionalTest
             return fibmemo_(n).eval(memo);
         }
 
-        private static MonadState<BigInteger, PMap<Integer, BigInteger>> fibmemo_(int n) {
+        private static MonadState<PMap<Integer, BigInteger>, BigInteger> fibmemo_(int n) {
             return MonadState.narrow(
                 do_(MonadState.get(), memo ->
                     memo.containsKey(n)
@@ -695,14 +695,14 @@ public class FunctionalTest
 
     // This implementation is good because state transformation is transparency
     static class GoodCPS {
-        private final Seq<Function<Integer, MonadState<Unit, GoodCPS>>> queue;
+        private final Seq<Function<Integer, MonadState<GoodCPS, Unit>>> queue;
         private final Seq<String> log;
 
         public GoodCPS() {
             this(Seq.nil(), Seq.nil());
         }
 
-        private GoodCPS(Seq<Function<Integer, MonadState<Unit, GoodCPS>>> queue, Seq<String> log) {
+        private GoodCPS(Seq<Function<Integer, MonadState<GoodCPS, Unit>>> queue, Seq<String> log) {
             this.queue = queue;
             this.log = log;
         }
@@ -716,13 +716,13 @@ public class FunctionalTest
             ).eval().exec(new GoodCPS());
         }
 
-        private static StateCont<Integer, GoodCPS> ask(String prompt) {
-            return StateCont.<Integer, Unit, GoodCPS>shift(k ->
+        private static StateCont<GoodCPS, Integer> ask(String prompt) {
+            return StateCont.<GoodCPS, Integer, Unit>shift(k ->
                   do_(StateCont.modify(state -> state.save(k)),
                   do_(log(prompt))));
         }
 
-        private static StateCont<Unit, GoodCPS> log(String message) {
+        private static StateCont<GoodCPS, Unit> log(String message) {
             return StateCont.modify(state -> state.addLog(message));
         }
 
@@ -734,7 +734,7 @@ public class FunctionalTest
             return log;
         }
 
-        private GoodCPS save(Function<Integer, MonadState<Unit, GoodCPS>> f) {
+        private GoodCPS save(Function<Integer, MonadState<GoodCPS, Unit>> f) {
             return new GoodCPS(queue.append(f), log);
         }
 

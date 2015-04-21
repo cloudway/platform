@@ -19,31 +19,15 @@ import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.fp.io.VoidIO;
 import com.cloudway.platform.common.fp.$;
 
-import static com.cloudway.platform.common.fp.control.TrampolineIO.*;
-
 /**
  * The stateful IO monad.
  *
  * @param <A> the type of result of computation
  * @param <S> the type of state passing to the computation
  */
-public final class StateIO<A, S> implements $<StateIO.µ<S>, A> {
-    // the state transfer function
-    private final Function<S, TrampolineIO<Tuple<A, S>>> sf;
-
-    // construct a stateful IO monad
-    private StateIO(Function<S, TrampolineIO<Tuple<A, S>>> f) {
-        this.sf = f;
-    }
-
-    // helper method to construct a monad from a transfer function
-    static <A, S> StateIO<A, S> $(Function<S, TrampolineIO<Tuple<A, S>>> f) {
-        return new StateIO<>(f);
-    }
-
-    // single step the state transfer
-    private TrampolineIO<Tuple<A, S>> go(S s) {
-        return sf.apply(s);
+public final class StateIO<S, A> extends StateT.Monadic<StateIO.µ<S>, S, TrampolineIO.µ, A> {
+    private StateIO(Function<S, $<TrampolineIO.µ, Tuple<A,S>>> f) {
+        super(f);
     }
 
     /**
@@ -52,8 +36,8 @@ public final class StateIO<A, S> implements $<StateIO.µ<S>, A> {
      * @param f the state transfer function
      * @return the stateful IO monad
      */
-    public static <A, S> StateIO<A, S> state(Function<S, Tuple<A, S>> f) {
-        return $(s -> immediate(f.apply(s)));
+    public static <S, A> StateIO<S, A> state(Function<? super S, Tuple<A, S>> f) {
+        return narrow(StateIO.<S>tclass().state(f));
     }
 
     /**
@@ -62,18 +46,15 @@ public final class StateIO<A, S> implements $<StateIO.µ<S>, A> {
      * @param a the final result
      * @return the stateful IO monad that hold the final result
      */
-    public static <A, S> StateIO<A, S> pure(A a) {
-        return $(s -> immediate(Tuple.of(a, s)));
+    public static <S, A> StateIO<S, A> pure(A a) {
+        return narrow(StateIO.<S>tclass().pure(a));
     }
-
-    private static final StateIO<Unit,?> _unit = pure(Unit.U);
 
     /**
      * Returns a do nothing I/O action.
      */
-    @SuppressWarnings("unchecked")
-    public static <S> StateIO<Unit, S> unit() {
-        return (StateIO<Unit,S>)_unit;
+    public static <S> StateIO<S, Unit> unit() {
+        return pure(Unit.U);
     }
 
     /**
@@ -83,14 +64,14 @@ public final class StateIO<A, S> implements $<StateIO.µ<S>, A> {
      * @param a a thunk that eventually produce computation result
      * @return the state monad that hold the computation
      */
-    public static <A, S> StateIO<A, S> lazy(IO<A> a) {
+    public static <S, A> StateIO<S, A> lazy(IO<A> a) {
         return lift(a);
     }
 
     /**
      * Constructs a computation that performs the given action with no result.
      */
-    public static <S> StateIO<Unit, S> action(VoidIO a) {
+    public static <S> StateIO<S, Unit> action(VoidIO a) {
         return lift(a);
     }
 
@@ -100,8 +81,8 @@ public final class StateIO<A, S> implements $<StateIO.µ<S>, A> {
      * @param m the IO action
      * @return the prompted stateful IO action
      */
-    public static <A, S> StateIO<A, S> lift(IO<A> m) {
-        return $(s -> TrampolineIO.lift(m).map(a -> Tuple.of(a, s)));
+    public static <S, A> StateIO<S, A> lift(IO<A> m) {
+        return narrow(StateIO.<S>tclass().lift(TrampolineIO.lift(m)));
     }
 
     /**
@@ -110,7 +91,7 @@ public final class StateIO<A, S> implements $<StateIO.µ<S>, A> {
      * @param m the IO action which has no return value
      * @return the prompted stateful IO action
      */
-    public static <S> StateIO<Unit, S> lift_(VoidIO m) {
+    public static <S> StateIO<S, Unit> lift_(VoidIO m) {
         return lift(m);
     }
 
@@ -122,7 +103,7 @@ public final class StateIO<A, S> implements $<StateIO.µ<S>, A> {
      * @return the tuple of final value and final state wrapped in an IO monad
      */
     public IO<Tuple<A, S>> run(S s) {
-        return go(s).run();
+        return TrampolineIO.narrow(StateIO.<S>tclass().runState(this, s)).run();
     }
 
     /**
@@ -151,112 +132,92 @@ public final class StateIO<A, S> implements $<StateIO.µ<S>, A> {
      * Transfer a state computation by feeding the value to the given function
      * and wrapping the result to a new state.
      */
-    public <B> StateIO<B, S> map(Function<? super A, ? extends B> f) {
-        return $(s -> suspend(() -> go(s).map(t -> t.mapFirst(f))));
+    public <B> StateIO<S, B> map(Function<? super A, ? extends B> f) {
+        return narrow(StateIO.<S>tclass().map(this, f));
     }
 
     /**
      * Transfer a state computation by feeding the value to the given function.
      */
-    public <B> StateIO<B, S> bind(Function<? super A, ? extends $<µ<S>, B>> f) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(f.apply(t.first())).go(t.second())))));
+    public <B> StateIO<S, B> bind(Function<? super A, ? extends $<µ<S>, B>> f) {
+        return narrow(StateIO.<S>tclass().bind(this, f));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> StateIO<B, S> then(Supplier<? extends $<µ<S>, B>> next) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(next.get()).go(t.second())))));
+    public <B> StateIO<S, B> then(Supplier<? extends $<µ<S>, B>> next) {
+        return narrow(StateIO.<S>tclass().seqR(this, next));
     }
 
     /**
      * Transfer a state computation by discarding the intermediate value.
      */
-    public <B> StateIO<B, S> then($<µ<S>, B> next) {
-        return $(s -> suspend(() -> go(s).bind(t -> suspend(() -> narrow(next).go(t.second())))));
+    public <B> StateIO<S, B> then($<µ<S>, B> next) {
+        return narrow(StateIO.<S>tclass().seqR(this, next));
     }
 
     /**
      * Map both the return value and final state of computation using the
      * given function.
      */
-    public <B> StateIO<B, S> mapState(Function<IO<Tuple<A, S>>, IO<Tuple<B, S>>> f) {
-        return $(s -> suspend(() -> TrampolineIO.lift(f.apply(run(s)))));
+    public <B> StateIO<S, B> mapState(Function<Tuple<A, S>, Tuple<B, S>> f) {
+        return narrow(StateIO.<S>tclass().mapState(this, t -> TrampolineIO.narrow(t).map(f)));
     }
 
     /**
      * Execute action on a state modified by applying function.
      */
-    public StateIO<A, S> withState(Function<S, S> f) {
-        return $(s -> suspend(() -> go(f.apply(s))));
+    public StateIO<S, A> withState(Function<S, S> f) {
+        return narrow(StateIO.<S>tclass().withState(this, f));
     }
 
     /**
      * Fetch the current value of the state within the monad.
      */
     public static <S> StateIO<S, S> get() {
-        return $(s -> immediate(Tuple.of(s, s)));
+        return narrow(StateIO.<S>tclass().get());
     }
 
     /**
      * Fetch the current value of the state and bind the value to the given function.
      */
-    public static <B, S> StateIO<B,S> get(Function<? super S, ? extends $<µ<S>, B>> f) {
-        return $(s -> suspend(() -> narrow(f.apply(s)).go(s))); // get().bind(f)
+    public static <S, B> StateIO<S, B> get(Function<? super S, ? extends $<µ<S>, B>> f) {
+        return narrow(StateIO.<S>tclass().get(f));
     }
 
     /**
      * Sets the state within the monad.
      */
-    public static <S> StateIO<Unit, S> put(S s) {
-        return $(__ -> immediate(Tuple.of(Unit.U, s)));
+    public static <S> StateIO<S, Unit> put(S s) {
+        return narrow(StateIO.<S>tclass().put(s));
     }
 
     /**
      * Updates the state to the result of applying a function to the current state.
      */
-    public static <S> StateIO<Unit, S> modify(Function<S, S> f) {
-        return $(s -> immediate(Tuple.of(Unit.U, f.apply(s))));
+    public static <S> StateIO<S, Unit> modify(Function<S, S> f) {
+        return narrow(StateIO.<S>tclass().modify(f));
     }
 
     /**
      * Get specific component of the state, using a projection function applied.
      */
-    public static <A, S> StateIO<A, S> gets(Function<S, A> f) {
-        return $(s -> immediate(Tuple.of(f.apply(s), s)));
+    public static <S, A> StateIO<S, A> gets(Function<S, A> f) {
+        return narrow(StateIO.<S>tclass().gets(f));
     }
 
     // Monad
 
-    public static final class µ<S> implements Monad<µ<S>> {
-        @Override
-        public <A> StateIO<A, S> pure(A a) {
-            return StateIO.pure(a);
+    public static final class µ<S> extends StateT<µ<S>, S, TrampolineIO.µ> {
+        private µ() {
+            super(TrampolineIO.tclass);
         }
-
+        
         @Override
-        public <A, B> StateIO<B, S> map($<µ<S>, A> a, Function<? super A, ? extends B> f) {
-            return narrow(a).map(f);
+        protected <A> StateIO<S, A> $(Function<S, $<TrampolineIO.µ, Tuple<A, S>>> f) {
+            return new StateIO<>(f);
         }
-
-        @Override
-        public <A, B> StateIO<B, S> bind($<µ<S>, A> a, Function<? super A, ? extends $<µ<S>, B>> k) {
-            return narrow(a).bind(k);
-        }
-
-        @Override
-        public <A, B> StateIO<B, S> seqR($<µ<S>, A> a, $<µ<S>, B> b) {
-            return narrow(a).then(b);
-        }
-
-        @Override
-        public <A, B> StateIO<B, S> seqR($<µ<S>, A> a, Supplier<? extends $<µ<S>, B>> b) {
-            return narrow(a).then(b);
-        }
-    }
-
-    public static <A, S> StateIO<A, S> narrow($<µ<S>, A> value) {
-        return (StateIO<A, S>)value;
     }
 
     private static final µ<?> _TCLASS = new µ<>();
@@ -271,53 +232,69 @@ public final class StateIO<A, S> implements $<StateIO.µ<S>, A> {
         return tclass();
     }
 
+    public static <S, A> StateIO<S, A> narrow($<µ<S>, A> value) {
+        return (StateIO<S,A>)value;
+    }
+
+    public static <S, A> IO<Tuple<A, S>> runState($<µ<S>, A> m, S s) {
+        return narrow(m).run(s);
+    }
+
+    public static <S, A> IO<A> evalState($<µ<S>, A> m, S s) {
+        return narrow(m).eval(s);
+    }
+
+    public static <S, A> IO<S> execState($<µ<S>, A> m, S s) {
+        return narrow(m).exec(s);
+    }
+
     // Convenient static monad methods
 
-    public static <T, A, S> StateIO<? extends Traversable<T, A>, S>
+    public static <T, S, A> StateIO<S, ? extends Traversable<T, A>>
     flatM(Traversable<T, ? extends $<µ<S>, A>> ms) {
         return narrow(StateIO.<S>tclass().flatM(ms));
     }
 
     @SuppressWarnings("unchecked")
-    public static <A, S> StateIO<Seq<A>, S> flatM(Seq<? extends $<µ<S>, A>> ms) {
-        return (StateIO<Seq<A>, S>)StateIO.<S>tclass().flatM(ms);
+    public static <S, A> StateIO<S, Seq<A>> flatM(Seq<? extends $<µ<S>, A>> ms) {
+        return (StateIO<S, Seq<A>>)StateIO.<S>tclass().flatM(ms);
     }
 
-    public static <T, A, B, S> StateIO<? extends Traversable<T, B>, S>
+    public static <T, S, A, B> StateIO<S, ? extends Traversable<T, B>>
     mapM(Traversable<T, A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
         return narrow(StateIO.<S>tclass().mapM(xs, f));
     }
 
     @SuppressWarnings("unchecked")
-    public static <A, B, S> StateIO<Seq<B>, S>
+    public static <S, A, B> StateIO<S, Seq<B>>
     mapM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
-        return (StateIO<Seq<B>, S>)StateIO.<S>tclass().mapM(xs, f);
+        return (StateIO<S, Seq<B>>)StateIO.<S>tclass().mapM(xs, f);
     }
 
-    public static <A, S> StateIO<Unit, S> sequence(Foldable<? extends $<µ<S>, A>> ms) {
+    public static <S, A> StateIO<S, Unit> sequence(Foldable<? extends $<µ<S>, A>> ms) {
         return narrow(StateIO.<S>tclass().sequence(ms));
     }
 
-    public static <A, B, S> StateIO<Unit, S>
+    public static <S, A, B> StateIO<S, Unit>
     mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<S>, B>> f) {
         return narrow(StateIO.<S>tclass().mapM_(xs, f));
     }
 
-    public static <A, S> StateIO<Seq<A>, S>
+    public static <S, A> StateIO<S, Seq<A>>
     filterM(Seq<A> xs, Function<? super A, ? extends $<µ<S>, Boolean>> p) {
         return narrow(StateIO.<S>tclass().filterM(xs, p));
     }
 
-    public static <A, B, S> StateIO<B, S>
+    public static <S, A, B> StateIO<S, B>
     foldM(B r0, Foldable<A> xs, BiFunction<B, ? super A, ? extends $<µ<S>, B>> f) {
         return narrow(StateIO.<S>tclass().foldM(r0, xs, f));
     }
 
-    public static <A, S> StateIO<Seq<A>, S> replicateM(int n, $<µ<S>, A> a) {
+    public static <S, A> StateIO<S, Seq<A>> replicateM(int n, $<µ<S>, A> a) {
         return narrow(StateIO.<S>tclass().replicateM(n, a));
     }
 
-    public static <A, S> StateIO<Unit, S> replicateM_(int n, $<µ<S>, A> a) {
+    public static <S, A> StateIO<S, Unit> replicateM_(int n, $<µ<S>, A> a) {
         return narrow(StateIO.<S>tclass().replicateM_(n, a));
     }
 }

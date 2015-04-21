@@ -168,6 +168,19 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<
     }
 
     /**
+     * This method takes a function and a default value supplier. If the
+     * {@code Maybe} value is empty, the default value is returned. Otherwise,
+     * it applies the function to the value inside the {@code Maybe} and returns
+     * the result.
+     *
+     * @param f the function to apply on the value inside {@code Maybe} when present
+     * @param d the default value to return if {@code Maybe} is empty
+     */
+    public <R> R either(Function<? super A, ? extends R> f, Supplier<? extends R> d) {
+        return value != null ? f.apply(value) : d.get();
+    }
+
+    /**
      * If a value is present, and the value matches the given predicate,
      * return an {@code Maybe} describing the value, otherwise return an
      * empty {@code Maybe}.
@@ -216,15 +229,6 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<
      */
     public <B> Maybe<B> flatMap(Function<? super A, Maybe<B>> mapper) {
         return isPresent() ? Objects.requireNonNull(mapper.apply(value)) : empty();
-    }
-
-    /**
-     * Map each element of a structure to an action, evaluate these actions
-     * from left to right, and collect the results.
-     */
-    @Override
-    public <F, B> $<F, Maybe<B>> traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
-        return isPresent() ? m.map(f.apply(value), Maybe::of) : m.pure(empty());
     }
 
     /**
@@ -342,7 +346,7 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<
         return t -> t.isPresent() ? null : mapper;
     }
 
-    // Foldable
+    // Foldable & Traversable
 
     @Override
     public <R> R foldRight(BiFunction<? super A, Supplier<R>, R> f, Supplier<R> r) {
@@ -374,14 +378,19 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<
         return this;
     }
 
+    @Override
+    public <F, B> $<F, Maybe<B>> traverse(Applicative<F> m, Function<? super A, ? extends $<F,B>> f) {
+        return isPresent() ? m.map(f.apply(value), Maybe::of) : m.pure(empty());
+    }
+
     // Type Classes
 
-    public static <A> Monoid<Maybe<A>> monoid(Monoid<A> ma) {
+    public static <A> Monoid<Maybe<A>> monoid(Monoid<A> m) {
         return Monoid.monoid_(empty(), (a1, a2) ->
             with(a1, a2).<Maybe<A>>get()
               .when(Any(x -> Nothing(() -> x)))
               .when(Nothing(() -> Any(y -> y)))
-              .when(Just(x -> Just(y -> of(ma.append(x, y)))))
+              .when(Just(x -> Just(y -> of(m.append(x, y)))))
               .get());
     }
 

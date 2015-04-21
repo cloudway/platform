@@ -87,7 +87,7 @@ final class ApacheDB {
     }
 
     // FIXME: STM (Software Transactional Memory) required
-    private MapFile atomically(StateIO<?, MapFile> action) throws IOException {
+    private MapFile atomically(StateIO<MapFile, ?> action) throws IOException {
         MapFile oldfile, newfile;
         do {
             oldfile = state.get();
@@ -110,7 +110,7 @@ final class ApacheDB {
         }
     }
 
-    private StateIO<PMap<String,String>, MapFile> load() {
+    private StateIO<MapFile, PMap<String,String>> load() {
         return StateIO.narrow(
             do_(get(), oldfile ->
             do_(readMap(oldfile), newfile ->
@@ -151,7 +151,7 @@ final class ApacheDB {
         }
     }
 
-    private StateIO<Unit, MapFile> store(PMap<String, String> map) {
+    private StateIO<MapFile, Unit> store(PMap<String, String> map) {
         return StateIO.narrow(
             do_(lift(() -> mkdir(basedir())), base ->
             let(base.resolve(mapname + SUFFIX), txt ->
@@ -161,7 +161,7 @@ final class ApacheDB {
             do_(put(new MapFile(map, modtime)))))))));
     }
 
-    private static StateIO<Long, MapFile> writeMap(Path file, PMap<String, String> map) {
+    private static StateIO<MapFile, Long> writeMap(Path file, PMap<String, String> map) {
         return lift(() -> {
             try (BufferedWriter f = newBufferedWriter(file)) {
                 IO.forEach(map, (k, v) -> f.write(k + " " + v + "\n"));
@@ -170,7 +170,7 @@ final class ApacheDB {
         });
     }
 
-    private static StateIO<Unit, MapFile> writeDBM(Path base, Path dbm, Path txt) {
+    private static StateIO<MapFile, Unit> writeDBM(Path base, Path dbm, Path txt) {
         return lift_(() -> {
             Path wd = createTempDirectory(base, dbm.getFileName() + "~");
             try {

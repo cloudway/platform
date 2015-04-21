@@ -166,15 +166,23 @@ public interface IO<A> extends $<IO.µ, A> {
         }
     }
 
-    static <A> IO<A> narrow($<µ, A> value) {
-        return (IO<A>)value;
-    }
-
     µ tclass = new µ() {};
 
     @Override
     default µ getTypeClass() {
         return tclass;
+    }
+
+    static <A> IO<A> narrow($<µ, A> value) {
+        return (IO<A>)value;
+    }
+
+    static <A> A runIO($<µ, A> m) throws IOException {
+        return narrow(m).runIO();
+    }
+
+    static <A> A runUncheckedIO($<µ, A> m) {
+        return narrow(m).runUncheckedIO();
     }
 
     // Convenient static monad methods
@@ -209,7 +217,7 @@ public interface IO<A> extends $<IO.µ, A> {
         return narrow(tclass.mapM_(xs, f));
     }
 
-    static <A, S> IO<Seq<A>>
+    static <A> IO<Seq<A>>
     filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
         return narrow(tclass.filterM(xs, p));
     }

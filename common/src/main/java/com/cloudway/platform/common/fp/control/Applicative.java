@@ -12,6 +12,7 @@ import java.util.function.Function;
 import com.cloudway.platform.common.fp.$;
 import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Functor;
+import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.function.TriFunction;
 
 /**
@@ -69,11 +70,18 @@ public interface Applicative<F> extends Functor<F> {
     <A> $<F,A> pure(A a);
 
     /**
+     * Lift a unit value.
+     */
+    default $<F, Unit> unit() {
+        return pure(Unit.U);
+    }
+
+    /**
      * Sequential application.
      *
      * <pre>{@code (<*>) :: f (a -> b) -> f a -> f b}</pre>
      */
-    <A, B> $<F,B> ap($<F, Function<? super A, ? extends B>> fs, $<F,A> a);
+    <A, B> $<F,B> ap($<F, Function<? super A, ? extends B>> f, $<F,A> v);
 
     /**
      * Sequential application using a binary function.

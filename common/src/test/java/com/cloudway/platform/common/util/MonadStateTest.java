@@ -15,8 +15,12 @@ import java.util.regex.Pattern;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
+import com.cloudway.platform.common.fp.$;
 import com.cloudway.platform.common.fp.control.ConditionCase;
 import com.cloudway.platform.common.fp.control.MonadState;
+import com.cloudway.platform.common.fp.control.ReaderT;
+import com.cloudway.platform.common.fp.control.StateT;
+import com.cloudway.platform.common.fp.data.Identity;
 import com.cloudway.platform.common.fp.data.IntSeq;
 import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.Seq;
@@ -27,6 +31,7 @@ import com.cloudway.platform.common.fp.function.ExceptionBiFunction;
 
 import static com.cloudway.platform.common.fp.control.Syntax.*;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
+import static com.cloudway.platform.common.fp.data.Identity.runIdentity;
 import static com.cloudway.platform.common.fp.data.IntSeq.IntCons;
 import static com.cloudway.platform.common.fp.data.IntSeq.IntSingle;
 import static com.cloudway.platform.common.fp.data.Maybe.Just;
@@ -88,7 +93,7 @@ public class MonadStateTest {
                       .eval(IntSeq.nil());
         }
 
-        static MonadState<Integer, IntSeq> scan(String item) {
+        static MonadState<IntSeq, Integer> scan(String item) {
             switch (item) {
             case "+": return pop().bind(x -> pop().bind(y -> push(y + x)));
             case "-": return pop().bind(x -> pop().bind(y -> push(y - x)));
@@ -98,11 +103,11 @@ public class MonadStateTest {
             }
         }
 
-        static MonadState<Integer, IntSeq> push(int a) {
+        static MonadState<IntSeq, Integer> push(int a) {
             return MonadState.state(xs -> Tuple.of(0, IntSeq.cons(a, xs)));
         }
 
-        static MonadState<Integer, IntSeq> pop() {
+        static MonadState<IntSeq, Integer> pop() {
             return MonadState.state(xs -> Tuple.of(xs.head(), xs.tail()));
         }
     }
@@ -116,7 +121,7 @@ public class MonadStateTest {
                       .eval(Maybe.of(IntSeq.nil()));
         }
 
-        static MonadState<Unit, Maybe<IntSeq>> scan(String item) {
+        static MonadState<Maybe<IntSeq>, Unit> scan(String item) {
             switch (item) {
             case "+": return pop().bind(x -> pop().bind(y -> push(y + x)));
             case "-": return pop().bind(x -> pop().bind(y -> push(y - x)));
@@ -127,28 +132,28 @@ public class MonadStateTest {
             }
         }
 
-        static MonadState<Unit, Maybe<IntSeq>> push(int x) {
+        static MonadState<Maybe<IntSeq>, Unit> push(int x) {
             return MonadState.modify((Maybe<IntSeq> stack) ->
                 select.from(stack, xs ->
                        yield(Maybe.of(IntSeq.cons(x, xs))))
                       .orElse(Maybe.<IntSeq>empty()));
         }
 
-        static MonadState<Unit, Maybe<IntSeq>> push(Maybe<Integer> item) {
+        static MonadState<Maybe<IntSeq>, Unit> push(Maybe<Integer> item) {
             return MonadState.modify((Maybe<IntSeq> stack) ->
                 select.from(stack, xs -> from(item, x ->
                        yield(Maybe.of(IntSeq.cons(x, xs)))))
                       .orElse(Maybe.<IntSeq>empty()));
         }
 
-        static MonadState<Integer, Maybe<IntSeq>> pop() {
+        static MonadState<Maybe<IntSeq>, Integer> pop() {
             return MonadState.state((Maybe<IntSeq> stack) ->
                 select.from(stack, as(IntCons((x, xs) ->
                        yield(Tuple.of(x, Maybe.of(xs))))))
                       .orElseGet(() -> Tuple.of(0, Maybe.empty())));
         }
 
-        static MonadState<OptionalInt, Maybe<IntSeq>> getResult() {
+        static MonadState<Maybe<IntSeq>, OptionalInt> getResult() {
             return pop().mapState((result, stack) ->
                 select.from(stack, (IntSeq xs) -> where(xs.isEmpty(),
                        yield(Tuple.of(OptionalInt.of(result), Maybe.<IntSeq>empty()))))
@@ -207,24 +212,24 @@ public class MonadStateTest {
             return this.state != state ? new Door(state, actions.push(action)) : this;
         }
 
-        private static MonadState<State, Door> action(Action action, State state) {
+        private static MonadState<Door, State> action(Action action, State state) {
             return MonadState.narrow(
                 do_(MonadState.modify(s -> s.transfer(state, action)),
                 do_(MonadState.pure(state))));
         }
 
-        public static MonadState<State, Door> open() {
+        public static MonadState<Door, State> open() {
             return action(Action.OPEN, State.OPENED );
         }
 
-        public static MonadState<State, Door> close() {
+        public static MonadState<Door, State> close() {
             return action(Action.CLOSE, State.CLOSED);
         }
     }
 
     @Test
     public void doorStateTest() {
-        MonadState<Door.State, Door> states =
+        MonadState<Door, Door.State> states =
             Door.open().then(Door.open()).then(Door.close()).then(Door.close());
         Tuple<Door.State, Door> result = states.run(new Door(Door.State.CLOSED));
         assertEquals(Door.State.CLOSED, result.first());
@@ -258,14 +263,14 @@ public class MonadStateTest {
     static final class Game {
         private Game() {}
 
-        public static MonadState<Integer, GameState> play(String input) {
+        public static MonadState<GameState, Integer> play(String input) {
             return MonadState.narrow(
                 do_(MonadState.mapM_(Seq.wrap(input), Game::scan),
                 do_(MonadState.get(), as(GameState((on, score) ->
                 do_(MonadState.pure(score)))))));
         }
 
-        static MonadState<Unit, GameState> scan(char x) {
+        static MonadState<GameState, Unit> scan(char x) {
             return MonadState.modify(as(GameState((on, score) ->
                         x == 'a' && on ? new GameState(on, score + 1) :
                         x == 'b' && on ? new GameState(on, score - 1) :
@@ -289,7 +294,7 @@ public class MonadStateTest {
         MonadState<Integer, Integer> inc =
             MonadState.get(x -> MonadState.put(x+1).then(MonadState.pure(x)));
 
-        Seq<MonadState<Integer,Integer>> states = Seq.replicate(3, inc);
+        Seq<MonadState<Integer, Integer>> states = Seq.replicate(3, inc);
         Tuple<Seq<Integer>, Integer> res = MonadState.flatM(states).run(0);
         Tuple<Unit, Integer> res_ = MonadState.sequence(states).run(0);
         assertSeqEquals(res.first(), 0,1,2);
@@ -310,7 +315,7 @@ public class MonadStateTest {
 
     @Test
     public void mapMTest() {
-        Function<Integer, MonadState<Integer,Integer>> add =
+        Function<Integer, MonadState<Integer, Integer>> add =
             x -> MonadState.get(y -> MonadState.put(x+y).then(MonadState.pure(y)));
 
         Seq<Integer> xs = Seq.of(1, 2, 3);
@@ -329,7 +334,7 @@ public class MonadStateTest {
 
     @Test
     public void filterMTest() {
-        Function<Integer, MonadState<Boolean,Integer>> fadd =
+        Function<Integer, MonadState<Integer, Boolean>> fadd =
             x -> x == 0 ? MonadState.pure(false)
                         : MonadState.get(y -> MonadState.put(x+y).then(MonadState.pure(true)));
 
@@ -341,7 +346,7 @@ public class MonadStateTest {
 
     @Test
     public void foldMTest() {
-        BiFunction<Integer, Integer, MonadState<Integer,Integer>> add2 =
+        BiFunction<Integer, Integer, MonadState<Integer, Integer>> add2 =
             (z, x) -> MonadState.get(y -> MonadState.put(x + y + z).then(MonadState.pure(z + x)));
 
         Seq<Integer> xs = Seq.of(1, 2, 3);
@@ -362,5 +367,15 @@ public class MonadStateTest {
             xs = xs.tail();
         }
         assertTrue(xs.isEmpty());
+    }
+
+    @Test
+    public void monadTransformerTest() {
+        StateT.On<Integer, ReaderT.On<Integer, Identity.µ>> sr = StateT.on(ReaderT.on(Identity.tclass));
+        $<StateT.On<Integer, ReaderT.On<Integer, Identity.µ>>, Integer> b =
+            do_(sr.get(), x ->
+            do_(sr.lift(ReaderT::ask), y ->
+            do_(sr.pure(x + y))));
+        assertEquals(Tuple.of(7, 3), runIdentity(sr.inner().runReader(sr.runState(b, 3), 4)));
     }
 }

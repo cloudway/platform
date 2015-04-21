@@ -335,6 +335,16 @@ public abstract class Trampoline<A> implements $<Trampoline.µ, A> {
         }
 
         @Override
+        public <A> Trampoline<A> lazy(Supplier<A> a) {
+            return Trampoline.lazy(a);
+        }
+
+        @Override
+        public Trampoline<Unit> action(Runnable a) {
+            return Trampoline.action(a);
+        }
+
+        @Override
         public <A, B> Trampoline<B> map($<µ, A> a, Function<? super A, ? extends B> f) {
             return narrow(a).map(f);
         }
@@ -355,15 +365,19 @@ public abstract class Trampoline<A> implements $<Trampoline.µ, A> {
         }
     }
 
-    public static <A> Trampoline<A> narrow($<µ, A> value) {
-        return (Trampoline<A>)value;
-    }
-
     public static final µ tclass = new µ();
 
     @Override
     public µ getTypeClass() {
         return tclass;
+    }
+
+    public static <A> Trampoline<A> narrow($<µ, A> value) {
+        return (Trampoline<A>)value;
+    }
+
+    public static <A> A run($<µ, A> m) {
+        return narrow(m).run();
     }
 
     // Convenient static monad methods

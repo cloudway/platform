@@ -70,6 +70,20 @@ public interface Monad<M> extends Applicative<M> {
     }
 
     /**
+     * Lift a lazy value.
+     */
+    default <A> $<M, A> lazy(Supplier<A> a) {
+        return seqR(unit(), Fn.lazy(() -> pure(a.get())));
+    }
+
+    /**
+     * Lift an action with side effect.
+     */
+    default $<M, Unit> action(Runnable a) {
+        return lazy(() -> { a.run(); return Unit.U; });
+    }
+
+    /**
      * Returns a container consisting of the results of applying the given
      * function to the elements of given container.
      */

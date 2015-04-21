@@ -262,6 +262,16 @@ public final class Cont<A> implements $<Cont.µ, A> {
         }
 
         @Override
+        public <A> Cont<A> lazy(Supplier<A> a) {
+            return Cont.lazy(a);
+        }
+
+        @Override
+        public Cont<Unit> action(Runnable a) {
+            return Cont.action(a);
+        }
+
+        @Override
         public <A, B> Cont<B> map($<µ, A> a, Function<? super A, ? extends B> f) {
             return narrow(a).map(f);
         }
@@ -282,15 +292,23 @@ public final class Cont<A> implements $<Cont.µ, A> {
         }
     }
 
-    public static <A> Cont<A> narrow($<µ, A> value) {
-        return (Cont<A>)value;
-    }
-
     public static final µ tclass = new µ();
 
     @Override
     public µ getTypeClass() {
         return tclass;
+    }
+
+    public static <A> Cont<A> narrow($<µ, A> value) {
+        return (Cont<A>)value;
+    }
+
+    public static <R, A> R runCont(Function<? super A, ? extends R> k, $<µ, A> m) {
+        return narrow(m).run(k);
+    }
+
+    public static <A> A evalCont($<µ, A> m) {
+        return narrow(m).eval();
     }
 
     // Convenient static monad methods

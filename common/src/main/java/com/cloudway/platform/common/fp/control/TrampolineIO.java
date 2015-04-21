@@ -346,6 +346,16 @@ public abstract class TrampolineIO<A> implements $<TrampolineIO.µ, A> {
         }
 
         @Override
+        public <A> TrampolineIO<A> lazy(Supplier<A> a) {
+            return TrampolineIO.lazy(a::get);
+        }
+
+        @Override
+        public TrampolineIO<Unit> action(Runnable a) {
+            return TrampolineIO.action(a::run);
+        }
+
+        @Override
         public <A, B> TrampolineIO<B> map($<µ, A> a, Function<? super A, ? extends B> f) {
             return narrow(a).map(f);
         }
@@ -366,15 +376,19 @@ public abstract class TrampolineIO<A> implements $<TrampolineIO.µ, A> {
         }
     }
 
-    public static <A> TrampolineIO<A> narrow($<µ, A> value) {
-        return (TrampolineIO<A>)value;
-    }
-
     public static final µ tclass = new µ();
 
     @Override
     public µ getTypeClass() {
         return tclass;
+    }
+
+    public static <A> TrampolineIO<A> narrow($<µ, A> value) {
+        return (TrampolineIO<A>)value;
+    }
+
+    public static <A> IO<A> run($<µ, A> m) {
+        return narrow(m).run();
     }
 
     // Convenient static monad methods
