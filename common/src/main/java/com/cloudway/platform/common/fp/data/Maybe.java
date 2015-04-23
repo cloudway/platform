@@ -15,12 +15,12 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.control.Applicative;
+import com.cloudway.platform.common.fp.control.MonadPlus;
 import com.cloudway.platform.common.fp.control.ConditionCase;
 import com.cloudway.platform.common.fp.function.ExceptionFunction;
 import com.cloudway.platform.common.fp.function.ExceptionSupplier;
 import com.cloudway.platform.common.fp.$;
-import com.cloudway.platform.common.fp.control.Applicative;
-import com.cloudway.platform.common.fp.control.Monad;
 
 import static com.cloudway.platform.common.fp.control.Conditionals.Any;
 import static com.cloudway.platform.common.fp.control.Conditionals.with;
@@ -394,7 +394,7 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<
               .get());
     }
 
-    public static final class µ implements Monad<µ> {
+    public static final class µ implements MonadPlus<µ> {
         @Override
         public <A> Maybe<A> pure(A a) {
             return of(a);
@@ -427,8 +427,18 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<
         }
 
         @Override
-        public <A, B> $<µ, B> seqR($<µ, A> a, Supplier<? extends $<µ, B>> b) {
+        public <A, B> Maybe<B> seqR($<µ, A> a, Supplier<? extends $<µ, B>> b) {
             return narrow(a).isPresent() ? narrow(b.get()) : empty();
+        }
+
+        @Override
+        public <A> Maybe<A> mzero() {
+            return empty();
+        }
+
+        @Override
+        public <A> Maybe<A> mplus($<µ, A> a1, $<µ, A> a2) {
+            return narrow(a1).isAbsent() ? narrow(a2) : narrow(a1);
         }
     }
 
@@ -475,7 +485,7 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<
         return narrow(tclass.mapM_(xs, f));
     }
 
-    public static <A, S> Maybe<Seq<A>>
+    public static <A> Maybe<Seq<A>>
     filterM(Seq<A> xs, Function<? super A, ? extends $<µ, Boolean>> p) {
         return narrow(tclass.filterM(xs, p));
     }

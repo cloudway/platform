@@ -18,11 +18,11 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
+import com.cloudway.platform.common.fp.control.Applicative;
+import com.cloudway.platform.common.fp.control.MonadPlus;
 import com.cloudway.platform.common.fp.control.Trampoline;
 import com.cloudway.platform.common.fp.function.TriFunction;
 import com.cloudway.platform.common.fp.$;
-import com.cloudway.platform.common.fp.control.Applicative;
-import com.cloudway.platform.common.fp.control.Monad;
 
 /**
  * Provides an immutable finite vector, implemented as a finger tree. This
@@ -555,7 +555,7 @@ public interface Vector<A> extends $<Vector.µ, A>, Foldable<A>, Traversable<Vec
     /**
      * Typeclass definition for Vector.
      */
-    class µ implements Monad<µ> {
+    class µ implements MonadPlus<µ> {
         private µ() {}
 
         @Override
@@ -571,6 +571,16 @@ public interface Vector<A> extends $<Vector.µ, A>, Foldable<A>, Traversable<Vec
         @Override
         public <A, B> Vector<B> bind($<µ,A> a, Function<? super A, ? extends $<µ,B>> k) {
             return narrow(a).flatMap(x -> narrow(k.apply(x)));
+        }
+
+        @Override
+        public <A> Vector<A> mzero() {
+            return empty();
+        }
+
+        @Override
+        public <A> Vector<A> mplus($<µ,A> a1, $<µ,A> a2) {
+            return narrow(a1).append(narrow(a2));
         }
     }
 

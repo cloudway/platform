@@ -444,35 +444,11 @@ public final class Syntax {
     }
 
     /**
-     * Helper method to chain state actions together, discard intermediate result.
+     * Helper method to chain monad actions together, discard intermediate result.
      */
     public static <M extends Monad<M>, A, B> $<M, B>
     do_($<M, A> a, Supplier<? extends $<M, B>> b) {
         return a.getTypeClass().seqR(a, b);
-    }
-
-    /**
-     * Conditional execution of monad action.
-     */
-    public static <M extends Monad<M>> $<M, Unit>
-    when(boolean test, $<M, Unit> then) {
-        return test ? then : then.getTypeClass().pure(Unit.U);
-    }
-
-    /**
-     * The reverse of when.
-     */
-    public static <M extends Monad<M>> $<M, Unit>
-    unless(boolean test, $<M, Unit> orElse) {
-        return test ? orElse.getTypeClass().pure(Unit.U) : orElse;
-    }
-
-    /**
-     * Repeats the action infinitely.
-     */
-    public static <M extends Monad<M>, A, B> $<M, B>
-    forever($<M, A> a) {
-        return loop(r -> a.getTypeClass().seqR(a, r));
     }
 
     /**
@@ -487,6 +463,37 @@ public final class Syntax {
      */
     public static <A> Supplier<A> do_(Supplier<A> a) {
         return a;
+    }
+
+    /**
+     * Returns {@code pure ()} if the given guard condition is true, otherwise
+     * return {@code mzero}.
+     */
+    public static <F extends Alternative<F>> $<F, Unit> guard(F m, boolean b) {
+        return m.guard(b);
+    }
+
+    /**
+     * Conditional execution of monad action.
+     */
+    public static <F extends Applicative<F>> $<F, Unit>
+    when(boolean test, $<F, Unit> then) {
+        return test ? then : then.getTypeClass().pure(Unit.U);
+    }
+
+    /**
+     * The reverse of when.
+     */
+    public static <F extends Applicative<F>> $<F, Unit>
+    unless(boolean test, $<F, Unit> orElse) {
+        return test ? orElse.getTypeClass().pure(Unit.U) : orElse;
+    }
+
+    /**
+     * Repeats the action infinitely.
+     */
+    public static <M extends Monad<M>, A, B> $<M, B> forever($<M, A> a) {
+        return loop(r -> a.getTypeClass().seqR(a, r));
     }
 
     /**

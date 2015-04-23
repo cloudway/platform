@@ -21,14 +21,14 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.cloudway.platform.common.fp.control.Applicative;
+import com.cloudway.platform.common.fp.control.MonadPlus;
 import com.cloudway.platform.common.fp.function.ExceptionBiFunction;
 import com.cloudway.platform.common.fp.function.ExceptionFunction;
 import com.cloudway.platform.common.fp.function.ExceptionSupplier;
 import com.cloudway.platform.common.fp.function.ExceptionTriFunction;
 import com.cloudway.platform.common.fp.control.ConditionCase;
 import com.cloudway.platform.common.fp.$;
-import com.cloudway.platform.common.fp.control.Applicative;
-import com.cloudway.platform.common.fp.control.Monad;
 
 /**
  * A sequential, ordered, and potentially lazied list.
@@ -685,7 +685,7 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T
     /**
      * Typeclass definition for Seq.
      */
-    class µ implements Monad<µ> {
+    class µ implements MonadPlus<µ> {
         private µ() {}
 
         @Override
@@ -706,6 +706,16 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T
         @Override
         public <A> Seq<A> fail(String s) {
             return nil();
+        }
+
+        @Override
+        public <A> $<µ, A> mzero() {
+            return nil();
+        }
+
+        @Override
+        public <A> $<µ, A> mplus($<µ, A> a1, $<µ, A> a2) {
+            return narrow(a1).append(narrow(a2));
         }
     }
 
