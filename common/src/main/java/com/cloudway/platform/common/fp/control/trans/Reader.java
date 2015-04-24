@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -27,7 +27,7 @@ import com.cloudway.platform.common.fp.data.Unit;
  * @param <R> the environment type
  * @param <A> the computation type
  */
-public final class Reader<R, A> extends ReaderT.Monadic<Reader.µ<R>, R, Identity.µ, A> {
+public final class Reader<R, A> extends ReaderTC.Monadic<Reader.µ<R>, R, Identity.µ, A> {
     private Reader(Function<? super R, ? extends $<Identity.µ, A>> f) {
         super(f);
     }
@@ -65,7 +65,7 @@ public final class Reader<R, A> extends ReaderT.Monadic<Reader.µ<R>, R, Identit
      * Runs a reader and extracts the final value from it.
      */
     public A runReader(R r) {
-        return Identity.runIdentity(Reader.<R>tclass().runReader(this, r));
+        return Identity.run(Reader.<R>tclass().runReader(this, r));
     }
 
     /**
@@ -85,8 +85,8 @@ public final class Reader<R, A> extends ReaderT.Monadic<Reader.µ<R>, R, Identit
     /**
      * Execute a computation in a modified environment.
      */
-    public Reader<R, A> local(Function<R, R> f) {
-        return narrow(Reader.<R>tclass().local(this, f));
+    public static <R, A> Reader<R, A> local(Function<R, R> f, $<µ<R>, A> m) {
+        return narrow(Reader.<R>tclass().local(f, m));
     }
 
     /**
@@ -126,9 +126,9 @@ public final class Reader<R, A> extends ReaderT.Monadic<Reader.µ<R>, R, Identit
         return narrow(Reader.<R>tclass().seqR(this, next));
     }
 
-    // Monad
-    
-    public static final class µ<R> extends ReaderT<µ<R>, R, Identity.µ> {
+    // Type Class
+
+    public static final class µ<R> extends ReaderTC<µ<R>, R, Identity.µ> {
         private µ() {
             super(Identity.tclass);
         }
@@ -155,7 +155,7 @@ public final class Reader<R, A> extends ReaderT.Monadic<Reader.µ<R>, R, Identit
         return (Reader<R,A>)value;
     }
 
-    public static <R, A> A runReader($<µ<R>, A> m, R r) {
+    public static <R, A> A run($<µ<R>, A> m, R r) {
         return narrow(m).runReader(r);
     }
 

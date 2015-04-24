@@ -20,10 +20,12 @@ import com.google.common.collect.ImmutableList;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
+import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.trans.StateT;
 import com.cloudway.platform.common.fp.data.Fn;
-import com.cloudway.platform.common.fp.control.Cont;
-import com.cloudway.platform.common.fp.control.MonadState;
-import com.cloudway.platform.common.fp.control.StateCont;
+import com.cloudway.platform.common.fp.control.trans.Cont;
+import com.cloudway.platform.common.fp.control.trans.State;
+import com.cloudway.platform.common.fp.control.trans.StateCont;
 import com.cloudway.platform.common.fp.control.Trampoline;
 import com.cloudway.platform.common.fp.data.IntSeq;
 import com.cloudway.platform.common.fp.data.Maybe;
@@ -500,19 +502,20 @@ public class FunctionalTest
         static BigInteger fibmemo(int n) {
             PMap<Integer, BigInteger> memo = TreePMap.empty();
             memo = memo.put(1, BigInteger.ONE).put(2, BigInteger.ONE);
-            return fibmemo_(n).eval(memo);
+            return Trampoline.run(StateT.eval(fibmemo_(n), memo));
         }
 
-        private static MonadState<PMap<Integer, BigInteger>, BigInteger> fibmemo_(int n) {
-            return MonadState.narrow(
-                do_(MonadState.get(), memo ->
-                    memo.containsKey(n)
-                    ? MonadState.pure(memo.get(n))
-                    : do_(fibmemo_(n - 1), (BigInteger a) ->
-                      do_(fibmemo_(n - 2), (BigInteger b) ->
-                      let(a.add(b), (BigInteger c) ->
-                      do_(MonadState.modify(m -> m.put(n, c)),
-                      do_(MonadState.pure(c))))))));
+        private static final StateT<PMap<Integer, BigInteger>, Trampoline.µ> st = StateT.on(Trampoline.tclass);
+
+        private static $<StateT<PMap<Integer, BigInteger>, Trampoline.µ>, BigInteger> fibmemo_(int n) {
+            return do_(st.get(), memo ->
+                       memo.containsKey(n)
+                       ? st.pure(memo.get(n))
+                       : do_(fibmemo_(n - 1), a ->
+                         do_(fibmemo_(n - 2), b ->
+                         let(a.add(b), c ->
+                         do_(st.modify(m -> m.put(n, c)),
+                         do_(st.pure(c)))))));
         }
     }
 
@@ -695,14 +698,14 @@ public class FunctionalTest
 
     // This implementation is good because state transformation is transparency
     static class GoodCPS {
-        private final Seq<Function<Integer, MonadState<GoodCPS, Unit>>> queue;
+        private final Seq<Function<Integer, State<GoodCPS, Unit>>> queue;
         private final Seq<String> log;
 
         public GoodCPS() {
             this(Seq.nil(), Seq.nil());
         }
 
-        private GoodCPS(Seq<Function<Integer, MonadState<GoodCPS, Unit>>> queue, Seq<String> log) {
+        private GoodCPS(Seq<Function<Integer, State<GoodCPS, Unit>>> queue, Seq<String> log) {
             this.queue = queue;
             this.log = log;
         }
@@ -734,7 +737,7 @@ public class FunctionalTest
             return log;
         }
 
-        private GoodCPS save(Function<Integer, MonadState<GoodCPS, Unit>> f) {
+        private GoodCPS save(Function<Integer, State<GoodCPS, Unit>> f) {
             return new GoodCPS(queue.append(f), log);
         }
 

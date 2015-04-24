@@ -11,6 +11,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.control.trans.MonadIO;
 import com.cloudway.platform.common.fp.data.Either;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
@@ -339,7 +340,12 @@ public abstract class TrampolineIO<A> implements $<TrampolineIO.µ, A> {
 
     // Monad
 
-    public static final class µ implements Monad<µ> {
+    public static final class µ implements Monad<µ>, MonadIO<µ> {
+        @Override
+        public <A> TrampolineIO<A> liftIO($<IO.µ, A> m) {
+            return lift(IO.narrow(m));
+        }
+
         @Override
         public <A> TrampolineIO<A> pure(A a) {
             return TrampolineIO.pure(a);

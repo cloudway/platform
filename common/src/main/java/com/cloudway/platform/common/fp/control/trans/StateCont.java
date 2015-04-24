@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.Iterator;
 import java.util.function.BiFunction;
@@ -12,6 +12,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.control.Generator;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.Seq;
@@ -27,8 +28,8 @@ import com.cloudway.platform.common.fp.$;
  *
  * @see Cont
  */
-public final class StateCont<S, A> extends ContT.Monadic<StateCont.µ<S>, MonadState.µ<S>, A> {
-    private <R> StateCont(K<A, MonadState.µ<S>, R> k) {
+public final class StateCont<S, A> extends ContTC.Monadic<StateCont.µ<S>, State.µ<S>, A> {
+    private <R> StateCont(K<A, State.µ<S>, R> k) {
         super(k);
     }
 
@@ -38,16 +39,16 @@ public final class StateCont<S, A> extends ContT.Monadic<StateCont.µ<S>, MonadS
      * @param k the function that accept computation value and return final result
      * @return the final result of computation
      */
-    public <R> MonadState<S, R> run(Function<? super A, ? extends $<MonadState.µ<S>, R>> k) {
-        return MonadState.narrow(StateCont.<S>tclass().runCont(this, k));
+    public <R> State<S, R> run(Function<? super A, ? extends $<State.µ<S>, R>> k) {
+        return State.narrow(StateCont.<S>tclass().runCont(this, k));
     }
 
     /**
      * The result of running a CPS computation with 'return' as the final
      * continuation.
      */
-    public MonadState<S, A> eval() {
-        return run(MonadState::<S,A>pure);
+    public State<S, A> eval() {
+        return run(State::<S,A>pure);
     }
 
     /**
@@ -90,7 +91,7 @@ public final class StateCont<S, A> extends ContT.Monadic<StateCont.µ<S>, MonadS
      * @param m the state computation
      * @return the prompted stateful CPS computation
      */
-    public static <S, A> StateCont<S, A> lift($<MonadState.µ<S>, A> m) {
+    public static <S, A> StateCont<S, A> lift($<State.µ<S>, A> m) {
         return narrow(StateCont.<S>tclass().lift(m));
     }
 
@@ -144,8 +145,8 @@ public final class StateCont<S, A> extends ContT.Monadic<StateCont.µ<S>, MonadS
      * @param f the function that transform the result of computation
      * @return a continuation applying the transfer function
      */
-    public <R> StateCont<S, A> mapCont(Function<MonadState<S, R>, ? extends $<MonadState.µ<S>, R>> f) {
-        return narrow(StateCont.<S>tclass().<R,A>mapCont(this, r -> f.apply(MonadState.narrow(r))));
+    public <R> StateCont<S, A> mapCont(Function<State<S, R>, ? extends $<State.µ<S>, R>> f) {
+        return narrow(StateCont.<S>tclass().<R,A>mapCont(this, r -> f.apply(State.narrow(r))));
     }
 
     /**
@@ -156,8 +157,8 @@ public final class StateCont<S, A> extends ContT.Monadic<StateCont.µ<S>, MonadS
      * @return a continuation applying the transfer function
      */
     public <B, R> StateCont<S, B>
-    withCont(Function<Function<? super B, ? extends $<MonadState.µ<S>, R>>,
-                      Function<? super A, ? extends $<MonadState.µ<S>, R>>> f) {
+    withCont(Function<Function<? super B, ? extends $<State.µ<S>, R>>,
+                      Function<? super A, ? extends $<State.µ<S>, R>>> f) {
         return narrow(StateCont.<S>tclass().withCont(this, f));
     }
 
@@ -165,7 +166,7 @@ public final class StateCont<S, A> extends ContT.Monadic<StateCont.µ<S>, MonadS
      * Fetch the current value of the state within the monad.
      */
     public static <S> StateCont<S, S> get() {
-        return lift(MonadState.get());
+        return lift(State.get());
     }
 
     /**
@@ -179,14 +180,14 @@ public final class StateCont<S, A> extends ContT.Monadic<StateCont.µ<S>, MonadS
      * Sets the state within the monad.
      */
     public static <S> StateCont<S, Unit> put(S s) {
-        return lift(MonadState.put(s));
+        return lift(State.put(s));
     }
 
     /**
      * Updates the state to the result of applying a function to the current state.
      */
     public static <S> StateCont<S, Unit> modify(Function<S, S> f) {
-        return lift(MonadState.modify(f));
+        return lift(State.modify(f));
     }
 
     /**
@@ -241,21 +242,53 @@ public final class StateCont<S, A> extends ContT.Monadic<StateCont.µ<S>, MonadS
      * and passes it to the given function.
      */
     public static <S, A, R> StateCont<S, A>
-    shift(Function<Function<A, MonadState<S, R>>, ? extends $<µ<S>, R>> f) {
+    shift(Function<Function<A, State<S, R>>, ? extends $<µ<S>, R>> f) {
         return narrow(StateCont.<S>tclass().<R, A>shift(k ->
-            f.apply(a -> MonadState.narrow(k.apply(a)))));
+            f.apply(a -> State.narrow(k.apply(a)))));
     }
 
-    // Monad
+    // Type Class
 
-    public static class µ<S> extends ContT<µ<S>, MonadState.µ<S>> {
+    public static class µ<S> extends ContTC<µ<S>, State.µ<S>> {
         private µ() {
-            super(MonadState.tclass());
+            super(State.tclass());
         }
 
         @Override
-        protected <R, A> StateCont<S, A> $(K<A, MonadState.µ<S>, R> k) {
+        protected <R, A> StateCont<S, A> $(K<A, State.µ<S>, R> k) {
             return new StateCont<>(k);
+        }
+
+        public StateCont<S, S> get() {
+            return StateCont.get();
+        }
+
+        public StateCont<S, Unit> put(S s) {
+            return StateCont.put(s);
+        }
+
+        public StateCont<S, Unit> modify(Function<S, S> f) {
+            return StateCont.modify(f);
+        }
+
+        public <A> Generator<A> generator(S s, $<µ<S>, A> k) {
+            return StateCont.generator(s, k);
+        }
+
+        public <A> StateCont<S, A> yield(A a) {
+            return StateCont.yield(a);
+        }
+
+        public <A> StateCont<S, A> yieldFrom(Generator<A> g) {
+            return StateCont.yieldFrom(g);
+        }
+
+        public <A> StateCont<S, Unit> sendTo(Generator.Channel<A> target, A value) {
+            return StateCont.sendTo(target, value);
+        }
+
+        public <A> StateCont<S, A> finish() {
+            return StateCont.finish();
         }
     }
 
@@ -275,12 +308,12 @@ public final class StateCont<S, A> extends ContT.Monadic<StateCont.µ<S>, MonadS
         return (StateCont<S,A>)value;
     }
 
-    public static <S, A, R> MonadState<S, R> runCont(
-            Function<? super A, ? extends $<MonadState.µ<S>, R>> f, $<µ<S>, A> m) {
+    public static <S, A, R> State<S, R>
+    run(Function<? super A, ? extends $<State.µ<S>, R>> f, $<µ<S>, A> m) {
         return narrow(m).run(f);
     }
 
-    public static <S, A> MonadState<S, A> evalCont($<µ<S>, A> m) {
+    public static <S, A> State<S, A> eval($<µ<S>, A> m) {
         return narrow(m).eval();
     }
 
@@ -339,9 +372,9 @@ public final class StateCont<S, A> extends ContT.Monadic<StateCont.µ<S>, MonadS
     private static class Yield<S, A> {
         final A result;
         final S state;
-        final Function<A, MonadState<S, Maybe<Yield<S, A>>>> cont;
+        final Function<A, State<S, Maybe<Yield<S, A>>>> cont;
 
-        Yield(A a, S s, Function<A, MonadState<S, Maybe<Yield<S, A>>>> k) {
+        Yield(A a, S s, Function<A, State<S, Maybe<Yield<S, A>>>> k) {
             result = a;
             state = s;
             cont = k;

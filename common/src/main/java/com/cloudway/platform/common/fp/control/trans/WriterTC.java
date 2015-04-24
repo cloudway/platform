@@ -4,38 +4,29 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Monad;
 import com.cloudway.platform.common.fp.data.Monoid;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
 
 /**
- * The Writer monad adds collection of outputs (such as a count or string
- * output) to a given monad.
- *
- * <p>This monad transformer provides only limited access to the output
- * during the computation. For more general access, use {@link StateT}
- * instead.
+ * The {@link WriterT} monad typeclass definition.
  *
  * @param <T> the writer monad typeclass
  * @param <W> the writer output type
  * @param <M> the inner monad typeclass
  */
-public abstract class WriterT<T extends WriterT<T,W,M>, W, M extends Monad<M>>
-    implements Monad<T>, MonadTrans<T, M>
+public abstract class WriterTC<T, W, M extends Monad<M>>
+    implements MonadTrans<T, M>, MonadWriter<T, W>
 {
     /**
-     * The monadic datatype that encapsulate the writer outputs.
-     *
-     * @param <T> the writer monad typeclass
-     * @param <W> the writer output type
-     * @param <M> the inner monad typeclass
-     * @param <A> the computation type
+     * The monadic data that encapsulate the writer outputs.
      */
     public static abstract class Monadic<T, W, M, A> implements $<T, A> {
         private final $<M, Tuple<A, W>> value;
@@ -57,7 +48,7 @@ public abstract class WriterT<T extends WriterT<T,W,M>, W, M extends Monad<M>>
      * @param wm the {@link Monoid} used to collect outputs
      * @param nm the inner monad
      */
-    protected WriterT(Monoid<W> wm, M nm) {
+    protected WriterTC(Monoid<W> wm, M nm) {
         this.wm = wm;
         this.nm = nm;
     }
@@ -70,13 +61,6 @@ public abstract class WriterT<T extends WriterT<T,W,M>, W, M extends Monad<M>>
     // helper method to construct a raw (result, output) pair.
     private <A> $<M, Tuple<A, W>> raw(A a, W w) {
         return nm.pure(Tuple.of(a, w));
-    }
-
-    /**
-     * Construct a writer computation from a (result, output) pair.
-     */
-    public <A> $<T, A> writer(Tuple<A, W> t) {
-        return $(nm.pure(t));
     }
 
     /**
@@ -173,8 +157,17 @@ public abstract class WriterT<T extends WriterT<T,W,M>, W, M extends Monad<M>>
     }
 
     /**
+     * Embeds a simple writer action.
+     */
+    @Override
+    public <A> $<T, A> writer(Tuple<A, W> t) {
+        return $(nm.pure(t));
+    }
+
+    /**
      * An action that produces the output.
      */
+    @Override
     public $<T, Unit> tell(W w) {
         return $(raw(Unit.U, w));
     }
@@ -183,6 +176,7 @@ public abstract class WriterT<T extends WriterT<T,W,M>, W, M extends Monad<M>>
      * An action that executes the given action and adds its output to the
      * value of the computation.
      */
+    @Override
     public <A> $<T, Tuple<A, W>> listen($<T, A> m) {
         return $(nm.bind(runWriter(m), t -> t.as((a, w) -> raw(Tuple.of(a, w), w))));
     }
@@ -191,7 +185,8 @@ public abstract class WriterT<T extends WriterT<T,W,M>, W, M extends Monad<M>>
      * An action that executes the given action and adds the result of applying
      * given function to the output to the value of the computation.
      */
-    public <A, B> $<T, Tuple<A, B>> listens($<T, A> m, Function<? super W, ? extends B> f) {
+    @Override
+    public <A, B> $<T, Tuple<A, B>> listens(Function<? super W, ? extends B> f, $<T, A> m) {
         return $(nm.bind(runWriter(m), t -> t.as((a, w) -> raw(Tuple.of(a, f.apply(w)), w))));
     }
 
@@ -199,6 +194,7 @@ public abstract class WriterT<T extends WriterT<T,W,M>, W, M extends Monad<M>>
      * An action that executes the given action, which returns a value and a
      * function, and returns the value, applying the function to the output.
      */
+    @Override
     public <A> $<T, A> pass($<T, Tuple<A, Function<W, W>>> m) {
         return $(nm.bind(runWriter(m), t -> t.as((af, w) -> af.as((a, f) -> raw(a, f.apply(w))))));
     }
@@ -207,38 +203,24 @@ public abstract class WriterT<T extends WriterT<T,W,M>, W, M extends Monad<M>>
      * An action that executes the given action and applies the given function
      * to its output, leaving the return value unchanged.
      */
-    public <A> $<T, A> censor($<T, A> m, Function<W, W> f) {
+    @Override
+    public <A> $<T, A> censor(Function<W, W> f, $<T, A> m) {
         return $(nm.bind(runWriter(m), t -> t.as((a, w) -> raw(a, f.apply(w)))));
     }
 
-    // Monad Stacking
+    // Lifting other operations
 
-    /**
-     * Stack writer monad on another monad.
-     *
-     * @param wm the monoid used to collect output
-     * @param nm the inner monad
-     * @return a stacked writer monad
-     */
-    public static <W, M extends Monad<M>> On<W, M> on(Monoid<W> wm, M nm) {
-        return new On<>(wm, nm);
+    <W1, A> $<T, Tuple<A, W1>> liftListen(WriterTC<M, W1, ?> wt, $<T, A> m) {
+        return $(wt.bind(wt.listen(runWriter(m)), (Tuple<Tuple<A, W>, W1> t) ->
+            t.as((a, w) -> wt.pure(a.mapFirst(r -> Tuple.of(r, w))))));
     }
 
-    /**
-     * The stacked writer monad typeclass.
-     */
-    public static final class On<W, M extends Monad<M>> extends WriterT<On<W,M>, W, M> {
-        private On(Monoid<W> wm, M nm) {
-            super(wm, nm);
-        }
+    <W1, A> $<T, A> liftPass(WriterTC<M, W1, ?> wt, $<T, Tuple<A, Function<W1, W1>>> m) {
+        return $(wt.pass(wt.bind(runWriter(m), (Tuple<Tuple<A, Function<W1, W1>>, W> t) ->
+            t.as((a, w) -> wt.pure(a.mapFirst(r -> Tuple.of(r, w)))))));
+    }
 
-        @Override
-        protected <A> $<On<W,M>, A> $($<M, Tuple<A, W>> value) {
-            return new Monadic<On<W,M>, W, M, A>(value) {
-                @Override public On<W,M> getTypeClass() {
-                    return On.this;
-                }
-            };
-        }
+    <E, A> $<T, A> liftCatch(ExceptTC<M, E, ?> et, Function<? super E, ? extends $<T, A>> h, $<T, A> m) {
+        return $(et.catchE(e -> runWriter(h.apply(e)), runWriter(m)));
     }
 }

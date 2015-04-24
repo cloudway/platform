@@ -19,10 +19,10 @@ import java.util.function.Supplier;
 import java.util.stream.Collector;
 import static java.util.Objects.requireNonNull;
 
-import com.cloudway.platform.common.fp.control.Cont;
+import com.cloudway.platform.common.fp.control.trans.Cont;
 import com.cloudway.platform.common.fp.control.Trampoline;
-import static com.cloudway.platform.common.fp.control.Cont.generator;
-import static com.cloudway.platform.common.fp.control.Cont.yield;
+import static com.cloudway.platform.common.fp.control.trans.Cont.generator;
+import static com.cloudway.platform.common.fp.control.trans.Cont.yield;
 import static com.cloudway.platform.common.fp.control.Trampoline.suspend;
 
 /**

@@ -4,34 +4,30 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Monad;
 import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
 
 /**
- * An abstract state transformer monad.
+ * The {@link StateT} typeclass definition.
  *
  * @param <T> the state monad typeclass
  * @param <S> the state type
  * @param <M> the inner monad typeclass
  */
-public abstract class StateT<T extends StateT<T,S,M>, S, M extends Monad<M>>
-    implements Monad<T>, MonadTrans<T, M>
+public abstract class StateTC<T, S, M extends Monad<M>>
+    implements MonadTrans<T, M>, MonadState<T, S>
 {
     /**
-     * The monadic datatype that encapsulate a state transfer function. This
+     * The monadic data that encapsulate a state transfer function. This
      * class may be overridden by concrete state transformer monad.
-     *
-     * @param <T> the state monad typeclass
-     * @param <S> the state type
-     * @param <M> the inner monad typeclass
-     * @param <A> the computation value type
      */
     public static abstract class Monadic<T, S, M, A> implements $<T, A> {
         /**
@@ -54,7 +50,7 @@ public abstract class StateT<T extends StateT<T,S,M>, S, M extends Monad<M>>
      *
      * @param nm the inner monad
      */
-    protected StateT(M nm) {
+    protected StateTC(M nm) {
         this.nm = nm;
     }
 
@@ -69,6 +65,7 @@ public abstract class StateT<T extends StateT<T,S,M>, S, M extends Monad<M>>
      * @param f the state transfer function
      * @return the state transformer monad
      */
+    @Override
     public <A> $<T, A> state(Function<? super S, Tuple<A,S>> f) {
         return $(s -> nm.pure(f.apply(s)));
     }
@@ -214,22 +211,15 @@ public abstract class StateT<T extends StateT<T,S,M>, S, M extends Monad<M>>
     /**
      * Fetch the current value of the state within the monad.
      */
+    @Override
     public $<T, S> get() {
         return $(s -> nm.pure(Tuple.of(s, s)));
     }
 
     /**
-     * Fetch the current value of the state and bind the value to the given function.
-     *
-     * <p>Equivalent to: {@code get().bind(f)}</p>
-     */
-    public <B> $<T, B> get(Function<? super S, ? extends $<T, B>> f) {
-        return $(s -> runState(f.apply(s), s));
-    }
-
-    /**
      * Sets the state within the monad.
      */
+    @Override
     public $<T, Unit> put(S s) {
         return $(__ -> nm.pure(Tuple.of(Unit.U, s)));
     }
@@ -237,44 +227,40 @@ public abstract class StateT<T extends StateT<T,S,M>, S, M extends Monad<M>>
     /**
      * Update the state to the result of applying a function to the current state.
      */
+    @Override
     public $<T, Unit> modify(Function<S, S> f) {
         return $(s -> nm.pure(Tuple.of(Unit.U, f.apply(s))));
     }
 
     /**
+     * Fetch the current value of the state and bind the value to the given function.
+     */
+    @Override
+    public <A> $<T, A> get(Function<? super S, ? extends $<T, A>> f) {
+        return $(s -> runState(f.apply(s), s));
+    }
+
+    /**
      * Get a specific component of the state, using a projection function supplied.
      */
-    public <A> $<T, A> gets(Function<S, A> f) {
+    @Override
+    public <A> $<T, A> gets(Function<? super S, ? extends A> f) {
         return $(s -> nm.pure(Tuple.of(f.apply(s), s)));
     }
 
-    // Monad Stacking
+    // Lifting other operations
 
-    /**
-     * Stack monad on another monad.
-     *
-     * @param nm the inner monad
-     * @return a stacked monad
-     */
-    public static <S, M extends Monad<M>> On<S, M> on(M nm) {
-        return new On<>(nm);
+    <W, A> $<T, Tuple<A, W>> liftListen(WriterTC<M, W, ?> wt, $<T, A> m) {
+        return $(s -> wt.bind(wt.listen(runState(m, s)), (Tuple<Tuple<A, S>, W> t) ->
+            t.as((a, w) -> wt.pure(a.mapFirst(r -> Tuple.of(r, w))))));
     }
 
-    /**
-     * The stacked monad typeclass.
-     */
-    public static final class On<S, M extends Monad<M>> extends StateT<On<S,M>, S, M> {
-        private On(M nm) {
-            super(nm);
-        }
+    <W, A> $<T, A> liftPass(WriterTC<M, W, ?> wt, $<T, Tuple<A, Function<W, W>>> m) {
+        return $(s -> wt.pass(wt.bind(runState(m, s), (Tuple<Tuple<A, Function<W, W>>, S> t) ->
+            t.as((a, s1) -> wt.pure(a.mapFirst(r -> Tuple.of(r, s1)))))));
+    }
 
-        @Override
-        protected <A> $<On<S,M>, A> $(Function<S, $<M, Tuple<A, S>>> f) {
-            return new Monadic<On<S,M>, S, M, A>(f) {
-                @Override public On<S,M> getTypeClass() {
-                    return On.this;
-                }
-            };
-        }
+    <E, A> $<T, A> liftCatch(ExceptTC<M, E, ?> et, Function<? super E, ? extends $<T, A>> h, $<T, A> m) {
+        return $(s -> et.catchE(e -> runState(h.apply(e), s), runState(m, s)));
     }
 }

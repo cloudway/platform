@@ -4,35 +4,25 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.function.Function;
 
 import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Monad;
 import com.cloudway.platform.common.fp.data.Either;
+import com.cloudway.platform.common.fp.data.Fn;
+import com.cloudway.platform.common.fp.data.Tuple;
+
 import static com.cloudway.platform.common.fp.data.Either.left;
 import static com.cloudway.platform.common.fp.data.Either.right;
 
 /**
- * This monad transformer extends a monad with the ability throw exceptions.
- *
- * <p>A sequence of actions terminates normally, producing a value, only if
- * none of the actions in the sequence throws an exception. If one throws
- * an exception, the rest of the sequence is skipped and the composite action
- * exists with that exception.
- *
- * <p>If the value of the exception is not required, the variant in {@link
- * MaybeT} may be used instead.
- *
- * @param <T> the exception monad typeclass
- * @param <E> the exception type
- * @param <M> the inner monad typeclass
+ * The {@link ExceptT} monad typeclass definition.
  */
-public abstract class ExceptT<T extends ExceptT<T, E, M>, E, M extends Monad<M>>
-    implements Monad<T>, MonadTrans<T, M>
-{
+public abstract class ExceptTC<T, E, M extends Monad<M>> implements MonadTrans<T, M> {
     /**
-     * The monadic datatype that encapsulate a exception computation.
+     * The monadic data that encapsulate an exception computation.
      */
     public static abstract class Monadic<T, E, M, A> implements $<T, A> {
         final $<M, Either<E, A>> value;
@@ -50,7 +40,7 @@ public abstract class ExceptT<T extends ExceptT<T, E, M>, E, M extends Monad<M>>
     /**
      * Construct a exception transformer monad typeclass.
      */
-    protected ExceptT(M nm) {
+    protected ExceptTC(M nm) {
         this.nm = nm;
     }
 
@@ -65,6 +55,13 @@ public abstract class ExceptT<T extends ExceptT<T, E, M>, E, M extends Monad<M>>
     @SuppressWarnings("unchecked")
     public <A> $<M, Either<E, A>> runExcept($<T, A> m) {
         return ((Monadic<T,E,M,A>)m).value;
+    }
+
+    /**
+     * Constructor for computations in the exception monad.
+     */
+    public <A> $<T, A> except(Either<E, A> m) {
+        return $(nm.pure(m));
     }
 
     /**
@@ -140,7 +137,7 @@ public abstract class ExceptT<T extends ExceptT<T, E, M>, E, M extends Monad<M>>
     public <A> $<T, A> catchE(Function<? super E, ? extends $<T, A>> h, $<T, A> m) {
         return $(nm.bind(runExcept(m), a ->
             a.either(l -> runExcept(h.apply(l)),
-                     r -> nm.pure(Either.<E, A>right(r)))));
+                     r -> nm.pure(Either.<E,A>right(r)))));
     }
 
     /**
@@ -159,7 +156,7 @@ public abstract class ExceptT<T extends ExceptT<T, E, M>, E, M extends Monad<M>>
     @Override
     public <A, B> $<T, B> bind($<T, A> m, Function<? super A, ? extends $<T, B>> k) {
         return $(nm.bind(runExcept(m), a ->
-            a.either(e -> nm.pure(Either.<E, B>left(e)),
+            a.either(e -> nm.pure(Either.<E,B>left(e)),
                      x -> runExcept(k.apply(x)))));
     }
 
@@ -176,30 +173,17 @@ public abstract class ExceptT<T extends ExceptT<T, E, M>, E, M extends Monad<M>>
                               x -> nm.pure(right(k.apply(x))))))));
     }
 
-    // Monad Stacking
+    // Lifting other operations
 
-    /**
-     * Stack exception monad on another monad.
-     */
-    public static <E, M extends Monad<M>> On<E, M> on(M nm) {
-        return new On<>(nm);
+    <W, A> $<T, Tuple<A, W>> liftListen(WriterTC<M, W, ?> wt, $<T, A> m) {
+        return $(wt.bind(wt.listen(runExcept(m)), (Tuple<Either<E, A>, W> t) ->
+            t.as((a, w) -> wt.pure(a.map(r -> Tuple.of(r, w))))));
     }
 
-    /**
-     * The stacked monad typeclass.
-     */
-    public static final class On<E, M extends Monad<M>> extends ExceptT<On<E,M>, E, M> {
-        private On(M nm) {
-            super(nm);
-        }
-
-        @Override
-        protected <A> $<On<E,M>, A> $($<M, Either<E, A>> value) {
-            return new Monadic<On<E,M>, E, M, A>(value) {
-                @Override public On<E,M> getTypeClass() {
-                    return On.this;
-                }
-            };
-        }
+    <W, A> $<T, A> liftPass(WriterTC<M, W, ?> wt, $<T, Tuple<A, Function<W, W>>> m) {
+        return $(wt.pass(wt.bind(runExcept(m), (Either<E, Tuple<A, Function<W, W>>> t) ->
+            wt.pure(t.<Tuple<Either<E,A>, Function<W,W>>>either(
+                l -> Tuple.of(left(l), Fn.id()),
+                r -> r.mapFirst(Either::right))))));
     }
 }

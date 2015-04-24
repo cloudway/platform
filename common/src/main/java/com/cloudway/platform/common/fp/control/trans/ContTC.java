@@ -4,31 +4,28 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Monad;
 import com.cloudway.platform.common.fp.data.Fn;
 
 /**
- * An abstract factory class for CPS transformer monad.
+ * The {@link ContT} monad typeclass definition.
  *
  * @param <T> the CPS monad typeclass
  * @param <M> the inner monad typeclass
  */
-public abstract class ContT<T extends ContT<T,M>, M extends Monad<M>>
-    implements Monad<T>, MonadTrans<T, M>
+public abstract class ContTC<T, M extends Monad<M>>
+    implements MonadTrans<T, M>
 {
     /**
-     * The monadic datatype that encapsulate a CPS transfer function. This class
+     * The monadic data that encapsulate a CPS transfer function. This class
      * may be overridden by concrete CPS transformer monad.
-     *
-     * @param <T> the CPS monad typeclass
-     * @param <M> the inner monad typeclass
-     * @param <A> the computation value type
      */
     public static abstract class Monadic<T, M, A> implements $<T, A> {
         /**
@@ -56,7 +53,7 @@ public abstract class ContT<T extends ContT<T,M>, M extends Monad<M>>
      *
      * @param nm the inner monad
      */
-    protected ContT(M nm) {
+    protected ContTC(M nm) {
         this.nm = nm;
     }
 
@@ -268,33 +265,10 @@ public abstract class ContT<T extends ContT<T,M>, M extends Monad<M>>
         return $((Function<A, $<M, R>> k) -> evalCont(f.apply(k)));
     }
 
-    // Monad Stacking
+    // Lifting other operations
 
-    /**
-     * Stack monad on another monad.
-     *
-     * @param nm the inner monad
-     * @return a stacked monad
-     */
-    public static <M extends Monad<M>> On<M> on(M nm) {
-        return new On<>(nm);
-    }
-
-    /**
-     * The stacked monad typeclass.
-     */
-    public static final class On<M extends Monad<M>> extends ContT<On<M>, M> {
-        private On(M nm) {
-            super(nm);
-        }
-
-        @Override
-        protected <R, A> $<On<M>, A> $(Monadic.K<A, M, R> f) {
-            return new Monadic<On<M>, M, A>(f) {
-                @Override public On<M> getTypeClass() {
-                    return On.this;
-                }
-            };
-        }
+    <R, A> $<T, A> liftLocal(ReaderTC<M, R, ?> rt, Function<R, R> f, $<T, A> m) {
+        return $(c -> rt.bind(rt.ask(), r ->
+            rt.local(f, runCont(m, a -> rt.local(Fn.pure(r), c.apply(a))))));
     }
 }

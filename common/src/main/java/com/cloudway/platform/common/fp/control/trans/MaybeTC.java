@@ -4,35 +4,28 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.function.Function;
 
 import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Monad;
+import com.cloudway.platform.common.fp.control.MonadPlus;
+import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.platform.common.fp.data.Tuple;
 
 /**
- * The {@code MaybeT} monad transformer extends a monad with the ability to
- * exit the computation without returning a value.
- *
- * <p>A sequence of actions produces a value only if all the actions in the
- * sequence do. If one exists, the rest of the sequence is skipped and the
- * composite action exits.
- *
- * <p>For a variant allowing a range of exception values, see {@link ExceptT}.
+ * The {@link MaybeT} monad typeclass definition.
  *
  * @param <T> the maybe monad typeclass
  * @param <M> the inner monad typeclass
  */
-public abstract class MaybeT<T extends MaybeT<T, M>, M extends Monad<M>>
+public abstract class MaybeTC<T, M extends Monad<M>>
     implements MonadPlus<T>, MonadTrans<T, M>
 {
     /**
-     * The monadic datatype that encapsulate a Maybe computation.
-     *
-     * @param <T> the maybe monad typeclass
-     * @param <M> the inner monad typeclass
-     * @param <A> the computation value type
+     * The monadic type that encapsulate a Maybe computation.
      */
     public static abstract class Monadic<T, M, A> implements $<T, A> {
         final $<M, Maybe<A>> value;
@@ -50,7 +43,7 @@ public abstract class MaybeT<T extends MaybeT<T, M>, M extends Monad<M>>
     /**
      * Construct a maybe transformer monad typeclass.
      */
-    protected MaybeT(M nm) {
+    protected MaybeTC(M nm) {
         this.nm = nm;
     }
 
@@ -130,7 +123,7 @@ public abstract class MaybeT<T extends MaybeT<T, M>, M extends Monad<M>>
      */
     @Override
     public <A, B> $<T, B> bind($<T, A> m, Function<? super A, ? extends $<T, B>> k) {
-        return $(nm.bind(runMaybe(m), v ->
+        return $(nm.bind(runMaybe(m), (Maybe<A> v) ->
             v.isPresent() ? runMaybe(k.apply(v.get()))
                           : nm.pure(Maybe.empty())));
     }
@@ -151,30 +144,20 @@ public abstract class MaybeT<T extends MaybeT<T, M>, M extends Monad<M>>
         return $(nm.bind(runMaybe(x), v -> v.isPresent() ? nm.pure(v) : runMaybe(y)));
     }
 
-    // Monad Stacking
+    // Lifting other operations
 
-    /**
-     * Stack maybe monad on another monad.
-     */
-    public static <M extends Monad<M>> On<M> on(M nm) {
-        return new On<>(nm);
+    <W, A> $<T, Tuple<A, W>> liftListen(WriterTC<M, W, ?> wt, $<T, A> m) {
+        return $(wt.map(wt.listen(runMaybe(m)), (Tuple<Maybe<A>, W> t) ->
+            t.as((a, w) -> a.map(r -> Tuple.of(r, w)))));
     }
 
-    /**
-     * The stacked monad typeclass.
-     */
-    public static final class On<M extends Monad<M>> extends MaybeT<On<M>, M> {
-        private On(M nm) {
-            super(nm);
-        }
+    <W, A> $<T, A> liftPass(WriterTC<M, W, ?> wt, $<T, Tuple<A, Function<W, W>>> m) {
+        return $(wt.pass(wt.map(runMaybe(m), (Maybe<Tuple<A, Function<W, W>>> a) ->
+            a.isPresent() ? Tuple.of(Maybe.of(a.get().first()), a.get().second())
+                          : Tuple.of(Maybe.empty(), Fn.id()))));
+    }
 
-        @Override
-        protected <A> $<On<M>, A> $($<M, Maybe<A>> value) {
-            return new Monadic<On<M>, M, A>(value) {
-                @Override public On<M> getTypeClass() {
-                    return On.this;
-                }
-            };
-        }
+    <E, A> $<T, A> liftCatch(ExceptTC<M, E, ?> et, Function<? super E, ? extends $<T, A>> h, $<T, A> m) {
+        return $(et.catchE(e -> runMaybe(h.apply(e)), runMaybe(m)));
     }
 }

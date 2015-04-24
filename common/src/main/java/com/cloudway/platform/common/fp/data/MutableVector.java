@@ -19,11 +19,11 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
-import com.cloudway.platform.common.fp.control.Cont;
+import com.cloudway.platform.common.fp.control.trans.Cont;
 import com.cloudway.platform.common.fp.io.IO;
 
-import static com.cloudway.platform.common.fp.control.Cont.generator;
-import static com.cloudway.platform.common.fp.control.Cont.yield;
+import static com.cloudway.platform.common.fp.control.trans.Cont.generator;
+import static com.cloudway.platform.common.fp.control.trans.Cont.yield;
 
 public class MutableVector<A> extends AbstractList<A>
     implements Deque<A>, java.io.Serializable

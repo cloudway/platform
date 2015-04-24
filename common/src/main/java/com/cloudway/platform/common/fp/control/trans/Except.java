@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -25,7 +25,7 @@ import com.cloudway.platform.common.fp.data.Unit;
  * @param <E> the exception type
  * @param <A> the computation value type
  */
-public final class Except<E, A> extends ExceptT.Monadic<Except.µ<E>, E, Identity.µ, A> {
+public final class Except<E, A> extends ExceptTC.Monadic<Except.µ<E>, E, Identity.µ, A> {
     private Except($<Identity.µ, Either<E, A>> value) {
         super(value);
     }
@@ -67,7 +67,7 @@ public final class Except<E, A> extends ExceptT.Monadic<Except.µ<E>, E, Identit
      * an exception.
      */
     public Either<E, A> runExcept() {
-        return Identity.runIdentity(Except.<E>tclass().runExcept(this));
+        return Identity.run(Except.<E>tclass().runExcept(this));
     }
 
     /**
@@ -129,9 +129,9 @@ public final class Except<E, A> extends ExceptT.Monadic<Except.µ<E>, E, Identit
         return narrow(Except.<E>tclass().seqR(this, next));
     }
     
-    // Monad 
+    // Type Class
     
-    public static final class µ<E> extends ExceptT<µ<E>, E, Identity.µ> {
+    public static final class µ<E> extends ExceptTC<µ<E>, E, Identity.µ> {
         public µ() {
             super(Identity.tclass);
         }

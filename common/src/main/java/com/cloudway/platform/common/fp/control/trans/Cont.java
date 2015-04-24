@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.Iterator;
 import java.util.function.BiFunction;
@@ -13,6 +13,8 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.control.Generator;
+import com.cloudway.platform.common.fp.control.Monad;
 import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Maybe;
@@ -290,6 +292,26 @@ public final class Cont<A> implements $<Cont.µ, A> {
         public <A, B> Cont<B> seqR($<µ, A> a, Supplier<? extends $<µ, B>> b) {
             return narrow(a).then(b);
         }
+
+        public <A> Generator<A> generator($<µ, A> k) {
+            return Cont.generator(k);
+        }
+
+        public <A> Cont<A> yield(A a) {
+            return Cont.yield(a);
+        }
+
+        public <A> Cont<A> yieldFrom(Generator<A> g) {
+            return Cont.yieldFrom(g);
+        }
+
+        public <A> Cont<Unit> sendTo(Generator.Channel<A> target, A value) {
+            return Cont.sendTo(target, value);
+        }
+
+        public <A> Cont<A> finish() {
+            return Cont.finish();
+        }
     }
 
     public static final µ tclass = new µ();
@@ -303,11 +325,11 @@ public final class Cont<A> implements $<Cont.µ, A> {
         return (Cont<A>)value;
     }
 
-    public static <R, A> R runCont(Function<? super A, ? extends R> k, $<µ, A> m) {
+    public static <R, A> R run(Function<? super A, ? extends R> k, $<µ, A> m) {
         return narrow(m).run(k);
     }
 
-    public static <A> A evalCont($<µ, A> m) {
+    public static <A> A eval($<µ, A> m) {
         return narrow(m).eval();
     }
 

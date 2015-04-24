@@ -4,12 +4,14 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.function.Function;
-
 import com.cloudway.platform.common.fp.$;
 import com.cloudway.platform.common.fp.control.Monad;
+import com.cloudway.platform.common.fp.data.Unit;
+import com.cloudway.platform.common.fp.io.IO;
+import com.cloudway.platform.common.fp.io.VoidIO;
 
 /**
  * The class of monad transformers.  Instances should satisfy the following
@@ -20,7 +22,7 @@ import com.cloudway.platform.common.fp.control.Monad;
  * lift (m >>= f) = lift m >= (lift . f)
  * }</pre>
  */
-public interface MonadTrans<T, M extends Monad<M>> {
+public interface MonadTrans<T, M extends Monad<M>> extends Monad<T>, MonadIO<T> {
     /**
      * Returns the inner monad typeclass.
      *
@@ -44,5 +46,19 @@ public interface MonadTrans<T, M extends Monad<M>> {
      */
     default <A> $<T, A> lift(Function<? super M, ? extends $<M, A>> f) {
         return lift(f.apply(inner()));
+    }
+
+    /**
+     * Lift a computation from the IO monad.
+     */
+    @Override
+    @SuppressWarnings("unchecked")
+    default <A> $<T, A> liftIO($<IO.µ, A> m) {
+        M nm = inner();
+        if (nm instanceof MonadIO) {
+            return lift(((MonadIO<M>)nm).liftIO(m));
+        } else {
+            throw new UnsupportedOperationException("liftIO: unsupported operation");
+        }
     }
 }

@@ -15,6 +15,7 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import com.cloudway.platform.common.fp.control.Conditionals;
+import com.cloudway.platform.common.fp.control.trans.MonadIO;
 import com.cloudway.platform.common.fp.control.TrampolineIO;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.PMap;
@@ -115,7 +116,12 @@ public interface IO<A> extends $<IO.µ, A> {
 
     // Monad
 
-    interface µ extends Monad<µ> {
+    interface µ extends Monad<µ>, MonadIO<µ> {
+        @Override
+        default <A> IO<A> liftIO($<IO.µ, A> m) {
+            return narrow(m);
+        }
+
         @Override
         default <A> IO<A> pure(A a) {
             return IO.pure(a);

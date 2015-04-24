@@ -4,12 +4,13 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.cloudway.platform.common.fp.control.TrampolineIO;
 import com.cloudway.platform.common.fp.data.Foldable;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Traversable;
@@ -22,10 +23,10 @@ import com.cloudway.platform.common.fp.$;
 /**
  * The stateful IO monad.
  *
- * @param <A> the type of result of computation
  * @param <S> the type of state passing to the computation
+ * @param <A> the type of result of computation
  */
-public final class StateIO<S, A> extends StateT.Monadic<StateIO.µ<S>, S, TrampolineIO.µ, A> {
+public final class StateIO<S, A> extends StateTC.Monadic<StateIO.µ<S>, S, TrampolineIO.µ, A> {
     private StateIO(Function<S, $<TrampolineIO.µ, Tuple<A,S>>> f) {
         super(f);
     }
@@ -161,8 +162,9 @@ public final class StateIO<S, A> extends StateT.Monadic<StateIO.µ<S>, S, Trampo
      * Map both the return value and final state of computation using the
      * given function.
      */
-    public <B> StateIO<S, B> mapState(Function<Tuple<A, S>, Tuple<B, S>> f) {
-        return narrow(StateIO.<S>tclass().mapState(this, t -> TrampolineIO.narrow(t).map(f)));
+    public <B> StateIO<S, B> mapState(Function<IO<Tuple<A, S>>, IO<Tuple<B, S>>> f) {
+        return narrow(StateIO.<S>tclass().mapState(this, a ->
+            TrampolineIO.lift(f.apply(TrampolineIO.run(a)))));
     }
 
     /**
@@ -203,13 +205,13 @@ public final class StateIO<S, A> extends StateT.Monadic<StateIO.µ<S>, S, Trampo
     /**
      * Get specific component of the state, using a projection function applied.
      */
-    public static <S, A> StateIO<S, A> gets(Function<S, A> f) {
+    public static <S, A> StateIO<S, A> gets(Function<? super S, ? extends A> f) {
         return narrow(StateIO.<S>tclass().gets(f));
     }
 
-    // Monad
+    // Type Class
 
-    public static final class µ<S> extends StateT<µ<S>, S, TrampolineIO.µ> {
+    public static final class µ<S> extends StateTC<µ<S>, S, TrampolineIO.µ> {
         private µ() {
             super(TrampolineIO.tclass);
         }
@@ -236,15 +238,15 @@ public final class StateIO<S, A> extends StateT.Monadic<StateIO.µ<S>, S, Trampo
         return (StateIO<S,A>)value;
     }
 
-    public static <S, A> IO<Tuple<A, S>> runState($<µ<S>, A> m, S s) {
+    public static <S, A> IO<Tuple<A, S>> run($<µ<S>, A> m, S s) {
         return narrow(m).run(s);
     }
 
-    public static <S, A> IO<A> evalState($<µ<S>, A> m, S s) {
+    public static <S, A> IO<A> eval($<µ<S>, A> m, S s) {
         return narrow(m).eval(s);
     }
 
-    public static <S, A> IO<S> execState($<µ<S>, A> m, S s) {
+    public static <S, A> IO<S> exec($<µ<S>, A> m, S s) {
         return narrow(m).exec(s);
     }
 

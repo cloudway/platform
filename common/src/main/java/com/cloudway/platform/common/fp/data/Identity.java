@@ -55,7 +55,7 @@ public final class Identity<A> implements $<Identity.µ, A>, Foldable<A>, Traver
      * @param m a generic {@code Identity} monad.
      * @return the wrapped value in the given generic {@code Identity} monad
      */
-    public static <A> A runIdentity($<µ, A> m) {
+    public static <A> A run($<µ, A> m) {
         return narrow(m).get();
     }
 

@@ -12,16 +12,16 @@ import java.util.function.Function;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-import com.cloudway.platform.common.fp.control.Cont;
+import com.cloudway.platform.common.fp.control.trans.Cont;
 import com.cloudway.platform.common.fp.control.Generator;
-import com.cloudway.platform.common.fp.control.StateCont;
+import com.cloudway.platform.common.fp.control.trans.StateCont;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
 import com.cloudway.platform.common.fp.$;
 
 import static com.cloudway.platform.common.fp.control.Conditionals.as;
-import static com.cloudway.platform.common.fp.control.StateCont.callCC;
+import static com.cloudway.platform.common.fp.control.trans.StateCont.callCC;
 import static com.cloudway.platform.common.fp.control.Syntax.do_;
 import static com.cloudway.platform.common.fp.control.Syntax.forever;
 import static com.cloudway.platform.common.fp.control.Syntax.when;

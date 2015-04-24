@@ -4,13 +4,14 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Monad;
 import com.cloudway.platform.common.fp.data.Fn;
 import com.cloudway.platform.common.fp.data.Monoid;
 import com.cloudway.platform.common.fp.data.Triple;
@@ -18,8 +19,7 @@ import com.cloudway.platform.common.fp.data.Tuple;
 import com.cloudway.platform.common.fp.data.Unit;
 
 /**
- * A monad transformer that combines {@link ReaderT}, {@link WriterT} and
- * {@link StateT}.
+ * The {@link RWST} monad typeclass definition.
  *
  * @param <T> the monad typeclass
  * @param <R> the reader input type
@@ -27,18 +27,11 @@ import com.cloudway.platform.common.fp.data.Unit;
  * @param <S> the state type
  * @param <M> the inner monad typeclass
  */
-public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M>>
-    implements Monad<T>, MonadTrans<T, M>
+public abstract class RWSTC<T, R, W, S, M extends Monad<M>>
+    implements MonadTrans<T, M>, MonadReader<T, R>, MonadWriter<T, W>, MonadState<T, S>
 {
     /**
-     * The monadic datatype that encapsulate the computation transformation.
-     *
-     * @param <T> the monad typeclass
-     * @param <R> the reader input type
-     * @param <W> the writer output type
-     * @param <S> the state type
-     * @param <M> the inner monad typeclass
-     * @param <A> the computation type
+     * The monadic data that encapsulate the computation transformation.
      */
     public static abstract class Monadic<T, R, W, S, M, A> implements $<T, A> {
         private final BiFunction<? super R, ? super S, ? extends $<M, Triple<A, S, W>>> rwsf;
@@ -60,7 +53,7 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
      * @param wm the {@link Monoid} used to collect outputs
      * @param nm the inner monad
      */
-    protected RWST(Monoid<W> wm, M nm) {
+    protected RWSTC(Monoid<W> wm, M nm) {
         this.wm = wm;
         this.nm = nm;
     }
@@ -188,15 +181,17 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
     // Reader operations
 
     /**
-     * Construct a computation in the reader monad (equivalent to {@link #asks}).
+     * Retrieve a function of the current environment.
      */
+    @Override
     public <A> $<T, A> reader(Function<? super R, ? extends A> f) {
-        return asks(f);
+        return $((r, s) -> raw(f.apply(r), s, wm.empty()));
     }
 
     /**
      * Fetch the value of the environment.
      */
+    @Override
     public $<T, R> ask() {
         return $((r, s) -> raw(r, s, wm.empty()));
     }
@@ -204,22 +199,17 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
     /**
      * Execute a computation in a modified environment.
      */
-    public <A> $<T, A> local($<T, A> m, Function<R, R> f) {
+    @Override
+    public <A> $<T, A> local(Function<R, R> f, $<T, A> m) {
         return $((r, s) -> runRWS(m, f.apply(r), s));
-    }
-
-    /**
-     * Retrieve a function of the current environment.
-     */
-    public <A> $<T, A> asks(Function<? super R, ? extends A> f) {
-        return $((r, s) -> raw(f.apply(r), s, wm.empty()));
     }
 
     // Writer operations
 
     /**
-     * Construct a writer computation from a (result, output) pair.
+     * Embeds a simple writer action.
      */
+    @Override
     public <A> $<T, A> writer(Tuple<A, W> p) {
         return $((r, s) -> raw(p.first(), s, p.second()));
     }
@@ -227,6 +217,7 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
     /**
      * An action that produces the given output.
      */
+    @Override
     public $<T, Unit> tell(W w) {
         return $((r, s) -> raw(Unit.U, s, w));
     }
@@ -235,6 +226,7 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
      * An action that executes the given action and adds its output to the
      * value of the computation.
      */
+    @Override
     public <A> $<T, Tuple<A, W>> listen($<T, A> m) {
         return $((r, s) -> nm.bind(runRWS(m, r, s), t ->
             t.as((a, s1, w) -> raw(Tuple.of(a, w), s1, w))));
@@ -244,7 +236,8 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
      * An action that executes the given action and adds the result of applying
      * given function to the output to the value of the computation.
      */
-    public <A, B> $<T, Tuple<A, B>> listens($<T, A> m, Function<? super W, ? extends B> f) {
+    @Override
+    public <A, B> $<T, Tuple<A, B>> listens(Function<? super W, ? extends B> f, $<T, A> m) {
         return $((r, s) -> nm.bind(runRWS(m, r, s), t ->
             t.as((a, s1, w) -> raw(Tuple.of(a, f.apply(w)), s1, w))));
     }
@@ -253,6 +246,7 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
      * An action that executes the given action, which returns a value and a
      * function, and returns the value, applying the function to the output.
      */
+    @Override
     public <A> $<T, A> pass($<T, Tuple<A, Function<W, W>>> m) {
         return $((r, s) -> nm.bind(runRWS(m, r, s), t ->
             t.as((af, s1, w) -> af.as((A a, Function<W, W> f) -> raw(a, s1, f.apply(w))))));
@@ -262,7 +256,8 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
      * An action that executes the given action and applies the given function
      * to its output, leaving the return value unchanged.
      */
-    public <A> $<T, A> censor($<T, A> m, Function<W, W> f) {
+    @Override
+    public <A> $<T, A> censor(Function<W, W> f, $<T, A> m) {
         return $((r, s) -> nm.bind(runRWS(m, r, s), t ->
             t.as((a, s1, w) -> raw(a, s1, f.apply(w)))));
     }
@@ -270,8 +265,9 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
     // State operations
 
     /**
-     * Construct a state monad computation from a state transformer function.
+     * Embed a simple state action into the monad.
      */
+    @Override
     public <A> $<T, A> state(Function<? super S, Tuple<A, S>> f) {
         return $((r, s) -> f.apply(s).as((a, s1) -> raw(a, s1, wm.empty())));
     }
@@ -279,6 +275,7 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
     /**
      * Fetch the current value of the state within the monad.
      */
+    @Override
     public $<T, S> get() {
         return $((r, s) -> raw(s, s, wm.empty()));
     }
@@ -286,6 +283,7 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
     /**
      * Sets the state within the monad.
      */
+    @Override
     public $<T, Unit> put(S s) {
         return $((_r, _s) -> raw(Unit.U, s, wm.empty()));
     }
@@ -294,48 +292,39 @@ public abstract class RWST<T extends RWST<T,R,W,S,M>, R, W, S, M extends Monad<M
      * An action that updates the state to the result of applying given
      * function to the current state.
      */
+    @Override
     public $<T, Unit> modify(Function<S, S> f) {
         return $((r, s) -> raw(Unit.U, f.apply(s), wm.empty()));
     }
 
     /**
+     * Fetch the current value of the state and bind the value to the given function.
+     */
+    @Override
+    public <A> $<T, A> get(Function<? super S, ? extends $<T, A>> f) {
+        return $((r, s) -> runRWS(f.apply(s), r, s));
+    }
+    /**
      * Get a specific component of the state, using a projection function supplied.
      */
+    @Override
     public <A> $<T, A> gets(Function<? super S, ? extends A> f) {
         return $((r, s) -> raw(f.apply(s), s, wm.empty()));
     }
 
-    // Monad Stacking
+    // Lifting other operations
 
-    /**
-     * Stack RWS monad on another monad.
-     *
-     * @param wm the monoid used to collect output
-     * @param nm the inner monad
-     * @return a stacked monad
-     */
-    public static <R, W, S, M extends Monad<M>> On<R, W, S, M> on(Monoid<W> wm, M nm) {
-        return new On<>(wm, nm);
+    <W1, A> $<T, Tuple<A, W1>> liftListen(WriterTC<M, W1, ?> wt, $<T, A> m) {
+        return $((r, s) -> wt.bind(wt.listen(runRWS(m, r, s)), (Tuple<Triple<A,S,W>, W1> t) ->
+            t.as((asw, w) -> asw.as((a, s1, w1) -> wt.pure(Triple.of(Tuple.of(a, w), s1, w1))))));
     }
 
-    /**
-     * The stacked RWS monad typeclass.
-     */
-    public static final class On<R, W, S, M extends Monad<M>>
-        extends RWST<On<R,W,S,M>, R, W, S, M>
-    {
-        private On(Monoid<W> wm, M nm) {
-            super(wm, nm);
-        }
+    <W1, A> $<T, A> liftPass(WriterTC<M, W1, ?> wt, $<T, Tuple<A, Function<W1, W1>>> m) {
+        return $((r, s) -> wt.pass(wt.bind(runRWS(m, r, s), (Triple<Tuple<A, Function<W1, W1>>, S, W> t) ->
+            t.as((af, w1, s1) -> af.as((a, f) -> wt.pure(Tuple.of(Triple.of(a, w1, s1), f)))))));
+    }
 
-        @Override
-        protected <A> $<On<R,W,S,M>, A>
-        $(BiFunction<? super R, ? super S, ? extends $<M, Triple<A,S,W>>> f) {
-            return new Monadic<On<R,W,S,M>, R, W, S, M, A>(f) {
-                @Override public On<R,W,S,M> getTypeClass() {
-                    return On.this;
-                }
-            };
-        }
+    <E, A> $<T, A> liftCatch(ExceptTC<M, E, ?> et, Function<? super E, ? extends $<T, A>> h, $<T, A> m) {
+        return $((r, s) -> et.catchE(e -> runRWS(h.apply(e), r, s), runRWS(m, r, s)));
     }
 }

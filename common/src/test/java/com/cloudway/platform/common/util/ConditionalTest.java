@@ -27,7 +27,8 @@ import com.google.common.collect.ImmutableMap;
 
 import com.cloudway.platform.common.fp.control.ConditionCase;
 import com.cloudway.platform.common.fp.control.Generator;
-import com.cloudway.platform.common.fp.control.StateCont;
+import com.cloudway.platform.common.fp.control.trans.Cont;
+import com.cloudway.platform.common.fp.control.trans.StateCont;
 import com.cloudway.platform.common.fp.data.Maybe;
 import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.common.fp.data.Tuple;
@@ -39,10 +40,6 @@ import com.cloudway.platform.common.fp.function.ExceptionSupplier;
 
 import static com.cloudway.platform.common.fp.control.Syntax.*;
 import static com.cloudway.platform.common.fp.control.Conditionals.*;
-import static com.cloudway.platform.common.fp.control.Cont.generator;
-import static com.cloudway.platform.common.fp.control.Cont.yield;
-import static com.cloudway.platform.common.fp.control.Cont.yieldFrom;
-import static com.cloudway.platform.common.fp.control.Cont.finish;
 import static com.cloudway.platform.common.fp.data.Maybe.Just;
 import static com.cloudway.platform.common.fp.data.Maybe.Nothing;
 import static com.cloudway.platform.common.fp.data.Seq.Cons;
@@ -999,40 +996,43 @@ public class ConditionalTest
             PRE_ORDER {
                 @Override
                 public <T> Generator<T> walk(Tree<T> tree) {
-                    return generator(
+                    Cont.µ ct = Cont.tclass;
+                    return ct.generator(
                       inCaseOf(tree, Node((a, x, b) ->
-                        do_(yieldFrom(walk(a)), () ->
-                        do_(yield(x), () ->
-                        do_(yieldFrom(walk(b)))))),
-                      otherwise(finish())));
+                        do_(ct.yieldFrom(walk(a)), () ->
+                        do_(ct.yield(x), () ->
+                        do_(ct.yieldFrom(walk(b)))))),
+                      otherwise(ct.finish())));
                 }
             },
 
             POST_ORDER {
                 @Override
                 public <T> Generator<T> walk(Tree<T> tree) {
-                    return generator(
+                    Cont.µ ct = Cont.tclass;
+                    return ct.generator(
                       inCaseOf(tree, Node((a, x, b) ->
-                        do_(yieldFrom(walk(b)), () ->
-                        do_(yield(x), () ->
-                        do_(yieldFrom(walk(a)))))),
-                      otherwise(finish())));
+                        do_(ct.yieldFrom(walk(b)), () ->
+                        do_(ct.yield(x), () ->
+                        do_(ct.yieldFrom(walk(a)))))),
+                      otherwise(ct.finish())));
                 }
             },
 
             BREADTH_FIRST {
                 @Override
                 public <T> Generator<T> walk(Tree<T> tree) {
-                  return StateCont.generator(Seq.of(tree),
+                  StateCont.µ<Seq<Tree<T>>> sc = StateCont.tclass();
+                  return sc.generator(Seq.of(tree),
                     loop(again ->
-                      do_(StateCont.get(), queue ->
+                      do_(sc.get(), queue ->
                       inCaseOf(queue, Cons((current, remaining) ->
                         do_(inCaseOf(current, Node((a, x, b) ->
-                          do_(StateCont.yield(x),
-                          do_(StateCont.put(remaining.append(Seq.of(a, b)))))),
-                        otherwise(StateCont.put(remaining))),
+                          do_(sc.yield(x),
+                          do_(sc.put(remaining.append(Seq.of(a, b)))))),
+                        otherwise(sc.put(remaining))),
                         again)),
-                      otherwise(StateCont.finish())))));
+                      otherwise(sc.finish())))));
                 }
             };
 

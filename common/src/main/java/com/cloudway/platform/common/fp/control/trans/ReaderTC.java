@@ -4,34 +4,28 @@
  * All rights reserved.
  */
 
-package com.cloudway.platform.common.fp.control;
+package com.cloudway.platform.common.fp.control.trans;
 
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.cloudway.platform.common.fp.$;
+import com.cloudway.platform.common.fp.control.Monad;
 import com.cloudway.platform.common.fp.data.Fn;
 
 /**
- * The parameterizable reader monad.
- *
- * <p>Computations are functions of a shared environment.
+ * The {@link ReaderT} monad typeclass definition.
  *
  * @param <T> the reader monad typeclass
  * @param <R> the environment type
  * @param <M> the inner monad typeclass
  */
-public abstract class ReaderT<T extends ReaderT<T,R,M>, R, M extends Monad<M>>
-    implements Monad<T>, MonadTrans<T, M>
+public abstract class ReaderTC<T, R, M extends Monad<M>>
+    implements MonadTrans<T, M>, MonadReader<T, R>
 {
     /**
-     * The monadic datatype that encapsulate a computation transfer function.
+     * The monadic data that encapsulate a computation transfer function.
      * This class should be implemented by concrete reader monad.
-     *
-     * @param <T> the reader monad typeclass
-     * @param <R> the environment type
-     * @param <M> the inner monad typeclass
-     * @param <A> the computation type
      */
     public static abstract class Monadic<T, R, M, A> implements $<T, A> {
         private final Function<? super R, ? extends $<M, A>> rf;
@@ -51,7 +45,7 @@ public abstract class ReaderT<T extends ReaderT<T,R,M>, R, M extends Monad<M>>
      *
      * @param m the inner monad
      */
-    protected ReaderT(M m) {
+    protected ReaderTC(M m) {
         this.nm = m;
     }
 
@@ -118,8 +112,17 @@ public abstract class ReaderT<T extends ReaderT<T,R,M>, R, M extends Monad<M>>
     }
 
     /**
+     * Retrieve a function of the current environment.
+     */
+    @Override
+    public <A> $<T, A> reader(Function<? super R, ? extends A> f) {
+        return $(r -> nm.pure(f.apply(r)));
+    }
+
+    /**
      * Fetch the value of the environment.
      */
+    @Override
     public $<T, R> ask() {
         return $(nm::pure);
     }
@@ -127,15 +130,9 @@ public abstract class ReaderT<T extends ReaderT<T,R,M>, R, M extends Monad<M>>
     /**
      * Execute a computation in a modified environment.
      */
-    public <A> $<T, A> local($<T, A> m, Function<R, R> f) {
+    @Override
+    public <A> $<T, A> local(Function<R, R> f, $<T, A> m) {
         return $(r -> runReader(m, f.apply(r)));
-    }
-
-    /**
-     * Retrieve a function of the current environment.
-     */
-    public <A> $<T, A> asks(Function<? super R, ? extends A> f) {
-        return $(r -> nm.pure(f.apply(r)));
     }
 
     /**
@@ -164,34 +161,9 @@ public abstract class ReaderT<T extends ReaderT<T,R,M>, R, M extends Monad<M>>
         return $(r -> nm.ap(runReader(f, r), runReader(v, r)));
     }
 
-    // Monad Stacking
+    // Lifting other operations
 
-    /**
-     * Stack monad on another monad.
-     *
-     * @param nm the inner monad
-     * @return a stacked monad
-     */
-    public static <R, M extends Monad<M>> On<R, M> on(M nm) {
-        return new On<>(nm);
-    }
-
-    /**
-     * The stacked monad typeclass.
-     */
-    public static final class On<R, M extends Monad<M>> extends ReaderT<On<R,M>, R, M> {
-        private On(M nm) {
-            super(nm);
-        }
-
-        @Override
-        protected <A> $<On<R,M>, A> $(Function<? super R, ? extends $<M, A>> f) {
-            return new Monadic<On<R,M>, R, M, A>(f) {
-                @Override
-                public On<R,M> getTypeClass() {
-                    return On.this;
-                }
-            };
-        }
+    <E, A> $<T, A> liftCatch(ExceptTC<M, E, ?> et, Function<? super E, ? extends $<T, A>> h, $<T, A> m) {
+        return $(r -> et.catchE(e -> runReader(h.apply(e), r), runReader(m, r)));
     }
 }

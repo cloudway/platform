@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.fp.control.StateIO;
+import com.cloudway.platform.common.fp.control.trans.StateIO;
 import com.cloudway.platform.common.fp.data.HashPMap;
 import com.cloudway.platform.common.fp.data.PMap;
 import com.cloudway.platform.common.fp.data.Unit;
@@ -27,7 +27,7 @@ import com.cloudway.platform.common.os.Exec;
 import static java.nio.file.Files.*;
 import static com.cloudway.platform.common.util.MoreFiles.*;
 import static java.nio.file.StandardCopyOption.*;
-import static com.cloudway.platform.common.fp.control.StateIO.*;
+import static com.cloudway.platform.common.fp.control.trans.StateIO.*;
 import static com.cloudway.platform.common.fp.control.Syntax.*;
 
 final class ApacheDB {
