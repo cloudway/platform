@@ -136,6 +136,13 @@ public abstract class Either<A, B> implements $<Either.µ<A>, B>, Traversable<Ei
     }
 
     /**
+     * Returns an Either value with elements swapped.
+     */
+    public Either<B, A> swap() {
+        return isLeft() ? right(left()) : left(right());
+    }
+
+    /**
      * If the given value is 'Right', apply the provided mapping function to it,
      * otherwise return the 'Left' value.
      */
