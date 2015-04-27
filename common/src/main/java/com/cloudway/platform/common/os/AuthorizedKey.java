@@ -12,7 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import static java.util.Objects.requireNonNull;
 
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
 
 /**
  * <p>The authorized_keys file contains public keys for public key authentication.

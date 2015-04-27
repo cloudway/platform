@@ -12,7 +12,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import com.cloudway.platform.common.fp.function.ExceptionFunction;
+import com.cloudway.fp.function.ExceptionFunction;
 import jnr.constants.platform.Signal;
 import jnr.posix.FileStat;
 

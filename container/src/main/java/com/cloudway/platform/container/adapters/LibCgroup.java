@@ -13,9 +13,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableTable;
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
 import com.cloudway.platform.container.ResourceLimits;
-import static com.cloudway.platform.common.fp.control.StringPredicates.*;
+import static com.cloudway.fp.control.StringPredicates.*;
 
 /**
  * Low level cgroup interface.

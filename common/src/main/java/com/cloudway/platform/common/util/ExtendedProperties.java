@@ -23,7 +23,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
 
 /**
  * The {@code ExtendedProperties} class represents a persistent set of

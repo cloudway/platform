@@ -15,20 +15,20 @@ import java.util.Map;
 import java.util.stream.IntStream;
 
 import static java.util.stream.Collectors.*;
-import static com.cloudway.platform.common.fp.control.StringPredicates.*;
+import static com.cloudway.fp.control.StringPredicates.*;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableTable;
 
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
+import com.cloudway.fp.data.IntSeq;
+import com.cloudway.fp.data.Seq;
+import com.cloudway.fp.io.IO;
+import com.cloudway.fp.io.IOConsumer;
+import com.cloudway.fp.io.IOBiConsumer;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Etc;
 import com.cloudway.platform.common.os.Exec;
-import com.cloudway.platform.common.fp.io.IO;
-import com.cloudway.platform.common.fp.io.IOConsumer;
-import com.cloudway.platform.common.fp.io.IOBiConsumer;
-import com.cloudway.platform.common.fp.data.IntSeq;
-import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ResourceLimits;
 import jnr.constants.platform.Signal;

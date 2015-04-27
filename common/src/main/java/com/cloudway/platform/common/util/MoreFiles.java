@@ -32,8 +32,8 @@ import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.fp.io.IO;
-import com.cloudway.platform.common.fp.io.IOConsumer;
+import com.cloudway.fp.io.IO;
+import com.cloudway.fp.io.IOConsumer;
 import com.cloudway.platform.common.os.Exec;
 import com.google.common.io.ByteSink;
 import com.google.common.io.ByteSource;

@@ -12,7 +12,7 @@ import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeMatcher;
 import static org.junit.Assert.assertThat;
 import static org.hamcrest.CoreMatchers.*;
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
 
 public class AuthorizedKeyTest
 {

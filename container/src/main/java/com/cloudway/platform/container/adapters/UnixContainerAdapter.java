@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Etc;
 import com.cloudway.platform.common.os.Exec;

@@ -14,8 +14,8 @@ import java.util.regex.Pattern;
 import com.google.common.collect.ImmutableSet;
 import static java.lang.String.format;
 
-import com.cloudway.platform.common.fp.data.Maybe;
-import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.fp.data.Maybe;
+import com.cloudway.fp.data.Seq;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Exec;
 

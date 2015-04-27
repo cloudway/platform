@@ -12,7 +12,7 @@ import java.nio.file.FileVisitor;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 
-import com.cloudway.platform.common.fp.function.ExceptionConsumer;
+import com.cloudway.fp.function.ExceptionConsumer;
 
 public abstract class SimpleFileVisitor implements FileVisitor<Path>
 {

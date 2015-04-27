@@ -11,7 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
 import com.cloudway.platform.common.os.Exec;
 import com.cloudway.platform.container.ApplicationContainer;
 import static com.cloudway.platform.common.util.MoreFiles.*;

@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
 import com.cloudway.platform.common.os.Exec;
 import com.cloudway.platform.container.adapters.UnixContainerAdapter;
 

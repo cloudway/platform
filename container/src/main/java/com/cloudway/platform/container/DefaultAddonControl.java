@@ -27,14 +27,14 @@ import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
+import com.cloudway.fp.data.Seq;
+import com.cloudway.fp.io.IO;
+import com.cloudway.fp.io.IOAction;
 import com.cloudway.platform.common.os.Etc;
 import com.cloudway.platform.common.os.Exec;
 import com.cloudway.platform.common.util.MoreFiles;
-import com.cloudway.platform.common.fp.io.IO;
-import com.cloudway.platform.common.fp.io.IOAction;
 import com.cloudway.platform.common.util.SimpleFileVisitor;
-import com.cloudway.platform.common.fp.data.Seq;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import com.cloudway.platform.container.proxy.ProxyMapping;
 import static com.cloudway.platform.container.AddonType.FRAMEWORK;
@@ -45,8 +45,8 @@ import static java.nio.file.StandardCopyOption.*;
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 import static java.nio.file.Files.*;
 import static com.cloudway.platform.common.util.MoreFiles.*;
-import static com.cloudway.platform.common.fp.control.Predicates.*;
-import static com.cloudway.platform.common.fp.control.StringPredicates.*;
+import static com.cloudway.fp.control.Predicates.*;
+import static com.cloudway.fp.control.StringPredicates.*;
 
 public class DefaultAddonControl implements AddonControl
 {

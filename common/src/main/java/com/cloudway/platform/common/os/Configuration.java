@@ -6,7 +6,7 @@
 
 package com.cloudway.platform.common.os;
 
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
 
 /**
  * The Configuration interface maintains all properties read from

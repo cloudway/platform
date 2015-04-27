@@ -13,7 +13,7 @@ import java.nio.file.Files;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.util.ExtendedProperties;
 

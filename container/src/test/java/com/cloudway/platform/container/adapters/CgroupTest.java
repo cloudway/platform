@@ -18,8 +18,8 @@ import org.junit.Test;
 import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
 
-import com.cloudway.platform.common.fp.data.Maybe;
-import com.cloudway.platform.common.fp.io.IO;
+import com.cloudway.fp.data.Maybe;
+import com.cloudway.fp.io.IO;
 import com.cloudway.platform.common.util.ExtendedProperties;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ResourceLimits;

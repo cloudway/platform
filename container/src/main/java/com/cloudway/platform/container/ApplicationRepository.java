@@ -8,7 +8,7 @@ package com.cloudway.platform.container;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import com.cloudway.platform.common.fp.io.IOFunction;
+import com.cloudway.fp.io.IOFunction;
 
 /**
  * This interface represents an application's source code repository.

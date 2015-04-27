@@ -17,7 +17,7 @@ import org.junit.Test;
 import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
 
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
 import com.cloudway.platform.common.os.Configuration;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import com.cloudway.platform.common.os.Config;

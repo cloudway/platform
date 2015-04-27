@@ -21,7 +21,7 @@ import javax.xml.bind.Marshaller;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.cloudway.platform.common.fp.function.ExceptionConsumer;
+import com.cloudway.fp.function.ExceptionConsumer;
 import com.cloudway.platform.container.proxy.ProxyMapping;
 import static com.cloudway.platform.common.util.MoreFiles.*;
 

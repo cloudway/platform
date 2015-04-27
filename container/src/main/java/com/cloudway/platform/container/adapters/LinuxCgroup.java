@@ -31,18 +31,18 @@ import jnr.constants.platform.Signal;
 import static java.nio.file.StandardCopyOption.*;
 import static java.util.stream.Collectors.*;
 
-import com.cloudway.platform.common.fp.data.Maybe;
-import com.cloudway.platform.common.fp.io.IO;
-import com.cloudway.platform.common.fp.io.IOBiConsumer;
-import com.cloudway.platform.common.fp.io.IOFunction;
+import com.cloudway.fp.data.Maybe;
+import com.cloudway.fp.io.IO;
+import com.cloudway.fp.io.IOBiConsumer;
+import com.cloudway.fp.io.IOFunction;
 import com.cloudway.platform.common.util.MoreFiles;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Etc;
 
 import static com.cloudway.platform.common.util.MoreFiles.*;
 import static com.cloudway.platform.common.util.MoreCollectors.*;
-import static com.cloudway.platform.common.fp.control.Conditionals.*;
-import static com.cloudway.platform.common.fp.control.Predicates.*;
+import static com.cloudway.fp.control.Conditionals.*;
+import static com.cloudway.fp.control.Predicates.*;
 
 // @formatter:off
 class LinuxCgroup implements LibCgroup

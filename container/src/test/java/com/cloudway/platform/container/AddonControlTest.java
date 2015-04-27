@@ -42,12 +42,12 @@ import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
 import static com.cloudway.platform.container.Actions.*;
 
+import com.cloudway.fp.io.IO;
+import com.cloudway.fp.function.ExceptionBiConsumer;
+import com.cloudway.fp.function.ExceptionConsumer;
 import com.cloudway.platform.common.util.SimpleFileVisitor;
-import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Exec;
-import com.cloudway.platform.common.fp.function.ExceptionBiConsumer;
-import com.cloudway.platform.common.fp.function.ExceptionConsumer;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import com.cloudway.platform.container.proxy.HttpProxyUpdater;
 import com.cloudway.platform.container.proxy.ProxyMapping;
@@ -56,7 +56,7 @@ import com.google.common.collect.ImmutableMap;
 
 import static java.nio.file.Files.*;
 import static com.cloudway.platform.common.util.MoreFiles.*;
-import static com.cloudway.platform.common.fp.data.Maybe.or;
+import static com.cloudway.fp.data.Maybe.or;
 
 // @formatter:off
 public class AddonControlTest

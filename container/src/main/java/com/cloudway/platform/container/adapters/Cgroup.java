@@ -8,7 +8,7 @@ package com.cloudway.platform.container.adapters;
 
 import java.io.IOException;
 import java.util.Map;
-import com.cloudway.platform.common.fp.data.Maybe;
+import com.cloudway.fp.data.Maybe;
 
 public class Cgroup
 {

@@ -12,8 +12,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import com.cloudway.platform.common.fp.function.TriConsumer;
-import com.cloudway.platform.common.fp.function.TriFunction;
+import com.cloudway.fp.function.TriConsumer;
+import com.cloudway.fp.function.TriFunction;
 
 import org.jmock.api.Action;
 import org.jmock.api.Invocation;

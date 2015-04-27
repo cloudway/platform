@@ -10,15 +10,15 @@ import java.io.IOException;
 import java.util.UUID;
 import java.util.function.Function;
 
-import com.cloudway.platform.common.fp.io.IOFunction;
+import com.cloudway.fp.io.IOFunction;
 import com.cloudway.platform.container.adapters.LinuxContainerAdapter;
 import com.cloudway.platform.container.adapters.MacOSContainerAdapter;
 import com.cloudway.platform.container.adapters.UnixContainerAdapter;
 
 import jnr.ffi.Platform;
 import static jnr.ffi.Platform.OS.*;
-import static com.cloudway.platform.common.fp.control.Conditionals.*;
-import static com.cloudway.platform.common.fp.control.Predicates.*;
+import static com.cloudway.fp.control.Conditionals.*;
+import static com.cloudway.fp.control.Predicates.*;
 
 final class Helper {
     private Helper() {}

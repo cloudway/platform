@@ -16,19 +16,19 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import com.cloudway.platform.common.fp.control.trans.StateIO;
-import com.cloudway.platform.common.fp.data.HashPMap;
-import com.cloudway.platform.common.fp.data.PMap;
-import com.cloudway.platform.common.fp.data.Unit;
-import com.cloudway.platform.common.fp.io.IO;
+import com.cloudway.fp.control.monad.trans.StateIO;
+import com.cloudway.fp.data.HashPMap;
+import com.cloudway.fp.data.PMap;
+import com.cloudway.fp.data.Unit;
+import com.cloudway.fp.io.IO;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Exec;
 
 import static java.nio.file.Files.*;
 import static com.cloudway.platform.common.util.MoreFiles.*;
 import static java.nio.file.StandardCopyOption.*;
-import static com.cloudway.platform.common.fp.control.trans.StateIO.*;
-import static com.cloudway.platform.common.fp.control.Syntax.*;
+import static com.cloudway.fp.control.monad.trans.StateIO.*;
+import static com.cloudway.fp.control.Syntax.*;
 
 final class ApacheDB {
     private static final String SUFFIX = ".txt";

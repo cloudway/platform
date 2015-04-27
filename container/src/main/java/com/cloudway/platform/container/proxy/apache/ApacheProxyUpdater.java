@@ -14,14 +14,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import com.google.common.collect.ImmutableSet;
 
-import com.cloudway.platform.common.fp.data.Maybe;
-import com.cloudway.platform.common.fp.data.PMap;
-import com.cloudway.platform.common.fp.data.Seq;
+import com.cloudway.fp.data.Maybe;
+import com.cloudway.fp.data.PMap;
+import com.cloudway.fp.data.Seq;
+import com.cloudway.fp.data.BooleanRef;
 import com.cloudway.platform.container.proxy.HttpProxyUpdater;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.proxy.ProxyMapping;
-import com.cloudway.platform.common.fp.data.BooleanRef;
-import static com.cloudway.platform.common.fp.control.Predicates.*;
+import static com.cloudway.fp.control.Predicates.*;
 
 public enum ApacheProxyUpdater implements HttpProxyUpdater
 {

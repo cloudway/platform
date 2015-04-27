@@ -20,9 +20,9 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 import static org.hamcrest.CoreMatchers.*;
 
+import com.cloudway.fp.function.ExceptionBiConsumer;
 import com.cloudway.platform.common.util.SimpleFileVisitor;
 import com.cloudway.platform.common.os.Exec;
-import com.cloudway.platform.common.fp.function.ExceptionBiConsumer;
 import static com.cloudway.platform.common.util.MoreFiles.*;
 import static com.cloudway.platform.container.Actions.*;
 import static java.nio.file.Files.*;

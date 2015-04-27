@@ -31,12 +31,12 @@ import com.google.common.collect.ImmutableList;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
 
-import com.cloudway.platform.common.fp.data.Maybe;
-import com.cloudway.platform.common.fp.io.IOAction;
+import com.cloudway.fp.data.Maybe;
+import com.cloudway.fp.io.IO;
+import com.cloudway.fp.io.IOAction;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Etc;
 import com.cloudway.platform.common.os.Exec;
-import com.cloudway.platform.common.fp.io.IO;
 import com.cloudway.platform.container.proxy.HttpProxy;
 import com.cloudway.platform.container.velocity.Alt;
 

@@ -17,11 +17,11 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
+import com.cloudway.fp.io.IO;
+import com.cloudway.fp.function.ExceptionAction;
 import com.cloudway.platform.common.os.AuthorizedKey;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.util.MoreFiles;
-import com.cloudway.platform.common.fp.io.IO;
-import com.cloudway.platform.common.fp.function.ExceptionAction;
 import com.cloudway.platform.container.ApplicationContainer;
 import com.cloudway.platform.container.ContainerAdapter;
 
@@ -29,7 +29,7 @@ import static java.lang.String.format;
 import static java.nio.file.Files.*;
 import static com.cloudway.platform.common.util.MoreFiles.*;
 import static com.cloudway.platform.common.util.MoreCollectors.*;
-import static com.cloudway.platform.common.fp.control.Predicates.*;
+import static com.cloudway.fp.control.Predicates.*;
 
 public abstract class AbstractContainerAdapter implements ContainerAdapter
 {
