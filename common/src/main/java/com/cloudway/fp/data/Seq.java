@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.cloudway.fp.control.Applicative;
+import com.cloudway.fp.control.MonadFix;
 import com.cloudway.fp.control.MonadPlus;
 import com.cloudway.fp.function.ExceptionBiFunction;
 import com.cloudway.fp.function.ExceptionFunction;
@@ -685,7 +686,7 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T
     /**
      * Typeclass definition for Seq.
      */
-    class µ implements MonadPlus<µ> {
+    class µ implements MonadPlus<µ>, MonadFix<µ> {
         private µ() {}
 
         @Override
@@ -709,13 +710,23 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T
         }
 
         @Override
-        public <A> $<µ, A> mzero() {
+        public <A> Seq<A> mzero() {
             return nil();
         }
 
         @Override
-        public <A> $<µ, A> mplus($<µ, A> a1, $<µ, A> a2) {
+        public <A> Seq<A> mplus($<µ, A> a1, $<µ, A> a2) {
             return narrow(a1).append(narrow(a2));
+        }
+
+        @Override
+        public <A> Seq<A> mfix(Function<Supplier<A>, ? extends $<µ, A>> f) {
+            Seq<A> ys = Fn.<Seq<A>>fix(xs -> narrow(f.apply(() -> xs.get().head())));
+            if (ys.isEmpty()) {
+                return nil();
+            } else {
+                return cons(ys.head(), () -> this.<A>mfix(x -> narrow(f.apply(x)).tail()));
+            }
         }
     }
 

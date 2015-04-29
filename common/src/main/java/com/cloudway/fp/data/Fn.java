@@ -144,6 +144,34 @@ public final class Fn {
     }
 
     /**
+     * Returns the least fixed point of the given function, i.e. the least
+     * defined {@code x} such that {@code f x = x}.
+     *
+     * @param f the function to get the fixed point
+     * @return the least fixed point of the function
+     */
+    public static <A> A fix(Function<Supplier<A>, ? extends A> f) {
+        Ref<Supplier<A>> x = new Ref<>();
+        return x.set(lazy(() -> f.apply(x.get()))).get();
+    }
+
+    /**
+     * Returns the least fixed point of the given binary operator.
+     */
+    public static <A, B> Function<A, B>
+    fix(BiFunction<Function<? super A, ? extends B>, ? super A, ? extends B> f) {
+        return fix(rec -> x -> f.apply(y -> rec.get().apply(y), x));
+    }
+
+    /**
+     * Returns the least fixed point of the given ternary operator.
+     */
+    public static <A, B, C> BiFunction<A, B, C>
+    fix(TriFunction<BiFunction<? super A, ? super B, ? extends C>, ? super A, ? super B, ? extends C> f) {
+        return fix(rec -> (x, y) -> f.apply((a, b) -> rec.get().apply(a, b), x, y));
+    }
+
+    /**
      * Maps the function in first argument to the function in the second argument.
      *
      * @param <A> the result type of the first function which is argument type of

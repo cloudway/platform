@@ -16,6 +16,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.cloudway.fp.control.Applicative;
+import com.cloudway.fp.control.MonadFix;
 import com.cloudway.fp.control.MonadPlus;
 import com.cloudway.fp.control.ConditionCase;
 import com.cloudway.fp.function.ExceptionFunction;
@@ -394,7 +395,7 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<
               .get());
     }
 
-    public static final class µ implements MonadPlus<µ> {
+    public static final class µ implements MonadPlus<µ>, MonadFix<µ> {
         @Override
         public <A> Maybe<A> pure(A a) {
             return of(a);
@@ -439,6 +440,11 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<
         @Override
         public <A> Maybe<A> mplus($<µ, A> a1, $<µ, A> a2) {
             return narrow(a1).isAbsent() ? narrow(a2) : narrow(a1);
+        }
+
+        @Override
+        public <A> Maybe<A> mfix(Function<Supplier<A>, ? extends $<µ, A>> f) {
+            return Fn.<Maybe<A>>fix(x -> narrow(f.apply(Fn.lazy(() -> x.get().get()))));
         }
     }
 

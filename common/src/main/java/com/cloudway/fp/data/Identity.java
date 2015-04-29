@@ -6,6 +6,7 @@
 
 package com.cloudway.fp.data;
 
+import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -13,6 +14,7 @@ import java.util.function.Supplier;
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Applicative;
 import com.cloudway.fp.control.Monad;
+import com.cloudway.fp.control.MonadFix;
 
 /**
  * The identity monad.
@@ -84,6 +86,8 @@ public final class Identity<A> implements $<Identity.µ, A>, Foldable<A>, Traver
         return narrow(f.apply(value));
     }
 
+    // Foldable and Traversable
+
     @Override
     public <R> R foldMap(Monoid<R> monoid, Function<? super A, ? extends R> f) {
         return f.apply(value);
@@ -130,7 +134,7 @@ public final class Identity<A> implements $<Identity.µ, A>, Foldable<A>, Traver
     /**
      * The {@code Identity} typeclass definition.
      */
-    public static final class µ implements Monad<µ> {
+    public static final class µ implements MonadFix<µ> {
         @Override
         public <A> Identity<A> pure(A a) {
             return of(a);
@@ -150,6 +154,11 @@ public final class Identity<A> implements $<Identity.µ, A>, Foldable<A>, Traver
         public <A, B> Identity<B> ap($<µ, Function<? super A, ? extends B>> fs, $<µ, A> a) {
             return of(narrow(fs).get().apply(narrow(a).get()));
         }
+
+        @Override
+        public <A> Identity<A> mfix(Function<Supplier<A>, ? extends $<µ, A>> f) {
+            return of(Fn.fix(x -> run(f.apply(x))));
+        }
     }
 
     public static <A> Identity<A> narrow($<µ, A> value) {
@@ -161,5 +170,24 @@ public final class Identity<A> implements $<Identity.µ, A>, Foldable<A>, Traver
     @Override
     public µ getTypeClass() {
         return tclass;
+    }
+
+    // Object
+
+    public boolean equals(Object obj) {
+        if (obj == this)
+            return true;
+        if (!(obj instanceof Identity))
+            return false;
+        Identity<?> other = (Identity<?>)obj;
+        return Objects.equals(value, other.value);
+    }
+
+    public int hashCode() {
+        return Objects.hashCode(value);
+    }
+
+    public String toString() {
+        return "Identity " + value;
     }
 }

@@ -9,12 +9,13 @@ package com.cloudway.fp.data;
 import java.util.NoSuchElementException;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
-import com.cloudway.fp.function.ExceptionFunction;
-import com.cloudway.fp.control.ConditionCase;
-import com.cloudway.fp.$;
 import com.cloudway.fp.control.Applicative;
-import com.cloudway.fp.control.Monad;
+import com.cloudway.fp.control.MonadFix;
+import com.cloudway.fp.control.ConditionCase;
+import com.cloudway.fp.function.ExceptionFunction;
+import com.cloudway.fp.$;
 
 /**
  * The {@code Either} class represents values with two possibilities: a value of
@@ -198,20 +199,25 @@ public abstract class Either<A, B> implements $<Either.µ<A>, B>, Traversable<Ei
 
     // Type Classes
 
-    public static final class µ<A> implements Monad<µ<A>> {
+    public static final class µ<E> implements MonadFix<µ<E>> {
         @Override
-        public <B> Either<A, B> pure(B b) {
+        public <A> Either<E, A> pure(A b) {
             return right(b);
         }
 
         @Override
-        public <B, C> Either<A, C> map($<µ<A>, B> a, Function<? super B, ? extends C> f) {
+        public <A, B> Either<E, B> map($<µ<E>, A> a, Function<? super A, ? extends B> f) {
             return narrow(a).map(f);
         }
 
         @Override
-        public <B, C> Either<A, C> bind($<µ<A>, B> a, Function<? super B, ? extends $<µ<A>, C>> k) {
+        public <A, B> Either<E, B> bind($<µ<E>, A> a, Function<? super A, ? extends $<µ<E>, B>> k) {
             return narrow(a).flatMap(k);
+        }
+
+        @Override
+        public <A> Either<E, A> mfix(Function<Supplier<A>, ? extends $<µ<E>, A>> f) {
+            return Fn.<Either<E,A>>fix(x -> narrow(f.apply(Fn.lazy(() -> x.get().right()))));
         }
     }
 
@@ -258,7 +264,7 @@ public abstract class Either<A, B> implements $<Either.µ<A>, B>, Traversable<Ei
         return narrow(Either.<E>tclass().sequence(ms));
     }
 
-    public static <E, A, B> Either<E, Unit>
+    public static <E, A> Either<E, Unit>
     mapM_(Foldable<A> xs, Function<? super A, ? extends $<µ<E>, A>> f) {
         return narrow(Either.<E>tclass().mapM_(xs, f));
     }
