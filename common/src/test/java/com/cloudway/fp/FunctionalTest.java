@@ -20,7 +20,7 @@ import com.google.common.collect.ImmutableList;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-import com.cloudway.fp.control.monad.trans.StateT;
+import com.cloudway.fp.control.monad.trans.BindT;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.control.monad.trans.Cont;
 import com.cloudway.fp.control.monad.trans.State;
@@ -501,20 +501,16 @@ public class FunctionalTest
         static BigInteger fibmemo(int n) {
             PMap<Integer, BigInteger> memo = TreePMap.empty();
             memo = memo.put(1, BigInteger.ONE).put(2, BigInteger.ONE);
-            return Trampoline.run(StateT.eval(fibmemo_(n), memo));
+            return Trampoline.run(BindT.eval(fibmemo_(n), memo));
         }
 
-        private static final StateT<PMap<Integer, BigInteger>, Trampoline.µ> st = StateT.on(Trampoline.tclass);
+        private static final BindT<Integer, BigInteger, Trampoline.µ> st = BindT.on(Trampoline.tclass);
 
-        private static $<StateT<PMap<Integer, BigInteger>, Trampoline.µ>, BigInteger> fibmemo_(int n) {
-            return do_(st.get(), memo ->
-                       memo.containsKey(n)
-                       ? st.pure(memo.get(n))
-                       : do_(fibmemo_(n - 1), a ->
-                         do_(fibmemo_(n - 2), b ->
-                         let(a.add(b), c ->
-                         do_(st.modify(m -> m.put(n, c)),
-                         do_(st.pure(c)))))));
+        private static $<BindT<Integer, BigInteger, Trampoline.µ>, BigInteger> fibmemo_(int n) {
+            return st.memo(n, k ->
+               do_(fibmemo_(n - 1), a ->
+               do_(fibmemo_(n - 2), b ->
+               do_(st.pure(a.add(b))))));
         }
     }
 
