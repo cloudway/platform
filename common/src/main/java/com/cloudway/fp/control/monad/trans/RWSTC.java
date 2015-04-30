@@ -11,6 +11,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.cloudway.fp.$;
+import com.cloudway.fp.control.ForwardingMonad;
 import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.Monoid;
@@ -314,17 +315,133 @@ public abstract class RWSTC<T, R, W, S, M extends Monad<M>>
 
     // Lifting other operations
 
-    <W1, A> $<T, Tuple<A, W1>> liftListen(WriterTC<M, W1, ?> wt, $<T, A> m) {
-        return $((r, s) -> wt.bind(wt.listen(runRWS(m, r, s)), (Tuple<Triple<A,S,W>, W1> t) ->
-            t.as((asw, w) -> asw.as((a, s1, w1) -> wt.pure(Triple.of(Tuple.of(a, w), s1, w1))))));
+    @Override
+    @SuppressWarnings("unchecked")
+    public <R1> MonadReader<T, R1> liftReader() {
+        MonadReader<M, R1> inner;
+        if (nm instanceof MonadReader) {
+            inner = (MonadReader<M,R1>)nm;
+        } else if (nm instanceof MonadTrans) {
+            inner = (MonadReader<M,R1>)((MonadTrans<T,M>)nm).liftReader();
+        } else {
+            throw new UnsupportedOperationException("liftReader");
+        }
+        return new LiftReader<>(inner);
     }
 
-    <W1, A> $<T, A> liftPass(WriterTC<M, W1, ?> wt, $<T, Tuple<A, Function<W1, W1>>> m) {
-        return $((r, s) -> wt.pass(wt.bind(runRWS(m, r, s), (Triple<Tuple<A, Function<W1, W1>>, S, W> t) ->
-            t.as((af, w1, s1) -> af.as((a, f) -> wt.pure(Tuple.of(Triple.of(a, w1, s1), f)))))));
+    private class LiftReader<R1> implements MonadReader<T, R1>, ForwardingMonad<T> {
+        private final MonadReader<M, R1> inner;
+
+        LiftReader(MonadReader<M, R1> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public Monad<T> delegate() {
+            return RWSTC.this;
+        }
+
+        @Override
+        public <A> $<T, A> reader(Function<? super R1, ? extends A> f) {
+            return lift(inner.reader(f));
+        }
+
+        @Override
+        public $<T, R1> ask() {
+            return lift(inner.ask());
+        }
+
+        @Override
+        public <A> $<T, A> local(Function<R1, R1> f, $<T, A> m) {
+            return mapRWS(m, v -> inner.local(f, v));
+        }
     }
 
-    <E, A> $<T, A> liftCatch(ExceptTC<M, E, ?> et, Function<? super E, ? extends $<T, A>> h, $<T, A> m) {
-        return $((r, s) -> et.catchE(e -> runRWS(h.apply(e), r, s), runRWS(m, r, s)));
+    @Override
+    @SuppressWarnings("unchecked")
+    public <W1> MonadWriter<T, W1> liftWriter() {
+        MonadWriter<M, W1> inner;
+        if (nm instanceof MonadWriter) {
+            inner = (MonadWriter<M,W1>)nm;
+        } else if (nm instanceof MonadTrans) {
+            inner = (MonadWriter<M,W1>)((MonadTrans<T,M>)nm).liftWriter();
+        } else {
+            throw new UnsupportedOperationException("liftWriter");
+        }
+        return new LiftWriter<>(inner);
+    }
+
+    private class LiftWriter<W1> implements MonadWriter<T, W1>, ForwardingMonad<T> {
+        private final MonadWriter<M, W1> inner;
+
+        LiftWriter(MonadWriter<M, W1> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public Monad<T> delegate() {
+            return RWSTC.this;
+        }
+
+        @Override
+        public <A> $<T, A> writer(Tuple<A, W1> aw) {
+            return lift(inner.writer(aw));
+        }
+
+        @Override
+        public $<T, Unit> tell(W1 w) {
+            return lift(inner.tell(w));
+        }
+
+        @Override
+        public <A> $<T, Tuple<A, W1>> listen($<T, A> m) {
+            MonadWriter<M, W1> wt = this.inner;
+            return $((r, s) -> wt.bind(wt.listen(runRWS(m, r, s)), (Tuple<Triple<A, S, W>, W1> t) ->
+                t.as((asw, w) -> asw.as((a, s1, w1) -> wt.pure(Triple.of(Tuple.of(a, w), s1, w1))))));
+        }
+
+        @Override
+        public <A> $<T, A> pass($<T, Tuple<A, Function<W1, W1>>> m) {
+            MonadWriter<M, W1> wt = this.inner;
+            return $((r, s) -> wt.pass(wt.bind(runRWS(m, r, s), (Triple<Tuple<A, Function<W1, W1>>, S, W> t) ->
+                t.as((af, w1, s1) -> af.as((a, f) -> wt.pure(Tuple.of(Triple.of(a, w1, s1), f)))))));
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <E> MonadExcept<T, E> liftExcept() {
+        MonadExcept<M, E> inner;
+        if (nm instanceof MonadExcept) {
+            inner = (MonadExcept<M,E>)nm;
+        } else if (nm instanceof MonadTrans) {
+            inner = (MonadExcept<M,E>)((MonadTrans<T,M>)nm).liftExcept();
+        } else {
+            throw new UnsupportedOperationException("liftExcept");
+        }
+        return new LiftExcept<>(inner);
+    }
+
+    private class LiftExcept<E> implements MonadExcept<T, E>, ForwardingMonad<T> {
+        private final MonadExcept<M, E> inner;
+
+        LiftExcept(MonadExcept<M, E> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public Monad<T> delegate() {
+            return RWSTC.this;
+        }
+
+        @Override
+        public <A> $<T, A> throwE(E e) {
+            return lift(inner.throwE(e));
+        }
+
+        @Override
+        public <A> $<T, A> catchE(Function<? super E, ? extends $<T, A>> h, $<T, A> m) {
+            return $((r, s) -> inner.catchE(e -> runRWS(h.apply(e), r, s), runRWS(m, r, s)));
+        }
     }
 }

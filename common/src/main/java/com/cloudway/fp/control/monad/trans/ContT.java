@@ -6,6 +6,8 @@
 
 package com.cloudway.fp.control.monad.trans;
 
+import java.util.function.Function;
+
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Monad;
 
@@ -37,5 +39,14 @@ public final class ContT<M extends Monad<M>> extends ContTC<ContT<M>, M>
      */
     public static <M extends Monad<M>> ContT<M> on(M nm) {
         return new ContT<>(nm);
+    }
+
+    public static <M extends Monad<M>, R, A> $<M, R>
+    run(Function<? super A, ? extends $<M, R>> k, $<ContT<M>, A> m) {
+        return m.getTypeClass().runCont(m, k);
+    }
+
+    public static <M extends Monad<M>, R> $<M, R> eval($<ContT<M>, R> m) {
+        return m.getTypeClass().evalCont(m);
     }
 }

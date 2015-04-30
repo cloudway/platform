@@ -374,7 +374,7 @@ public class MonadStateTest {
         StateT<Integer, ReaderT<Integer, Identity.µ>> sr = StateT.on(ReaderT.on(Identity.tclass));
         $<StateT<Integer, ReaderT<Integer, Identity.µ>>, Integer> b =
             do_(sr.get(), x ->
-            do_(ReaderT.ask(sr), y ->
+            do_(sr.<Integer>liftReader().ask(), y ->
             do_(sr.pure(x + y))));
         assertEquals(Tuple.of(7, 3), Identity.run(ReaderT.run(StateT.run(b, 3), 4)));
     }

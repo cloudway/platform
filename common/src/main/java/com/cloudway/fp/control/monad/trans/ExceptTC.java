@@ -9,10 +9,12 @@ package com.cloudway.fp.control.monad.trans;
 import java.util.function.Function;
 
 import com.cloudway.fp.$;
+import com.cloudway.fp.control.ForwardingMonad;
 import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.Tuple;
+import com.cloudway.fp.data.Unit;
 
 import static com.cloudway.fp.data.Either.left;
 import static com.cloudway.fp.data.Either.right;
@@ -175,15 +177,98 @@ public abstract class ExceptTC<T, E, M extends Monad<M>> implements MonadTrans<T
 
     // Lifting other operations
 
-    <W, A> $<T, Tuple<A, W>> liftListen(WriterTC<M, W, ?> wt, $<T, A> m) {
-        return $(wt.bind(wt.listen(runExcept(m)), (Tuple<Either<E, A>, W> t) ->
-            t.as((a, w) -> wt.pure(a.map(r -> Tuple.of(r, w))))));
+    @Override
+    @SuppressWarnings("unchecked")
+    public <R> MonadReader<T, R> liftReader() {
+        MonadReader<M, R> inner;
+        if (nm instanceof MonadReader) {
+            inner = (MonadReader<M,R>)nm;
+        } else if (nm instanceof MonadTrans) {
+            inner = (MonadReader<M,R>)((MonadTrans<T,M>)nm).liftReader();
+        } else {
+            throw new UnsupportedOperationException("liftReader");
+        }
+        return new LiftReader<R>(inner);
     }
 
-    <W, A> $<T, A> liftPass(WriterTC<M, W, ?> wt, $<T, Tuple<A, Function<W, W>>> m) {
-        return $(wt.pass(wt.bind(runExcept(m), (Either<E, Tuple<A, Function<W, W>>> t) ->
-            wt.pure(t.<Tuple<Either<E,A>, Function<W,W>>>either(
-                l -> Tuple.of(left(l), Fn.id()),
-                r -> r.mapFirst(Either::right))))));
+    private class LiftReader<R> implements MonadReader<T, R>, ForwardingMonad<T> {
+        private final MonadReader<M, R> inner;
+
+        LiftReader(MonadReader<M, R> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public Monad<T> delegate() {
+            return ExceptTC.this;
+        }
+
+        @Override
+        public <A> $<T, A> reader(Function<? super R, ? extends A> f) {
+            return lift(inner.reader(f));
+        }
+
+        @Override
+        public $<T, R> ask() {
+            return lift(inner.ask());
+        }
+
+        @Override
+        public <A> $<T, A> local(Function<R, R> f, $<T, A> m) {
+            return mapExcept(m, v -> inner.local(f, v));
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <W> MonadWriter<T, W> liftWriter() {
+        MonadWriter<M, W> inner;
+        if (nm instanceof MonadWriter) {
+            inner = (MonadWriter<M,W>)nm;
+        } else if (nm instanceof MonadTrans) {
+            inner = (MonadWriter<M,W>)((MonadTrans<T,M>)nm).liftWriter();
+        } else {
+            throw new UnsupportedOperationException("liftWriter");
+        }
+        return new LiftWriter<W>(inner);
+    }
+
+    private class LiftWriter<W> implements MonadWriter<T, W>, ForwardingMonad<T> {
+        private final MonadWriter<M, W> inner;
+
+        LiftWriter(MonadWriter<M, W> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public Monad<T> delegate() {
+            return ExceptTC.this;
+        }
+
+        @Override
+        public <A> $<T, A> writer(Tuple<A, W> aw) {
+            return lift(inner.writer(aw));
+        }
+
+        @Override
+        public $<T, Unit> tell(W w) {
+            return lift(inner.tell(w));
+        }
+
+        @Override
+        public <A> $<T, Tuple<A, W>> listen($<T, A> m) {
+            MonadWriter<M, W> wt = this.inner;
+            return $(wt.bind(wt.listen(runExcept(m)), (Tuple<Either<E, A>, W> t) ->
+                t.as((a, w) -> wt.pure(a.map(r -> Tuple.of(r, w))))));
+        }
+
+        @Override
+        public <A> $<T, A> pass($<T, Tuple<A, Function<W, W>>> m) {
+            MonadWriter<M, W> wt = this.inner;
+            return $(wt.pass(wt.bind(runExcept(m), (Either<E, Tuple<A, Function<W, W>>> t) ->
+                wt.pure(t.<Tuple<Either<E, A>, Function<W, W>>>either(
+                    l -> Tuple.of(left(l), Fn.id()),
+                    r -> r.mapFirst(Either::right))))));
+        }
     }
 }

@@ -11,7 +11,6 @@ import java.util.function.Function;
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.data.Tuple;
-import com.cloudway.fp.data.Unit;
 
 /**
  * A state transformer monad.
@@ -55,25 +54,5 @@ public final class StateT<S, M extends Monad<M>>
 
     public static <S, M extends Monad<M>> $<M, S> exec($<StateT<S, M>, ?> m, S s) {
         return m.getTypeClass().execState(m, s);
-    }
-
-    public static <T, S, ST extends StateTC<ST, S, ?>>
-    $<T, S> get(MonadTrans<T, ST> mt) {
-        return mt.lift(mt.inner().get());
-    }
-
-    public static <T, S, ST extends StateTC<ST, S, ?>>
-    $<T, Unit> put(MonadTrans<T, ST> mt, S s) {
-        return mt.lift(mt.inner().put(s));
-    }
-
-    public static <T, S, ST extends StateTC<ST, S, ?>>
-    $<T, Unit> modify(MonadTrans<T, ST> mt, Function<S, S> f) {
-        return mt.lift(mt.inner().modify(f));
-    }
-
-    public static <T, S, A, ST extends StateTC<ST, S, ?>>
-    $<T, A> gets(MonadTrans<T, ST> mt, Function<? super S, ? extends A> f) {
-        return mt.lift(mt.inner().gets(f));
     }
 }

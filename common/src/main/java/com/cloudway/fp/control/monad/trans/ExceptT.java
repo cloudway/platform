@@ -6,8 +6,6 @@
 
 package com.cloudway.fp.control.monad.trans;
 
-import java.util.function.Function;
-
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.data.Either;
@@ -49,50 +47,7 @@ public final class ExceptT<E, M extends Monad<M>>
         return new ExceptT<>(nm);
     }
 
-    public static <T, E, A, ET extends ExceptTC<ET, E, ?>>
-    $<T, A> throwE(MonadTrans<T, ET> mt, E e) {
-        return mt.lift(mt.inner().<A>throwE(e));
-    }
-
-    public static <R, E, A, ET extends ExceptTC<ET, E, ?>>
-    $<ReaderT<R, ET>, A> catchE(ReaderT<R, ET> mt,
-                                Function<? super E, ? extends $<ReaderT<R, ET>, A>> h,
-                                $<ReaderT<R, ET>, A> m) {
-        return mt.liftCatch(mt.inner(), h, m);
-    }
-
-    public static <W, E, A, ET extends ExceptTC<ET, E, ?>>
-    $<WriterT<W, ET>, A> catchE(WriterT<W, ET> mt,
-                                Function<? super E, ? extends $<WriterT<W, ET>, A>> h,
-                                $<WriterT<W, ET>, A> m) {
-        return mt.liftCatch(mt.inner(), h, m);
-    }
-
-    public static <S, E, A, ET extends ExceptTC<ET, E, ?>>
-    $<StateT<S, ET>, A> catchE(StateT<S, ET> mt,
-                               Function<? super E, ? extends $<StateT<S, ET>, A>> h,
-                               $<StateT<S, ET>, A> m) {
-        return mt.liftCatch(mt.inner(), h, m);
-    }
-
-    public static <R, W, S, E, A, ET extends ExceptTC<ET, E, ?>>
-    $<RWST<R,W,S,ET>, A> catchE(RWST<R,W,S,ET> mt,
-                                Function<? super E, ? extends $<RWST<R,W,S,ET>, A>> h,
-                                $<RWST<R,W,S,ET>, A> m) {
-        return mt.liftCatch(mt.inner(), h, m);
-    }
-
-    public static <E, A, ET extends ExceptTC<ET, E, ?>>
-    $<ListT<ET>, A> catchE(ListT<ET> mt,
-                           Function<? super E, ? extends $<ListT<ET>, A>> h,
-                           $<ListT<ET>, A> m) {
-        return mt.liftCatch(mt.inner(), h, m);
-    }
-
-    public static <E, A, ET extends ExceptTC<ET, E, ?>>
-    $<MaybeT<ET>, A> catchE(MaybeT<ET> mt,
-                            Function<? super E, ? extends $<MaybeT<ET>, A>> h,
-                            $<MaybeT<ET>, A> m) {
-        return mt.liftCatch(mt.inner(), h, m);
+    public static <E, M extends Monad<M>, A> $<M, Either<E, A>> run($<ExceptT<E, M>, A> m) {
+        return m.getTypeClass().runExcept(m);
     }
 }

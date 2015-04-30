@@ -11,6 +11,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.cloudway.fp.$;
+import com.cloudway.fp.control.ForwardingMonad;
 import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.data.Fn;
 
@@ -267,8 +268,47 @@ public abstract class ContTC<T, M extends Monad<M>>
 
     // Lifting other operations
 
-    <R, A> $<T, A> liftLocal(ReaderTC<M, R, ?> rt, Function<R, R> f, $<T, A> m) {
-        return $(c -> rt.bind(rt.ask(), r ->
-            rt.local(f, runCont(m, a -> rt.local(Fn.pure(r), c.apply(a))))));
+    @Override
+    @SuppressWarnings("unchecked")
+    public <R> MonadReader<T, R> liftReader() {
+        MonadReader<M, R> inner;
+        if (nm instanceof MonadReader) {
+            inner = (MonadReader<M,R>)nm;
+        } else if (nm instanceof MonadTrans) {
+            inner = (MonadReader<M,R>)((MonadTrans<T,M>)nm).liftReader();
+        } else {
+            throw new UnsupportedOperationException("liftReader");
+        }
+        return new LiftReader<R>(inner);
+    }
+
+    private class LiftReader<R> implements MonadReader<T, R>, ForwardingMonad<T> {
+        private final MonadReader<M, R> inner;
+
+        LiftReader(MonadReader<M, R> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public Monad<T> delegate() {
+            return ContTC.this;
+        }
+
+        @Override
+        public <A> $<T, A> reader(Function<? super R, ? extends A> f) {
+            return lift(inner.reader(f));
+        }
+
+        @Override
+        public $<T, R> ask() {
+            return lift(inner.ask());
+        }
+
+        @Override
+        public <A> $<T, A> local(Function<R, R> f, $<T, A> m) {
+            MonadReader<M, R> rt = this.inner;
+            return $(c -> rt.bind(rt.ask(), r ->
+                rt.local(f, runCont(m, a -> rt.local(Fn.pure(r), c.apply(a))))));
+        }
     }
 }

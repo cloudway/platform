@@ -159,7 +159,7 @@ public final class Except<E, A> extends ExceptTC.Monadic<Except.µ<E>, E, Identi
         return (Except<E,A>)value;
     }
     
-    public static <E, A> Either<E, A> runExcept($<µ<E>, A> m) {
+    public static <E, A> Either<E, A> run($<µ<E>, A> m) {
         return narrow(m).runExcept();
     }
 

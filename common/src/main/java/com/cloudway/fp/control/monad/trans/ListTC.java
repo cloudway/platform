@@ -13,6 +13,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.cloudway.fp.$;
+import com.cloudway.fp.control.ForwardingMonad;
 import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.control.MonadPlus;
 import com.cloudway.fp.data.Fn;
@@ -202,29 +203,6 @@ public abstract class ListTC<T, M extends Monad<M>>
         return $(() -> append(runList(xs), runList(ys)));
     }
 
-    // Lifting other operations
-
-    /* This (perhaps more straightforward) implementation has the disadvantage
-     * that it only catches errors that occur at the first position of the list.
-     *
-     *      m `catchError` h = ListT $ runListT m `catchError` \e -> runListT (h e)
-     *
-     * This is better because errors are caught everywhere in the list.
-     */
-    <E, A> $<T, A> liftCatch(ExceptTC<M, E, ?> et, Function<? super E, ? extends $<T, A>> h, $<T, A> m) {
-        return $(() -> deepCatch(et, h, runList(m)));
-    }
-
-    private <E, A> $<M, MList<M, A>> deepCatch(ExceptTC<M, E, ?> et,
-            Function<? super E, ? extends $<T, A>> h, $<M, MList<M, A>> ml) {
-        return et.catchE(e -> runList(h.apply(e)), nm.map(ml, xs -> deepCatch_(et, h, xs)));
-    }
-
-    private <E, A> MList<M, A> deepCatch_(ExceptTC<M, E, ?> et,
-            Function<? super E, ? extends $<T, A>> h, MList<M, A> xs) {
-        return xs.isEmpty() ? xs : mcons(xs.head(), () -> deepCatch(et, h, xs.tail()));
-    }
-
     // Internals
 
     private static final class MCons<M extends Monad<M>, A> extends MList<M, A> {
@@ -304,5 +282,102 @@ public abstract class ListTC<T, M extends Monad<M>>
 
     private <A> $<M, MList<M, A>> joinMList_(MList<M, $<M, MList<M, A>>> xss) {
         return xss.isEmpty() ? nm.pure(mnil()) : append(xss.head(), joinMList(xss.tail()));
+    }
+
+    // Lifting other operations
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <R> MonadReader<T, R> liftReader() {
+        MonadReader<M, R> inner;
+        if (nm instanceof MonadReader) {
+            inner = (MonadReader<M,R>)nm;
+        } else if (nm instanceof MonadTrans) {
+            inner = (MonadReader<M,R>)((MonadTrans<T,M>)nm).liftReader();
+        } else {
+            throw new UnsupportedOperationException("liftReader");
+        }
+        return new LiftReader<>(inner);
+    }
+
+    private class LiftReader<R> implements MonadReader<T, R>, ForwardingMonad<T> {
+        private final MonadReader<M, R> inner;
+
+        LiftReader(MonadReader<M, R> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public Monad<T> delegate() {
+            return ListTC.this;
+        }
+
+        @Override
+        public <A> $<T, A> reader(Function<? super R, ? extends A> f) {
+            return lift(inner.reader(f));
+        }
+
+        @Override
+        public $<T, R> ask() {
+            return lift(inner.ask());
+        }
+
+        @Override
+        public <A> $<T, A> local(Function<R, R> f, $<T, A> m) {
+            return mapList(m, v -> inner.local(f, v));
+        }
+    }
+
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <E> MonadExcept<T, E> liftExcept() {
+        MonadExcept<M, E> inner;
+        if (nm instanceof MonadExcept) {
+            inner = (MonadExcept<M,E>)nm;
+        } else if (nm instanceof MonadTrans) {
+            inner = (MonadExcept<M,E>)((MonadTrans<T,M>)nm).liftExcept();
+        } else {
+            throw new UnsupportedOperationException("liftExcept");
+        }
+        return new LiftExcept<>(inner);
+    }
+
+    private class LiftExcept<E> implements MonadExcept<T, E>, ForwardingMonad<T> {
+        private final MonadExcept<M, E> inner;
+
+        LiftExcept(MonadExcept<M, E> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public Monad<T> delegate() {
+            return ListTC.this;
+        }
+
+        @Override
+        public <A> $<T, A> throwE(E e) {
+            return lift(inner.throwE(e));
+        }
+
+        /* This (perhaps more straightforward) implementation has the disadvantage
+         * that it only catches errors that occur at the first position of the list.
+         *
+         *      m `catchError` h = ListT $ runListT m `catchError` \e -> runListT (h e)
+         *
+         * This is better because errors are caught everywhere in the list.
+         */
+        @Override
+        public <A> $<T, A> catchE(Function<? super E, ? extends $<T, A>> h, $<T, A> m) {
+            return $(() -> deepCatch(h, runList(m)));
+        }
+
+        private <A> $<M, MList<M, A>> deepCatch(Function<? super E, ? extends $<T, A>> h, $<M, MList<M, A>> ml) {
+            return inner.catchE(e -> runList(h.apply(e)), nm.map(ml, xs -> deepCatch_(h, xs)));
+        }
+
+        private <A> MList<M, A> deepCatch_(Function<? super E, ? extends $<T, A>> h, MList<M, A> xs) {
+            return xs.isEmpty() ? xs : mcons(xs.head(), () -> deepCatch(h, xs.tail()));
+        }
     }
 }

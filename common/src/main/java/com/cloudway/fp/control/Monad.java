@@ -46,7 +46,7 @@ public interface Monad<M> extends Applicative<M> {
      *
      * <pre>{@code (>>=) :: m a -> (a -> m b) -> m b}</pre>
      */
-    <A, B> $<M,B> bind($<M,A> a, Function<? super A, ? extends $<M,B>> k);
+    <A, B> $<M,B> bind($<M,A> m, Function<? super A, ? extends $<M,B>> k);
 
     /**
      * Sequentially compose two actions, discarding any value produced by the
@@ -88,16 +88,16 @@ public interface Monad<M> extends Applicative<M> {
      * function to the elements of given container.
      */
     @Override
-    default <A, B> $<M,B> map($<M,A> a, Function<? super A, ? extends B> f) {
-        return bind(a, x -> pure(f.apply(x)));
+    default <A, B> $<M,B> map($<M,A> m, Function<? super A, ? extends B> f) {
+        return bind(m, x -> pure(f.apply(x)));
     }
 
     /**
      * Sequential application.
      */
     @Override
-    default <A, B> $<M,B> ap($<M, Function<? super A, ? extends B>> fs, $<M,A> a) {
-        return bind(fs, f -> map(a, f));
+    default <A, B> $<M,B> ap($<M, Function<? super A, ? extends B>> mf, $<M,A> v) {
+        return bind(mf, f -> map(v, f));
     }
 
     /**

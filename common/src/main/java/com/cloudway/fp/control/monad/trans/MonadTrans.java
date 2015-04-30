@@ -59,4 +59,34 @@ public interface MonadTrans<T, M extends Monad<M>> extends Monad<T>, MonadIO<T> 
             throw new UnsupportedOperationException("liftIO: unsupported operation");
         }
     }
+
+    // (Optional) Lifting other operations
+
+    /**
+     * Lift a computation from an enclosed {@link MonadReader}.
+     */
+    default <R> MonadReader<T, R> liftReader() {
+        throw new UnsupportedOperationException("liftReader");
+    }
+
+    /**
+     * Lift a computation from an enclosed {@link MonadWriter}.
+     */
+    default <W> MonadWriter<T, W> liftWriter() {
+        throw new UnsupportedOperationException("liftWriter");
+    }
+
+    /**
+     * Lift a computation from an enclosed {@link MonadState}.
+     */
+    default <S> MonadState<T, S> liftState() {
+        return StateTC.liftState(this);
+    }
+
+    /**
+     * Lift a computation from an enclosed {@link MonadExcept}.
+     */
+    default <E> MonadExcept<T, E> liftExcept() {
+        throw new UnsupportedOperationException("liftExcept");
+    }
 }
