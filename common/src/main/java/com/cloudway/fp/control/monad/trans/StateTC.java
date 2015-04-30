@@ -190,7 +190,7 @@ public abstract class StateTC<T, S, M extends Monad<M>>
      */
     @Override
     public <A, B> $<T, B> bind($<T, A> m, Function<? super A, ? extends $<T, B>> k) {
-        return $(s -> nm.bind(runState(m, s), t -> t.as((a, s1) -> runState(k.apply(a), s1))));
+        return $(s -> nm.bind(runState(m, s), (a, s1) -> runState(k.apply(a), s1)));
     }
 
     /**
@@ -331,16 +331,14 @@ public abstract class StateTC<T, S, M extends Monad<M>>
 
         @Override
         public <A> $<T, Tuple<A, W>> listen($<T, A> m) {
-            MonadWriter<M, W> wt = this.inner;
-            return $(s -> wt.bind(wt.listen(runState(m, s)), (Tuple<Tuple<A, S>, W> t) ->
-                t.as((a, w) -> wt.pure(a.mapFirst(r -> Tuple.of(r, w))))));
+            return $(s -> inner.map(inner.listen(runState(m, s)), (a, w) ->
+                a.mapFirst(r -> Tuple.of(r, w))));
         }
 
         @Override
         public <A> $<T, A> pass($<T, Tuple<A, Function<W, W>>> m) {
-            MonadWriter<M, W> wt = this.inner;
-            return $(s -> wt.pass(wt.bind(runState(m, s), (Tuple<Tuple<A, Function<W, W>>, S> t) ->
-                t.as((a, s1) -> wt.pure(a.mapFirst(r -> Tuple.of(r, s1)))))));
+            return $(s -> inner.pass(inner.map(runState(m, s), (a, s1) ->
+                a.mapFirst(r -> Tuple.of(r, s1)))));
         }
     }
 

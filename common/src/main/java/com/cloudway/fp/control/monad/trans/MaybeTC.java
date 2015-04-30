@@ -228,15 +228,12 @@ public abstract class MaybeTC<T, M extends Monad<M>>
 
         @Override
         public <A> $<T, Tuple<A, W>> listen($<T, A> m) {
-            MonadWriter<M, W> wt = this.inner;
-            return $(wt.map(wt.listen(runMaybe(m)), (Tuple<Maybe<A>, W> t) ->
-                t.as((a, w) -> a.map(r -> Tuple.of(r, w)))));
+            return $(inner.map(inner.listen(runMaybe(m)), (a, w) -> a.map(r -> Tuple.of(r, w))));
         }
 
         @Override
         public <A> $<T, A> pass($<T, Tuple<A, Function<W, W>>> m) {
-            MonadWriter<M, W> wt = this.inner;
-            return $(wt.pass(wt.map(runMaybe(m), (Maybe<Tuple<A, Function<W, W>>> a) ->
+            return $(inner.pass(inner.map(runMaybe(m), (Maybe<Tuple<A, Function<W, W>>> a) ->
                 a.isPresent() ? Tuple.of(Maybe.of(a.get().first()), a.get().second())
                               : Tuple.of(Maybe.empty(), Fn.id()))));
         }

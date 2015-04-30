@@ -7,6 +7,7 @@
 package com.cloudway.fp.control;
 
 import java.util.Collection;
+import java.util.function.BiFunction;
 import java.util.function.DoubleFunction;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -22,6 +23,7 @@ import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Ref;
 import com.cloudway.fp.data.IntSeq;
 import com.cloudway.fp.data.Seq;
+import com.cloudway.fp.data.Tuple;
 import com.cloudway.fp.data.Unit;
 import com.cloudway.fp.io.IO;
 import com.cloudway.fp.io.VoidIO;
@@ -424,30 +426,38 @@ public final class Syntax {
         return h.set(Fn.lazy(() -> body.apply(h.get()))).get();
     }
 
-    // Do notation helper methods. These methods simply call 'bind' or 'then'
+    // Do notation helper methods. These methods simply call '>>=' or '>>'
     // on monads.
 
     /**
      * Helper method to chain monad actions together.
      */
-    public static <M extends Monad<M>, A, B> $<M, B>
-    do_($<M, A> a, Function<? super A, ? extends $<M, B>> f) {
-        return a.getTypeClass().bind(a, f);
+    public static <M extends Monad<M>, A, B>
+    $<M, B> do_($<M, A> m, Function<? super A, ? extends $<M, B>> k) {
+        return m.getTypeClass().bind(m, k);
+    }
+
+    /**
+     * Helper method to chain monad actions together.
+     */
+    public static <M extends Monad<M>, A, B, C>
+    $<M, C> do_($<M, Tuple<A, B>> m, BiFunction<? super A, ? super B, ? extends $<M, C>> k) {
+        return m.getTypeClass().bind(m, k);
     }
 
     /**
      * Helper method to chain monad actions together, discard intermediate result.
      */
-    public static <M extends Monad<M>, A, B> $<M, B>
-    do_($<M, A> a, $<M, B> b) {
+    public static <M extends Monad<M>, A, B>
+    $<M, B> do_($<M, A> a, $<M, B> b) {
         return a.getTypeClass().seqR(a, b);
     }
 
     /**
      * Helper method to chain monad actions together, discard intermediate result.
      */
-    public static <M extends Monad<M>, A, B> $<M, B>
-    do_($<M, A> a, Supplier<? extends $<M, B>> b) {
+    public static <M extends Monad<M>, A, B>
+    $<M, B> do_($<M, A> a, Supplier<? extends $<M, B>> b) {
         return a.getTypeClass().seqR(a, b);
     }
 
@@ -476,17 +486,31 @@ public final class Syntax {
     /**
      * Conditional execution of monad action.
      */
-    public static <F extends Applicative<F>> $<F, Unit>
-    when(boolean test, $<F, Unit> then) {
+    public static <F extends Applicative<F>>
+    $<F, Unit> when(boolean test, $<F, Unit> then) {
         return test ? then : then.getTypeClass().pure(Unit.U);
     }
 
     /**
      * The reverse of when.
      */
-    public static <F extends Applicative<F>> $<F, Unit>
-    unless(boolean test, $<F, Unit> orElse) {
+    public static <F extends Applicative<F>>
+    $<F, Unit> unless(boolean test, $<F, Unit> orElse) {
         return test ? orElse.getTypeClass().pure(Unit.U) : orElse;
+    }
+
+    /**
+     * Combine the results of alternatives.
+     */
+    @SafeVarargs
+    public static <F extends Alternative<F>, A>
+    $<F, A> alternative($<F, A> first, $<F, A>... rest) {
+        F tc = first.getTypeClass();
+        $<F, A> result = first;
+        for ($<F, A> next : rest) {
+            result = tc.mplus(result, next);
+        }
+        return result;
     }
 
     /**

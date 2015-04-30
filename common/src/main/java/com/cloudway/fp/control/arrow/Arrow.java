@@ -6,6 +6,7 @@
 
 package com.cloudway.fp.control.arrow;
 
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.cloudway.fp.data.Fn;
@@ -37,6 +38,15 @@ public interface Arrow<A> extends Category<A> {
      * <pre>{@code arr :: (b -> c) -> a b c}</pre>
      */
     <B, C> π<A, B, C> arr(Function<? super B, ? extends C> f);
+
+    /**
+     * Lift a binary function to an arrow.
+     *
+     * <pre>{@code arr :: ((b,c) -> d) -> a (b,c) d}</pre>
+     */
+    default <B, C, D> π<A, Tuple<B, C>, D> arr(BiFunction<? super B, ? super C, ? extends D> f) {
+        return arr(t -> t.as(f));
+    }
 
     /**
      * Send the first component of the input through the argument arrow,

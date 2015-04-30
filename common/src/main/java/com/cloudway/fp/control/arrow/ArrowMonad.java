@@ -83,7 +83,7 @@ public class ArrowMonad<A extends ArrowApply<A>>
         π<A, Unit, Tuple<Function<? super B, ? extends C>, B>> split =
             arrow.fanout(unMonad(f), unMonad(v));
         π<A, Tuple<Function<? super B, ? extends C>, B>, C> merge =
-            arrow.arr(t -> t.as((k, x) -> k.apply(x)));
+            arrow.arr((k, x) -> k.apply(x));
         return monad(arrow.then(split, merge));
     }
 }

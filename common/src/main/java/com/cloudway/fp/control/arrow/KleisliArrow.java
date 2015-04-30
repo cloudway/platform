@@ -7,6 +7,7 @@
 package com.cloudway.fp.control.arrow;
 
 
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.cloudway.fp.$;
@@ -48,6 +49,13 @@ public class KleisliArrow<M extends Monad<M>>
         };
     }
 
+    /**
+     * Construct a Kleisli arrow from given binary function.
+     */
+    public <A, B, C> Kleisli<M, Tuple<A, B>, C> kleisli(BiFunction<? super A, ? super B, ? extends $<M, C>> f) {
+        return kleisli(t -> t.as(f));
+    }
+
     @Override
     public <A> Kleisli<M, A, A> id() {
         return kleisli(nm::pure);
@@ -72,12 +80,12 @@ public class KleisliArrow<M extends Monad<M>>
 
     @Override
     public <B, C, D> Kleisli<M, Tuple<B,D>, Tuple<C,D>> first(π<KleisliArrow<M>, B, C> f) {
-        return kleisli(bd -> bd.as((b, d) -> nm.bind(run(f, b), (C c) -> nm.pure(Tuple.of(c, d)))));
+        return kleisli((b, d) -> nm.bind(run(f, b), (C c) -> nm.pure(Tuple.of(c, d))));
     }
 
     @Override
     public <B, C, D> Kleisli<M, Tuple<D,B>, Tuple<D,C>> second(π<KleisliArrow<M>, B, C> f) {
-        return kleisli(db -> db.as((d, b) -> nm.bind(run(f, b), (C c) -> nm.pure(Tuple.of(d, c)))));
+        return kleisli((d, b) -> nm.bind(run(f, b), (C c) -> nm.pure(Tuple.of(d, c))));
     }
 
     @Override

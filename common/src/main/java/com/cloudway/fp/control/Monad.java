@@ -15,6 +15,7 @@ import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.Foldable;
 import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.data.Traversable;
+import com.cloudway.fp.data.Tuple;
 import com.cloudway.fp.data.Unit;
 import com.cloudway.fp.function.TriFunction;
 
@@ -49,6 +50,13 @@ public interface Monad<M> extends Applicative<M> {
     <A, B> $<M,B> bind($<M,A> m, Function<? super A, ? extends $<M,B>> k);
 
     /**
+     * Convenient method for binding on tuple computation.
+     */
+    default <A, B, C> $<M,C> bind($<M, Tuple<A,B>> m, BiFunction<? super A, ? super B, ? extends $<M,C>> k) {
+        return bind(m, t -> t.as(k));
+    }
+
+    /**
      * Sequentially compose two actions, discarding any value produced by the
      * first.
      *
@@ -80,7 +88,10 @@ public interface Monad<M> extends Applicative<M> {
      * Lift an action with side effect.
      */
     default $<M, Unit> action(Runnable a) {
-        return lazy(() -> { a.run(); return Unit.U; });
+        return lazy(() -> {
+            a.run();
+            return Unit.U;
+        });
     }
 
     /**
@@ -110,6 +121,15 @@ public interface Monad<M> extends Applicative<M> {
     }
 
     /**
+     * The join function is the conventional monad join operator. It is used
+     * to remove one level of monadic structure, projecting its bound argument
+     * into the outer level.
+     */
+    default <A> $<M, A> join($<M, ? extends $<M, A>> x) {
+        return bind(x, y -> y);
+    }
+
+    /**
      * Promote a function to a monad.
      *
      * <pre>{@code liftM :: Monad m => (a -> b) -> m a -> m b}</pre>
@@ -126,7 +146,15 @@ public interface Monad<M> extends Applicative<M> {
      */
     default <A, B, C> BiFunction<$<M,A>, $<M,B>, $<M,C>>
     liftM2(BiFunction<? super A, ? super B, ? extends C> f) {
-        return (m1, m2) -> bind(m1, x1 -> map(m2, x2 -> f.apply(x1, x2)));
+        return (m1, m2) -> liftM2(f, m1, m2);
+    }
+
+    /**
+     * Promote a function to a monad and apply it immediately.
+     */
+    default <A, B, C> $<M,C>
+    liftM2(BiFunction<? super A, ? super B, ? extends C> f, $<M,A> m1, $<M,B> m2) {
+        return bind(m1, x1 -> map(m2, x2 -> f.apply(x1, x2)));
     }
 
     /**
@@ -137,7 +165,15 @@ public interface Monad<M> extends Applicative<M> {
      */
     default <A, B, C, D> TriFunction<$<M,A>, $<M,B>, $<M,C>, $<M,D>>
     liftM3(TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
-        return (m1, m2, m3) -> bind(m1, x1 -> bind(m2, x2 -> map(m3, x3 -> f.apply(x1, x2, x3))));
+        return (m1, m2, m3) -> liftM3(f, m1, m2, m3);
+    }
+
+    /**
+     * Promote a function to a monad and apply it immediately.
+     */
+    default <A, B, C, D> $<M,D>
+    liftM3(TriFunction<? super A, ? super B, ? super C, ? extends D> f, $<M,A> m1, $<M,B> m2, $<M,C> m3) {
+        return bind(m1, x1 -> bind(m2, x2 -> map(m3, x3 -> f.apply(x1, x2, x3))));
     }
 
     /**

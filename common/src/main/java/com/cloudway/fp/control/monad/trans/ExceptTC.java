@@ -257,18 +257,15 @@ public abstract class ExceptTC<T, E, M extends Monad<M>> implements MonadTrans<T
 
         @Override
         public <A> $<T, Tuple<A, W>> listen($<T, A> m) {
-            MonadWriter<M, W> wt = this.inner;
-            return $(wt.bind(wt.listen(runExcept(m)), (Tuple<Either<E, A>, W> t) ->
-                t.as((a, w) -> wt.pure(a.map(r -> Tuple.of(r, w))))));
+            return $(inner.map(inner.listen(runExcept(m)), (a, w) -> a.map(r -> Tuple.of(r, w))));
         }
 
         @Override
         public <A> $<T, A> pass($<T, Tuple<A, Function<W, W>>> m) {
-            MonadWriter<M, W> wt = this.inner;
-            return $(wt.pass(wt.bind(runExcept(m), (Either<E, Tuple<A, Function<W, W>>> t) ->
-                wt.pure(t.<Tuple<Either<E, A>, Function<W, W>>>either(
+            return $(inner.pass(inner.map(runExcept(m), (Either<E, Tuple<A, Function<W, W>>> t) ->
+                t.<Tuple<Either<E, A>, Function<W, W>>>either(
                     l -> Tuple.of(left(l), Fn.id()),
-                    r -> r.mapFirst(Either::right))))));
+                    r -> r.mapFirst(Either::right)))));
         }
     }
 }

@@ -6,6 +6,7 @@
 
 package com.cloudway.fp.data;
 
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.cloudway.fp.$;
@@ -32,6 +33,13 @@ public interface Functor<F> {
      * <pre>{@code map :: f a -> (a -> b) -> f b}</pre>
      */
     <A, B> $<F, B> map($<F, A> a, Function<? super A, ? extends B> f);
+
+    /**
+     * Convenient method for mapping on tuple argument.
+     */
+    default <A, B, C> $<F, C> map($<F, Tuple<A, B>> a, BiFunction<? super A, ? super B, ? extends C> f) {
+        return map(a, t -> t.as(f));
+    }
 
     /**
      * Replace all locations in the input with the same value. The default

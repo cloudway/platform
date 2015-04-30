@@ -54,7 +54,7 @@ public interface MonadWriter<M, W> extends Monad<M> {
      * the given function to the output to the value of the computation.
      */
     default <A, B> $<M, Tuple<A, B>> listens(Function<? super W, ? extends B> f, $<M, A> m) {
-        return bind(listen(m), aw -> aw.as((a, w) -> pure(Tuple.of(a, f.apply(w)))));
+        return bind(listen(m), (a, w) -> pure(Tuple.of(a, f.apply(w))));
     }
 
     /**

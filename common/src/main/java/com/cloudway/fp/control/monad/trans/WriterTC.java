@@ -142,9 +142,9 @@ public abstract class WriterTC<T, W, M extends Monad<M>>
      */
     @Override
     public <A, B> $<T, B> bind($<T, A> m, Function<? super A, ? extends $<T, B>> k) {
-        return $(nm.bind(runWriter(m), t1 -> t1.as((a, w) ->
-                 nm.bind(runWriter(k.apply(a)), t2 -> t2.as((b, w1) ->
-                 raw(b, wm.append(w, w1)))))));
+        return $(nm.bind(runWriter(m), (a, w) ->
+                 nm.bind(runWriter(k.apply(a)), (b, w1) ->
+                 raw(b, wm.append(w, w1)))));
     }
 
     /**
@@ -179,7 +179,7 @@ public abstract class WriterTC<T, W, M extends Monad<M>>
      */
     @Override
     public <A> $<T, Tuple<A, W>> listen($<T, A> m) {
-        return $(nm.bind(runWriter(m), t -> t.as((a, w) -> raw(Tuple.of(a, w), w))));
+        return $(nm.bind(runWriter(m), (a, w) -> raw(Tuple.of(a, w), w)));
     }
 
     /**
@@ -188,7 +188,7 @@ public abstract class WriterTC<T, W, M extends Monad<M>>
      */
     @Override
     public <A, B> $<T, Tuple<A, B>> listens(Function<? super W, ? extends B> f, $<T, A> m) {
-        return $(nm.bind(runWriter(m), t -> t.as((a, w) -> raw(Tuple.of(a, f.apply(w)), w))));
+        return $(nm.bind(runWriter(m), (a, w) -> raw(Tuple.of(a, f.apply(w)), w)));
     }
 
     /**
@@ -197,7 +197,7 @@ public abstract class WriterTC<T, W, M extends Monad<M>>
      */
     @Override
     public <A> $<T, A> pass($<T, Tuple<A, Function<W, W>>> m) {
-        return $(nm.bind(runWriter(m), t -> t.as((af, w) -> af.as((a, f) -> raw(a, f.apply(w))))));
+        return $(nm.bind(runWriter(m), (af, w) -> af.as((a, f) -> raw(a, f.apply(w)))));
     }
 
     /**
@@ -206,7 +206,7 @@ public abstract class WriterTC<T, W, M extends Monad<M>>
      */
     @Override
     public <A> $<T, A> censor(Function<W, W> f, $<T, A> m) {
-        return $(nm.bind(runWriter(m), t -> t.as((a, w) -> raw(a, f.apply(w)))));
+        return $(nm.bind(runWriter(m), (a, w) -> raw(a, f.apply(w))));
     }
 
     // Lifting other operations
@@ -291,16 +291,14 @@ public abstract class WriterTC<T, W, M extends Monad<M>>
 
         @Override
         public <A> $<T, Tuple<A, W1>> listen($<T, A> m) {
-            MonadWriter<M, W1> wt = this.inner;
-            return $(wt.bind(wt.listen(runWriter(m)), (Tuple<Tuple<A, W>, W1> t) ->
-                t.as((a, w) -> wt.pure(a.mapFirst(r -> Tuple.of(r, w))))));
+            return $(inner.map(inner.listen(runWriter(m)), (Tuple<A, W> a, W1 w) ->
+                a.mapFirst(r -> Tuple.of(r, w))));
         }
 
         @Override
         public <A> $<T, A> pass($<T, Tuple<A, Function<W1, W1>>> m) {
-            MonadWriter<M, W1> wt = this.inner;
-            return $(wt.pass(wt.bind(runWriter(m), (Tuple<Tuple<A, Function<W1, W1>>, W> t) ->
-                t.as((a, w) -> wt.pure(a.mapFirst(r -> Tuple.of(r, w)))))));
+            return $(inner.pass(inner.map(runWriter(m), (Tuple<A, Function<W1, W1>> a, W w) ->
+                a.mapFirst(r -> Tuple.of(r, w)))));
         }
     }
 
