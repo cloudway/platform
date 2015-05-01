@@ -254,7 +254,7 @@ public final class Fn {
         }
     }
 
-    private static class LazyThunk<T> implements Supplier<T> {
+    private static class LazyThunk<T> implements Supplier<T>, Forcible<Supplier<T>> {
         private Supplier<T> thunk;
         private T value;
 
@@ -269,6 +269,12 @@ public final class Fn {
                 thunk = null;
             }
             return value;
+        }
+
+        @Override
+        public Supplier<T> force() {
+            Forcible.force(get());
+            return this;
         }
     }
 

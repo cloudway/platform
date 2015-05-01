@@ -36,7 +36,7 @@ import com.cloudway.fp.$;
  *
  * @param <T> the element type
  */
-public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T>
+public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T>, Forcible<Seq<T>>
 {
     /**
      * Returns {@code true} if this list contains no elements.
@@ -275,6 +275,19 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T
     }
 
     // Operations
+
+    /**
+     * Fully evaluate the list to "Normal Form".  This include the data
+     * structure of the list and elements in list.  This method will not
+     * return for a infinite list.
+     */
+    @Override
+    default Seq<T> force() {
+        for (Seq<T> xs = this; !xs.isEmpty(); xs = xs.tail()) {
+            Forcible.force(xs.head());
+        }
+        return this;
+    }
 
     /**
      * Repeat a list infinitely.

@@ -427,6 +427,16 @@ final class TMapImpl {
         public Node<K,V> cursor() {
             return this;
         }
+
+        NodeList<K,V> force() {
+            NodeList<K,V> p = this;
+            while (p != null) {
+                Forcible.force(p.key);
+                Forcible.force(p.value);
+                p = p.next;
+            }
+            return this;
+        }
     }
 
     static class Empty<K,V> implements TMap<K,V> {
@@ -498,6 +508,11 @@ final class TMapImpl {
         @Override
         public Traverser<K,V> traverser() {
             return null;
+        }
+
+        @Override
+        public PMap<K,V> force() {
+            return this;
         }
 
         @Override
@@ -630,6 +645,13 @@ final class TMapImpl {
 
         @Override
         public Node<K,V> cursor() {
+            return this;
+        }
+
+        @Override
+        public PMap<K,V> force() {
+            Forcible.force(key);
+            Forcible.force(value);
             return this;
         }
 
@@ -778,6 +800,12 @@ final class TMapImpl {
         @Override
         public Traverser<K,V> traverser() {
             return kvs;
+        }
+
+        @Override
+        public PMap<K,V> force() {
+            kvs.force();
+            return this;
         }
 
         @Override
@@ -1167,6 +1195,14 @@ final class TMapImpl {
             public Node<K,V> cursor() {
                 return current.cursor();
             }
+        }
+
+        @Override
+        public PMap<K,V> force() {
+            for (TMap<K,V> elem : elems) {
+                elem.force();
+            }
+            return this;
         }
 
         @Override

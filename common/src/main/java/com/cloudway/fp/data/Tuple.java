@@ -23,8 +23,8 @@ import com.cloudway.fp.function.ExceptionTriFunction;
 /**
  * A tuple with two elements.
  */
-public class Tuple<A, B> implements
-    $<Tuple.µ<A>, B>, Foldable<B>, Traversable<Tuple.µ<A>, B>,
+public class Tuple<A, B> implements $<Tuple.µ<A>, B>,
+    Foldable<B>, Traversable<Tuple.µ<A>, B>, Forcible<Tuple<A, B>>,
     Serializable, Cloneable
 {
     private static final long serialVersionUID = 6021746465072972306L;
@@ -141,6 +141,13 @@ public class Tuple<A, B> implements
      */
     public static <A, B> Predicate<Tuple<A, B>> second(Predicate<? super B> p) {
         return t -> p.test(t.second());
+    }
+
+    @Override
+    public Tuple<A, B> force() {
+        Forcible.force(first);
+        Forcible.force(second);
+        return this;
     }
 
     public boolean equals(Object obj) {

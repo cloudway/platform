@@ -254,6 +254,15 @@ final class TSetImpl {
         public K cursor() {
             return key;
         }
+
+        List<K> force() {
+            List<K> p = this;
+            while (p != null) {
+                Forcible.force(key);
+                p = p.next;
+            }
+            return this;
+        }
     }
 
     static class Empty<K> extends TSet<K> {
@@ -325,6 +334,11 @@ final class TSetImpl {
         @Override
         public Traverser<K> traverser() {
             return null;
+        }
+
+        @Override
+        public PSet<K> force() {
+            return this;
         }
 
         @Override
@@ -427,6 +441,12 @@ final class TSetImpl {
         @Override
         public K cursor() {
             return key;
+        }
+
+        @Override
+        public PSet<K> force() {
+            Forcible.force(key);
+            return this;
         }
 
         @Override
@@ -540,6 +560,12 @@ final class TSetImpl {
         @Override
         public Traverser<K> traverser() {
             return keys;
+        }
+
+        @Override
+        public PSet<K> force() {
+            keys.force();
+            return this;
         }
 
         @Override
@@ -1008,6 +1034,14 @@ final class TSetImpl {
             public K cursor() {
                 return current.cursor();
             }
+        }
+
+        @Override
+        public PSet<K> force() {
+            for (TSet<K> elem : elems) {
+                elem.force();
+            }
+            return this;
         }
 
         @Override

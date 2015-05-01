@@ -26,7 +26,7 @@ import com.cloudway.fp.$;
  * @param <K> the type of keys maintained by this map
  * @param <V> the type of mapped values
  */
-public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
+public interface PMap<K, V> extends Iterable<Map.Entry<K, V>>, Forcible<PMap<K, V>> {
 
     // Query Operations
 
@@ -419,6 +419,14 @@ public interface PMap<K, V> extends Iterable<Map.Entry<K, V>> {
      */
     default void forEach(BiConsumer<? super K, ? super V> action) {
         foldLeftKV(Unit.U, (z, k, v) -> { action.accept(k, v); return z; });
+    }
+
+    /**
+     * Fully evaluate the data structure.
+     */
+    @Override
+    default PMap<K, V> force() {
+        return this;
     }
 
     // Views

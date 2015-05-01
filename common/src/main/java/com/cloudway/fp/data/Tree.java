@@ -1552,6 +1552,11 @@ final class Tree {
             return Collections.emptyIterator();
         }
 
+        @Override
+        public PMap<K, V> force() {
+            return this;
+        }
+
         public boolean equals(Object obj) {
             return (obj instanceof PMap) && ((PMap)obj).isEmpty();
         }
@@ -1601,6 +1606,15 @@ final class Tree {
         @Override
         public Iterator<Map.Entry<K,V>> iterator() {
             return new MapIterator<>(this);
+        }
+
+        @Override
+        public PMap<K, V> force() {
+            Forcible.force(key);
+            Forcible.force(value);
+            Forcible.force(left);
+            Forcible.force(right);
+            return this;
         }
 
         public boolean equals(Object obj) {
@@ -1812,6 +1826,11 @@ final class Tree {
             return Spliterators.emptySpliterator();
         }
 
+        @Override
+        public PSet<E> force() {
+            return this;
+        }
+
         public boolean equals(Object obj) {
             return (obj instanceof PSet) && ((PSet)obj).isEmpty();
         }
@@ -1844,6 +1863,14 @@ final class Tree {
         @Override
         public Spliterator<E> spliterator() {
             return new TreeSpliterator<>(this);
+        }
+
+        @Override
+        public PSet<E> force() {
+            Forcible.force(key);
+            Forcible.force(left);
+            Forcible.force(right);
+            return this;
         }
 
         public boolean equals(Object obj) {

@@ -31,7 +31,9 @@ import com.cloudway.fp.$;
  *
  * @param <A> The element type of the vector
  */
-public interface Vector<A> extends $<Vector.µ, A>, Foldable<A>, Traversable<Vector.µ, A> {
+public interface Vector<A> extends $<Vector.µ, A>,
+    Foldable<A>, Traversable<Vector.µ, A>, Forcible<Vector<A>>
+{
     /**
      * Construct an empty vector.
      *

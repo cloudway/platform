@@ -29,7 +29,9 @@ import com.cloudway.fp.$;
  * @param <A> the type of the left value
  * @param <B> the type of the right value
  */
-public abstract class Either<A, B> implements $<Either.µ<A>, B>, Traversable<Either.µ<A>, B> {
+public abstract class Either<A, B> implements $<Either.µ<A>, B>,
+    Traversable<Either.µ<A>, B>, Forcible<Either<A, B>>
+{
     private static class Left<A, B> extends Either<A, B> {
         private final A a;
 
@@ -45,6 +47,12 @@ public abstract class Either<A, B> implements $<Either.µ<A>, B>, Traversable<Ei
         @Override
         public A left() {
             return a;
+        }
+
+        @Override
+        public Either<A, B> force() {
+            Forcible.force(a);
+            return this;
         }
 
         public String toString() {
@@ -67,6 +75,12 @@ public abstract class Either<A, B> implements $<Either.µ<A>, B>, Traversable<Ei
         @Override
         public B right() {
             return b;
+        }
+
+        @Override
+        public Either<A, B> force() {
+            Forcible.force(b);
+            return this;
         }
 
         public String toString() {

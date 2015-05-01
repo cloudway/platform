@@ -252,7 +252,7 @@ final class FingerTreeImpl {
      * A digit is a vector of 1-4 elements. Serves as a pointer to the
      * prefix or suffix of a finger tree.
      */
-    static abstract class Digit<V,A> implements Foldable<A>, Measured<V> {
+    static abstract class Digit<V,A> implements Foldable<A>, Measured<V>, Forcible<Digit<V,A>> {
         final FTMaker<V,A> m;
 
         Digit(FTMaker<V,A> m) {
@@ -336,6 +336,12 @@ final class FingerTreeImpl {
             return f.apply(z, a);
         }
 
+        @Override
+        public Digit<V,A> force() {
+            Forcible.force(a);
+            return this;
+        }
+
         @Override <R> R as(Function<A,R> f) { return f.apply(a); }
     }
 
@@ -404,6 +410,13 @@ final class FingerTreeImpl {
         @Override
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return f.apply(f.apply(z, a), b);
+        }
+
+        @Override
+        public Digit<V,A> force() {
+            Forcible.force(a);
+            Forcible.force(b);
+            return this;
         }
 
         @Override <R> R as(BiFunction<A,A,R> f) { return f.apply(a, b); }
@@ -481,6 +494,14 @@ final class FingerTreeImpl {
         @Override
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return f.apply(f.apply(f.apply(z, a), b), c);
+        }
+
+        @Override
+        public Digit<V,A> force() {
+            Forcible.force(a);
+            Forcible.force(b);
+            Forcible.force(c);
+            return this;
         }
 
         @Override <R> R as(TriFunction<A,A,A,R> f) { return f.apply(a, b, c); }
@@ -567,12 +588,21 @@ final class FingerTreeImpl {
             return f.apply(f.apply(f.apply(f.apply(z, a), b), c), d);
         }
 
+        @Override
+        public Digit<V,A> force() {
+            Forcible.force(a);
+            Forcible.force(b);
+            Forcible.force(c);
+            Forcible.force(d);
+            return this;
+        }
+
         @Override <R> R as(QuadFunction<A,A,A,A,R> f) { return f.apply(a, b, c, d); }
     }
 
     // ------------------------------------------------------------------------
 
-    static abstract class Node<V,A> implements Foldable<A>, Measured<V> {
+    static abstract class Node<V,A> implements Foldable<A>, Measured<V>, Forcible<Node<V,A>> {
         final FTMaker<V,A> m;
         final V v;
 
@@ -655,6 +685,13 @@ final class FingerTreeImpl {
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return f.apply(f.apply(z, a), b);
         }
+
+        @Override
+        public Node<V,A> force() {
+            Forcible.force(a);
+            Forcible.force(b);
+            return this;
+        }
     }
 
     static final class Node3<V,A> extends Node<V,A> {
@@ -727,6 +764,14 @@ final class FingerTreeImpl {
         @Override
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return f.apply(f.apply(f.apply(z, a), b), c);
+        }
+
+        @Override
+        public Node<V,A> force() {
+            Forcible.force(a);
+            Forcible.force(b);
+            Forcible.force(c);
+            return this;
         }
     }
 
@@ -897,6 +942,11 @@ final class FingerTreeImpl {
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return z;
         }
+
+        @Override
+        public FingerTree<V,A> force() {
+            return this;
+        }
     }
 
     static class Single<V,A> extends FTree<V,A> {
@@ -995,6 +1045,12 @@ final class FingerTreeImpl {
         @Override
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return f.apply(z, a);
+        }
+
+        @Override
+        public FingerTree<V,A> force() {
+            Forcible.force(a);
+            return this;
         }
     }
 
@@ -1497,6 +1553,14 @@ final class FingerTreeImpl {
         @Override
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return sf.foldLeft(mi.foldLeft(pr.foldLeft(z, f), (r, x) -> x.foldLeft(r, f)), f);
+        }
+
+        @Override
+        public FingerTree<V,A> force() {
+            pr.force();
+            mi.force();
+            sf.force();
+            return this;
         }
     }
 }

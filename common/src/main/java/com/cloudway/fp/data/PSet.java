@@ -15,7 +15,7 @@ import java.util.stream.StreamSupport;
  *
  * @param <E> the type of set elements
  */
-public interface PSet<E> extends Foldable<E> {
+public interface PSet<E> extends Foldable<E>, Forcible<PSet<E>> {
 
     // Query Operations
 
@@ -126,5 +126,13 @@ public interface PSet<E> extends Foldable<E> {
      */
     default Stream<E> stream() {
         return StreamSupport.stream(spliterator(), false);
+    }
+
+    /**
+     * Fully evaluate the data structure.
+     */
+    @Override
+    default PSet<E> force() {
+        return this;
     }
 }

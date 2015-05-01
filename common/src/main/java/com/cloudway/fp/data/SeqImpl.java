@@ -114,12 +114,12 @@ final class SeqImpl {
 
     private static class LazySeq<T> implements Seq<T>, Delayed {
         private final T head;
-        private volatile Supplier<Seq<T>> generator;
+        private volatile Supplier<Seq<T>> thunk;
         private volatile Seq<T> tail;
 
-        LazySeq(T head, Supplier<Seq<T>> generator) {
+        LazySeq(T head, Supplier<Seq<T>> thunk) {
             this.head = head;
-            this.generator = generator;
+            this.thunk = thunk;
         }
 
         @Override
@@ -141,19 +141,19 @@ final class SeqImpl {
 
         private synchronized void expand() {
             if (tail == null) {
-                tail = requireNonNull(generator.get());
-                generator = null; // no longer used again
+                tail = requireNonNull(thunk.get());
+                thunk = null; // no longer used again
             }
         }
 
         @Override
         public boolean computed() {
-            return generator == null;
+            return thunk == null;
         }
 
         @Override
         public String toString() {
-            if (generator != null) {
+            if (thunk != null) {
                 return "[" + head + ", ?]";
             } else {
                 return SeqImpl.toString(this);
@@ -168,7 +168,7 @@ final class SeqImpl {
             this.delayed = delayed;
         }
 
-        Seq<T> force() {
+        Seq<T> eval() {
             return delayed.tail();
         }
 
@@ -179,17 +179,17 @@ final class SeqImpl {
 
         @Override
         public boolean isEmpty() {
-            return force().isEmpty();
+            return eval().isEmpty();
         }
 
         @Override
         public T head() {
-            return force().head();
+            return eval().head();
         }
 
         @Override
         public Seq<T> tail() {
-            return force().tail();
+            return eval().tail();
         }
 
         @Override
@@ -226,6 +226,12 @@ final class SeqImpl {
         }
 
         @Override
+        public Seq<T> force() {
+            Forcible.force(value);
+            return this;
+        }
+
+        @Override
         public String toString() {
             return "[" + value + ", ...]";
         }
@@ -257,7 +263,7 @@ final class SeqImpl {
     }
 
     static <T> Seq<T> force(Seq<T> seq) {
-        return (seq instanceof DelaySeq) ? ((DelaySeq<T>)seq).force() : seq;
+        return (seq instanceof DelaySeq) ? ((DelaySeq<T>)seq).eval() : seq;
     }
 
     @SuppressWarnings("unchecked")

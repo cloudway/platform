@@ -13,7 +13,6 @@ import java.util.function.Supplier;
 
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Applicative;
-import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.control.MonadFix;
 
 /**
@@ -28,7 +27,9 @@ import com.cloudway.fp.control.MonadFix;
  *
  * @param <A> the type of identity value
  */
-public final class Identity<A> implements $<Identity.µ, A>, Foldable<A>, Traversable<Identity.µ, A> {
+public final class Identity<A> implements $<Identity.µ, A>,
+    Foldable<A>, Traversable<Identity.µ, A>, Forcible<Identity<A>>
+{
     private final A value;
 
     private Identity(A a) {
@@ -127,6 +128,12 @@ public final class Identity<A> implements $<Identity.µ, A>, Foldable<A>, Traver
     public <F, B> $<F, Identity<B>>
     traverse(Applicative<F> m, Function<? super A, ? extends $<F, B>> f) {
         return m.map(f.apply(value), Identity::of);
+    }
+
+    @Override
+    public Identity<A> force() {
+        Forcible.force(value);
+        return this;
     }
 
     // Monad

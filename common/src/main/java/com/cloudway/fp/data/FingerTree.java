@@ -29,7 +29,7 @@ import java.util.function.UnaryOperator;
  * @param <V> The monoidal type with which to annotate nodes
  * @param <A> The type of the tree's elements
  */
-public interface FingerTree<V, A> extends Foldable<A> {
+public interface FingerTree<V, A> extends Foldable<A>, Forcible<FingerTree<V,A>> {
     /**
      * This interface has two purposes:
      *

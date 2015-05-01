@@ -37,7 +37,9 @@ import static com.cloudway.fp.control.Conditionals.with;
  * {@link #ifPresent(java.util.function.Consumer) ifPresent()} (execute a block
  * of code if the value is present).
  */
-public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<Maybe.µ, A> {
+public final class Maybe<A> implements $<Maybe.µ, A>,
+    Foldable<A>, Traversable<Maybe.µ, A>, Forcible<Maybe<A>>
+{
     /**
      * Common instance for {@code empty()}.
      */
@@ -275,6 +277,12 @@ public final class Maybe<A> implements $<Maybe.µ, A>, Foldable<A>, Traversable<
         } else {
             throw exceptionSupplier.get();
         }
+    }
+
+    @Override
+    public Maybe<A> force() {
+        Forcible.force(value);
+        return this;
     }
 
     /**

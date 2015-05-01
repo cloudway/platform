@@ -221,7 +221,7 @@ final class VectorImpl {
      * A digit is a vector of 1-4 elements. Serves as a pointer to the
      * prefix or suffix of a finger tree.
      */
-    static abstract class Digit<A> implements Foldable<A>, Sized {
+    static abstract class Digit<A> implements Foldable<A>, Sized, Forcible<Digit<A>> {
         abstract int card();
         abstract A first();
         abstract A last();
@@ -314,6 +314,12 @@ final class VectorImpl {
             return f.apply(z, a);
         }
 
+        @Override
+        public Digit<A> force() {
+            Forcible.force(a);
+            return this;
+        }
+
         @Override <R> R as(Function<A,R> f) { return f.apply(a); }
     }
 
@@ -392,6 +398,13 @@ final class VectorImpl {
         @Override
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return f.apply(f.apply(z, a), b);
+        }
+
+        @Override
+        public Digit<A> force() {
+            Forcible.force(a);
+            Forcible.force(b);
+            return this;
         }
 
         @Override <R> R as(BiFunction<A,A,R> f) { return f.apply(a, b); }
@@ -480,6 +493,14 @@ final class VectorImpl {
         @Override
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return f.apply(f.apply(f.apply(z, a), b), c);
+        }
+
+        @Override
+        public Digit<A> force() {
+            Forcible.force(a);
+            Forcible.force(b);
+            Forcible.force(c);
+            return this;
         }
 
         @Override <R> R as(TriFunction<A,A,A,R> f) { return f.apply(a, b, c); }
@@ -580,12 +601,21 @@ final class VectorImpl {
             return f.apply(f.apply(f.apply(f.apply(z, a), b), c), d);
         }
 
+        @Override
+        public Digit<A> force() {
+            Forcible.force(a);
+            Forcible.force(b);
+            Forcible.force(c);
+            Forcible.force(d);
+            return this;
+        }
+
         @Override <R> R as(QuadFunction<A,A,A,A,R> f) { return f.apply(a, b, c, d); }
     }
 
     // ------------------------------------------------------------------------
 
-    static abstract class Node<A> implements Foldable<A>, Sized {
+    static abstract class Node<A> implements Foldable<A>, Sized, Forcible<Node<A>> {
         abstract Place<A> lookup(int i);
         abstract Node<A> modify(int i, IndexFunction<A> f);
         abstract Split<Digit<A>,A> split(int i);
@@ -674,6 +704,13 @@ final class VectorImpl {
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return f.apply(f.apply(z, a), b);
         }
+
+        @Override
+        public Node<A> force() {
+            Forcible.force(a);
+            Forcible.force(b);
+            return this;
+        }
     }
 
     static final class Node3<A> extends Node<A> {
@@ -757,6 +794,14 @@ final class VectorImpl {
         @Override
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return f.apply(f.apply(f.apply(z, a), b), c);
+        }
+
+        @Override
+        public Node<A> force() {
+            Forcible.force(a);
+            Forcible.force(b);
+            Forcible.force(c);
+            return this;
         }
     }
 
@@ -967,6 +1012,11 @@ final class VectorImpl {
         }
 
         @Override
+        public Vector<A> force() {
+            return this;
+        }
+
+        @Override
         public String toString() {
             return "Vector[]";
         }
@@ -1078,6 +1128,12 @@ final class VectorImpl {
         @Override
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return f.apply(z, a);
+        }
+
+        @Override
+        public Vector<A> force() {
+            Forcible.force(a);
+            return this;
         }
 
         @Override
@@ -1579,6 +1635,14 @@ final class VectorImpl {
         @Override
         public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
             return sf.foldLeft(mi.foldLeft(pr.foldLeft(z, f), (r, x) -> x.foldLeft(r, f)), f);
+        }
+
+        @Override
+        public Vector<A> force() {
+            pr.force();
+            mi.force();
+            sf.force();
+            return this;
         }
 
         public String toString() {
