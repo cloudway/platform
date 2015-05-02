@@ -352,6 +352,11 @@ public abstract class TrampolineIO<A> implements $<TrampolineIO.µ, A> {
         }
 
         @Override
+        public <A> TrampolineIO<A> delay(Supplier<$<µ, A>> m) {
+            return suspend(m);
+        }
+
+        @Override
         public <A> TrampolineIO<A> lazy(Supplier<A> a) {
             return TrampolineIO.lazy(a::get);
         }

@@ -78,6 +78,13 @@ public interface Monad<M> extends Applicative<M> {
     }
 
     /**
+     * Delay evaluate the computation.
+     */
+    default <A> $<M, A> delay(Supplier<$<M, A>> m) {
+        return seqR(unit(), m);
+    }
+
+    /**
      * Lift a lazy value.
      */
     default <A> $<M, A> lazy(Supplier<A> a) {

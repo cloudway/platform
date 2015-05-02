@@ -143,32 +143,6 @@ public abstract class Trampoline<A> implements $<Trampoline.µ, A> {
         }
     }
 
-    /**
-     * A thunk of computation.
-     */
-    private static final class Thunk<A> extends Normal<A> {
-        private final Supplier<A> thunk;
-
-        private Thunk(Supplier<A> t) {
-            thunk = t;
-        }
-
-        @Override
-        protected <R> R foldNormal(Function<A, R> pure, Function<Supplier<Trampoline<A>>, R> k) {
-            return pure.apply(thunk.get());
-        }
-
-        @Override
-        protected <R> R fold(Function<Normal<A>, R> n, Function<Codense<A>, R> gs) {
-            return n.apply(this);
-        }
-
-        @Override
-        public Either<Supplier<Trampoline<A>>, A> resume() {
-            return right(thunk.get());
-        }
-    }
-
     @SuppressWarnings("unchecked")
     private static <A, B> Codense<B> codense(Normal<A> a, Function<? super A, ? extends $<µ, B>> k) {
         return new Codense<>((Normal<Object>)a, (Function<Object, Trampoline<B>>)k);
@@ -208,14 +182,14 @@ public abstract class Trampoline<A> implements $<Trampoline.µ, A> {
      * @return the trampoline that holds the computation
      */
     public static <A> Trampoline<A> lazy(Supplier<A> a) {
-        return new Thunk<>(Fn.lazy(a));
+        return suspend(Fn.lazy(() -> pure(a.get())));
     }
 
     /**
      * Constructs a computation that performs the given action with no result.
      */
     public static Trampoline<Unit> action(Runnable a) {
-        return new Thunk<>(() -> { a.run(); return Unit.U; });
+        return lazy(() -> { a.run(); return Unit.U; });
     }
 
     /**
@@ -332,6 +306,11 @@ public abstract class Trampoline<A> implements $<Trampoline.µ, A> {
         @Override
         public <A> Trampoline<A> pure(A a) {
             return Trampoline.pure(a);
+        }
+
+        @Override
+        public <A> Trampoline<A> delay(Supplier<$<µ, A>> m) {
+            return suspend(m);
         }
 
         @Override

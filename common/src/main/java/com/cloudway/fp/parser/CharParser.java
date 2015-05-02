@@ -16,7 +16,7 @@ import com.cloudway.fp.data.Identity;
  * @param <ST> the user state type
  */
 public class CharParser<ST> extends CharParserTC<CharParser<ST>, ST, Identity.µ> {
-    public CharParser() {
+    private CharParser() {
         super(Identity.tclass);
     }
 

@@ -11,11 +11,14 @@ import java.util.function.Predicate;
 
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Monad;
+import com.cloudway.fp.control.Trampoline;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.data.Tuple;
 import com.cloudway.fp.data.Unit;
+
+import static com.cloudway.fp.control.Trampoline.suspend;
 
 /**
  * A {@link CharParserT} typeclass definition.
@@ -95,7 +98,7 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * Parses a newline character ('\n'). Returns a newline character.
      */
     public $<P, Character> newline() {
-        return label(character('\n'), "lf new-line");
+        return label(chr('\n'), "lf new-line");
     }
 
     /**
@@ -103,7 +106,7 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * ('\n'). Returns a newline character.
      */
     public $<P, Character> crlf() {
-        return label(seqR(character('\r'), character('\n')), "crlf newline");
+        return label(seqR(chr('\r'), chr('\n')), "crlf newline");
     }
 
     /**
@@ -118,7 +121,7 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * Parses a tab character ('\t'). Returns a tab character.
      */
     public $<P, Character> tab() {
-        return label(character('\t'), "tab");
+        return label(chr('\t'), "tab");
     }
 
     /**
@@ -184,7 +187,7 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
     /**
      * Parses a single character. Returns the parsed character.
      */
-    public $<P, Character> character(char c) {
+    public $<P, Character> chr(char c) {
         return label(satisfy(x -> x == c), String.valueOf(c));
     }
 
@@ -200,7 +203,7 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
     }
 
     public $<P, String> manyChar1($<P, Character> p) {
-        return map(many(p), CharParserTC::join);
+        return map(many1(p), CharParserTC::join);
     }
 
     private static String join(Seq<Character> cs) {
@@ -215,30 +218,30 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
     /**
      * Parses a sequence of characters. Returns the parsed string.
      */
-    public $<P, String> string(String cs) {
+    public $<P, String> str(String cs) {
         if (cs.isEmpty()) {
-            return $((s, cok, cerr, eok, eerr) -> eok.apply("", s, unknownError(s)));
+            return $((s, cok, cerr, eok, eerr) -> suspend(() -> eok.apply("", s, unknownError(s))));
         } else {
             return $((s, cok, cerr, eok, eerr) -> s.as((input, pos, u) -> {
-                BiFunction<String, String, $<M, Object>> walk = Fn.fix((rec, toks, rs) -> {
+                BiFunction<String, String, Trampoline<$<M, Object>>> walk = Fn.fix((rec, toks, rs) -> {
                     if (toks.isEmpty()) {
                         SourcePos pos_ = pos.updatePosString(cs);
                         State<String, ST> s_ = new State<>(rs, pos_, u);
-                        return cok.apply(cs, s_, new ParseError(pos_));
+                        return suspend(() -> cok.apply(cs, s_, new ParseError(pos_)));
                     } else {
-                        return stream().uncons(rs).map(t -> t.as((x, xs) ->
+                        return suspend(() -> stream().uncons(rs).map(t -> t.as((x, xs) ->
                             toks.charAt(0) == x
                                 ? rec.apply(toks.substring(1), xs)
                                 : cerr.apply(errExpect(pos, x, cs))
-                        )).orElseGet(() -> cerr.apply(errEof(pos, cs)));
+                        )).orElseGet(() -> cerr.apply(errEof(pos, cs))));
                     }
                 });
 
-                return stream().uncons(input).map(t -> t.as((x, xs) ->
+                return suspend(() -> stream().uncons(input).map(t -> t.as((x, xs) ->
                     cs.charAt(0) == x
                         ? walk.apply(cs.substring(1), xs)
                         : cerr.apply(errExpect(pos, x, cs))
-                    )).orElseGet(() -> cerr.apply(errEof(pos, cs)));
+                    )).orElseGet(() -> cerr.apply(errEof(pos, cs))));
             }));
         }
     }
