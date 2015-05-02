@@ -50,4 +50,18 @@ public final class SeqZipper<T> extends SeqZipperBase<T, SeqZipper<T>> {
     public Seq<T> toList() {
         return front.reverse().append(rear);
     }
+
+    /**
+     * Returns the front list.
+     */
+    public Seq<T> front() {
+        return front.reverse();
+    }
+
+    /**
+     * Returns the rear list.
+     */
+    public Seq<T> rear() {
+        return rear;
+    }
 }

@@ -177,13 +177,21 @@ public interface Monad<M> extends Applicative<M> {
     }
 
     /**
-     * Evaluate each action in the list from left to right, and collect the
-     * result.
+     * Evaluate each action in the data structure from left to right, and
+     * collect the result.
      *
      * <pre>{@code flatM :: (Traversable t, Monad m) => t (m a) -> m (t a)}</pre>
      */
     default <T, A> $<M, ? extends Traversable<T, A>>
     flatM(Traversable<T, ? extends $<M, A>> ms) {
+        return ms.traverse(this, Fn.<$<M,A>>id());
+    }
+
+    /**
+     * Evaluate each action in the list from left to right, and collect the
+     * result.
+     */
+    default <A> $<M, Seq<A>> flatM(Seq<? extends $<M, A>> ms) {
         return ms.traverse(this, Fn.<$<M,A>>id());
     }
 
@@ -209,6 +217,14 @@ public interface Monad<M> extends Applicative<M> {
     }
 
     /**
+     * The {@code mapM} is analogous to {@link Seq#map(Function) map} except
+     * that its result is encapsulated in a {@code Monad}.
+     */
+    default <A, B> $<M, Seq<B>> mapM(Seq<A> xs, Function<? super A, ? extends $<M, B>> f) {
+        return xs.traverse(this, f);
+    }
+
+    /**
      * {@code mapM_} is equivalent to {@code sequence(xs.map(f))}.
      *
      * <pre>{@code mapM_ :: (Foldable t, Monad m) => t a -> (a -> m b) -> m ()}</pre>
@@ -224,10 +240,9 @@ public interface Monad<M> extends Applicative<M> {
      *
      * <pre>{@code zipM :: Monad m => [a] -> [b] -> (a -> b -> m c) -> m [c]}</pre>
      */
-    @SuppressWarnings("unchecked")
     default <A, B, C> $<M, Seq<C>>
     zipM(Seq<A> xs, Seq<B> ys, BiFunction<? super A, ? super B, ? extends $<M, C>> f) {
-        return ($<M, Seq<C>>)flatM(Seq.zip(xs, ys, f));
+        return flatM(Seq.zip(xs, ys, f));
     }
 
     /**
@@ -272,9 +287,8 @@ public interface Monad<M> extends Applicative<M> {
      *
      * <pre>{@code replicateM :: Monad m => Int -> m a -> m [a]}</pre>
      */
-    @SuppressWarnings("unchecked")
     default <A> $<M, Seq<A>> replicateM(int n, $<M, A> a) {
-        return ($<M, Seq<A>>)flatM(Seq.replicate(n, a));
+        return flatM(Seq.replicate(n, a));
     }
 
     /**

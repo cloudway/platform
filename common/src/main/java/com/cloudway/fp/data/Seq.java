@@ -632,6 +632,21 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T
     }
 
     /**
+     * Applied to a predicate and returns a tuple where first element is longest
+     * prefix (possibly empty) of xs of elements that satisfy the given predicate
+     * and second element is the remainder of the list.
+     *
+     * <p>{@code xs.span(p)} is equivalent to {@code (xs.takeWhile(p), xs.dropWhile(p)}.
+     */
+    default Tuple<Seq<T>, Seq<T>> span(Predicate<? super T> predicate) {
+        SeqZipper<T> z = SeqZipper.from(this);
+        while (!z.atEnd() && predicate.test(z.get())) {
+            z = z.right();
+        }
+        return Tuple.of(z.front(), z.rear());
+    }
+
+    /**
      * Returns the count of elements in this list.
      *
      * @return the count of elements in this list

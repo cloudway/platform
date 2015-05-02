@@ -56,7 +56,7 @@ public abstract class Either<A, B> implements $<Either.µ<A>, B>,
         }
 
         public String toString() {
-            return "Left(" + a + ")";
+            return "Left " + a;
         }
     }
 
@@ -84,7 +84,7 @@ public abstract class Either<A, B> implements $<Either.µ<A>, B>,
         }
 
         public String toString() {
-            return "Right(" + b + ")";
+            return "Right " + b;
         }
     }
 
