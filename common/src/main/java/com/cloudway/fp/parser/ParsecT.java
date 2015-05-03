@@ -432,23 +432,15 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      * expression'. Without the {@code label} combinator, the message would
      * like '...: expecting "let" or letter', which is less friendly.</p>
      */
-    public <A> $<P, A> label($<P, A> p, String msg) {
-        return labels(p, Seq.of(msg));
-    }
-
-    public <A> $<P, A> labels($<P, A> p, Seq<String> msgs) {
+    public <A> $<P, A> label(String msg, $<P, A> p) {
         return $((s, cok, cerr, eok, eerr) -> unParser(p, s, cok, cerr,
-            (x, s1, e) -> suspend(() -> eok.apply(x, s1, setExpectErrors(e, msgs))),
-            (e) -> suspend(() -> eerr.apply(setExpectErrors(e, msgs)))));
+            (x, s1, e) -> suspend(() -> eok.apply(x, s1, setExpectError(e, msg))),
+            (e) -> suspend(() -> eerr.apply(setExpectError(e, msg)))));
     }
 
-    private static ParseError setExpectErrors(ParseError err, Seq<String> msgs) {
-        if (msgs.isEmpty()) {
-            return err.setMessage(new Message.Expect(""));
-        } else {
-            Seq<Message> messages = err.getMessages().append(msgs.map(Message.Expect::new));
-            return new ParseError(err.getErrorPos(), messages.distinct());
-        }
+    private static ParseError setExpectError(ParseError err, String msg) {
+        Seq<Message> messages = err.getMessages().append(new Message.Expect(msg));
+        return new ParseError(err.getErrorPos(), messages.distinct());
     }
 
     /**
@@ -714,7 +706,7 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      * parser but it is defined using {@link #notFollowedBy}.
      */
     public $<P, Unit> eof() {
-        return label(notFollowedBy(anyToken()), "end of input");
+        return label("end of input", notFollowedBy(anyToken()));
     }
 
     /**

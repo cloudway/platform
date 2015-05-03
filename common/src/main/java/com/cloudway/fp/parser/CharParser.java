@@ -15,18 +15,24 @@ import com.cloudway.fp.data.Identity;
  *
  * @param <ST> the user state type
  */
-public class CharParser<ST> extends CharParserTC<CharParser<ST>, ST, Identity.µ> {
+public class CharParser<ST> extends CharParserTC<CharParser<ST>, String, ST, Identity.µ> {
     private CharParser() {
         super(Identity.tclass);
     }
 
     private static final CharParser<?> _TCLASS = new CharParser<>();
 
+    /**
+     * Returns the single instance of the {@code CharParser}.
+     */
     @SuppressWarnings("unchecked")
     public static <ST> CharParser<ST> get() {
         return (CharParser<ST>)_TCLASS;
     }
 
+    /**
+     * Run the {@code CharParser}.
+     */
     public static <ST, A> Either<ParseError, A>
     run($<CharParser<ST>, A> p, ST st, String name, String input) {
         return Identity.run(p.getTypeClass().runParsecT(p, st, name, input));
@@ -47,5 +53,10 @@ public class CharParser<ST> extends CharParserTC<CharParser<ST>, ST, Identity.µ
     @Override
     protected <A> $<CharParser<ST>, A> $(ParseFunction<String, ST, Identity.µ, A, ?> f) {
         return new Parser<>(f);
+    }
+
+    @Override
+    protected Stream<String, Character> stream() {
+        return CharStream.INSTANCE;
     }
 }

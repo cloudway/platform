@@ -17,7 +17,7 @@ import com.cloudway.fp.data.Either;
  * @param <M> the inner monad type
  */
 public class CharParserT<ST, M extends Monad<M>>
-    extends CharParserTC<CharParserT<ST, M>, ST, M>
+    extends CharParserTC<CharParserT<ST, M>, String, ST, M>
 {
     private CharParserT(M nm) {
         super(nm);
@@ -30,6 +30,11 @@ public class CharParserT<ST, M extends Monad<M>>
                 return CharParserT.this;
             }
         };
+    }
+
+    @Override
+    protected Stream<String, Character> stream() {
+        return CharStream.INSTANCE;
     }
 
     /**

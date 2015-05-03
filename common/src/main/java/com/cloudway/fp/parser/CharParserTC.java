@@ -15,7 +15,6 @@ import com.cloudway.fp.control.Trampoline;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Seq;
-import com.cloudway.fp.data.Tuple;
 import com.cloudway.fp.data.Unit;
 
 import static com.cloudway.fp.control.Trampoline.suspend;
@@ -24,31 +23,15 @@ import static com.cloudway.fp.control.Trampoline.suspend;
  * A {@link CharParserT} typeclass definition.
  *
  * @param <P> the parser monad typeclass
- * @param <ST> the user state type
+ * @param <S> the stream type
+ * @param <U> the user state type
  * @param <M> the inner monad typeclass
  */
-public abstract class CharParserTC<P, ST, M extends Monad<M>>
-    extends ParsecT<P, String, Character, ST, M>
+public abstract class CharParserTC<P, S, U, M extends Monad<M>>
+    extends ParsecT<P, S, Character, U, M>
 {
     protected CharParserTC(M nm) {
         super(nm);
-    }
-
-    // The string input stream
-    private enum CharStream implements Stream<String, Character> {
-        INSTANCE;
-
-        @Override
-        public Maybe<Tuple<Character, String>> uncons(String s) {
-            return s.isEmpty()
-                   ? Maybe.empty()
-                   : Maybe.of(Tuple.of(s.charAt(0), s.substring(1)));
-        }
-    }
-
-    @Override
-    protected Stream<String, Character> stream() {
-        return CharStream.INSTANCE;
     }
 
     /**
@@ -83,7 +66,7 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * Skips zero or more white space characters.
      */
     public $<P, Unit> spaces() {
-        return label(skipMany(space()), "white space");
+        return label("white space", skipMany(space()));
     }
 
     /**
@@ -91,14 +74,14 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * {@code Character.isSpace}). Returns the parsed character.
      */
     public $<P, Character> space() {
-        return label(satisfy(Character::isWhitespace), "space");
+        return label("space", satisfy(Character::isWhitespace));
     }
 
     /**
      * Parses a newline character ('\n'). Returns a newline character.
      */
     public $<P, Character> newline() {
-        return label(chr('\n'), "lf new-line");
+        return label("lf new-line", chr('\n'));
     }
 
     /**
@@ -106,7 +89,7 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * ('\n'). Returns a newline character.
      */
     public $<P, Character> crlf() {
-        return label(seqR(chr('\r'), chr('\n')), "crlf newline");
+        return label("crlf newline", seqR(chr('\r'), chr('\n')));
     }
 
     /**
@@ -114,14 +97,14 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * Returns a newline character ('\n').
      */
     public $<P, Character> endOfLine() {
-        return label(mplus(newline(), crlf()), "new-line");
+        return label("new-line", mplus(newline(), crlf()));
     }
 
     /**
      * Parses a tab character ('\t'). Returns a tab character.
      */
     public $<P, Character> tab() {
-        return label(chr('\t'), "tab");
+        return label("tab", chr('\t'));
     }
 
     /**
@@ -129,7 +112,7 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * Returns the parsed character.
      */
     public $<P, Character> upper() {
-        return label(satisfy(Character::isUpperCase), "uppercase letter");
+        return label("uppercase letter", satisfy(Character::isUpperCase));
     }
 
     /**
@@ -137,7 +120,7 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * Returns the parsed character.
      */
     public $<P, Character> lower() {
-        return label(satisfy(Character::isLowerCase), "lowercase letter");
+        return label("lowercase letter", satisfy(Character::isLowerCase));
     }
 
     /**
@@ -145,7 +128,7 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * Returns the parsed character.
      */
     public $<P, Character> alphaNum() {
-        return label(satisfy(Character::isLetterOrDigit), "letter or digit");
+        return label("letter or digit", satisfy(Character::isLetterOrDigit));
     }
 
     /**
@@ -153,14 +136,14 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * parsed character.
      */
     public $<P, Character> letter() {
-        return label(satisfy(Character::isLetter), "letter");
+        return label("letter", satisfy(Character::isLetter));
     }
 
     /**
      * Parses a digit. Returns the parsed character.
      */
     public $<P, Character> digit() {
-        return label(satisfy(Character::isDigit), "digit");
+        return label("digit", satisfy(Character::isDigit));
     }
 
     /**
@@ -168,12 +151,13 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * or 'A' and 'F'). Returns the parsed character.
      */
     public $<P, Character> hexDigit() {
-        return label(satisfy(cc -> {
-            char c = cc;
-            return c >= '0' && c <= '9'
-                || c >= 'a' && c <= 'f'
-                || c >= 'A' && c <= 'F';
-        }), "hexadecimal digit");
+        return label("hexadecimal digit",
+            satisfy(cc -> {
+                char c = cc;
+                return c >= '0' && c <= '9'
+                    || c >= 'a' && c <= 'f'
+                    || c >= 'A' && c <= 'F';
+            }));
     }
 
     /**
@@ -181,14 +165,14 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
      * the parsed character.
      */
     public $<P, Character> octDigit() {
-        return label(satisfy(c -> c >= '0' && c <= '7'), "octal digit");
+        return label("octal digit", satisfy(c -> c >= '0' && c <= '7'));
     }
 
     /**
      * Parses a single character. Returns the parsed character.
      */
     public $<P, Character> chr(char c) {
-        return label(satisfy(x -> x == c), String.valueOf(c));
+        return label(String.valueOf(c), satisfy(x -> x == c));
     }
 
     /**
@@ -223,10 +207,10 @@ public abstract class CharParserTC<P, ST, M extends Monad<M>>
             return $((s, cok, cerr, eok, eerr) -> suspend(() -> eok.apply("", s, unknownError(s))));
         } else {
             return $((s, cok, cerr, eok, eerr) -> s.as((input, pos, u) -> {
-                BiFunction<String, String, Trampoline<$<M, Object>>> walk = Fn.fix((rec, toks, rs) -> {
+                BiFunction<String, S, Trampoline<$<M, Object>>> walk = Fn.fix((rec, toks, rs) -> {
                     if (toks.isEmpty()) {
                         SourcePos pos_ = pos.updatePosString(cs);
-                        State<String, ST> s_ = new State<>(rs, pos_, u);
+                        State<S, U> s_ = new State<>(rs, pos_, u);
                         return suspend(() -> cok.apply(cs, s_, new ParseError(pos_)));
                     } else {
                         return suspend(() -> stream().uncons(rs).map(t -> t.as((x, xs) ->
