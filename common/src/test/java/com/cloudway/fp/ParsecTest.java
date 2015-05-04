@@ -6,6 +6,9 @@
 
 package com.cloudway.fp;
 
+import java.util.function.BinaryOperator;
+import java.util.function.UnaryOperator;
+
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -15,6 +18,9 @@ import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.data.Tuple;
 import com.cloudway.fp.data.Unit;
 import com.cloudway.fp.parser.CharParser;
+import com.cloudway.fp.parser.Expr;
+import com.cloudway.fp.parser.Expr.Assoc;
+import com.cloudway.fp.parser.Expr.Operator;
 import com.cloudway.fp.parser.GenTokenParser;
 import com.cloudway.fp.parser.Languages;
 import com.cloudway.fp.parser.Stream;
@@ -22,6 +28,7 @@ import com.cloudway.fp.parser.TokenParser;
 
 import static com.cloudway.fp.control.Syntax.alternative;
 import static com.cloudway.fp.control.Syntax.do_;
+import static com.cloudway.fp.parser.Expr.buildExpressionParser;
 
 // @formatter:off
 
@@ -114,5 +121,62 @@ public class ParsecTest {
         String input = "send \"welcome to earth\" to martin";
         String res = GenTokenParser.run(goal, Unit.U, "(unknown)", Seq.wrap(input)).getOrThrow(Fn.id());
         assertEquals("Hello, martin! welcome to earth.", res);
+    }
+
+    static final class ExprTest {
+        private final TokenParser<Unit> pt;
+        private final Seq<Seq<Operator<TokenParser<Unit>, Integer>>> table;
+        private final $<TokenParser<Unit>, Integer> goal;
+
+        public ExprTest() {
+            this.pt = new TokenParser<>(Languages.Java);
+
+            this.table = Seq.of(
+                Seq.of(prefix("-", x -> -x), prefix("+", x -> x)),
+                Seq.of(postfix("++", x -> x + 1)),
+                Seq.of(binary("*", (x, y) -> x * y, Assoc.Left),
+                       binary("/", (x, y) -> x / y, Assoc.Left)),
+                Seq.of(binary("+", (x, y) -> x + y, Assoc.Left),
+                       binary("-", (x, y) -> x - y, Assoc.Left)));
+
+            this.goal = expr();
+        }
+
+        private $<TokenParser<Unit>, Integer> expr() {
+            return pt.label("expression",
+                buildExpressionParser(pt, table, pt.delay(this::term)));
+        }
+
+        private $<TokenParser<Unit>, Integer> term() {
+            return pt.label("term", alternative(
+                pt.natural(),
+                pt.parens(pt.delay(this::expr))));
+        }
+
+        private Operator<TokenParser<Unit>, Integer>
+        binary(String name, BinaryOperator<Integer> fun, Assoc assoc) {
+            return Expr.infix(name, do_(pt.reservedOp(name), pt.pure(fun)), assoc);
+        }
+
+        private Operator<TokenParser<Unit>, Integer>
+        prefix(String name, UnaryOperator<Integer> fun) {
+            return Expr.prefix(name, do_(pt.reservedOp(name), pt.pure(fun)));
+        }
+
+        private Operator<TokenParser<Unit>, Integer>
+        postfix(String name, UnaryOperator<Integer> fun) {
+            return Expr.postfix(name, do_(pt.reservedOp(name), pt.pure(fun)));
+        }
+
+        public int eval(String expression) {
+            return TokenParser.run(goal, Unit.U, "", expression).getOrThrow(Fn.id());
+        }
+    }
+
+    @Test
+    public void exprTest() {
+        ExprTest test = new ExprTest();
+        assertEquals(7, test.eval("1+2*3"));
+        assertEquals(9, test.eval("(1+2)*3"));
     }
 }
