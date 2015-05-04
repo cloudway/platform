@@ -75,6 +75,13 @@ public final class State<S, A> extends StateTC.Monadic<State.µ<S>, S, Trampolin
     }
 
     /**
+     * Delay evaluate the computation.
+     */
+    public static <S, A> State<S, A> delay(Supplier<$<µ<S>, A>> m) {
+        return narrow(State.<S>tclass().delay(m));
+    }
+
+    /**
      * Evaluate a state computation with the given initial state and return
      * a tuple of final value and final state.
      *

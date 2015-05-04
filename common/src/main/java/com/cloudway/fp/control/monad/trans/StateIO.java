@@ -77,6 +77,13 @@ public final class StateIO<S, A> extends StateTC.Monadic<StateIO.µ<S>, S, Tramp
     }
 
     /**
+     * Delay evaluate the computation.
+     */
+    public static <S, A> StateIO<S, A> delay(Supplier<$<µ<S>, A>> m) {
+        return narrow(StateIO.<S>tclass().delay(m));
+    }
+
+    /**
      * Promote an IO action to a stateful IO action.
      *
      * @param m the IO action

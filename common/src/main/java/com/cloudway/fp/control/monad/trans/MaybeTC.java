@@ -50,9 +50,16 @@ public abstract class MaybeTC<T, M extends Monad<M>>
     }
 
     /**
-     * Implemented by concrete class to instantiate a new maybe monad.
+     * Instantiate a new maybe monad.
      */
-    protected abstract <A> $<T, A> $($<M, Maybe<A>> value);
+    protected <A> $<T, A> $($<M, Maybe<A>> value) {
+        return new Monadic<T, M, A>(value) {
+            @Override @SuppressWarnings("unchecked")
+            public T getTypeClass() {
+                return (T)MaybeTC.this;
+            }
+        };
+    }
 
     /**
      * Unwrap the maybe computation.

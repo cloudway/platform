@@ -6,8 +6,6 @@
 
 package com.cloudway.fp.control.monad.trans;
 
-import java.util.function.BiFunction;
-
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.data.Monoid;
@@ -28,16 +26,6 @@ public final class RWST<R, W, S, M extends Monad<M>>
 {
     private RWST(Monoid<W> wm, M nm) {
         super(wm, nm);
-    }
-
-    @Override
-    protected <A> $<RWST<R, W, S, M>, A>
-    $(BiFunction<? super R, ? super S, ? extends $<M, Triple<A,S,W>>> f) {
-        return new Monadic<RWST<R,W,S,M>, R, W, S, M, A>(f) {
-            @Override public RWST<R,W,S,M> getTypeClass() {
-                return RWST.this;
-            }
-        };
     }
 
     /**

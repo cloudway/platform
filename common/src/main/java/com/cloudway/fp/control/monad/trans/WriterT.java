@@ -29,15 +29,6 @@ public final class WriterT<W, M extends Monad<M>>
         super(wm, nm);
     }
 
-    @Override
-    protected <A> $<WriterT<W, M>, A> $($<M, Tuple<A, W>> value) {
-        return new Monadic<WriterT<W,M>, W, M, A>(value) {
-            @Override public WriterT<W,M> getTypeClass() {
-                return WriterT.this;
-            }
-        };
-    }
-
     /**
      * Stack writer monad on another monad.
      *

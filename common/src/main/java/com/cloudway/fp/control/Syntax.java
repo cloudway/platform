@@ -462,6 +462,21 @@ public final class Syntax {
     }
 
     /**
+     * Evaluate each action in the array from left to right, and ignore the
+     * result.
+     */
+    @SafeVarargs
+    public static <M extends Monad<M>>
+    $<M, Unit> do_($<M, ?> first, $<M, ?> second, $<M, ?>... rest) {
+        M tc = first.getTypeClass();
+        $<M, ?> result = tc.seqR(first, second);
+        for ($<M, ?> next : rest) {
+            result = tc.seqR(result, next);
+        }
+        return tc.seqR(result, tc.unit());
+    }
+
+    /**
      * Helper method to wrap an action.
      */
     public static <A> A do_(A a) {
@@ -504,7 +519,7 @@ public final class Syntax {
      */
     @SafeVarargs
     public static <F extends Alternative<F>, A>
-    $<F, A> alternative($<F, A> first, $<F, A>... rest) {
+    $<F, A> choice($<F, A> first, $<F, A>... rest) {
         F tc = first.getTypeClass();
         $<F, A> result = first;
         for ($<F, A> next : rest) {

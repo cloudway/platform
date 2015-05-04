@@ -27,20 +27,32 @@ import com.cloudway.fp.control.MonadFix;
  *
  * @param <A> the type of identity value
  */
-public final class Identity<A> implements $<Identity.µ, A>,
+public abstract class Identity<A> implements $<Identity.µ, A>,
     Foldable<A>, Traversable<Identity.µ, A>, Forcible<Identity<A>>
 {
-    private final A value;
-
-    private Identity(A a) {
-        this.value = a;
+    Identity() {
+        // no public instantiation
     }
 
     /**
      * Wraps a value in a {@code Identity} monad.
      */
     public static <A> Identity<A> of(A a) {
-        return new Identity<>(a);
+        return new Strict<>(a);
+    }
+
+    /**
+     * Wraps a lazy value in a {@code Identity} monad.
+     */
+    public static <A> Identity<A> lazy(Supplier<A> a) {
+        return new Lazy<>(a);
+    }
+
+    /**
+     * Delay evaluate a computation.
+     */
+    public static <A> Identity<A> delay(Supplier<$<µ, A>> m) {
+        return new Lazy<>(() -> narrow(m.get()).get());
     }
 
     /**
@@ -48,9 +60,7 @@ public final class Identity<A> implements $<Identity.µ, A>,
      *
      * @return the wrapped value in this {@code Identity}
      */
-    public A get() {
-        return value;
-    }
+    public abstract A get();
 
     /**
      * Returns the wrapped value in the given generic {@code Identity} monad.
@@ -76,64 +86,128 @@ public final class Identity<A> implements $<Identity.µ, A>,
      * Transfer the {@code Identity} value by applying the given function and
      * wraps the result in a new {@code Identity}.
      */
-    public <B> Identity<B> map(Function<? super A, ? extends B> f) {
-        return of(f.apply(value));
-    }
+    public abstract <B> Identity<B> map(Function<? super A, ? extends B> f);
 
     /**
      * Transfer the {@code Identity} value by applying the given function.
      */
-    public <B> Identity<B> bind(Function<? super A, ? extends $<µ, B>> f) {
-        return narrow(f.apply(value));
-    }
+    public abstract <B> Identity<B> bind(Function<? super A, ? extends $<µ, B>> f);
+
+    /**
+     * Sequential application.
+     */
+    public abstract <B> Identity<B> ap($<µ, Function<? super A, ? extends B>> f);
 
     // Foldable and Traversable
 
     @Override
     public <R> R foldMap(Monoid<R> monoid, Function<? super A, ? extends R> f) {
-        return f.apply(value);
+        return f.apply(get());
     }
 
     @Override
     public <R> R foldRight(BiFunction<? super A, Supplier<R>, R> f, Supplier<R> r) {
-        return f.apply(value, r);
+        return f.apply(get(), r);
     }
 
     @Override
     public <R> R foldRight_(R z, BiFunction<? super A, R, R> f) {
-        return f.apply(value, z);
+        return f.apply(get(), z);
     }
 
     @Override
     public Maybe<A> foldRight(BiFunction<A, A, A> f) {
-        return Maybe.of(value);
+        return Maybe.of(get());
     }
 
     @Override
     public <R> R foldLeft(BiFunction<Supplier<R>, ? super A, R> f, Supplier<R> r) {
-        return f.apply(r, value);
+        return f.apply(r, get());
     }
 
     @Override
     public <R> R foldLeft(R z, BiFunction<R, ? super A, R> f) {
-        return f.apply(z, value);
+        return f.apply(z, get());
     }
 
     @Override
     public Maybe<A> foldLeft(BiFunction<A, A, A> f) {
-        return Maybe.of(value);
+        return Maybe.of(get());
     }
 
     @Override
     public <F, B> $<F, Identity<B>>
     traverse(Applicative<F> m, Function<? super A, ? extends $<F, B>> f) {
-        return m.map(f.apply(value), Identity::of);
+        return m.map(f.apply(get()), Identity::of);
     }
 
     @Override
     public Identity<A> force() {
-        Forcible.force(value);
+        Forcible.force(get());
         return this;
+    }
+
+    // Implementation
+
+    private static class Strict<A> extends Identity<A> {
+        private final A value;
+
+        Strict(A a) {
+            value = a;
+        }
+
+        @Override
+        public A get() {
+            return value;
+        }
+
+        @Override
+        public <B> Identity<B> map(Function<? super A, ? extends B> f) {
+            return new Strict<>(f.apply(value));
+        }
+
+        @Override
+        public <B> Identity<B> bind(Function<? super A, ? extends $<µ, B>> f) {
+            return narrow(f.apply(value));
+        }
+
+        @Override
+        public <B> Identity<B> ap($<µ, Function<? super A, ? extends B>> f) {
+            return new Strict<>(narrow(f).get().apply(value));
+        }
+    }
+
+    private static class Lazy<A> extends Identity<A> {
+        private Supplier<A> thunk;
+        private A value;
+
+        Lazy(Supplier<A> a) {
+            thunk = a;
+        }
+
+        @Override
+        public A get() {
+            if (thunk != null) {
+                value = thunk.get();
+                thunk = null;
+            }
+            return value;
+        }
+
+        @Override
+        public <B> Identity<B> map(Function<? super A, ? extends B> f) {
+            return new Lazy<>(() -> f.apply(get()));
+        }
+
+        @Override
+        public <B> Identity<B> bind(Function<? super A, ? extends $<µ, B>> f) {
+            return new Lazy<>(() -> narrow(f.apply(get())).get());
+        }
+
+        @Override
+        public <B> Identity<B> ap($<µ, Function<? super A, ? extends B>> f) {
+            return new Lazy<>(() -> narrow(f).get().apply(get()));
+        }
     }
 
     // Monad
@@ -148,18 +222,28 @@ public final class Identity<A> implements $<Identity.µ, A>,
         }
 
         @Override
-        public <A, B> Identity<B> map($<µ, A> a, Function<? super A, ? extends B> f) {
-            return narrow(a).map(f);
+        public <A> Identity<A> lazy(Supplier<A> a) {
+            return Identity.lazy(a);
         }
 
         @Override
-        public <A, B> Identity<B> bind($<µ, A> a, Function<? super A, ? extends $<µ, B>> k) {
-            return narrow(a).bind(k);
+        public <A> Identity<A> delay(Supplier<$<µ, A>> a) {
+            return Identity.delay(a);
         }
 
         @Override
-        public <A, B> Identity<B> ap($<µ, Function<? super A, ? extends B>> fs, $<µ, A> a) {
-            return of(narrow(fs).get().apply(narrow(a).get()));
+        public <A, B> Identity<B> map($<µ, A> m, Function<? super A, ? extends B> f) {
+            return narrow(m).map(f);
+        }
+
+        @Override
+        public <A, B> Identity<B> bind($<µ, A> m, Function<? super A, ? extends $<µ, B>> k) {
+            return narrow(m).bind(k);
+        }
+
+        @Override
+        public <A, B> Identity<B> ap($<µ, Function<? super A, ? extends B>> f, $<µ, A> m) {
+            return narrow(m).ap(f);
         }
 
         @Override
@@ -187,14 +271,14 @@ public final class Identity<A> implements $<Identity.µ, A>,
         if (!(obj instanceof Identity))
             return false;
         Identity<?> other = (Identity<?>)obj;
-        return Objects.equals(value, other.value);
+        return Objects.equals(get(), other.get());
     }
 
     public int hashCode() {
-        return Objects.hashCode(value);
+        return Objects.hashCode(get());
     }
 
     public String toString() {
-        return "Identity " + value;
+        return "Identity " + get();
     }
 }

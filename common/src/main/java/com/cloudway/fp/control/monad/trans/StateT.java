@@ -6,8 +6,6 @@
 
 package com.cloudway.fp.control.monad.trans;
 
-import java.util.function.Function;
-
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.data.Tuple;
@@ -23,15 +21,6 @@ public final class StateT<S, M extends Monad<M>>
 {
     private StateT(M nm) {
         super(nm);
-    }
-
-    @Override
-    protected <A> $<StateT<S,M>, A> $(Function<S, $<M, Tuple<A, S>>> f) {
-        return new Monadic<StateT<S,M>, S, M, A>(f) {
-            @Override public StateT<S,M> getTypeClass() {
-                return StateT.this;
-            }
-        };
     }
 
     /**

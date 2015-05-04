@@ -62,8 +62,15 @@ public abstract class RWSTC<T, R, W, S, M extends Monad<M>>
     /**
      * Implemented by concrete class to instantiate a new monad.
      */
-    protected abstract <A> $<T, A>
-    $(BiFunction<? super R, ? super S, ? extends $<M, Triple<A, S, W>>> f);
+    protected <A> $<T, A>
+    $(BiFunction<? super R, ? super S, ? extends $<M, Triple<A, S, W>>> f) {
+        return new Monadic<T, R, W, S, M, A>(f) {
+            @Override @SuppressWarnings("unchecked")
+            public T getTypeClass() {
+                return (T)RWSTC.this;
+            }
+        };
+    }
 
     // helper method to construct a raw (result, state, output) triplet
     private <A> $<M, Triple<A, S, W>> raw(A a, S s, W w) {
@@ -93,6 +100,14 @@ public abstract class RWSTC<T, R, W, S, M extends Monad<M>>
     public <A> $<T, A> lazy(Supplier<A> a) {
         Supplier<A> t = Fn.lazy(a);
         return $((r, s) -> raw(t.get(), s, wm.empty()));
+    }
+
+    /**
+     * Delay evaluate the computation.
+     */
+    @Override
+    public <A> $<T, A> delay(Supplier<$<T, A>> m) {
+        return $((r, s) -> nm.delay(() -> runRWS(m.get(), r, s)));
     }
 
     /**

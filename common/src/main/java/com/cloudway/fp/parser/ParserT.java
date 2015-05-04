@@ -6,16 +6,16 @@
 
 package com.cloudway.fp.parser;
 
+import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.cloudway.fp.$;
-import com.cloudway.fp.control.ConditionCase;
 import com.cloudway.fp.control.ForwardingMonad;
 import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.control.MonadPlus;
-import com.cloudway.fp.control.Trampoline;
 import com.cloudway.fp.control.monad.trans.MonadExcept;
 import com.cloudway.fp.control.monad.trans.MonadReader;
 import com.cloudway.fp.control.monad.trans.MonadTrans;
@@ -27,34 +27,29 @@ import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.data.Unit;
 import com.cloudway.fp.function.TriFunction;
 
-import static com.cloudway.fp.control.Conditionals.with;
-import static com.cloudway.fp.control.Trampoline.immediate;
-import static com.cloudway.fp.control.Trampoline.suspend;
-
 // @formatter:off
 
 /**
  * Parser monad transformer.
  *
  * @param <P> the concrete parser type
- * @param <S> the stream type
  * @param <T> the token type
  * @param <U> the user state type
  * @param <M> the underlying monad type
  */
-public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
+public abstract class ParserT<P, T, U, M extends Monad<M>>
     implements MonadPlus<P>, MonadTrans<P, M>
 {
     /**
      * A record of parser state that maintain the input, the source position,
      * and user data.
      */
-    public static class State<S, U> {
-        final S input;
+    public static class State<T, U> {
+        final Stream<T> input;
         final SourcePos pos;
         final U user;
 
-        public State(S input, SourcePos pos, U user) {
+        public State(Stream<T> input, SourcePos pos, U user) {
             this.input = input;
             this.pos = pos;
             this.user = user;
@@ -63,7 +58,7 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
         /**
          * Returns the current parser input.
          */
-        public S getInput() {
+        public Stream<T> getInput() {
             return input;
         }
 
@@ -84,78 +79,55 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
         /**
          * Deconstruct the State object.
          */
-        public <R> R as(TriFunction<? super S, SourcePos, ? super U, ? extends R> f) {
+        public <R> R as(TriFunction<Stream<T>, SourcePos, ? super U, ? extends R> f) {
             return f.apply(input, pos, user);
         }
     }
 
     private static class Consumed<A> {
+        final boolean isEmpty;
         final A reply;
 
-        Consumed(A reply) {
+        Consumed(boolean isEmpty, A reply) {
+            this.isEmpty = isEmpty;
             this.reply = reply;
         }
-
-        boolean isEmpty() {
-            return false;
-        }
     }
 
-    private static class Empty<A> extends Consumed<A> {
-        Empty(A data) {
-            super(data);
-        }
-
-        @Override
-        boolean isEmpty() {
-            return true;
-        }
+    private interface Reply<T, U, A> {
+        <R> R apply(TriFunction<A, State<T, U>, ParseError, R> ok, Function<ParseError, R> err);
     }
 
-    private interface Reply<S, U, A> {}
-
-    private static class Ok<S, U, A> implements Reply<S, U, A> {
+    private static class Ok<T, U, A> implements Reply<T, U, A> {
         final A value;
-        final State<S, U> state;
+        final State<T, U> state;
         final ParseError error;
 
-        Ok(A a, State<S, U> s, ParseError e) {
+        Ok(A a, State<T, U> s, ParseError e) {
             this.value = a;
             this.state = s;
             this.error = e;
         }
+
+        @Override
+        public <R> R apply(TriFunction<A, State<T, U>, ParseError, R> ok,
+                           Function<ParseError, R> err) {
+            return ok.apply(value, state, error);
+        }
     }
 
-    private static class Error<S, U, A> implements Reply<S, U, A> {
+    private static class Error<T, U, A> implements Reply<T, U, A> {
         final ParseError error;
 
         Error(ParseError e) {
             this.error = e;
         }
-    }
 
-    private static <S, U, A, R> ConditionCase<Reply<S, U, A>, R, RuntimeException>
-    Ok(TriFunction<? super A, ? super State<S, U>, ParseError, ? extends R> mapper) {
-        return t -> {
-            if (t instanceof Ok) {
-                Ok<S, U, A> ok = (Ok<S,U,A>)t;
-                return () -> mapper.apply(ok.value, ok.state, ok.error);
-            } else {
-                return null;
-            }
-        };
-    }
-
-    private static <S, U, A, R> ConditionCase<Reply<S, U, A>, R, RuntimeException>
-    Error(Function<ParseError, ? extends R> mapper) {
-        return t -> {
-            if (t instanceof Error) {
-                Error<S, U, A> err = (Error<S,U,A>)t;
-                return () -> mapper.apply(err.error);
-            } else {
-                return null;
-            }
-        };
+        @Override
+        public <R> R apply(TriFunction<A, State<T, U>, ParseError, R> ok,
+                           Function<ParseError, R> err) {
+            return err.apply(error);
+        }
     }
 
     protected static ParseError unknownError(State<?,?> state) {
@@ -166,109 +138,100 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      * The parser is implemented as a function.
      */
     @FunctionalInterface
-    protected interface ParseFunction<S, U, M extends Monad<M>, A, B> {
-        Trampoline<$<M, B>> apply(State<S, U> state,
-            TriFunction<A, State<S, U>, ParseError, Trampoline<$<M, B>>> cok, // consumed ok
-            Function<ParseError, Trampoline<$<M, B>>> cerr,                   // consumed err
-            TriFunction<A, State<S, U>, ParseError, Trampoline<$<M, B>>> eok, // empty ok
-            Function<ParseError, Trampoline<$<M, B>>> eerr);                  // empty err
+    protected interface ParseFunction<T, U, M extends Monad<M>, A, B> {
+        $<M, B> apply(State<T, U> state,
+            TriFunction<A, State<T, U>, ParseError, $<M, B>> cok, // consumed ok
+            Function<ParseError, $<M, B>> cerr,                   // consumed err
+            TriFunction<A, State<T, U>, ParseError, $<M, B>> eok, // empty ok
+            Function<ParseError, $<M, B>> eerr);                  // empty err
     }
 
     /**
      * Pack the parser function in a monadic data.
      */
-    protected static abstract class Monadic<P, S, U, M extends Monad<M>, A> implements $<P, A> {
-        private final ParseFunction<S, U, M, A, ?> pf;
+    protected class Monadic<A> implements $<P, A> {
+        private final ParseFunction<T,U,M,A,?> pf;
 
-        protected Monadic(ParseFunction<S, U, M, A, ?> f) {
+        protected Monadic(ParseFunction<T,U,M,A,?> f) {
             this.pf = f;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public P getTypeClass() {
+            return (P)ParserT.this;
         }
     }
 
-    private final M nm;
+    protected final M nm;
 
     /**
      * Construct a parser transformer monad.
      *
      * @param nm the inner monad
      */
-    protected ParsecT(M nm) {
+    protected ParserT(M nm) {
         this.nm = nm;
     }
 
     /**
-     * Implemented by subclass to construct a parser monad.
+     * Helper method to construct a parser monad.
      */
-    protected abstract <A> $<P, A> $(ParseFunction<S, U, M, A, ?> f);
+    protected <A> $<P, A> $(ParseFunction<T,U,M,A,?> f) {
+        return new Monadic<>(f);
+    }
 
     /**
-     * Implemented by subclass to return underlying stream implementation.
-     */
-    protected abstract Stream<S, T> stream();
-
-    /**
-    * Unpack the parser function.
+     * Unpack the parser function.
      */
     @SuppressWarnings("unchecked")
-    private <A, B> ParseFunction<S, U, M, A, B> unpack($<P, A> p) {
-        return (ParseFunction<S,U,M,A,B>)((Monadic<P,S,U,M,A>)p).pf;
+    protected final <A, B> ParseFunction<T,U,M,A,B> unpack($<P, A> p) {
+        return (ParseFunction<T,U,M,A,B>)((Monadic<A>)p).pf;
     }
 
     /**
      * Unpack and execute the parser function.
      */
-    private <A, B> Trampoline<$<M, B>> unParser($<P, A> p, State<S, U> s,
-            TriFunction<A, State<S, U>, ParseError, Trampoline<$<M, B>>> cok,
-            Function<ParseError, Trampoline<$<M, B>>> cerr,
-            TriFunction<A, State<S, U>, ParseError, Trampoline<$<M, B>>> eok,
-            Function<ParseError, Trampoline<$<M, B>>> eerr) {
-        return suspend(() -> this.<A,B>unpack(p).apply(s, cok, cerr, eok, eerr));
+    protected final <A, B> $<M, B> unParser($<P, A> p, State<T, U> s,
+            TriFunction<A, State<T, U>, ParseError, $<M, B>> cok,
+            Function<ParseError, $<M, B>> cerr,
+            TriFunction<A, State<T, U>, ParseError, $<M, B>> eok,
+            Function<ParseError, $<M, B>> eerr) {
+        return nm.delay(() -> this.<A,B>unpack(p).apply(s, cok, cerr, eok, eerr));
     }
 
     /**
      * Low-level unpacking of the ParsecT type.
      */
-    private <A> $<M, Consumed<$<M, Reply<S, U, A>>>> runPT($<P, A> p, State<S, U> s) {
-        return this.<A, Consumed<$<M, Reply<S, U, A>>>>unpack(p).apply(s,
-            (a, s1, e) -> immediate(nm.pure(new Consumed<>(nm.pure(new Ok<>(a, s1, e))))),
-            (e)        -> immediate(nm.pure(new Consumed<>(nm.pure(new Error<>(e))))),
-            (a, s1, e) -> immediate(nm.pure(new Empty<>(nm.pure(new Ok<>(a, s1, e))))),
-            (e)        -> immediate(nm.pure(new Empty<>(nm.pure(new Error<>(e))))))
-            .run();
+    protected final <A> $<M, Consumed<$<M, Reply<T, U, A>>>> runPT($<P, A> p, State<T, U> s) {
+        return this.<A, Consumed<$<M, Reply<T, U, A>>>>unpack(p).apply(s,
+            (a, s1, e) -> nm.pure(new Consumed<>(false, nm.pure(new Ok<>(a, s1, e)))),
+            (e)        -> nm.pure(new Consumed<>(false, nm.pure(new Error<>(e)))),
+            (a, s1, e) -> nm.pure(new Consumed<>(true,  nm.pure(new Ok<>(a, s1, e)))),
+            (e)        -> nm.pure(new Consumed<>(true,  nm.pure(new Error<>(e)))));
     }
 
     /**
-     * Low-level creation of the ParsecT type.
+     * Low-level creation of the ParserT type.
      */
-    private <A> $<P, A> mkPT(Function<State<S, U>, $<M, Consumed<$<M, Reply<S, U, A>>>>> k) {
+    protected final <A> $<P, A> mkPT(Function<State<T, U>, $<M, Consumed<$<M, Reply<T, U, A>>>>> k) {
         return $((s, cok, cerr, eok, eerr) ->
-            Trampoline.lazy(() -> nm.bind(k.apply(s), cons -> {
-                if (!cons.isEmpty()) {
-                    return nm.bind(cons.reply, rep ->
-                        with(rep).<$<M,Object>>get()
-                          .when(Ok((a, s1, e) -> cok.apply(a, s1, e).run()))
-                          .when(Error(e -> cerr.apply(e).run()))
-                          .get());
-                } else {
-                    return nm.bind(cons.reply, rep ->
-                        with(rep).<$<M,Object>>get()
-                          .when(Ok((a, s1, e) -> eok.apply(a, s1, e).run()))
-                          .when(Error(e -> eerr.apply(e).run()))
-                          .get());
-                }
-            })));
+            nm.bind(k.apply(s), cons ->
+                !cons.isEmpty
+                    ? nm.bind(cons.reply, rep -> rep.apply(cok, cerr))
+                    : nm.bind(cons.reply, rep -> rep.apply(eok, eerr))
+            ));
     }
 
     /**
      * Running a parser.
      */
-    public <A> $<M, Either<ParseError, A>> runParsecT($<P, A> p, U u, String name, S s) {
-        return nm.bind(runPT(p, new State<>(s, new SourcePos(name), u)), res ->
-               nm.map(res.reply, (Reply<S,U,A> r) ->
-                   with(r).<Either<ParseError, A>>get()
-                     .when(Ok((x, s1, e) -> Either.right(x)))
-                     .when(Error(Either::left))
-                     .get()));
+    public <A> $<M, Either<ParseError, A>> runParser($<P, A> p, U u, String name, Stream<T> input) {
+        State<T, U> s = new State<>(input.load(), new SourcePos(name), u);
+        return nm.bind(runPT(p, s), res ->
+               nm.map(res.reply, rep ->
+               rep.apply((x, s1, e) -> Either.<ParseError,A>right(x),
+                                       Either::<ParseError,A>left)));
     }
 
     /**
@@ -279,8 +242,7 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      */
     @Override
     public <A> $<P, A> pure(A x) {
-        return $((s, cok, cerr, eok, eerr) -> suspend(() ->
-            eok.apply(x, s, unknownError(s))));
+        return $((s, cok, cerr, eok, eerr) -> eok.apply(x, s, unknownError(s)));
     }
 
     private final $<P, Unit> _unit = pure(Unit.U);
@@ -303,8 +265,7 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
     @Override
     public <A> $<P, A> lazy(Supplier<A> x) {
         Supplier<A> t = Fn.lazy(x);
-        return $((s, cok, cerr, eok, eerr) -> suspend(() ->
-            eok.apply(t.get(), s, unknownError(s))));
+        return $((s, cok, cerr, eok, eerr) -> eok.apply(t.get(), s, unknownError(s)));
     }
 
     /**
@@ -314,8 +275,8 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
     @Override
     public <A> $<P, A> delay(Supplier<$<P, A>> x) {
         Supplier<$<P, A>> t = Fn.lazy(x);
-        return $((s, cok, cerr, eok, eerr) -> suspend(() ->
-            unParser(t.get(), s, cok, cerr, eok, eerr)));
+        return $((s, cok, cerr, eok, eerr) ->
+            unParser(t.get(), s, cok, cerr, eok, eerr));
     }
 
     /**
@@ -323,8 +284,8 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      */
     @Override
     public <A> $<P, A> lift($<M, A> m) {
-        return $((s, cok, cerr, eok, eerr) -> Trampoline.lazy(() ->
-            nm.bind(m, a -> eok.apply(a, s, unknownError(s)).run())));
+        return $((s, cok, cerr, eok, eerr) ->
+            nm.bind(m, a -> eok.apply(a, s, unknownError(s))));
     }
 
     /**
@@ -342,8 +303,8 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
     @Override
     public <A, B> $<P, B> map($<P, A> p, Function<? super A, ? extends B> f) {
         return $((s, cok, cerr, eok, eerr) ->
-            unParser(p, s, (x, s1, e) -> suspend(() -> cok.apply(f.apply(x), s1, e)), cerr,
-                           (x, s1, e) -> suspend(() -> eok.apply(f.apply(x), s1, e)), eerr));
+            unParser(p, s, (x, s1, e) -> cok.apply(f.apply(x), s1, e), cerr,
+                           (x, s1, e) -> eok.apply(f.apply(x), s1, e), eerr));
     }
 
     /**
@@ -356,13 +317,13 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
             unParser(m, s,
                 (x, s1, e1) ->
                     unParser(k.apply(x), s1, cok, cerr,
-                             (x2, s2, e2) -> suspend(() -> cok.apply(x2, s2, e1.merge(e2))),
-                             (e2) -> suspend(() -> cerr.apply(e1.merge(e2)))),
+                             (x2, s2, e2) -> cok.apply(x2, s2, e1.merge(e2)),
+                             (e2) -> cerr.apply(e1.merge(e2))),
                 cerr,
                 (x, s1, e1) ->
                     unParser(k.apply(x), s1, cok, cerr,
-                             (x2, s2, e2) -> suspend(() -> eok.apply(x2, s2, e1.merge(e2))),
-                             (e2) -> suspend(() -> eerr.apply(e1.merge(e2)))),
+                             (x2, s2, e2) -> eok.apply(x2, s2, e1.merge(e2)),
+                             (e2) -> eerr.apply(e1.merge(e2))),
                 eerr));
     }
 
@@ -371,7 +332,7 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      */
     @Override
     public <A> $<P, A> mzero() {
-        return $((s, cok, cerr, eok, eerr) -> suspend(() -> eerr.apply(unknownError(s))));
+        return $((s, cok, cerr, eok, eerr) -> eerr.apply(unknownError(s)));
     }
 
     /**
@@ -382,20 +343,8 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
         return $((s, cok, cerr, eok, eerr) ->
             unParser(m, s, cok, cerr, eok, e ->
             unParser(n, s, cok, cerr,
-                     (y, s1, e1) -> suspend(() -> eok.apply(y, s1, e.merge(e1))),
-                     (e1)        -> suspend(() -> eerr.apply(e.merge(e1))))));
-    }
-
-    /**
-     * Combine alternatives.
-     */
-    @SafeVarargs
-    public final <A> $<P, A> mplus($<P, A> first, $<P, A>... rest) {
-        $<P, A> result = first;
-        for ($<P, A> next : rest) {
-            result = mplus(result, next);
-        }
-        return result;
+                     (y, s1, e1) -> eok.apply(y, s1, e.merge(e1)),
+                     (e1)        -> eerr.apply(e.merge(e1)))));
     }
 
     // Combinators
@@ -405,8 +354,9 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      */
     @Override
     public <A> $<P, A> fail(String msg) {
-        return $((s, cok, cerr, eok, eerr) -> suspend(() ->
-            eerr.apply(new ParseError(s.pos, new Message.Fail(msg)))));
+        return $((s, cok, cerr, eok, eerr) ->
+            eerr.apply(new ParseError(s.pos, new Message.Fail(msg)))
+        );
     }
 
     /**
@@ -416,8 +366,9 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      * the three parsers used to generate error messages. </p>
      */
     public <A> $<P, A> unexpected(String msg) {
-        return $((s, cok, cerr, eok, eerr) -> suspend(() ->
-            eerr.apply(new ParseError(s.pos, new Message.UnExpect(msg)))));
+        return $((s, cok, cerr, eok, eerr) ->
+            eerr.apply(new ParseError(s.pos, new Message.UnExpect(msg)))
+        );
     }
 
     /**
@@ -434,8 +385,8 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      */
     public <A> $<P, A> label(String msg, $<P, A> p) {
         return $((s, cok, cerr, eok, eerr) -> unParser(p, s, cok, cerr,
-            (x, s1, e) -> suspend(() -> eok.apply(x, s1, setExpectError(e, msg))),
-            (e) -> suspend(() -> eerr.apply(setExpectError(e, msg)))));
+            (x, s1, e) -> eok.apply(x, s1, setExpectError(e, msg)),
+            (e) -> eerr.apply(setExpectError(e, msg))));
     }
 
     private static ParseError setExpectError(ParseError err, String msg) {
@@ -482,6 +433,26 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
     }
 
     /**
+     * Alternatively combine two parsers.
+     */
+    public <A> $<P, A> choice($<P, A> m, $<P, A> n) {
+        return mplus(m, n);
+    }
+
+    /**
+     * Tries to apply the parsers in the list in order, until one of them succeeds.
+     * Returns the value of the succeeding parser.
+     */
+    @SafeVarargs
+    public final <A> $<P, A> choice($<P, A> first, $<P, A>... rest) {
+        $<P, A> result = first;
+        for ($<P, A> next : rest) {
+            result = mplus(result, next);
+        }
+        return result;
+    }
+
+    /**
      * Tries to apply the parsers in the list in order, until one of them succeeds.
      * Returns the value of the succeeding parser.
      */
@@ -494,7 +465,7 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      * Returns a list of the returned values.
      */
     public <A> $<P, Seq<A>> many($<P, A> p) {
-        return bind(accum(p, Seq.<A>nil(), Seq::cons), xs -> pure(xs.reverse()));
+        return map(manyAccum(p, Seq.<A>nil(), Fn.flip(Seq::cons)), Seq::reverse);
     }
 
     /**
@@ -502,47 +473,49 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      * skipping its result.
      */
     public <A> $<P, Unit> skipMany($<P, A> p) {
-        return accum(p, Unit.U, (x, xs) -> xs);
+        return manyAccum(p, Unit.U, (xs, x) -> Unit.U);
     }
 
     /**
      * Applies the given parser one or more times. Returns a list of the returned
      * values.
      */
-    public <A> $<P, Seq<A>> many1($<P, A> p) {
-        return liftM2(Seq::cons, p, many(p));
+    public <A> $<P, Seq<A>> some($<P, A> p) {
+        return map(someAccum(p, Seq.<A>nil(), Fn.flip(Seq::cons)), Seq::reverse);
     }
 
     /**
      * Applies the given parser one or more times, skipping its result.
      */
-    public <A> $<P, Unit> skipMany1($<P, A> p) {
-        return seqR(p, skipMany(p));
+    public <A> $<P, Unit> skipSome($<P, A> p) {
+        return someAccum(p, Unit.U, (xs, x) -> Unit.U);
     }
 
     /**
      * Applies the given parser zero or more times, accumulate results.
      */
-    public <A, R> $<P, R> accum($<P, A> p, R z, BiFunction<? super A, R, R> acc) {
+    public <A, R> $<P, R> manyAccum($<P, A> p, R z, BiFunction<R, A, R> acc) {
         return $((s, cok, cerr, eok, eerr) -> {
-            Function<R, TriFunction<A, State<S,U>, ParseError, Trampoline<$<M, Object>>>> walk =
+            Function<R, TriFunction<A, State<T, U>, ParseError, $<M, Object>>> walk =
                 Fn.fix((rec, xs) -> (x, s1, err) ->
-                    unParser(p, s1,
-                        (x2, s2, e2) -> suspend(() -> rec.apply(acc.apply(x, xs)).apply(x2, s2, e2)),
-                        cerr, manyErr(),
-                        e -> suspend(() -> cok.apply(acc.apply(x, xs), s1, e))));
+                    unParser(p, s1, rec.apply(acc.apply(xs, x)),
+                             cerr, manyErr(),
+                             e -> cok.apply(acc.apply(xs, x), s1, e)));
 
-            return unParser(p, s,
-                (x, s1, e) -> suspend(() -> walk.apply(z).apply(x, s1, e)),
-                cerr, manyErr(),
-                e -> suspend(() -> eok.apply(z, s, e)));
+            return unParser(p, s, walk.apply(z),
+                            cerr, manyErr(),
+                            e -> eok.apply(z, s, e));
         });
     }
 
-    private <A> TriFunction<A, State<S, U>, ParseError, Trampoline<$<M, Object>>> manyErr() {
+    private <A> TriFunction<A, State<T, U>, ParseError, $<M, Object>> manyErr() {
         return (a, s, e) -> {
             throw new RuntimeException("combinator 'many' is applied to a parser that accepts an empty string");
         };
+    }
+
+    public <A, R> $<P, R> someAccum($<P, A> p, R z, BiFunction<R, A, R> acc) {
+        return bind(p, a -> manyAccum(p, acc.apply(z, a), acc));
     }
 
     /**
@@ -629,7 +602,7 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      * Returns a list of values returned by parser.
      */
     public <A> $<P, Seq<A>> endBy1($<P, A> p, $<P, ?> sep) {
-        return many1(bind(p, x -> seqR(sep, pure(x))));
+        return some(bind(p, x -> seqR(sep, pure(x))));
     }
 
     /**
@@ -752,8 +725,8 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      */
     public <A> $<P, A> lookAhead($<P, A> p) {
         return $((s, cok, cerr, eok, eerr) -> {
-            TriFunction<A, State<S, U>, ParseError, Trampoline<$<M, Object>>> eok_ =
-                (a, s1, e) -> suspend(() -> eok.apply(a, s, unknownError(s)));
+            TriFunction<A, State<T, U>, ParseError, $<M, Object>> eok_ =
+                (a, s1, e) -> eok.apply(a, s, unknownError(s));
             return unParser(p, s, eok_, cerr, eok_, eerr);
         });
     }
@@ -763,7 +736,7 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      * used to implement {@link #eof}. Returns the accepted token.
      */
     public $<P, T> anyToken() {
-        return tokenPrim(String::valueOf, (pos, tok, toks) -> pos, Maybe::of);
+        return tokenPrim(String::valueOf, (pos, tok) -> pos, t -> true);
     }
 
     /**
@@ -775,29 +748,67 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      *
      * <p>This is the most primitive combinator for accepting tokens.</p>
      */
-    public <A> $<P, A> tokenPrim(Function<T, String>  showToken,
-            TriFunction<SourcePos, T, S, SourcePos>   nextPos,
-            Function<T, Maybe<A>>                     test) {
-        return tokenPrimEx(showToken, nextPos, Maybe.empty(), test);
-    }
-
-    public <A> $<P, A> tokenPrimEx(Function<T, String>          showToken,
-            TriFunction<SourcePos, T, S, SourcePos>             nextPos,
-            Maybe<TriFunction<SourcePos, T, S, Function<U, U>>> nextState,
-            Function<T, Maybe<A>>                               test) {
+    public $<P, T> tokenPrim(Function<T, String> showToken,
+            BiFunction<SourcePos, T, SourcePos>  nextPos,
+            Predicate<T>                         p) {
         return $((s, cok, cerr, eok, eerr) -> s.as((input, pos, user) ->
-            suspend(() -> stream().uncons(input).map(t -> t.as((c, cs) ->
-                test.apply(c).map(x -> {
-                    SourcePos newPos = nextPos.apply(pos, c, cs);
-                    U newUser = nextState.map(f -> f.apply(pos, c, cs)).orElse(Fn.id()).apply(user);
-                    State<S, U> newState = new State<>(cs, newPos, newUser);
-                    return cok.apply(x, newState, new ParseError(newPos));
-                }).orElseGet(() -> eerr.apply(unexpectError(pos, showToken.apply(c))))
-            )).orElseGet(() -> eerr.apply(unexpectError(pos, ""))))));
+            input.uncons((c, cs) -> {
+                if (p.test(c)) {
+                    SourcePos newPos = nextPos.apply(pos, c);
+                    State<T, U> newState = new State<>(cs, newPos, user);
+                    return cok.apply(c, newState, new ParseError(newPos));
+                } else {
+                    return eerr.apply(unexpectError(pos, showToken.apply(c)));
+                }
+            },
+            () -> eerr.apply(unexpectError(pos, "")))));
     }
 
     private static ParseError unexpectError(SourcePos pos, String msg) {
         return new ParseError(pos, new Message.SysUnExpect(msg));
+    }
+
+    public $<P, Unit> tokens(Seq<T>            tts,
+                Function<Seq<T>, String>       showTokens,
+                Function<SourcePos, SourcePos> nextPoss) {
+        if (tts.isEmpty()) {
+            return $((s, cok, cerr, eok, eerr) -> eok.apply(Unit.U, s, unknownError(s)));
+        } else {
+            return $((s, cok, cerr, eok, eerr) -> s.as((input, pos, u) -> {
+                BiFunction<Seq<T>, Stream<T>, $<M, Object>> walk
+                    = Fn.fix((rec, toks, rs) -> {
+                        if (toks.isEmpty()) {
+                            SourcePos pos_ = nextPoss.apply(pos);
+                            State<T, U> s_ = new State<>(rs, pos_, u);
+                            return cok.apply(Unit.U, s_, new ParseError(pos_));
+                        } else {
+                            return rs.uncons((x, xs) ->
+                                Objects.equals(toks.head(), x)
+                                    ? rec.apply(toks.tail(), xs)
+                                    : cerr.apply(errExpect(showTokens, pos, x, tts)),
+                                () -> cerr.apply(errEof(showTokens, pos, tts)));
+                        }
+                    });
+
+                return input.uncons((x, xs) ->
+                    Objects.equals(tts.head(), x)
+                        ? walk.apply(tts.tail(), xs)
+                        : eerr.apply(errExpect(showTokens, pos, x, tts)),
+                    () -> eerr.apply(errEof(showTokens, pos, tts)));
+            }));
+        }
+    }
+
+    private static <T> ParseError
+    errEof(Function<Seq<T>, String> show, SourcePos pos, Seq<T> toks) {
+        return new ParseError(pos, new Message.SysUnExpect(""))
+                   .setMessage(new Message.Expect(show.apply(toks)));
+    }
+
+    private static <T> ParseError
+    errExpect(Function<Seq<T>, String> show, SourcePos pos, T token, Seq<T> tokens) {
+        return new ParseError(pos, new Message.SysUnExpect(show.apply(Seq.of(token))))
+                   .setMessage(new Message.Expect(show.apply(tokens)));
     }
 
     // Parser state combinators
@@ -812,7 +823,7 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
     /**
      * Returns the current input.
      */
-    public $<P, S> getInput() {
+    public $<P, Stream<T>> getInput() {
         return map(getParserState(), State::getInput);
     }
 
@@ -827,31 +838,31 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
      * Continues parsing with given input. The {@link #getInput} and {@code
      * setInput} functions can for example be used to deal with #include files.
      */
-    public $<P, Unit> setInput(S input) {
-        return seqR(updateParserState(s -> new State<>(input, s.pos, s.user)), unit());
+    public $<P, Unit> setInput(Stream<T> input) {
+        return seqR(updateParserState(s -> new State<>(input.load(), s.pos, s.user)), unit());
     }
 
     /**
      * returns the full parser state as a {@code State} record.
      */
-    public $<P, State<S, U>> getParserState() {
+    public $<P, State<T, U>> getParserState() {
         return updateParserState(Fn.id());
     }
 
     /**
      * Set the full parser state.
      */
-    public $<P, State<S, U>> setParserState(State<S, U> st) {
+    public $<P, State<T, U>> setParserState(State<T, U> st) {
         return updateParserState(Fn.pure(st));
     }
 
     /**
      * Applies function to the parser state.
      */
-    public $<P, State<S, U>> updateParserState(Function<State<S, U>, State<S, U>> f) {
+    public $<P, State<T, U>> updateParserState(Function<State<T, U>, State<T, U>> f) {
         return $((s, cok, cerr, eok, eerr) -> {
-            State<S, U> s1 = f.apply(s);
-            return suspend(() -> eok.apply(s1, s1, unknownError(s1)));
+            State<T, U> s1 = f.apply(s);
+            return eok.apply(s1, s1, unknownError(s1));
         });
     }
 
@@ -901,7 +912,7 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
 
         @Override
         public Monad<P> delegate() {
-            return ParsecT.this;
+            return ParserT.this;
         }
 
         @Override
@@ -943,7 +954,7 @@ public abstract class ParsecT<P, S, T, U, M extends Monad<M>>
 
         @Override
         public Monad<P> delegate() {
-            return ParsecT.this;
+            return ParserT.this;
         }
 
         @Override

@@ -7,9 +7,6 @@
 package com.cloudway.fp.parser;
 
 import com.cloudway.fp.$;
-import com.cloudway.fp.control.Monad;
-import com.cloudway.fp.data.HashPSet;
-import com.cloudway.fp.data.PSet;
 
 /**
  * This enum defines some language definitions that can be used to instantiate
@@ -23,66 +20,7 @@ public enum Languages implements LanguageDef {
      * operators, is case sensitive and doesn't accept comments, identifiers
      * or operators.
      */
-    Empty {
-        @Override
-        public String commentStart() {
-            return "";
-        }
-
-        @Override
-        public String commentEnd() {
-            return "";
-        }
-
-        @Override
-        public String commentLine() {
-            return "";
-        }
-
-        @Override
-        public boolean nestedComments() {
-            return true;
-        }
-
-        @Override
-        public <P, S, U, M extends Monad<M>>
-        $<P, Character> identStart(TokenParserTC<P, S, U, M> pt) {
-            return pt.mplus(pt.letter(), pt.chr('_'));
-        }
-
-        @Override
-        public <P, S, U, M extends Monad<M>>
-        $<P, Character> identPart(TokenParserTC<P, S, U, M> pt) {
-            return pt.mplus(pt.alphaNum(), pt.chr('_'));
-        }
-
-        @Override
-        public <P, S, U, M extends Monad<M>>
-        $<P, Character> opStart(TokenParserTC<P, S, U, M> pt) {
-            return opPart(pt);
-        }
-
-        @Override
-        public <P, S, U, M extends Monad<M>>
-        $<P, Character> opPart(TokenParserTC<P, S, U, M> pt) {
-            return pt.oneOf(":!#$%&*+./<=>?@\\^|-~");
-        }
-
-        @Override
-        public PSet<String> reservedNames() {
-            return HashPSet.empty();
-        }
-
-        @Override
-        public PSet<String> reservedOpNames() {
-            return HashPSet.empty();
-        }
-
-        @Override
-        public boolean caseSensitive() {
-            return true;
-        }
-    },
+    Empty,
 
     /**
      * This is a minimal token definition for Java style languages. It defines
@@ -106,47 +44,50 @@ public enum Languages implements LanguageDef {
         }
 
         @Override
-        public boolean nestedComments() {
-            return true;
-        }
-
-        @Override
-        public <P, S, U, M extends Monad<M>>
-        $<P, Character> identStart(TokenParserTC<P, S, U, M> pt) {
+        public <P> $<P, Character> identStart(TokenParserTC<P, ?, ?> pt) {
             return pt.satisfy(Character::isJavaIdentifierStart);
         }
 
         @Override
-        public <P, S, U, M extends Monad<M>>
-        $<P, Character> identPart(TokenParserTC<P, S, U, M> pt) {
+        public <P > $<P, Character> identPart(TokenParserTC<P, ?, ?> pt) {
             return pt.satisfy(Character::isJavaIdentifierPart);
         }
 
         @Override
-        public <P, S, U, M extends Monad<M>>
-        $<P, Character> opStart(TokenParserTC<P, S, U, M> pt) {
-            return opPart(pt);
+        public <P> $<P, Character> opPart(TokenParserTC<P, ?, ?> pt) {
+            return pt.fail("operator not allowed");
+        }
+    },
+
+    /**
+     * This is a minimal token definition for Haskell style languages. It
+     * defines the style of comments, valid identifiers and case sensitivity.
+     * It does not define any reserved words or operators.
+     */
+    Haskell {
+        @Override
+        public String commentStart() {
+            return "{-";
         }
 
         @Override
-        public <P, S, U, M extends Monad<M>>
-        $<P, Character> opPart(TokenParserTC<P, S, U, M> pt) {
-            return pt.oneOf(":!#$%&*+./<=>?@\\^|-~");
+        public String commentEnd() {
+            return "-}";
         }
 
         @Override
-        public PSet<String> reservedNames() {
-            return HashPSet.empty();
+        public String commentLine() {
+            return "--";
         }
 
         @Override
-        public PSet<String> reservedOpNames() {
-            return HashPSet.empty();
+        public <P> $<P, Character> identStart(TokenParserTC<P, ?, ?> pt) {
+            return pt.letter();
         }
 
         @Override
-        public boolean caseSensitive() {
-            return true;
+        public <P> $<P, Character> identPart(TokenParserTC<P, ?, ?> pt) {
+            return pt.mplus(pt.alphaNum(), pt.oneOf("_'"));
         }
     }
 }

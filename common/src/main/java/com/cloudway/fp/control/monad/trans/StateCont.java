@@ -86,6 +86,13 @@ public final class StateCont<S, A> extends ContTC.Monadic<StateCont.µ<S>, State
     }
 
     /**
+     * Delay evaluate the computation.
+     */
+    public static <S, A> StateCont<S, A> delay(Supplier<$<µ<S>, A>> m) {
+        return narrow(StateCont.<S>tclass().delay(m));
+    }
+
+    /**
      * Promote a state computation to a stateful CPS computation.
      *
      * @param m the state computation

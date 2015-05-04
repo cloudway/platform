@@ -187,11 +187,7 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T
      * Wrap a sequence of characters.
      */
     static Seq<Character> wrap(CharSequence cs) {
-        Seq<Character> res = nil();
-        for (int i = cs.length(); --i >= 0; ) {
-            res = cons(cs.charAt(i), res);
-        }
-        return res;
+        return SeqImpl.CharSeq.make(cs, 0, cs.length());
     }
 
     /**
@@ -271,6 +267,33 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T
     Single(ExceptionFunction<? super T, ? extends R, X> mapper) {
         return s -> !s.isEmpty() && s.tail().isEmpty()
             ? () -> mapper.evaluate(s.head())
+            : null;
+    }
+
+    /**
+     * Returns a conditional case that will be evaluated if the list contains
+     * a pair of values. The mapper function will accept the values as it's
+     * arguments.
+     */
+    static <T, R, X extends Throwable> ConditionCase<Seq<T>, R, X>
+    Pair(ExceptionBiFunction<? super T, ? super T, ? extends R, X> mapper) {
+        return s -> !s.isEmpty() && !s.tail().isEmpty() && s.tail().tail().isEmpty()
+            ? () -> mapper.evaluate(s.head(), s.tail().head())
+            : null;
+    }
+
+    /**
+     * Returns a conditional case that will be evaluated if the list contains
+     * a triplet of values. The mapper function will accept the values as it's
+     * arguments.
+     */
+    static <T, R, X extends Throwable> ConditionCase<Seq<T>, R, X>
+    Triple(ExceptionTriFunction<? super T, ? super T, ? super T, ? extends R, X> mapper) {
+        return s -> !s.isEmpty() &&
+                    !s.tail().isEmpty() &&
+                    !s.tail().tail().isEmpty() &&
+                    s.tail().tail().tail().isEmpty()
+            ? () -> mapper.evaluate(s.head(), s.tail().head(), s.tail().tail().head())
             : null;
     }
 

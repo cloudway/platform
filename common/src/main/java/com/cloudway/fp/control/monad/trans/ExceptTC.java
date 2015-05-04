@@ -7,6 +7,7 @@
 package com.cloudway.fp.control.monad.trans;
 
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.ForwardingMonad;
@@ -47,9 +48,16 @@ public abstract class ExceptTC<T, E, M extends Monad<M>> implements MonadTrans<T
     }
 
     /**
-     * Implemented by concrete class to instantiate a new exception monad.
+     * Instantiate a new exception monad.
      */
-    protected abstract <A> $<T, A> $($<M, Either<E,A>> value);
+    protected <A> $<T, A> $($<M, Either<E,A>> value) {
+        return new Monadic<T,E,M,A>(value) {
+            @Override @SuppressWarnings("unchecked")
+            public T getTypeClass() {
+                return (T)ExceptTC.this;
+            }
+        };
+    }
 
     /**
      * Unwrap the exception computation.
@@ -72,6 +80,14 @@ public abstract class ExceptTC<T, E, M extends Monad<M>> implements MonadTrans<T
     @Override
     public <A> $<T, A> pure(A a) {
         return $(nm.pure(right(a)));
+    }
+
+    /**
+     * Delay evaluate the computation.
+     */
+    @Override
+    public <A> $<T, A> delay(Supplier<$<T, A>> m) {
+        return $(nm.delay(() -> runExcept(m.get())));
     }
 
     /**

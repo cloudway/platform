@@ -53,9 +53,16 @@ public abstract class ReaderTC<T, R, M extends Monad<M>>
     }
 
     /**
-     * Implemented by concrete class to instantiate a new reader monad.
+     * Instantiate a new reader monad.
      */
-    protected abstract <A> $<T, A> $(Function<? super R, ? extends $<M, A>> f);
+    protected <A> $<T, A> $(Function<? super R, ? extends $<M, A>> f) {
+        return new Monadic<T, R, M, A>(f) {
+            @Override @SuppressWarnings("unchecked")
+            public T getTypeClass() {
+                return (T)ReaderTC.this;
+            }
+        };
+    }
 
     /**
      * Construct a pure computation that results in the given value.
@@ -73,6 +80,14 @@ public abstract class ReaderTC<T, R, M extends Monad<M>>
     public <A> $<T, A> lazy(Supplier<A> a) {
         Supplier<A> t = Fn.lazy(a);
         return $(r -> nm.pure(t.get()));
+    }
+
+    /**
+     * Delay evaluate the computation.
+     */
+    @Override
+    public <A> $<T, A> delay(Supplier<$<T, A>> m) {
+        return $(r -> nm.delay(() -> runReader(m.get(), r)));
     }
 
     /**

@@ -8,6 +8,7 @@ package com.cloudway.fp.control.monad.trans;
 
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.ForwardingMonad;
@@ -55,9 +56,16 @@ public abstract class WriterTC<T, W, M extends Monad<M>>
     }
 
     /**
-     * Implemented by concrete class to instantiate a new writer monad.
+     * Instantiate a new writer monad.
      */
-    protected abstract <A> $<T, A> $($<M, Tuple<A, W>> value);
+    protected <A> $<T, A> $($<M, Tuple<A, W>> value) {
+        return new Monadic<T, W, M, A>(value) {
+            @Override @SuppressWarnings("unchecked")
+            public T getTypeClass() {
+                return (T)WriterTC.this;
+            }
+        };
+    }
 
     // helper method to construct a raw (result, output) pair.
     private <A> $<M, Tuple<A, W>> raw(A a, W w) {
@@ -70,6 +78,14 @@ public abstract class WriterTC<T, W, M extends Monad<M>>
     @Override
     public <A> $<T, A> pure(A a) {
         return $(raw(a, wm.empty()));
+    }
+
+    /**
+     * Delay evaluate the computation.
+     */
+    @Override
+    public <A> $<T, A> delay(Supplier<$<T, A>> m) {
+        return $(nm.delay(() -> runWriter(m.get())));
     }
 
     /**

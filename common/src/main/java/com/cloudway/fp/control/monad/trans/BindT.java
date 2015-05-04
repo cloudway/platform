@@ -6,8 +6,6 @@
 
 package com.cloudway.fp.control.monad.trans;
 
-import java.util.function.Function;
-
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.data.PMap;
@@ -26,15 +24,6 @@ public final class BindT<K, V, M extends Monad<M>>
 {
     private BindT(M nm) {
         super(nm);
-    }
-
-    @Override
-    protected <A> $<BindT<K, V, M>, A> $(Function<PMap<K,V>, $<M, Tuple<A, PMap<K,V>>>> f) {
-        return new Monadic<BindT<K,V,M>, PMap<K,V>, M, A>(f) {
-            @Override public BindT<K,V,M> getTypeClass() {
-                return BindT.this;
-            }
-        };
     }
 
     /**

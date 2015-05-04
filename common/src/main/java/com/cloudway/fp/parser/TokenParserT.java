@@ -17,24 +17,10 @@ import com.cloudway.fp.data.Either;
  * @param <M> the inner monad type
  */
 public class TokenParserT<ST, M extends Monad<M>>
-    extends TokenParserTC<TokenParserT<ST, M>, String, ST, M>
+    extends TokenParserTC<TokenParserT<ST, M>, ST, M>
 {
-    private TokenParserT(LanguageDef ldf, M nm) {
+    protected TokenParserT(LanguageDef ldf, M nm) {
         super(ldf, nm);
-    }
-
-    @Override
-    protected <A> $<TokenParserT<ST, M>, A> $(ParseFunction<String, ST, M, A, ?> f) {
-        return new Monadic<TokenParserT<ST, M>, String, ST, M, A>(f) {
-            @Override public TokenParserT<ST, M> getTypeClass() {
-                return TokenParserT.this;
-            }
-        };
-    }
-
-    @Override
-    protected Stream<String, Character> stream() {
-        return CharStream.INSTANCE;
     }
 
     /**
@@ -50,10 +36,18 @@ public class TokenParserT<ST, M extends Monad<M>>
     }
 
     /**
-     * Run the lexical parser.
+     * Run the lexical parser with the given stream input.
      */
     public static <ST, M extends Monad<M>, A> $<M, Either<ParseError, A>>
-    run($<TokenParserT<ST, M>, A> p, ST st, String name, String input) {
-        return p.getTypeClass().runParsecT(p, st, name, input);
+    parse($<TokenParserT<ST, M>, A> p, ST st, String name, Stream<Character> input) {
+        return p.getTypeClass().runParser(p, st, name, input);
+    }
+
+    /**
+     * Run the lexical parser with the given string input.
+     */
+    public static <ST, M extends Monad<M>, A> $<M, Either<ParseError, A>>
+    parse($<TokenParserT<ST, M>, A> p, ST st, String name, String input) {
+        return parse(p, st, name, Stream.of(input));
     }
 }

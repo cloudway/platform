@@ -7,7 +7,7 @@
 package com.cloudway.fp.parser;
 
 import com.cloudway.fp.$;
-import com.cloudway.fp.control.Monad;
+import com.cloudway.fp.data.HashPSet;
 import com.cloudway.fp.data.PSet;
 
 /**
@@ -19,42 +19,53 @@ public interface LanguageDef {
      * Describes the start of a block comment. Use the empty string if the
      * language doesn't support block comments.
      */
-    String commentStart();
+    default String commentStart() {
+        return "";
+    }
 
     /**
      * Describes the end of a block comment. Use the empty string if the
      * language doesn't support block comments.
      */
-    String commentEnd();
+    default String commentEnd() {
+        return "";
+    }
 
     /**
      * Describes the start of a line comment. Use the empty string if the
      * language doesn't support line comments.
      */
-    String commentLine();
+    default String commentLine() {
+        return "";
+    }
 
     /**
      * Set to {@code true} if the language supports nested block comments.
      */
-    boolean nestedComments();
+    default boolean nestedComments() {
+        return true;
+    }
 
     /**
      * Returns a parser that should accept any start characters of identifiers.
      */
-    <P, S, U, M extends Monad<M>>
-    $<P, Character> identStart(TokenParserTC<P, S, U, M> pt);
+    default <P> $<P, Character> identStart(TokenParserTC<P, ?, ?> pt) {
+        return pt.mplus(pt.letter(), pt.chr('_'));
+    }
 
     /**
      * Returns a parser that should accept any legal tail characters of identifiers.
      */
-    <P, S, U, M extends Monad<M>>
-    $<P, Character> identPart(TokenParserTC<P, S, U, M> pt);
+    default <P> $<P, Character> identPart(TokenParserTC<P, ?, ?> pt) {
+        return pt.mplus(pt.alphaNum(), pt.chr('_'));
+    }
 
     /**
      * Returns a parser that should accept any start characters of operators.
      */
-    <P, S, U, M extends Monad<M>>
-    $<P, Character> opStart(TokenParserTC<P, S, U, M> pt);
+    default <P> $<P, Character> opStart(TokenParserTC<P, ?, ?> pt) {
+        return opPart(pt);
+    }
 
     /**
      * Returns a parser that should accept any legal tail characters of operators.
@@ -62,21 +73,28 @@ public interface LanguageDef {
      * support user-defined operators, or otherwise the {@code reservedOp} parser
      * won't work correctly.
      */
-    <P, S, U, M extends Monad<M>>
-    $<P, Character> opPart(TokenParserTC<P, S, U, M> pt);
+    default <P> $<P, Character> opPart(TokenParserTC<P, ?, ?> pt) {
+        return pt.oneOf(":!#$%&*+./<=>?@\\^|-~");
+    }
 
     /**
      * Returns the list of reserved identifiers.
      */
-    PSet<String> reservedNames();
+    default PSet<String> reservedNames() {
+        return HashPSet.empty();
+    }
 
     /**
      * Returns the list of reserved operators.
      */
-    PSet<String> reservedOpNames();
+    default PSet<String> reservedOpNames() {
+        return HashPSet.empty();
+    }
 
     /**
      * Returns {@code true} if the language is case sensitive.
      */
-    boolean caseSensitive();
+    default boolean caseSensitive() {
+        return true;
+    }
 }

@@ -7,56 +7,41 @@
 package com.cloudway.fp.parser;
 
 import com.cloudway.fp.$;
+import com.cloudway.fp.control.Trampoline;
 import com.cloudway.fp.data.Either;
-import com.cloudway.fp.data.Identity;
+import com.cloudway.fp.data.Unit;
 
 /**
- * A standalone parser that accept a string as input stream.
- *
- * @param <ST> the user state type
+ * A standalone character parser.
  */
-public class CharParser<ST> extends CharParserTC<CharParser<ST>, String, ST, Identity.µ> {
-    private CharParser() {
-        super(Identity.tclass);
+public class CharParser extends CharParserTC<CharParser, Unit, Trampoline.µ> {
+    protected CharParser() {
+        super(Trampoline.tclass);
     }
 
-    private static final CharParser<?> _TCLASS = new CharParser<>();
+    private static final CharParser _TCLASS = new CharParser();
 
     /**
      * Returns the single instance of the {@code CharParser}.
      */
     @SuppressWarnings("unchecked")
-    public static <ST> CharParser<ST> get() {
-        return (CharParser<ST>)_TCLASS;
+    public static CharParser get() {
+        return _TCLASS;
     }
 
     /**
-     * Run the {@code CharParser}.
+     * Run the {@code CharParser} with the given stream input.
      */
-    public static <ST, A> Either<ParseError, A>
-    run($<CharParser<ST>, A> p, ST st, String name, String input) {
-        return Identity.run(p.getTypeClass().runParsecT(p, st, name, input));
+    public static <A> Either<ParseError, A>
+    parse($<CharParser, A> p, String name, Stream<Character> input) {
+        return Trampoline.run(p.getTypeClass().runParser(p, Unit.U, name, input));
     }
 
-    private static final class Parser<ST, A> extends Monadic<CharParser<ST>, String, ST, Identity.µ, A> {
-        Parser(ParseFunction<String, ST, Identity.µ, A, ?> f) {
-            super(f);
-        }
-
-        @Override
-        @SuppressWarnings("unchecked")
-        public CharParser<ST> getTypeClass() {
-            return get();
-        }
-    }
-
-    @Override
-    protected <A> $<CharParser<ST>, A> $(ParseFunction<String, ST, Identity.µ, A, ?> f) {
-        return new Parser<>(f);
-    }
-
-    @Override
-    protected Stream<String, Character> stream() {
-        return CharStream.INSTANCE;
+    /**
+     * Run the {@code CharParser} with the given string input.
+     */
+    public static <A> Either<ParseError, A>
+    parse($<CharParser, A> p, String name, String input) {
+        return parse(p, name, Stream.of(input));
     }
 }

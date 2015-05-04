@@ -10,7 +10,9 @@ import java.util.Comparator;
 import java.util.NoSuchElementException;
 import java.util.StringJoiner;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import static java.util.Objects.requireNonNull;
 
@@ -234,6 +236,220 @@ final class SeqImpl {
         @Override
         public String toString() {
             return "[" + value + ", ...]";
+        }
+    }
+
+    static class CharSeq implements Seq<Character> {
+        private final CharSequence seq;
+        private final int start, end;
+
+        private CharSeq(CharSequence seq, int start, int end) {
+            this.seq = seq;
+            this.start = start;
+            this.end = end;
+        }
+
+        static Seq<Character> make(CharSequence seq, int start, int end) {
+            int subLen = end - start;
+            if (subLen == 0) {
+                return SeqImpl.nil();
+            } else if (subLen == 1) {
+                return single(seq.charAt(start));
+            } else {
+                return new CharSeq(seq, start, end);
+            }
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return false;
+        }
+
+        @Override
+        public Character head() {
+            return seq.charAt(start);
+        }
+
+        @Override
+        public Seq<Character> tail() {
+            return make(seq, start + 1, end);
+        }
+
+        @Override
+        public Seq<Character> force() {
+            return this;
+        }
+
+        @Override
+        public long count() {
+            return end - start;
+        }
+
+        @Override
+        public Seq<Character> reverse() {
+            StringBuilder buf = new StringBuilder();
+            for (int i = end; --i >= start; ) {
+                buf.append(seq.charAt(i));
+            }
+            return make(buf, 0, buf.length());
+        }
+
+        @Override
+        public Seq<Character> append(Seq<? extends Character> other) {
+            String str = toString().concat(other.toString());
+            return make(str, 0, str.length());
+        }
+
+        @Override
+        public Seq<Character> filter(Predicate<? super Character> p) {
+            StringBuilder buf = new StringBuilder(end - start);
+            for (int i = start; i < end; i++) {
+                char c = seq.charAt(i);
+                if (p.test(c)) buf.append(c);
+            }
+            return make(buf, 0, buf.length());
+        }
+
+        @Override
+        public <R> R foldLeft(R r, BiFunction<R, ? super Character, R> f) {
+            for (int i = start; i < end; i++) {
+                r = f.apply(r, seq.charAt(i));
+            }
+            return r;
+        }
+
+        @Override
+        public Maybe<Character> foldLeft(BiFunction<Character, Character, Character> f) {
+            char r = seq.charAt(start);
+            for (int i = start + 1; i < end; i++) {
+                r = f.apply(r, seq.charAt(i));
+            }
+            return Maybe.of(r);
+        }
+
+        @Override
+        public <R> R foldRight_(R r, BiFunction<? super Character, R, R> f) {
+            for (int i = end; --i >= start; ) {
+                r = f.apply(seq.charAt(i), r);
+            }
+            return r;
+        }
+
+        @Override
+        public Maybe<Character> foldRight(BiFunction<Character, Character, Character> f) {
+            char r = seq.charAt(end - 1);
+            for (int i = end - 2; i >= start; i--) {
+                r = f.apply(seq.charAt(i), r);
+            }
+            return Maybe.of(r);
+        }
+
+        @Override
+        public void forEach(Consumer<? super Character> action) {
+            for (int i = start; i < end; i++) {
+                action.accept(seq.charAt(i));
+            }
+        }
+
+        @Override
+        public Seq<Character> take(int n) {
+            if (n <= 0) {
+                return SeqImpl.nil();
+            } else if (n < end - start) {
+                return make(seq, start, start + n);
+            } else {
+                return this;
+            }
+        }
+
+        @Override
+        public Seq<Character> drop(int n) {
+            if (n <= 0) {
+                return this;
+            } else if (n >= end - start) {
+                return SeqImpl.nil();
+            } else {
+                return make(seq, start + n, end);
+            }
+        }
+
+        @Override
+        public Seq<Character> takeWhile(Predicate<? super Character> p) {
+            for (int i = start; i < end; i++) {
+                if (!p.test(seq.charAt(i))) {
+                    return make(seq, start, i);
+                }
+            }
+            return this;
+        }
+
+        @Override
+        public Seq<Character> dropWhile(Predicate<? super Character> p) {
+            for (int i = start; i < end; i++) {
+                if (!p.test(seq.charAt(i))) {
+                    return make(seq, i, end);
+                }
+            }
+            return SeqImpl.nil();
+        }
+
+        @Override
+        public Tuple<Seq<Character>, Seq<Character>> span(Predicate<? super Character> p) {
+            for (int i = start; i < end; i++) {
+                if (!p.test(seq.charAt(i))) {
+                    return Tuple.of(make(seq, start, i), make(seq, i, end));
+                }
+            }
+            return Tuple.of(this, SeqImpl.nil());
+        }
+
+        @Override
+        public Maybe<Character> find(Predicate<? super Character> p) {
+            for (int i = start; i < end; i++) {
+                char c = seq.charAt(i);
+                if (p.test(c)) return Maybe.of(c);
+            }
+            return Maybe.empty();
+        }
+
+        @Override
+        public String show(int n, CharSequence delimiter, CharSequence prefix, CharSequence suffix) {
+            int len = end - start;
+            if (n <= 0) {
+                return prefix + "..." + suffix;
+            } else if (delimiter.length() == 0) {
+                String str;
+                if (n >= len) {
+                    str = seq.subSequence(start, end).toString();
+                } else {
+                    str = seq.subSequence(start, start + n) + "...";
+                }
+                if (prefix.length() != 0 || suffix.length() != 0) {
+                    str = prefix + str + suffix;
+                }
+                return str;
+            } else {
+                StringBuilder sb = new StringBuilder();
+                sb.append(prefix);
+                sb.append(seq.charAt(start));
+                int i = start + 1;
+                while (i < end && i < n) {
+                    sb.append(delimiter);
+                    sb.append(seq.charAt(i));
+                    i++;
+                }
+                if (i < end) {
+                    sb.append(delimiter);
+                    sb.append("...");
+                }
+                sb.append(suffix);
+                return sb.toString();
+            }
+        }
+
+        @Override
+        public String toString() {
+            return seq.subSequence(start, end).toString();
         }
     }
 

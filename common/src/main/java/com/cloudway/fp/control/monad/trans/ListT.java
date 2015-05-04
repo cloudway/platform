@@ -7,7 +7,6 @@
 package com.cloudway.fp.control.monad.trans;
 
 import java.util.function.BiFunction;
-import java.util.function.Supplier;
 
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Monad;
@@ -23,16 +22,6 @@ import com.cloudway.fp.data.Tuple;
 public class ListT<M extends Monad<M>> extends ListTC<ListT<M>, M> {
     public ListT(M nm) {
         super(nm);
-    }
-
-    @Override
-    protected <A> $<ListT<M>, A> $(Supplier<$<M, MList<M, A>>> run) {
-        return new Monadic<ListT<M>, M, A>(run) {
-            @Override
-            public ListT<M> getTypeClass() {
-                return ListT.this;
-            }
-        };
     }
 
     public static <M extends Monad<M>> ListT<M> on(M nm) {

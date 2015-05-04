@@ -6,8 +6,6 @@
 
 package com.cloudway.fp.control.monad.trans;
 
-import java.util.function.Function;
-
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Monad;
 
@@ -24,16 +22,6 @@ public final class ReaderT<R, M extends Monad<M>>
 {
     private ReaderT(M nm) {
         super(nm);
-    }
-
-    @Override
-    protected <A> $<ReaderT<R, M>, A> $(Function<? super R, ? extends $<M, A>> f) {
-        return new Monadic<ReaderT<R, M>, R, M, A>(f) {
-            @Override
-            public ReaderT<R,M> getTypeClass() {
-                return ReaderT.this;
-            }
-        };
     }
 
     /**

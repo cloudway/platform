@@ -159,7 +159,7 @@ public final class Fn {
      * Returns the least fixed point of the given binary operator.
      */
     public static <A, B> Function<A, B>
-    fix(BiFunction<Function<? super A, ? extends B>, ? super A, ? extends B> f) {
+    fix(BiFunction<Function<A, B>, ? super A, ? extends B> f) {
         return fix(rec -> x -> f.apply(y -> rec.get().apply(y), x));
     }
 
@@ -167,7 +167,7 @@ public final class Fn {
      * Returns the least fixed point of the given ternary operator.
      */
     public static <A, B, C> BiFunction<A, B, C>
-    fix(TriFunction<BiFunction<? super A, ? super B, ? extends C>, ? super A, ? super B, ? extends C> f) {
+    fix(TriFunction<BiFunction<A, B, C>, ? super A, ? super B, ? extends C> f) {
         return fix(rec -> (x, y) -> f.apply((a, b) -> rec.get().apply(a, b), x, y));
     }
 

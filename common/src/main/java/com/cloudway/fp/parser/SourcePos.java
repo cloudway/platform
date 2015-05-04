@@ -8,8 +8,6 @@ package com.cloudway.fp.parser;
 
 import java.util.Objects;
 
-import com.cloudway.fp.function.TriFunction;
-
 /**
  * Represents the source position.
  *
@@ -73,13 +71,6 @@ public class SourcePos implements Comparable<SourcePos> {
     }
 
     /**
-     * Increments the line number of a source position.
-     */
-    public SourcePos incLine(int n) {
-        return new SourcePos(name, line + n, column);
-    }
-
-    /**
      * Returns the column number in the source.
      */
     public int getColumn() {
@@ -130,20 +121,6 @@ public class SourcePos implements Comparable<SourcePos> {
             }
         }
         return new SourcePos(name, ln, cn);
-    }
-
-    /**
-     * Increments the column number of a source position.
-     */
-    public SourcePos incColumn(int n) {
-        return new SourcePos(name, line, column + n);
-    }
-
-    /**
-     * Deconstruct the source position.
-     */
-    public <R> R as(TriFunction<String, Integer, Integer, ? extends R> f) {
-        return f.apply(name, line, column);
     }
 
     public boolean equals(Object obj) {

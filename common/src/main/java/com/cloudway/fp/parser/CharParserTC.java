@@ -6,29 +6,23 @@
 
 package com.cloudway.fp.parser;
 
-import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.Monad;
-import com.cloudway.fp.control.Trampoline;
-import com.cloudway.fp.data.Fn;
-import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.data.Unit;
-
-import static com.cloudway.fp.control.Trampoline.suspend;
 
 /**
  * A {@link CharParserT} typeclass definition.
  *
  * @param <P> the parser monad typeclass
- * @param <S> the stream type
  * @param <U> the user state type
  * @param <M> the inner monad typeclass
  */
-public abstract class CharParserTC<P, S, U, M extends Monad<M>>
-    extends ParsecT<P, S, Character, U, M>
+public abstract class CharParserTC<P, U, M extends Monad<M>>
+    extends ParserT<P, Character, U, M>
 {
     protected CharParserTC(M nm) {
         super(nm);
@@ -40,9 +34,7 @@ public abstract class CharParserTC<P, S, U, M extends Monad<M>>
      * actually parsed.
      */
     public $<P, Character> satisfy(Predicate<Character> p) {
-        return tokenPrim(String::valueOf,
-                         (pos, c, cs) -> pos.updatePosChar(c),
-                         (c) -> p.test(c) ? Maybe.of(c) : Maybe.empty());
+        return tokenPrim(String::valueOf, SourcePos::updatePosChar, p);
     }
 
     /**
@@ -186,8 +178,8 @@ public abstract class CharParserTC<P, S, U, M extends Monad<M>>
         return map(many(p), CharParserTC::join);
     }
 
-    public $<P, String> manyChar1($<P, Character> p) {
-        return map(many1(p), CharParserTC::join);
+    public $<P, String> someChar($<P, Character> p) {
+        return map(some(p), CharParserTC::join);
     }
 
     private static String join(Seq<Character> cs) {
@@ -200,43 +192,11 @@ public abstract class CharParserTC<P, S, U, M extends Monad<M>>
     }
 
     /**
-     * Parses a sequence of characters. Returns the parsed string.
+     * Parses a sequence of characters.
      */
-    public $<P, String> str(String cs) {
-        if (cs.isEmpty()) {
-            return $((s, cok, cerr, eok, eerr) -> suspend(() -> eok.apply("", s, unknownError(s))));
-        } else {
-            return $((s, cok, cerr, eok, eerr) -> s.as((input, pos, u) -> {
-                BiFunction<String, S, Trampoline<$<M, Object>>> walk = Fn.fix((rec, toks, rs) -> {
-                    if (toks.isEmpty()) {
-                        SourcePos pos_ = pos.updatePosString(cs);
-                        State<S, U> s_ = new State<>(rs, pos_, u);
-                        return suspend(() -> cok.apply(cs, s_, new ParseError(pos_)));
-                    } else {
-                        return suspend(() -> stream().uncons(rs).map(t -> t.as((x, xs) ->
-                            toks.charAt(0) == x
-                                ? rec.apply(toks.substring(1), xs)
-                                : cerr.apply(errExpect(pos, x, cs))
-                        )).orElseGet(() -> cerr.apply(errEof(pos, cs))));
-                    }
-                });
-
-                return suspend(() -> stream().uncons(input).map(t -> t.as((x, xs) ->
-                    cs.charAt(0) == x
-                        ? walk.apply(cs.substring(1), xs)
-                        : cerr.apply(errExpect(pos, x, cs))
-                    )).orElseGet(() -> cerr.apply(errEof(pos, cs))));
-            }));
-        }
-    }
-
-    private static ParseError errEof(SourcePos pos, String cs) {
-        return new ParseError(pos, new Message.SysUnExpect(""))
-                   .setMessage(new Message.Expect(cs));
-    }
-
-    private static ParseError errExpect(SourcePos pos, char x, String cs) {
-        return new ParseError(pos, new Message.SysUnExpect(String.valueOf(x)))
-                   .setMessage(new Message.Expect(cs));
+    public $<P, String> str(String s) {
+        Function<Seq<Character>, String> show = cs -> cs.show("", "", "");
+        Function<SourcePos, SourcePos> nextPos = pos -> pos.updatePosString(s);
+        return seqR(tokens(Seq.wrap(s), show, nextPos), pure(s));
     }
 }

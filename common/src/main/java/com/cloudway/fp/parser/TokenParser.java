@@ -7,43 +7,36 @@
 package com.cloudway.fp.parser;
 
 import com.cloudway.fp.$;
+import com.cloudway.fp.control.Trampoline;
 import com.cloudway.fp.data.Either;
-import com.cloudway.fp.data.Identity;
+import com.cloudway.fp.data.Unit;
 
 /**
  * A standalone lexical parser.
- *
- * @param <ST> the user state type
  */
-public class TokenParser<ST> extends TokenParserTC<TokenParser<ST>, String, ST, Identity.µ> {
+public class TokenParser extends TokenParserTC<TokenParser, Unit, Trampoline.µ> {
     /**
      * Construct a lexical parser.
      *
-     * @param ldf the language definition
+     * @param language the language definition
      */
-    public TokenParser(LanguageDef ldf) {
-        super(ldf, Identity.tclass);
+    public TokenParser(LanguageDef language) {
+        super(language, Trampoline.tclass);
     }
 
     /**
-     * Run the lexical parser.
+     * Run the lexical parser with given stream input.
      */
-    public static <ST, A>Either<ParseError, A>
-    run($<TokenParser<ST>, A> p, ST st, String name, String input) {
-        return Identity.run(p.getTypeClass().runParsecT(p, st, name, input));
+    public static <A> Either<ParseError, A>
+    parse($<TokenParser, A> p, String name, Stream<Character> input) {
+        return Trampoline.run(p.getTypeClass().runParser(p, Unit.U, name, input));
     }
 
-    @Override
-    protected <A> $<TokenParser<ST>, A> $(ParseFunction<String, ST, Identity.µ, A, ?> f) {
-        return new Monadic<TokenParser<ST>, String, ST, Identity.µ, A>(f) {
-            @Override public TokenParser<ST> getTypeClass() {
-                return TokenParser.this;
-            }
-        };
-    }
-
-    @Override
-    protected Stream<String, Character> stream() {
-        return CharStream.INSTANCE;
+    /**
+     * Run the lexical parser with the given string input.
+     */
+    public static <A>Either<ParseError, A>
+    parse($<TokenParser, A> p, String name, String input) {
+        return parse(p, name, Stream.of(input));
     }
 }

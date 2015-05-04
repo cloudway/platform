@@ -12,7 +12,7 @@ import java.util.function.UnaryOperator;
 import com.cloudway.fp.$;
 import com.cloudway.fp.data.Seq;
 
-import static com.cloudway.fp.control.Syntax.alternative;
+import static com.cloudway.fp.control.Syntax.choice;
 import static com.cloudway.fp.control.Syntax.do_;
 import static com.cloudway.fp.data.Seq.cons;
 import static com.cloudway.fp.data.Seq.nil;
@@ -151,16 +151,15 @@ public final class Expr {
      * @param operators the operator table
      * @param simpleExpr a simple parser parses expression term
      */
-    public static <P extends ParsecT<P,?,?,?,?>, A>
-    $<P, A> buildExpressionParser(P parser,
-            Seq<Seq<Operator<P, A>>> operators, $<P, A> simpleExpr) {
+    public static <P extends ParserT<P,?,?,?>, A>
+    $<P, A> buildExpressionParser(P parser, Seq<Seq<Operator<P, A>>> operators, $<P, A> simpleExpr) {
         return operators.foldLeft(simpleExpr, (term, ops) ->
             new Builder<P,A>(parser).build(ops, term));
     }
 
     // Internal
 
-    private static class Builder<P extends ParsecT<P,?,?,?,?>, A> {
+    private static class Builder<P extends ParserT<P,?,?,?>, A> {
         private final P pt;
 
         Builder(P pt) {
@@ -201,17 +200,18 @@ public final class Expr {
             UnaryOperator<A> id = x -> x;
 
             $<P, A> termP =
-                   do_(alternative(prefixOp, pt.pure(id)), pre ->
+                   do_(choice(prefixOp, pt.pure(id)), pre ->
                    do_(term, x ->
-                   do_(alternative(postfixOp, pt.pure(id)), post ->
+                   do_(choice(postfixOp, pt.pure(id)), post ->
                    do_(pt.pure(post.apply(pre.apply(x)))))));
 
             return do_(termP, x ->
-                   do_(pt.label("operator", alternative(
-                       rassocP(termP, x),
-                       lassocP(termP, x),
-                       nassocP(termP, x),
-                       pt.pure(x)))));
+                   do_(pt.label("operator",
+                   choice(
+                     rassocP(termP, x)
+                   , lassocP(termP, x)
+                   , nassocP(termP, x)
+                   , pt.pure(x)))));
         }
 
         @SuppressWarnings("unchecked")
@@ -243,41 +243,41 @@ public final class Expr {
         }
 
         private $<P, A> rassocP($<P, A> termP, A x) {
-            return alternative(
+            return choice(
                 do_(rassocOp, f ->
-                  do_(do_(termP, z -> rassocP1(termP, z)), y ->
-                  do_(pt.pure(f.apply(x, y))))),
-                ambiguousLeft,
-                ambiguousNone);
+                do_(do_(termP, z -> rassocP1(termP, z)), y ->
+                do_(pt.pure(f.apply(x, y)))))
+              , ambiguousLeft
+              , ambiguousNone);
         }
 
         private $<P, A> rassocP1($<P, A> termP, A x) {
-            return alternative(rassocP(termP, x), pt.pure(x));
+            return choice(rassocP(termP, x), pt.pure(x));
         }
 
         private $<P, A> lassocP($<P, A> termP, A x) {
-            return alternative(
+            return choice(
                 do_(lassocOp, f ->
-                  do_(termP, y ->
-                  do_(lassocP1(termP, f.apply(x, y))))),
-                ambiguousRight,
-                ambiguousNone
+                do_(termP, y ->
+                do_(lassocP1(termP, f.apply(x, y)))))
+              , ambiguousRight
+              , ambiguousNone
             );
         }
 
         private $<P, A> lassocP1($<P, A> termP, A x) {
-            return alternative(lassocP(termP, x), pt.pure(x));
+            return choice(lassocP(termP, x), pt.pure(x));
         }
 
         private $<P, A> nassocP($<P, A> termP, A x) {
             return
                 do_(nassocOp, f ->
                 do_(termP, y ->
-                alternative(
-                  ambiguousRight,
-                  ambiguousLeft,
-                  ambiguousNone,
-                  pt.pure(f.apply(x, y)))));
+                choice(
+                  ambiguousRight
+                , ambiguousLeft
+                , ambiguousNone
+                , pt.pure(f.apply(x, y)))));
         }
     }
 }

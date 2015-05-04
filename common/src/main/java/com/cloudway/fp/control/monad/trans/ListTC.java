@@ -70,9 +70,16 @@ public abstract class ListTC<T, M extends Monad<M>>
     }
 
     /**
-     * Implemented by concrete class to instantiate a new {@code ListT} monad.
+     * Instantiate a new {@code ListT} monad.
      */
-    protected abstract <A> $<T, A> $(Supplier<$<M, MList<M, A>>> run);
+    protected <A> $<T, A> $(Supplier<$<M, MList<M, A>>> run) {
+        return new Monadic<T, M, A>(run) {
+            @Override @SuppressWarnings("unchecked")
+            public T getTypeClass() {
+                return (T)ListTC.this;
+            }
+        };
+    }
 
     /**
      * Unwrap the {@code ListT} computation.

@@ -11,30 +11,16 @@ import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.data.Either;
 
 /**
- * A parser monadic transformer that accept a string an input stream.
+ * A character parser monadic transformer.
  *
  * @param <ST> the user state type
  * @param <M> the inner monad type
  */
 public class CharParserT<ST, M extends Monad<M>>
-    extends CharParserTC<CharParserT<ST, M>, String, ST, M>
+    extends CharParserTC<CharParserT<ST, M>, ST, M>
 {
-    private CharParserT(M nm) {
+    protected CharParserT(M nm) {
         super(nm);
-    }
-
-    @Override
-    protected <A> $<CharParserT<ST, M>, A> $(ParseFunction<String, ST, M, A, ?> f) {
-        return new Monadic<CharParserT<ST, M>, String, ST, M, A>(f) {
-            @Override public CharParserT<ST, M> getTypeClass() {
-                return CharParserT.this;
-            }
-        };
-    }
-
-    @Override
-    protected Stream<String, Character> stream() {
-        return CharStream.INSTANCE;
     }
 
     /**
@@ -48,10 +34,18 @@ public class CharParserT<ST, M extends Monad<M>>
     }
 
     /**
-     * Run the parser with given input.
+     * Run the parser with the given stream input.
      */
     public static <ST, M extends Monad<M>, A> $<M, Either<ParseError, A>>
-    run($<CharParserT<ST, M>, A> p, ST st, String name, String input) {
-        return p.getTypeClass().runParsecT(p, st, name, input);
+    parse($<CharParserT<ST, M>, A> p, ST st, String name, Stream<Character> input) {
+        return p.getTypeClass().runParser(p, st, name, input);
+    }
+
+    /**
+     * Run the parser with the given string input.
+     */
+    public static <ST, M extends Monad<M>, A> $<M, Either<ParseError, A>>
+    parse($<CharParserT<ST, M>, A> p, ST st, String name, String input) {
+        return parse(p, st, name, Stream.of(input));
     }
 }

@@ -56,9 +56,16 @@ public abstract class StateTC<T, S, M extends Monad<M>>
     }
 
     /**
-     * Implemented by concrete class to instantiate a new State monad.
+     * Instantiate a new State monad.
      */
-    protected abstract <A> $<T, A> $(Function<S, $<M, Tuple<A,S>>> f);
+    protected <A> $<T, A> $(Function<S, $<M, Tuple<A,S>>> f) {
+        return new Monadic<T, S, M, A>(f) {
+            @Override @SuppressWarnings("unchecked")
+            public T getTypeClass() {
+                return (T)StateTC.this;
+            }
+        };
+    }
 
     /**
      * Create a state transformer monad from the given state transfer function.
@@ -93,6 +100,14 @@ public abstract class StateTC<T, S, M extends Monad<M>>
     public <A> $<T, A> lazy(Supplier<A> a) {
         Supplier<A> t = Fn.lazy(a);
         return $(s -> nm.pure(Tuple.of(t.get(), s)));
+    }
+
+    /**
+     * Delay evaluate the computation.
+     */
+    @Override
+    public <A> $<T, A> delay(Supplier<$<T, A>> m) {
+        return $(s -> nm.delay(() -> runState(m.get(), s)));
     }
 
     /**

@@ -16,19 +16,9 @@ import com.cloudway.fp.control.Monad;
  *
  * @param <M> the inner monad typeclass
  */
-public final class ContT<M extends Monad<M>> extends ContTC<ContT<M>, M>
-{
+public final class ContT<M extends Monad<M>> extends ContTC<ContT<M>, M> {
     private ContT(M nm) {
         super(nm);
-    }
-
-    @Override
-    protected <R, A> $<ContT<M>, A> $(Monadic.K<A, M, R> f) {
-        return new Monadic<ContT<M>, M, A>(f) {
-            @Override public ContT<M> getTypeClass() {
-                return ContT.this;
-            }
-        };
     }
 
     /**

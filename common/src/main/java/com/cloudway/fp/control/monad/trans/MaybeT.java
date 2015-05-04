@@ -27,15 +27,6 @@ public final class MaybeT<M extends Monad<M>> extends MaybeTC<MaybeT<M>, M> {
         super(nm);
     }
 
-    @Override
-    protected <A> $<MaybeT<M>, A> $($<M, Maybe<A>> value) {
-        return new Monadic<MaybeT<M>, M, A>(value) {
-            @Override public MaybeT<M> getTypeClass() {
-                return MaybeT.this;
-            }
-        };
-    }
-
     /**
      * Stack maybe monad on another monad.
      */

@@ -132,6 +132,13 @@ public final class Cont<A> implements $<Cont.µ, A> {
     }
 
     /**
+     * Delay evaluate the computation.
+     */
+    public static <A> Cont<A> delay(Supplier<$<µ, A>> m) {
+        return $(f -> narrow(m.get()).run(f));
+    }
+
+    /**
      * Transfer a continuation by feeding the intermediate value to the given
      * function and yield the result of function application.
      *
@@ -271,6 +278,11 @@ public final class Cont<A> implements $<Cont.µ, A> {
         @Override
         public Cont<Unit> action(Runnable a) {
             return Cont.action(a);
+        }
+
+        @Override
+        public <A> Cont<A> delay(Supplier<$<µ, A>> m) {
+            return Cont.delay(m);
         }
 
         @Override

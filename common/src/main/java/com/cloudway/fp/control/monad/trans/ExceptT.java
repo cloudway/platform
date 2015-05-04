@@ -31,15 +31,6 @@ public final class ExceptT<E, M extends Monad<M>>
         super(nm);
     }
 
-    @Override
-    protected <A> $<ExceptT<E, M>, A> $($<M, Either<E, A>> value) {
-        return new Monadic<ExceptT<E,M>, E, M, A>(value) {
-            @Override public ExceptT<E,M> getTypeClass() {
-                return ExceptT.this;
-            }
-        };
-    }
-
     /**
      * Stack exception monad on another monad.
      */

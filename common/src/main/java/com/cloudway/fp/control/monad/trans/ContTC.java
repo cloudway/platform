@@ -59,9 +59,16 @@ public abstract class ContTC<T, M extends Monad<M>>
     }
 
     /**
-     * Implemented by concrete class to instantiate a new CPS monad.
+     * Instantiate a new CPS monad.
      */
-    protected abstract <R, A> $<T, A> $(Monadic.K<A, M, R> k);
+    protected <R, A> $<T, A> $(Monadic.K<A, M, R> k) {
+        return new Monadic<T, M, A>(k) {
+            @Override @SuppressWarnings("unchecked")
+            public T getTypeClass() {
+                return (T)ContTC.this;
+            }
+        };
+    }
 
     /**
      * Run the CPS computation to get the final result.
@@ -116,6 +123,14 @@ public abstract class ContTC<T, M extends Monad<M>>
     public <A> $<T, A> lazy(Supplier<A> a) {
         Supplier<A> t = Fn.lazy(a);
         return $(f -> f.apply(t.get()));
+    }
+
+    /**
+     * Delay evaluate the computation.
+     */
+    @Override
+    public <A> $<T, A> delay(Supplier<$<T, A>> m) {
+        return $(f -> nm.delay(() -> runCont(m.get(), f)));
     }
 
     /**
