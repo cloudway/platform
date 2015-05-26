@@ -9,54 +9,36 @@ package com.cloudway.fp.scheme;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Ref;
-import com.cloudway.fp.data.Seq;
-import com.cloudway.fp.scheme.LispVal.Atom;
+import com.cloudway.fp.scheme.LispVal.Symbol;
 
 public final class Env {
-    private PMap<Atom, Ref<LispVal>> bindings;
+    private PMap<Symbol, Ref<LispVal>> bindings;
     private final int quoteLevel;
 
-    public Env(PMap<Atom, Ref<LispVal>> bindings) {
+    public Env(PMap<Symbol, Ref<LispVal>> bindings) {
         this.bindings = bindings;
         this.quoteLevel = 0;
     }
 
-    public Env(Env outer) {
-        this.bindings = outer.bindings;
-        this.quoteLevel = 0;
-    }
-
-    private Env(PMap<Atom, Ref<LispVal>> bindings, int lvl) {
+    private Env(PMap<Symbol, Ref<LispVal>> bindings, int lvl) {
         this.bindings = bindings;
         this.quoteLevel = lvl;
     }
 
-    public Maybe<LispVal> lookup(Atom id) {
+    public Maybe<LispVal> lookup(Symbol id) {
         return bindings.lookup(id).map(Ref::get);
     }
 
-    public Maybe<Ref<LispVal>> lookupRef(Atom id) {
+    public Maybe<Ref<LispVal>> lookupRef(Symbol id) {
         return bindings.lookup(id);
     }
 
-    public void put(Atom id, LispVal value) {
+    public void put(Symbol id, LispVal value) {
         bindings = bindings.put(id, new Ref<>(value));
     }
 
-    public Env extend(Seq<Atom> params, Maybe<Atom> vararg, Seq<LispVal> args) {
-        PMap<Atom, Ref<LispVal>> env = bindings;
-
-        while (!params.isEmpty()) {
-            env = env.put(params.head(), new Ref<>(args.head()));
-            params = params.tail();
-            args = args.tail();
-        }
-
-        if (vararg.isPresent()) {
-            env = env.put(vararg.get(), new Ref<>(new LispVal.List(args)));
-        }
-
-        return new Env(env);
+    public Env extend(PMap<Symbol, Ref<LispVal>> bindings) {
+        return new Env(this.bindings.putAll(bindings));
     }
 
     public int getQL() {

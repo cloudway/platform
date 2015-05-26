@@ -23,24 +23,25 @@ public class LispError extends RuntimeException {
     }
 
     public static class NumArgs extends LispError {
-        private final int expected;
-        private final Seq<LispVal> found;
+        public final int expected;
+        public final LispVal found;
 
-        public NumArgs(int expected, Seq<LispVal> found) {
+        public NumArgs(int expected, LispVal found) {
             this.expected = expected;
             this.found = found;
         }
 
         @Override
         public String getMessage() {
-            return "Expected " + expected + " args; found values " +
-                   found.map(LispVal::show).show(" ", "(", ")");
+            return "Expected " + expected +
+                   " args; found values " +
+                   found.show() + ")";
         }
     }
 
     public static class TypeMismatch extends LispError {
-        private final String expected;
-        private final LispVal found;
+        public final String expected;
+        public final LispVal found;
 
         public TypeMismatch(String expected, LispVal found) {
             this.expected = expected;
@@ -50,6 +51,21 @@ public class LispError extends RuntimeException {
         @Override
         public String getMessage() {
             return "Invalid type: expected " + expected + ", found " + found.show();
+        }
+    }
+
+    public static class PatternMismatch extends LispError {
+        public final LispVal pattern;
+        public final LispVal found;
+
+        public PatternMismatch(LispVal pattern, LispVal found) {
+            this.pattern = pattern;
+            this.found = found;
+        }
+
+        @Override
+        public String getMessage() {
+            return "Pattern mismatch: pattern " + pattern.show() + ", found " + found.show();
         }
     }
 
@@ -65,7 +81,7 @@ public class LispError extends RuntimeException {
     }
 
     public static class BadSpecialForm extends LispError {
-        private final LispVal form;
+        public final LispVal form;
 
         public BadSpecialForm(String message, LispVal form) {
             super(message);
@@ -79,7 +95,7 @@ public class LispError extends RuntimeException {
     }
 
     public static class NotFunction extends LispError {
-        private final String func;
+        public final String func;
 
         public NotFunction(String message, String func) {
             super(message);
@@ -93,7 +109,7 @@ public class LispError extends RuntimeException {
     }
 
     public static class UnboundVar extends LispError {
-        private final String varname;
+        public final String varname;
 
         public UnboundVar(String message, String varname) {
             super(message);

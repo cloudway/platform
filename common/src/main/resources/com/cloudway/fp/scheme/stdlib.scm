@@ -6,18 +6,8 @@
 (define (curry f b)     (lambda (a) (f a b)))
 (define (compose f g)   (lambda (a) (f (g a))))
 
-(define (foldr op init lst)
-  (if (null? lst)
-      init
-      (op (car lst) (foldr op init (cdr lst)))))
-
-(define (foldl op init lst)
-  (do ([result init (op result (car rest))]
-       [rest lst (cdr rest)])
-      ((null? rest) result)))
-
-(define fold foldl)
-(define reduce foldr)
+(define fold fold-left)
+(define reduce fold-right)
 
 (define (unfold func init pred)
   (if (pred init)
@@ -80,8 +70,6 @@
 (define (cddddr pair) (cdr (cdr (cdr (cdr pair)))))
 
 (define (list . objs)   objs)
-(define (length lst)    (fold (lambda (x y) (+ x 1)) 0 lst))
-(define (reverse lst)   (fold (flip cons) '() lst))
 
 (define (list-tail lst k)
   (if (zero? k)
@@ -110,11 +98,6 @@
 (define (assv obj alist)    (fold (ass-helper (curry eqv? obj) car) #f alist))
 (define (assoc obj alist)   (fold (ass-helper (curry equal? obj) car) #f alist))
 
-(define (map func lst)      (foldr (lambda (x y) (cons (func x) y)) '() lst))
-(define (flatmap func lst)  (foldr (lambda (x y) (append (func x) y)) '() lst))
-(define (filter pred lst)   (foldr (lambda (x y) (if (pred x) (cons x y) y)) '() lst))
-(define (for-each proc lst) (foldl (lambda (a x) (proc x)) '() lst))
-
 ;;; Macros
 
 (defmacro (assert some-cond)
@@ -138,3 +121,12 @@
       `(do ((,mc 0 (+ ,mc 1)))
            (,some-cond ,mc)
          ,@some-actions)))
+
+; SRFI 31: A special form rec for recursive evaluation
+(defmacro (rec . args)
+  (match args
+    [((name . variables) . body)
+      `(letrec ((,name (lambda ,variables . ,@body))) ,name)]
+    [(name expression)
+      `(letrec ((,name ,expression)) ,name)]
+    [else (error "rec: bad syntax" args)]))

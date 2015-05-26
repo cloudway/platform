@@ -28,7 +28,6 @@ import com.cloudway.fp.parser.Lexer;
 import com.cloudway.fp.parser.ParseError;
 import com.cloudway.fp.parser.Stream;
 
-import static com.cloudway.fp.control.Conditionals.with;
 import static com.cloudway.fp.control.Syntax.do_;
 import static com.cloudway.fp.scheme.LispVal.Void.VOID;
 import static com.cloudway.fp.scheme.SchemeParser.Token.*;
@@ -42,15 +41,15 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
 
     // Symbol table
 
-    private final MutablePMap<String, Atom> symtab = new MutablePMap<>(HashPMap.empty());
+    private final MutablePMap<String, Symbol> symtab = new MutablePMap<>(HashPMap.empty());
     private final AtomicInteger tcounter = new AtomicInteger();
 
-    public Atom getsym(String name) {
-        return symtab.compute(name, (k, v) -> v == null ? new Atom(name) : v);
+    public Symbol getsym(String name) {
+        return symtab.compute(name, (k, v) -> v == null ? new Symbol(name) : v);
     }
 
-    public Atom newsym() {
-        return new Atom(" t." + tcounter.incrementAndGet());
+    public Symbol newsym() {
+        return new Symbol(" t." + tcounter.incrementAndGet());
     }
 
     // Lexical Analyzer
@@ -248,7 +247,7 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
 
     private $<SchemeParser, LispVal> p_simple_datum() {
         return label("", choice(
-            token(Atom.class),
+            token(Symbol.class),
             token(Text.class),
             token(Num.class),
             token(Bool.class)
@@ -273,33 +272,14 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
 
     private $<SchemeParser, LispVal> p_list() {
         return parens(choice(
-            bind(some(p_expr()), hd -> choice(dotted(hd), pure(new List(hd)))),
-            pure(List.NIL)));
+            do_(someAccum(p_expr(), Seq.<LispVal>nil(), Fn.flip(Seq::cons)), hd ->
+            do_(dotted(), tl -> pure(hd.foldLeft(tl, Fn.flip(Pair::new)))))
+            ,
+            pure(LispVal.Nil)));
     }
 
-    private $<SchemeParser, LispVal> dotted(Seq<LispVal> head) {
-        return do_(token(DOT),
-               do_(p_expr(), tail ->
-               do_(pure(cons(head, tail)))));
-    }
-
-    private static LispVal cons(Seq<LispVal> xs, LispVal y) {
-        return with(y).<LispVal>get()
-            .when(LispVal.List(ys ->
-                isUnquote(ys) ? new DottedList(xs, y) : new List(xs.append(ys))))
-            .when(LispVal.DottedList((ys, yt) ->
-                new DottedList(xs.append(ys), yt)))
-            .orElseGet(() ->
-                new DottedList(xs, y));
-    }
-
-    private static boolean isUnquote(Seq<LispVal> form) {
-        if (!form.isEmpty() && form.head().isAtom()) {
-            String tag = ((Atom)form.head()).name;
-            return "unquote".equals(tag) || "unquote-splicing".equals(tag);
-        } else {
-            return false;
-        }
+    private $<SchemeParser, LispVal> dotted() {
+        return choice(do_(token(DOT), p_expr()), pure(LispVal.Nil));
     }
 
     private $<SchemeParser, LispVal> p_vector() {
@@ -319,11 +299,11 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
         return tokenPrim(p, LispVal::show);
     }
 
-    private static List list(Atom id, LispVal arg) {
-        return new List(Seq.of(id, arg));
+    private static LispVal list(Symbol id, LispVal arg) {
+        return Pair.of(id, arg);
     }
 
-    private static List list(Atom id, Seq<LispVal> args) {
-        return new List(Seq.cons(id, args));
+    private static LispVal list(Symbol id, Seq<LispVal> args) {
+        return Pair.fromList(Seq.cons(id, args));
     }
 }
