@@ -237,7 +237,7 @@ public final class Expr {
         }
 
         private $<P, A> ambiguous(String assoc, $<P, BinaryOperator<A>> op) {
-            return pt.try_(
+            return pt.attempt(
                 do_(op,
                 do_(pt.fail("ambiguous use of a " + assoc + " associative operator"))));
         }

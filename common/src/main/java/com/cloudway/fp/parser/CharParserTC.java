@@ -6,7 +6,6 @@
 
 package com.cloudway.fp.parser;
 
-import java.util.function.Function;
 import java.util.function.Predicate;
 
 import com.cloudway.fp.$;
@@ -34,7 +33,7 @@ public abstract class CharParserTC<P, U, M extends Monad<M>>
      * actually parsed.
      */
     public $<P, Character> satisfy(Predicate<Character> p) {
-        return tokenPrim(String::valueOf, SourcePos::updatePosChar, p);
+        return tokenPrim(p, String::valueOf);
     }
 
     /**
@@ -195,8 +194,6 @@ public abstract class CharParserTC<P, U, M extends Monad<M>>
      * Parses a sequence of characters.
      */
     public $<P, String> str(String s) {
-        Function<Seq<Character>, String> show = cs -> cs.show("", "", "");
-        Function<SourcePos, SourcePos> nextPos = pos -> pos.updatePosString(s);
-        return seqR(tokens(Seq.wrap(s), show, nextPos), pure(s));
+        return seqR(tokens(Seq.wrap(s), cs -> cs.show("", "", "")), pure(s));
     }
 }

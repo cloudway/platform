@@ -41,20 +41,20 @@ public class ParseError extends RuntimeException {
         return errorPos;
     }
 
+    public ParseError setErrorPos(SourcePos pos) {
+        return new ParseError(pos, messages);
+    }
+
     public Seq<Message> getMessages() {
         return messages;
     }
 
-    public boolean isUnknown() {
-        return messages.isEmpty();
-    }
-
-    public ParseError setMessage(Message msg) {
+    public ParseError addMessage(Message msg) {
         return new ParseError(errorPos, Seq.cons(msg, messages).distinct());
     }
 
-    public ParseError addMessage(Message msg) {
-        return new ParseError(errorPos, Seq.cons(msg, messages));
+    public boolean isUnknown() {
+        return messages.isEmpty();
     }
 
     public ParseError merge(ParseError other) {

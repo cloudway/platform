@@ -15,9 +15,66 @@ import java.util.Objects;
  * new {@code SourcePos} object.</p>
  */
 public class SourcePos implements Comparable<SourcePos> {
+    /* Encodes and decodes source code positions, Source code positions
+     * are internally represented as integers that contain both column
+     * and line number information.
+     */
+    public static final int LINESHIFT  = 10;
+    public static final int LINEINC    = (1 << LINESHIFT);
+    public static final int COLUMNMASK = (1 << LINESHIFT) - 1;
+    public static final int NOPOS      = 0;
+    public static final int STARTPOS   = (1 << LINESHIFT) + 1;
+
+    public static int line(int pos) {
+        return pos >>> LINESHIFT;
+    }
+
+    public static int column(int pos) {
+        return pos & COLUMNMASK;
+    }
+
+    public static int pos(int line, int col) {
+        return (line << LINESHIFT) + col;
+    }
+
+    public static int nextline(int pos) {
+        return (pos & ~COLUMNMASK) + LINEINC + 1;
+    }
+
+    public static int nexttab(int pos) {
+        int line = line(pos);
+        int column = column(pos);
+        return pos(line, column + 8 - ((column - 1) % 8));
+    }
+
+    public static int nextchar(int pos, char c) {
+        if (c == '\n') {
+            return nextline(pos);
+        } else if (c == '\t') {
+            return nexttab(pos);
+        } else {
+            return pos + 1;
+        }
+    }
+
+    public static int addDelta(int pos, int pos1, int pos2) {
+        if (pos == pos1) {
+            return pos2;
+        } else if ((pos1 & ~COLUMNMASK) != (pos2 & ~COLUMNMASK)) {
+            return (pos & ~COLUMNMASK) + pos2 - (pos1 & ~COLUMNMASK);
+        } else {
+            return pos + pos2 - pos1;
+        }
+    }
+
     private final String name;
-    private final int line;
-    private final int column;
+    private final int pos;
+
+    // Package private constructor
+    SourcePos(String name, int pos) {
+        this.name = name;
+        this.pos = pos;
+    }
 
     /**
      * Construct a source position.
@@ -27,9 +84,7 @@ public class SourcePos implements Comparable<SourcePos> {
      * @param column the column number in the source
      */
     public SourcePos(String name, int line, int column) {
-        this.name = name;
-        this.line = line;
-        this.column = column;
+        this(name, pos(line, column));
     }
 
     /**
@@ -37,9 +92,7 @@ public class SourcePos implements Comparable<SourcePos> {
      * number and column number set to 1.
      */
     public SourcePos(String name) {
-        this.name = name;
-        this.line = 1;
-        this.column = 1;
+        this(name, STARTPOS);
     }
 
     /**
@@ -50,77 +103,45 @@ public class SourcePos implements Comparable<SourcePos> {
     }
 
     /**
-     * Set the name of the source.
+     * Set the source name.
      */
     public SourcePos setName(String newName) {
-        return new SourcePos(newName, line, column);
+        return new SourcePos(newName, pos);
     }
 
     /**
      * Returns the line number in the source.
      */
     public int getLine() {
-        return line;
+        return line(pos);
     }
 
     /**
      * Set the line number of a source position.
      */
-    public SourcePos setLine(int newLine) {
-        return new SourcePos(name, newLine, column);
+    public SourcePos setLine(int line) {
+        return new SourcePos(name, line, 1);
     }
 
     /**
      * Returns the column number in the source.
      */
     public int getColumn() {
-        return column;
+        return column(pos);
     }
 
     /**
      * Set the column number of a source position.
      */
-    public SourcePos setColumn(int newColumn) {
-        return new SourcePos(name, line, newColumn);
+    public SourcePos setColumn(int column) {
+        return new SourcePos(name, (pos & ~COLUMNMASK) | column);
     }
 
     /**
-     * Update a source position given a character. If the character is a
-     * newline ('\n') the line number is incremented by 1. If the character
-     * is a tab ('\t') the column number is incremented to the nearest 8'th
-     * column, ie. {@code column + 8 - ((column-1) % 8)}. In all other cases,
-     * the column is incremented by 1.
+     * Return the encoded source code position.
      */
-    public SourcePos updatePosChar(char c) {
-        switch (c) {
-        case '\n':
-            return new SourcePos(name, line + 1, 1);
-        case '\t':
-            return new SourcePos(name, line, column + 8 - ((column - 1) % 8));
-        default:
-            return new SourcePos(name, line, column + 1);
-        }
-    }
-
-    /**
-     * Updates the source position by calling {@link #updatePosChar} on every
-     * character in the given string.
-     */
-    public SourcePos updatePosString(String s) {
-        int ln = this.line;
-        int cn = this.column;
-        int len = s.length();
-        for (int i = 0; i < len; i++) {
-            switch (s.charAt(i)) {
-            case '\n': ln++; cn = 1;
-                       break;
-            case '\t': cn = cn + 8 - (cn - 1) % 8;
-                       break;
-            default:   cn++;
-                       break;
-            }
-        }
-        return new SourcePos(name, ln, cn);
+    public int getPosition() {
+        return pos;
     }
 
     public boolean equals(Object obj) {
@@ -129,13 +150,11 @@ public class SourcePos implements Comparable<SourcePos> {
         if (!(obj instanceof SourcePos))
             return false;
         SourcePos other = (SourcePos)obj;
-        return Objects.equals(name, other.name)
-            && line == other.line
-            && column == other.column;
+        return Objects.equals(name, other.name) && pos == other.pos;
     }
 
     public int hashCode() {
-        return Objects.hash(name, line, column);
+        return Objects.hash(name, pos);
     }
 
     @Override
@@ -147,20 +166,19 @@ public class SourcePos implements Comparable<SourcePos> {
             return 1;
         if ((c = this.name.compareTo(other.name)) != 0)
             return c;
-        if (this.line != other.line)
-            return this.line - other.line;
-        if (this.column != other.column)
-            return this.column - other.column;
-        return 0;
+        return this.pos - other.pos;
     }
 
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        if (name != null && !name.isEmpty())
+        if (name != null && !name.isEmpty()) {
             sb.append('"').append(name).append("\" ");
-        sb.append("(line ").append(line);
-        sb.append(", column ").append(column);
-        sb.append(")");
+        }
+        if (pos != NOPOS) {
+            sb.append("(line ").append(line(pos));
+            sb.append(", column ").append(column(pos));
+            sb.append(")");
+        }
         return sb.toString();
     }
 }

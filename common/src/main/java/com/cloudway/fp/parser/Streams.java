@@ -24,14 +24,16 @@ final class Streams {
     static final class CharStream implements Stream<Character> {
         private final String input;
         private final int offset;
+        private final int pos;
 
         CharStream(String input) {
-            this(input, 0);
+            this(input, 0, SourcePos.STARTPOS);
         }
 
-        private CharStream(String input, int offset) {
+        private CharStream(String input, int offset, int pos) {
             this.input = input;
             this.offset = offset;
+            this.pos = pos;
         }
 
         @Override
@@ -39,8 +41,15 @@ final class Streams {
             if (offset >= input.length()) {
                 return e.get();
             } else {
-                return f.apply(input.charAt(offset), new CharStream(input, offset + 1));
+                char c = input.charAt(offset);
+                int nextpos = SourcePos.nextchar(pos, c);
+                return f.apply(c, new CharStream(input, offset + 1, nextpos));
             }
+        }
+
+        @Override
+        public int getPosition() {
+            return pos;
         }
     }
 
@@ -62,6 +71,26 @@ final class Streams {
                 return f.apply(list.head(), new ListStream<>(list.tail()));
             }
         }
+
+        @Override
+        public <R> R foldRight(BiFunction<? super T, Supplier<R>, R> f, Supplier<R> r) {
+            return list.foldRight(f, r);
+        }
+
+        @Override
+        public <R> R foldRight_(R z, BiFunction<? super T, R, R> f) {
+            return list.foldRight_(z, f);
+        }
+
+        @Override
+        public <R> R foldLeft(R z, BiFunction<R, ? super T, R> f) {
+            return list.foldLeft(z, f);
+        }
+
+        @Override
+        public Seq<T> asList() {
+            return list;
+        }
     }
 
     /**
@@ -69,17 +98,18 @@ final class Streams {
      */
     static class ChunkStream implements Stream<Character> {
         private static final int CHUNK_SIZE = 8192;
-        private static final ChunkStream EOF = new ChunkStream(null);
 
         private final Reader reader;
+        private final int pos;
 
-        ChunkStream(Reader reader) {
+        ChunkStream(Reader reader, int pos) {
             this.reader = reader;
+            this.pos = pos;
         }
 
         @Override
         public Stream<Character> load() {
-            return makeChunk(makeChunkList(reader));
+            return makeChunk(makeChunkList(reader), pos);
         }
 
         @Override
@@ -87,11 +117,16 @@ final class Streams {
             return e.get();
         }
 
-        private static Stream<Character> makeChunk(Seq<char[]> chunks) {
+        @Override
+        public int getPosition() {
+            return pos;
+        }
+
+        private static Stream<Character> makeChunk(Seq<char[]> chunks, int pos) {
             if (chunks.isEmpty()) {
-                return EOF;
+                return new ChunkStream(null, pos);
             } else {
-                return new Chunk(chunks, 0);
+                return new Chunk(chunks, 0, pos);
             }
         }
 
@@ -115,21 +150,29 @@ final class Streams {
         static class Chunk implements Stream<Character> {
             private final Seq<char[]> chunks;
             private final int offset;
+            private final int pos;
 
-            Chunk(Seq<char[]> chunks, int offset) {
+            Chunk(Seq<char[]> chunks, int offset, int pos) {
                 this.chunks = chunks;
                 this.offset = offset;
+                this.pos = pos;
             }
 
             @Override
             public <R> R uncons(BiFunction<Character, Stream<Character>, R> f, Supplier<R> e) {
                 char[] cs = chunks.head();
                 char c = cs[offset];
+                int nextpos = SourcePos.nextchar(pos, c);
                 if (offset + 1 < cs.length) {
-                    return f.apply(c, new Chunk(chunks, offset + 1));
+                    return f.apply(c, new Chunk(chunks, offset + 1, nextpos));
                 } else {
-                    return f.apply(c, makeChunk(chunks.tail()));
+                    return f.apply(c, makeChunk(chunks.tail(), nextpos));
                 }
+            }
+
+            @Override
+            public int getPosition() {
+                return pos;
             }
         }
     }

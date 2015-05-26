@@ -348,4 +348,14 @@ public final class Fn {
     liftM3(TriFunction<? super A, ? super B, ? super C, ? extends D> f) {
         return (m1, m2, m3) -> bind(m1, x1 -> bind(m2, x2 -> map(m3, x3 -> f.apply(x1, x2, x3))));
     }
+
+    // Convenient functional interfaces used to declare a complex fold function.
+
+    @FunctionalInterface
+    interface RightFoldFunction<T, R> extends BiFunction<T, Supplier<R>, R> {
+    }
+
+    @FunctionalInterface
+    interface LeftFoldFunction<T, R> extends BiFunction<Supplier<R>, T, R> {
+    }
 }

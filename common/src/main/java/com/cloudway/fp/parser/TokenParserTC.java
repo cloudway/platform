@@ -52,7 +52,7 @@ public abstract class TokenParserTC<P, U, M extends Monad<M>> extends CharParser
      * string. This parser will fail on identifiers that are reserved words.
      * Legal identifier (start) characters and reserved words are defined in
      * the {@link LanguageDef}. An identifier is treated as a single token
-     * using {@code try}.
+     * using {@code attempt}.
      */
     public $<P, String> identifier() {
         return cachedIdentifier.get();
@@ -62,7 +62,7 @@ public abstract class TokenParserTC<P, U, M extends Monad<M>> extends CharParser
         Fn.lazy(this::identifier_);
 
     private $<P, String> identifier_() {
-        return lexeme(try_(bind(ident(), name ->
+        return lexeme(attempt(bind(ident(), name ->
             ldf.reservedNames().contains(name)
                 ? unexpected("reserved word " + name)
                 : pure(name))));
@@ -79,10 +79,10 @@ public abstract class TokenParserTC<P, U, M extends Monad<M>> extends CharParser
     /**
      * The lexeme parser parses symbol name, but it also checks that the name
      * is not a prefix of a valid identifier. A reserved word is treated as a
-     * single token using {@code try}.
+     * single token using {@code attempt}.
      */
     public $<P, Unit> reserved(String name) {
-        return lexeme(try_(
+        return lexeme(attempt(
             seqR(caseString(name), label("end of " + name, notFollowedBy(idPart)))));
     }
 
@@ -106,10 +106,10 @@ public abstract class TokenParserTC<P, U, M extends Monad<M>> extends CharParser
      * operator.  This parser will fail on any operators that are reserved
      * operators. Legal  operator (start) characters and reserved operators
      * are defined in the {@link LanguageDef}. An operator is treated as a
-     * single token using {@code try}.
+     * single token using {@code attempt}.
      */
     public $<P, String> operator() {
-        return lexeme(try_(bind(oper(), name ->
+        return lexeme(attempt(bind(oper(), name ->
             ldf.reservedOpNames().contains(name)
                 ? unexpected("reserved operator " + name)
                 : pure(name))));
@@ -125,10 +125,10 @@ public abstract class TokenParserTC<P, U, M extends Monad<M>> extends CharParser
     /**
      * The lexeme parser parses symbol name, but it also checks that the name
      * is not a prefix of a valid operator. A {@code reservedOp} is treated as
-     * a single token using {@code try}.
+     * a single token using {@code attempt}.
      */
     public $<P, Unit> reservedOp(String name) {
-        return lexeme(try_(
+        return lexeme(attempt(
             seqR(str(name), label("end of " + name, notFollowedBy(opPart)))));
     }
 
@@ -406,13 +406,13 @@ public abstract class TokenParserTC<P, U, M extends Monad<M>> extends CharParser
     }
 
     private $<P, Unit> oneLineComment() {
-        return seqR(try_(str(ldf.commentLine())),
+        return seqR(attempt(str(ldf.commentLine())),
                seqR(skipMany(satisfy(c -> c != '\n')),
                unit()));
     }
 
     private $<P, Unit> multiLineComment() {
-        return seqR(try_(str(ldf.commentStart())), this::inComment);
+        return seqR(attempt(str(ldf.commentStart())), this::inComment);
     }
 
     private $<P, Unit> inComment() {
@@ -422,7 +422,7 @@ public abstract class TokenParserTC<P, U, M extends Monad<M>> extends CharParser
     private $<P, Unit> inCommentMulti() {
         String startEnd = ldf.commentEnd() + ldf.commentStart();
         return label("end of comment",
-            choice(seqR(try_(str(ldf.commentEnd())), unit()),
+            choice(seqR(attempt(str(ldf.commentEnd())), unit()),
                    seqR(multiLineComment(), this::inCommentMulti),
                    seqR(skipSome(noneOf(startEnd)), this::inCommentMulti),
                    seqR(oneOf(startEnd), this::inCommentMulti)));
@@ -431,7 +431,7 @@ public abstract class TokenParserTC<P, U, M extends Monad<M>> extends CharParser
     private $<P, Unit> inCommentSingle() {
         String startEnd = ldf.commentEnd() + ldf.commentStart();
         return label("end of comment",
-            choice(seqR(try_(str(ldf.commentEnd())), unit()),
+            choice(seqR(attempt(str(ldf.commentEnd())), unit()),
                    seqR(skipSome(noneOf(startEnd)), this::inCommentSingle),
                    seqR(oneOf(startEnd), this::inCommentSingle)));
     }

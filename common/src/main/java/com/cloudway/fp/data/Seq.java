@@ -72,6 +72,32 @@ public interface Seq<T> extends $<Seq.µ, T>, Foldable<T>, Traversable<Seq.µ, T
     }
 
     /**
+     * Returns number of elements in the list.
+     *
+     * @return number of elements in the list.
+     */
+    default int length() {
+        int len = 0;
+        for (Seq<T> xs = this; !xs.isEmpty(); xs = xs.tail(), len++)
+            ;
+        return len;
+    }
+
+    /**
+     * Returns true if this list contains the given number of elements.
+     *
+     * @return {@code} true if this list contains the given number of elements.
+     */
+    default boolean arity(int n) {
+        Seq<T> xs = this;
+        while (n > 0 && !xs.isEmpty()) {
+            xs = xs.tail();
+            n--;
+        }
+        return n == 0 && xs.isEmpty();
+    }
+
+    /**
      * Returns <tt>true</tt> if this list contains the specified element.
      *
      * @return <tt>true</tt> if this list contains the specified element

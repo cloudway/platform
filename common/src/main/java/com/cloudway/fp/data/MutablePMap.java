@@ -45,7 +45,7 @@ public class MutablePMap<K, V> extends AbstractMap<K, V> implements java.io.Seri
     /**
      * Update persistent map atomically.
      */
-    private PMap<K,V> update(UnaryOperator<PMap<K,V>> updater) {
+    private PMap<K,V> update(UnaryOperator<PMap<K, V>> updater) {
         return pure.updateAndGet(updater);
     }
 
@@ -53,9 +53,18 @@ public class MutablePMap<K, V> extends AbstractMap<K, V> implements java.io.Seri
      * Update persistent map atomically and return previous value associated
      * to the given key.
      */
-    private V update(Object key, UnaryOperator<PMap<K,V>> updater) {
+    private V getAndUpdate(Object key, UnaryOperator<PMap<K, V>> updater) {
         PMap<K,V> prev = pure.getAndUpdate(updater);
         return prev.getOrDefault(key, null);
+    }
+
+    /**
+     * Update persistent map atomically and return new value associated
+     * to the given key.
+     */
+    private V updateAndGet(Object key, UnaryOperator<PMap<K,V>> updater) {
+        PMap<K,V> next = pure.updateAndGet(updater);
+        return next.getOrDefault(key, null);
     }
 
     @Override
@@ -91,7 +100,7 @@ public class MutablePMap<K, V> extends AbstractMap<K, V> implements java.io.Seri
 
     @Override
     public V put(K key, V value) {
-        return update(key, t -> t.put(key, value));
+        return getAndUpdate(key, t -> t.put(key, value));
     }
 
     @Override
@@ -106,7 +115,7 @@ public class MutablePMap<K, V> extends AbstractMap<K, V> implements java.io.Seri
 
     @Override
     public V remove(Object key) {
-        return update(key, t -> t.remove(key));
+        return getAndUpdate(key, t -> t.remove(key));
     }
 
     @Override
@@ -123,32 +132,32 @@ public class MutablePMap<K, V> extends AbstractMap<K, V> implements java.io.Seri
 
     @Override
     public V replace(K key, V value) {
-        return update(key, t -> t.replace(key, value));
+        return getAndUpdate(key, t -> t.replace(key, value));
     }
 
     @Override
     public V putIfAbsent(K key, V value) {
-        return update(key, t -> t.putIfAbsent(key, value));
+        return getAndUpdate(key, t -> t.putIfAbsent(key, value));
     }
 
     @Override
     public V computeIfAbsent(K key, Function<? super K, ? extends V> f) {
-        return update(key, t -> t.computeIfAbsent(key, f));
+        return updateAndGet(key, t -> t.computeIfAbsent(key, f));
     }
 
     @Override
     public V computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> f) {
-        return update(key, t -> t.computeIfPresent(key, (k, v) -> Maybe.ofNullable(f.apply(k, v))));
+        return updateAndGet(key, t -> t.computeIfPresent(key, (k, v) -> Maybe.ofNullable(f.apply(k, v))));
     }
 
     @Override
     public V compute(K key, BiFunction<? super K, ? super V, ? extends V> f) {
-        return update(key, t -> t.compute(key, (k, v) -> Maybe.ofNullable(f.apply(k, v.orElse(null)))));
+        return updateAndGet(key, t -> t.compute(key, (k, v) -> Maybe.ofNullable(f.apply(k, v.orElse(null)))));
     }
 
     @Override
     public V merge(K key, V value, BiFunction<? super V, ? super V, ? extends V> f) {
-        return update(key, t -> t.merge(key, value, f));
+        return updateAndGet(key, t -> t.merge(key, value, f));
     }
 
     @Override

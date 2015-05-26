@@ -38,20 +38,6 @@ import static com.cloudway.fp.control.Trampoline.suspend;
  */
 public interface Foldable<T> extends Iterable<T> {
     /**
-     * Convenient functional interface used to declare a complex fold function.
-     */
-    @FunctionalInterface
-    interface RightFoldFunction<T, R> extends BiFunction<T, Supplier<R>, R> {
-    }
-
-    /**
-     * Convenient functional interface used to declare a complex fold function.
-     */
-    @FunctionalInterface
-    interface LeftFoldFunction<T, R> extends BiFunction<Supplier<R>, T, R> {
-    }
-
-    /**
      * Reduce the data structure using the binary operator, from right to left.
      * This is a lazy operation so the accumulator accept a delay evaluation of
      * reduced result instead of a strict value.
@@ -90,7 +76,7 @@ public interface Foldable<T> extends Iterable<T> {
      * @return the result of the reduction
      */
     default <R> R foldRight_(R z, BiFunction<? super T, R, R> f) {
-        RightFoldFunction<T, Trampoline<R>> mf = (x, t) ->
+        Fn.RightFoldFunction<T, Trampoline<R>> mf = (x, t) ->
             suspend(() -> t.get().map(r -> f.apply(x, r)));
         return foldRight(mf, () -> Trampoline.pure(z)).run();
     }
@@ -121,7 +107,7 @@ public interface Foldable<T> extends Iterable<T> {
      * @return the result of the reduction
      */
     default <R> R foldLeft(BiFunction<Supplier<R>, ? super T, R> f, Supplier<R> r) {
-        RightFoldFunction<T, Function<Supplier<R>, Trampoline<R>>>
+        Fn.RightFoldFunction<T, Function<Supplier<R>, Trampoline<R>>>
             mf = (x, g) -> a -> suspend(() -> g.get().apply(() -> f.apply(a, x)));
         return foldRight(a -> Trampoline.pure(a.get()), mf).apply(r).run();
     }
@@ -135,7 +121,7 @@ public interface Foldable<T> extends Iterable<T> {
      * @return the result of the reduction
      */
     default <R> R foldLeft(R z, BiFunction<R, ? super T, R> f) {
-        RightFoldFunction<T, Function<R, Trampoline<R>>>
+        Fn.RightFoldFunction<T, Function<R, Trampoline<R>>>
             mf = (x, g) -> a -> suspend(() -> g.get().apply(f.apply(a, x)));
         return foldRight(Trampoline::pure, mf).apply(z).run();
     }
@@ -215,7 +201,7 @@ public interface Foldable<T> extends Iterable<T> {
      * or empty {@code Maybe} if element not found
      */
     default Maybe<T> find(Predicate<? super T> predicate) {
-        RightFoldFunction<T, Trampoline<Maybe<T>>> g = (x, r) ->
+        Fn.RightFoldFunction<T, Trampoline<Maybe<T>>> g = (x, r) ->
             predicate.test(x) ? Trampoline.pure(Maybe.of(x)) : suspend(r);
         return foldRight(g, () -> Trampoline.pure(Maybe.empty())).run();
     }
@@ -241,7 +227,7 @@ public interface Foldable<T> extends Iterable<T> {
      * or empty {@code Maybe} if element not found
      */
     default Maybe<T> findLast(Predicate<? super T> predicate) {
-        LeftFoldFunction<T, Trampoline<Maybe<T>>> g = (r, x) ->
+        Fn.LeftFoldFunction<T, Trampoline<Maybe<T>>> g = (r, x) ->
             predicate.test(x) ? Trampoline.pure(Maybe.of(x)) : suspend(r);
         return foldLeft(g, () -> Trampoline.pure(Maybe.empty())).run();
     }

@@ -24,7 +24,6 @@ public class CharParser extends CharParserTC<CharParser, Unit, Trampoline.µ> {
     /**
      * Returns the single instance of the {@code CharParser}.
      */
-    @SuppressWarnings("unchecked")
     public static CharParser get() {
         return _TCLASS;
     }

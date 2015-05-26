@@ -44,7 +44,7 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
      * A record of parser state that maintain the input, the source position,
      * and user data.
      */
-    public static class State<T, U> {
+    protected static class State<T, U> {
         final Stream<T> input;
         final SourcePos pos;
         final U user;
@@ -67,6 +67,15 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
          */
         public SourcePos getPosition() {
             return pos;
+        }
+
+        /**
+         * Returns an updated source position by adding delta to the given
+         * position.
+         */
+        public SourcePos updatePos(int newPos) {
+            newPos = SourcePos.addDelta(pos.getPosition(), input.getPosition(), newPos);
+            return new SourcePos(pos.getName(), newPos);
         }
 
         /**
@@ -130,8 +139,16 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
         }
     }
 
-    protected static ParseError unknownError(State<?,?> state) {
+    static ParseError unknownError(State<?,?> state) {
         return new ParseError(state.pos);
+    }
+
+    static ParseError unexpectError(State<?,?> state, String msg) {
+        return new ParseError(state.pos, new Message.SysUnExpect(msg));
+    }
+
+    static ParseError updateErrorPos(ParseError e, State<?,?> s) {
+        return e.setErrorPos(s.updatePos(e.getErrorPos().getPosition()));
     }
 
     /**
@@ -229,7 +246,7 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
     public <A> $<M, Either<ParseError, A>> runParser($<P, A> p, U u, String name, Stream<T> input) {
         State<T, U> s = new State<>(input.load(), new SourcePos(name), u);
         return nm.bind(runPT(p, s), res ->
-               nm.map(res.reply, rep ->
+               nm.map(res.reply, (Reply<T,U,A> rep) ->
                rep.apply((x, s1, e) -> Either.<ParseError,A>right(x),
                                        Either::<ParseError,A>left)));
     }
@@ -395,18 +412,18 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
     }
 
     /**
-     * The parser {@code try} behaves like given parser, except that it pretends
-     * that it hasn't consumed any input when an error occurs.
+     * The parser {@code attempt} behaves like given parser, except that it
+     * pretends that it hasn't consumed any input when an error occurs.
      *
      * <p>This combinator is used whenever arbitrary look ahead is needed. Since
      * it pretends that it hasn't consumed any input when given parser fails,
      * the (&lt;|&gt;) combinator will try its second alternative even when the
      * first parser failed while consuming input.</p>
      *
-     * <p>The {@code try} combinator can for example be used to distinguish
+     * <p>The {@code attempt} combinator can for example be used to distinguish
      * identifiers and reserved words. Both reserved words and identifiers
      * are a sequence of letters. Whenever we expect a certain reserved word
-     * where we can also expect an identifier we have to use the {@code try}
+     * where we can also expect an identifier we have to use the {@code attempt}
      * combinator. Suppose we write:</p>
      *
      * <pre>{@code
@@ -420,15 +437,15 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
      * only tries alternatives when the first alternative hasn't consumed input,
      * the identifier parser is never tried (because the prefix "le" of the
      * {@code string "let"} parser is already consumed). The right behaviour can
-     * be obtained by adding the {@code try} combinator:</p>
+     * be obtained by adding the {@code attempt} combinator:</p>
      *
      * <pre>{@code
      *     expr       = letExpr <|> identifier <?> "expression"
-     *     letExpr    = do { try (string "let"); ... }
+     *     letExpr    = do { attempt (string "let"); ... }
      *     identifier = many1 letter
      * }</pre>
      */
-    public <A> $<P, A> try_($<P, A> p) {
+    public <A> $<P, A> attempt($<P, A> p) {
         return $((s, cok, cerr, eok, eerr) -> unParser(p, s, cok, eerr, eok, eerr));
     }
 
@@ -691,13 +708,13 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
      * "lets"). We can program this behaviour as follows:
      *
      * <pre>{@code
-     *     keywordLet = try (do { string "let"
-     *                          ; notFollowedBy alphaNum
-     *                          })
+     *     keywordLet = attempt (do { string "let"
+     *                              ; notFollowedBy alphaNum
+     *                              })
      * }</pre>
      */
     public <A> $<P, Unit> notFollowedBy($<P, A> p) {
-        return try_(mplus(bind(try_(p), c -> unexpected(String.valueOf(c))), unit()));
+        return attempt(mplus(bind(attempt(p), c -> unexpected(String.valueOf(c))), unit()));
     }
 
     /**
@@ -707,7 +724,7 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
      *
      * <pre>{@code
      *     simpleComment = do { string "<!--"
-     *                        ; manyTill anyChar (try (string "-->"))
+     *                        ; manyTill anyChar (attempt (string "-->"))
      *                        }
      * }</pre>
      */
@@ -721,7 +738,7 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
      * The parser {@code lookAhead} parses given parser without consuming any input.
      *
      * <p>If the given parser fails and consumes some input, so does {@code lookAhead}.
-     * Combine with {@code try} if this is undesirable.</p>
+     * Combine with {@link #attempt} if this is undesirable.</p>
      */
     public <A> $<P, A> lookAhead($<P, A> p) {
         return $((s, cok, cerr, eok, eerr) -> {
@@ -736,7 +753,7 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
      * used to implement {@link #eof}. Returns the accepted token.
      */
     public $<P, T> anyToken() {
-        return tokenPrim(String::valueOf, (pos, tok) -> pos, t -> true);
+        return tokenPrim(t -> true, String::valueOf);
     }
 
     /**
@@ -748,29 +765,22 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
      *
      * <p>This is the most primitive combinator for accepting tokens.</p>
      */
-    public $<P, T> tokenPrim(Function<T, String> showToken,
-            BiFunction<SourcePos, T, SourcePos>  nextPos,
-            Predicate<T>                         p) {
+    public $<P, T> tokenPrim(Predicate<? super T> p, Function<T, String> showToken) {
         return $((s, cok, cerr, eok, eerr) -> s.as((input, pos, user) ->
             input.uncons((c, cs) -> {
                 if (p.test(c)) {
-                    SourcePos newPos = nextPos.apply(pos, c);
-                    State<T, U> newState = new State<>(cs, newPos, user);
-                    return cok.apply(c, newState, new ParseError(newPos));
+                    SourcePos pos_ = s.updatePos(cs.getPosition());
+                    State<T, U> s_ = new State<>(cs, pos_, user);
+                    return cok.apply(c, s_, new ParseError(pos_));
                 } else {
-                    return eerr.apply(unexpectError(pos, showToken.apply(c)));
+                    return eerr.apply(unexpectError(s, showToken.apply(c)));
                 }
             },
-            () -> eerr.apply(unexpectError(pos, "")))));
+            () -> eerr.apply(unexpectError(s, "")),
+            e  -> eerr.apply(updateErrorPos(e, s)))));
     }
 
-    private static ParseError unexpectError(SourcePos pos, String msg) {
-        return new ParseError(pos, new Message.SysUnExpect(msg));
-    }
-
-    public $<P, Unit> tokens(Seq<T>            tts,
-                Function<Seq<T>, String>       showTokens,
-                Function<SourcePos, SourcePos> nextPoss) {
+    public $<P, Unit> tokens(Seq<T> tts, Function<Seq<T>, String> showTokens) {
         if (tts.isEmpty()) {
             return $((s, cok, cerr, eok, eerr) -> eok.apply(Unit.U, s, unknownError(s)));
         } else {
@@ -778,7 +788,7 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
                 BiFunction<Seq<T>, Stream<T>, $<M, Object>> walk
                     = Fn.fix((rec, toks, rs) -> {
                         if (toks.isEmpty()) {
-                            SourcePos pos_ = nextPoss.apply(pos);
+                            SourcePos pos_ = s.updatePos(rs.getPosition());
                             State<T, U> s_ = new State<>(rs, pos_, u);
                             return cok.apply(Unit.U, s_, new ParseError(pos_));
                         } else {
@@ -786,7 +796,8 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
                                 Objects.equals(toks.head(), x)
                                     ? rec.apply(toks.tail(), xs)
                                     : cerr.apply(errExpect(showTokens, pos, x, tts)),
-                                () -> cerr.apply(errEof(showTokens, pos, tts)));
+                                () -> cerr.apply(errEof(showTokens, pos, tts)),
+                                e  -> cerr.apply(updateErrorPos(e, s)));
                         }
                     });
 
@@ -794,44 +805,31 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
                     Objects.equals(tts.head(), x)
                         ? walk.apply(tts.tail(), xs)
                         : eerr.apply(errExpect(showTokens, pos, x, tts)),
-                    () -> eerr.apply(errEof(showTokens, pos, tts)));
+                    () -> eerr.apply(errEof(showTokens, pos, tts)),
+                    e  -> eerr.apply(updateErrorPos(e, s)));
             }));
         }
     }
 
     private static <T> ParseError
     errEof(Function<Seq<T>, String> show, SourcePos pos, Seq<T> toks) {
-        return new ParseError(pos, new Message.SysUnExpect(""))
-                   .setMessage(new Message.Expect(show.apply(toks)));
+        ParseError e = new ParseError(pos, new Message.SysUnExpect(""));
+        return e.addMessage(new Message.Expect(show.apply(toks)));
     }
 
     private static <T> ParseError
     errExpect(Function<Seq<T>, String> show, SourcePos pos, T token, Seq<T> tokens) {
-        return new ParseError(pos, new Message.SysUnExpect(show.apply(Seq.of(token))))
-                   .setMessage(new Message.Expect(show.apply(tokens)));
+        ParseError e = new ParseError(pos, new Message.SysUnExpect(show.apply(Seq.of(token))));
+        return e.addMessage(new Message.Expect(show.apply(tokens)));
     }
 
     // Parser state combinators
-
-    /**
-     * Returns the current source position.
-     */
-    public $<P, SourcePos> getPosition() {
-        return map(getParserState(), State::getPosition);
-    }
 
     /**
      * Returns the current input.
      */
     public $<P, Stream<T>> getInput() {
         return map(getParserState(), State::getInput);
-    }
-
-    /**
-     * Set the current source position.
-     */
-    public $<P, Unit> setPosition(SourcePos pos) {
-        return seqR(updateParserState(s -> new State<>(s.input, pos, s.user)), unit());
     }
 
     /**
@@ -843,27 +841,17 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
     }
 
     /**
-     * returns the full parser state as a {@code State} record.
+     * Returns the current source position.
      */
-    public $<P, State<T, U>> getParserState() {
-        return updateParserState(Fn.id());
+    public $<P, SourcePos> getPosition() {
+        return map(getParserState(), State::getPosition);
     }
 
     /**
-     * Set the full parser state.
+     * Set the current source position.
      */
-    public $<P, State<T, U>> setParserState(State<T, U> st) {
-        return updateParserState(Fn.pure(st));
-    }
-
-    /**
-     * Applies function to the parser state.
-     */
-    public $<P, State<T, U>> updateParserState(Function<State<T, U>, State<T, U>> f) {
-        return $((s, cok, cerr, eok, eerr) -> {
-            State<T, U> s1 = f.apply(s);
-            return eok.apply(s1, s1, unknownError(s1));
-        });
+    public $<P, Unit> setPosition(SourcePos pos) {
+        return seqR(updateParserState(s -> new State<>(s.input, pos, s.user)), unit());
     }
 
     /**
@@ -885,6 +873,30 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
      */
     public $<P, Unit> modifyState(Function<U, U> f) {
         return seqR(updateParserState(s -> new State<>(s.input, s.pos, f.apply(s.user))), unit());
+    }
+
+    /**
+     * returns the full parser state as a {@code State} record.
+     */
+    protected $<P, State<T, U>> getParserState() {
+        return updateParserState(Fn.id());
+    }
+
+    /**
+     * Set the full parser state.
+     */
+    protected $<P, State<T, U>> setParserState(State<T, U> st) {
+        return updateParserState(Fn.pure(st));
+    }
+
+    /**
+     * Applies function to the parser state.
+     */
+    protected $<P, State<T, U>> updateParserState(Function<State<T, U>, State<T, U>> f) {
+        return $((s, cok, cerr, eok, eerr) -> {
+            State<T, U> s1 = f.apply(s);
+            return eok.apply(s1, s1, unknownError(s1));
+        });
     }
 
     // Lifting other operations
