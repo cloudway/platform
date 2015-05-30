@@ -66,9 +66,10 @@ public interface LispVal {
         return false;
     }
 
+    @SuppressWarnings("unchecked")
     default $<Evaluator, LispVal>
-    mapM(Evaluator m, Function<LispVal, $<Evaluator, LispVal>> f) {
-        return f.apply(this);
+    mapM(Evaluator m, Function<LispVal, $<Evaluator, ? extends LispVal>> f) {
+        return ($<Evaluator, LispVal>)f.apply(this);
     }
 
     default boolean allMatch(Predicate<LispVal> p) {
@@ -239,7 +240,7 @@ public interface LispVal {
 
         @Override
         public $<Evaluator, LispVal>
-        mapM(Evaluator m, Function<LispVal, $<Evaluator, LispVal>> f) {
+        mapM(Evaluator m, Function<LispVal, $<Evaluator, ? extends LispVal>> f) {
             return m.pure(this);
         }
 
@@ -312,7 +313,7 @@ public interface LispVal {
 
         @Override
         public $<Evaluator, LispVal>
-        mapM(Evaluator m, Function<LispVal, $<Evaluator, LispVal>> f) {
+        mapM(Evaluator m, Function<LispVal, $<Evaluator, ? extends LispVal>> f) {
             return m.bind(f.apply(head), x ->
                    m.map(tail.mapM(m, f), y ->
                    new Pair(x, y)));
@@ -406,11 +407,11 @@ public interface LispVal {
     }
 
     final class Promise implements LispVal {
-        public final LispVal body;
-        public final Env     env;
+        public final Env  env;
+        public final Proc body;
         public $<Evaluator, LispVal> result;
 
-        public Promise(LispVal body, Env env) {
+        public Promise(Env env, Proc body) {
             this.body = body;
             this.env = env;
         }
@@ -433,11 +434,11 @@ public interface LispVal {
 
     final class Prim implements LispVal {
         public final String name;
-        public final Function<LispVal, $<Evaluator, LispVal>> func;
+        public final PProc  proc;
 
-        public Prim(String name, Function<LispVal, $<Evaluator, LispVal>> func) {
+        public Prim(String name, PProc proc) {
             this.name = name;
-            this.func = func;
+            this.proc = proc;
         }
 
         @Override
@@ -452,10 +453,10 @@ public interface LispVal {
 
     final class Func implements LispVal {
         public final LispVal params;
-        public final LispVal body;
         public final Env     closure;
+        public final Proc    body;
 
-        public Func(LispVal params, LispVal body, Env closure) {
+        public Func(LispVal params, Proc body, Env closure) {
             this.params  = params;
             this.body    = body;
             this.closure = closure;
@@ -473,9 +474,9 @@ public interface LispVal {
 
     final class Macro implements LispVal {
         public final LispVal pattern;
-        public final LispVal body;
+        public final Proc body;
 
-        public Macro(LispVal pattern, LispVal body) {
+        public Macro(LispVal pattern, Proc body) {
             this.pattern = pattern;
             this.body    = body;
         }
@@ -511,10 +512,24 @@ public interface LispVal {
     }
 
     // -----------------------------------------------------------------------
+    // Runtime procedure
+
+    @FunctionalInterface
+    interface Proc extends LispVal, Function<Env, $<Evaluator, LispVal>> {
+        @Override
+        default String show() {
+            return "#<procedure>";
+        }
+    }
+
+    @FunctionalInterface
+    interface PProc extends BiFunction<Env, LispVal, $<Evaluator, LispVal>> {}
+
+    // -----------------------------------------------------------------------
     // Deconstructions
 
     static <R> ConditionCase<LispVal, R, RuntimeException>
-    Data(Function<LispVal, ? extends R> mapper) {
+    Datum(Function<LispVal, ? extends R> mapper) {
         return t -> t.isSelfEvaluating()
             ? () -> mapper.apply(t)
             : null;
@@ -651,9 +666,9 @@ public interface LispVal {
     }
 
     static <R> ConditionCase<LispVal, R, RuntimeException>
-    Prim(Function<Function<LispVal, $<Evaluator, LispVal>>, ? extends R> mapper) {
+    Prim(Function<PProc, ? extends R> mapper) {
         return t -> t instanceof Prim
-            ? () -> mapper.apply(((Prim)t).func)
+            ? () -> mapper.apply(((Prim)t).proc)
             : null;
     }
 

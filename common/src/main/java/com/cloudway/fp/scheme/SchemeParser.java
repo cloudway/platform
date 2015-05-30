@@ -121,8 +121,8 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
         .literal(",",  UNQUOTE)
         .literal(",@", UNQUOTE_SPLICING)
 
-        .rule("{c}+",       s -> getsym(s.toLowerCase()))
-        .rule("\\|{c}*\\|", s -> getsym(s.substring(1, s.length() - 1)))
+        .rule("{c}+",        s -> getsym(s.toLowerCase()))
+        .rule("\\|[^|]*\\|", s -> getsym(s.substring(1, s.length() - 1)))
 
         .ignore("\\s+")
         .ignore(";.*")

@@ -6,7 +6,6 @@
 
 package com.cloudway.fp.scheme;
 
-import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.parser.ParseError;
 
 @SuppressWarnings("serial")
@@ -33,9 +32,7 @@ public class LispError extends RuntimeException {
 
         @Override
         public String getMessage() {
-            return "Expected " + expected +
-                   " args; found values " +
-                   found.show() + ")";
+            return "Expected " + expected + " args; found values " + found.show();
         }
     }
 

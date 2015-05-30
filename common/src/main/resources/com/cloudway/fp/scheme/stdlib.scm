@@ -6,8 +6,18 @@
 (define (curry f b)     (lambda (a) (f a b)))
 (define (compose f g)   (lambda (a) (f (g a))))
 
-(define fold fold-left)
-(define reduce fold-right)
+(define (foldr op init lst)
+  (if (null? lst)
+      init
+      (op (car lst) (foldr op init (cdr lst)))))
+
+(define (foldl op init lst)
+  (do ([result init (op result (car rest))]
+       [rest lst (cdr rest)])
+      ((null? rest) result)))
+
+(define fold foldl)
+(define reduce foldr)
 
 (define (unfold func init pred)
   (if (pred init)
@@ -101,7 +111,7 @@
 ;;; Macros
 
 (defmacro (assert some-cond)
-  `(when (not ,some-cond)
+  `(if (not ,some-cond)
      (error "assertion failure" ',some-cond)))
 
 (defmacro (when pred . actions)
