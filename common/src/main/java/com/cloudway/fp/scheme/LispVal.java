@@ -95,7 +95,7 @@ public interface LispVal {
 
         @Override
         public String show() {
-            if (INVALID_SYMCHAR.matcher(name).find()) {
+            if (name.isEmpty() || INVALID_SYMCHAR.matcher(name).find()) {
                 return '|' + name + '|';
             } else {
                 return name;
@@ -503,7 +503,7 @@ public interface LispVal {
 
         @Override
         public String show() {
-            return "";
+            return "#<void>";
         }
 
         public String toString() {

@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.ConditionCase;
 import com.cloudway.fp.control.Trampoline;
+import com.cloudway.fp.control.monad.trans.ContT;
 import com.cloudway.fp.control.monad.trans.ExceptTC;
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
@@ -34,6 +35,7 @@ import com.cloudway.fp.data.Ref;
 import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.data.Vector;
 import com.cloudway.fp.function.TriFunction;
+import com.cloudway.fp.parser.ParseError;
 import com.cloudway.fp.parser.Stream;
 
 import static com.cloudway.fp.control.Conditionals.with;
@@ -50,33 +52,32 @@ import static com.cloudway.fp.scheme.LispVal.Void;
 // @formatter:off
 
 @SuppressWarnings("Convert2MethodRef")
-public class Evaluator extends ExceptTC<Evaluator, LispError, Trampoline.µ> {
+public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.µ>> {
     private final SchemeParser parser = new SchemeParser();
-    private final $<Evaluator, LispVal> stdlib;
+    private final Either<ParseError, Seq<LispVal>> stdlib;
 
     public Evaluator() {
-        super(Trampoline.tclass);
+        super(ContT.on(Trampoline.tclass));
         stdlib = loadLib("stdlib.scm");
     }
 
-    public $<Evaluator, LispVal> parse(String name, Stream<LispVal> input) {
-        return parser.parse(name, input).<$<Evaluator, LispVal>>either(
-            err -> throwE(new LispError.Parser(err)), this::pure);
+    public Either<ParseError, Seq<LispVal>> parse(String name, Stream<LispVal> input) {
+        return parser.parse(name, input);
     }
 
-    public $<Evaluator, LispVal> parse(String input) {
+    public Either<ParseError, Seq<LispVal>> parse(String input) {
         return parse("", parser.getStream(input));
     }
 
-    public $<Evaluator, LispVal> parse(String name, Reader input) {
+    public Either<ParseError, Seq<LispVal>> parse(String name, Reader input) {
         return parse(name, parser.getStream(input));
     }
 
-    private $<Evaluator, LispVal> loadLib(String name) {
+    private Either<ParseError, Seq<LispVal>> loadLib(String name) {
         try (InputStream is = getClass().getResourceAsStream(name)) {
             return parse(name, new InputStreamReader(is, StandardCharsets.UTF_8));
         } catch (Exception ex) {
-            return throwE(new LispError(ex));
+            return left(new ParseError(ex));
         }
     }
 
@@ -86,8 +87,21 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, Trampoline.µ> {
         return env;
     }
 
-    public Either<LispError, LispVal> run(Env env, $<Evaluator, LispVal> form) {
-        return Trampoline.run(runExcept(bind(form, exp -> eval(env, exp))));
+    public Either<LispError, LispVal> run(Env env, Either<ParseError, Seq<LispVal>> form) {
+        if (form.isLeft()) {
+            return left(new LispError.Parser(form.left()));
+        } else {
+            return runSequence(env, form.right());
+        }
+    }
+
+    private Either<LispError, LispVal> runSequence(Env env, Seq<LispVal> exps) {
+        Either<LispError, LispVal> res = right(Void.VOID);
+        while (!exps.isEmpty() && res.isRight()) {
+            res = Trampoline.run(ContT.eval(runExcept(eval(env, exps.head()))));
+            exps = exps.tail();
+        }
+        return res;
     }
 
     public Either<LispError, LispVal> evaluate(String form) {
@@ -145,9 +159,6 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, Trampoline.µ> {
                   .when(Cons(this::analyzeLambda))
                   .orElseGet(() -> badSyntax("lambda", form));
 
-            case "case-lambda":
-                return analyzeCaseLambda(args);
-
             case "set!":
                 return with(args).<$<Evaluator, Proc>>get()
                   .when(List((id, exp) ->
@@ -191,6 +202,17 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, Trampoline.µ> {
             case "delay":
                 return map(analyzeSequence(args), proc ->
                        env -> pure(new Promise(env, proc)));
+
+            case "reset":
+                return map(analyzeSequence(args), proc -> env -> reset(env, proc));
+
+            case "shift":
+                return with(args).<$<Evaluator, Proc>>get()
+                  .when(Cons((id, body) ->
+                    id.isSymbol()
+                      ? map(analyzeSequence(body), proc -> env -> shift(env, (Symbol)id, proc))
+                      : badSyntax("shift", form)))
+                    .orElseGet(() -> badSyntax("shift", form));
 
             case "let":
                 return args.isPair() && ((Pair)args).head.isSymbol()
@@ -285,23 +307,24 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, Trampoline.µ> {
     }
 
     private $<Evaluator, Proc> analyzeApplication(LispVal operator, LispVal operands) {
-        return do_(analyze(operator), fproc ->
-               do_(operands.mapM(this, this::analyze), aprocs ->
-               pure(new Application(fproc, aprocs, operands))));
+        // We can't determine whether the operator is a function or a macro at
+        // analyze time. We have to save the raw form of operands and analyze
+        // it at runtime, but there is an optimization for this that it will be
+        // analyzed only once.
+        return map(analyze(operator), fproc -> new Apply(fproc, operands));
     }
 
-    private final class Application implements Proc {
+    private final class Apply implements Proc {
         private final Proc    operator;
         private final LispVal operands;
-        private final LispVal raw_form;
 
+        private $<Evaluator, LispVal> aprocs;
         private Macro cached_macro;
         private Proc  cached_macro_proc;
 
-        public Application(Proc operator, LispVal operands, LispVal raw_form) {
+        public Apply(Proc operator, LispVal operands) {
             this.operator = operator;
             this.operands = operands;
-            this.raw_form = raw_form;
         }
 
         @Override
@@ -309,19 +332,27 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, Trampoline.µ> {
             return do_(operator.apply(env), op ->
                    op instanceof Macro
                      ? expandMacro(env, (Macro)op)
-                     : do_(operands.mapM(Evaluator.this, a -> ((Proc)a).apply(env)), args ->
-                       Evaluator.this.apply(env, op, args)));
+                     : applyFunc(env, op));
         }
 
-        /**
-         * Macro expansion optimization. FIXME: this should be done only on analyze time.
-         */
+        private $<Evaluator, LispVal> applyFunc(Env env, LispVal op) {
+            return do_(analyzeOperands(), aps ->
+                   do_(aps.mapM(Evaluator.this, a -> ((Proc)a).apply(env)), args ->
+                   Evaluator.this.apply(env, op, args)));
+        }
+
+        private $<Evaluator, LispVal> analyzeOperands() {
+            if (aprocs == null)
+                aprocs = operands.mapM(Evaluator.this, Evaluator.this::analyze);
+            return aprocs;
+        }
+
         private $<Evaluator, LispVal> expandMacro(Env env, Macro macro) {
             if (cached_macro == macro) {
                 return cached_macro_proc.apply(env);
             }
 
-            return match(macro.pattern, raw_form, HashPMap.empty()).<$<Evaluator, LispVal>>either(
+            return match(macro.pattern, operands, HashPMap.empty()).<$<Evaluator, LispVal>>either(
                 err -> throwE(err),
                 bindings ->
                     do_(macro.body.apply(env.extend(bindings)), mexp ->
@@ -498,12 +529,6 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, Trampoline.µ> {
     }
 
     // -----------------------------------------------------------------------
-
-    private $<Evaluator, Proc> analyzeCaseLambda(LispVal specs) {
-        Symbol id = parser.newsym();
-        return map(analyzeMatch(id, specs), mproc ->
-               env -> pure(new Func(id, mproc, env)));
-    }
 
     private $<Evaluator, Proc> analyzeMatch(LispVal exp, LispVal form) {
         return do_(analyze(exp), vproc ->
@@ -1022,9 +1047,11 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, Trampoline.µ> {
         .put("eval",        primE(this::eval))
         .put("apply",       primE(this::apply))
         .put("force",       prim(this::force))
+        .put("call/cc",     primE(this::callCC))
         .put("error",       this::error)
-        .put("gensym",      prim(this::gensym))
         .put("not",         prim(this::not))
+        .put("gensym",      primE(env -> pure(env.newsym())))
+        .put("void",        prim(() -> pure(Void.VOID)))
 
         .put("load",        primE(Text.class, this::load))
         .put("read",        prim(this::read))
@@ -1562,12 +1589,33 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, Trampoline.µ> {
         }
     }
 
-    private $<Evaluator, LispVal> error(Env env, LispVal args) {
-        return throwE(new LispError(args.show()));
+    private $<Evaluator, LispVal> callCC(Env env, LispVal proc) {
+        Function<Function<LispVal, $<Evaluator, LispVal>>, $<Evaluator, LispVal>> f =
+            k -> apply(env, proc, Pair.of(makeContFunc(env, k)));
+
+        return $(inner().<Either<LispError, LispVal>>callCC(c ->
+            runExcept(f.apply(a -> $(c.escape(right(a)))))));
     }
 
-    private $<Evaluator, LispVal> gensym() {
-        return pure(parser.newsym());
+    private $<Evaluator, LispVal> reset(Env env, Proc proc) {
+        return $(inner().reset(runExcept(proc.apply(env))));
+    }
+
+    private $<Evaluator, LispVal> shift(Env env, Symbol id, Proc proc) {
+        Function<Function<LispVal, $<Evaluator, LispVal>>, $<Evaluator, LispVal>> f =
+            k -> extendEnv(env, Seq.of(id), Seq.of(makeContFunc(env, k)), proc);
+
+        return $(inner().<Either<LispError,LispVal>, Either<LispError,LispVal>>shift(c ->
+            runExcept(f.apply(a -> $(inner().lift(c.apply(right(a))))))));
+    }
+
+    private static Func makeContFunc(Env env, Function<LispVal, $<Evaluator, LispVal>> k) {
+        Symbol cid = env.newsym();
+        return new Func(Pair.of(cid), eenv -> k.apply(eenv.get(cid)), env);
+    }
+
+    private $<Evaluator, LispVal> error(Env env, LispVal args) {
+        return throwE(new LispError(args.show()));
     }
 
     // ---------------------------------------------------------------------
@@ -1578,7 +1626,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, Trampoline.µ> {
                 return throwE(new LispError(name.show() + ": not found"));
             } else {
                 Reader input = new InputStreamReader(is, StandardCharsets.UTF_8);
-                return bind(parse(name.value, input), exp -> eval(env, exp));
+                return except(run(env, parse(name.value, input)));
             }
         } catch (Exception ex) {
             return throwE(new LispError(ex));
@@ -1633,6 +1681,10 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, Trampoline.µ> {
 
     private PProc prim(Supplier<$<Evaluator, LispVal>> f) {
         return (env, args) -> args.isNil() ? f.get() : errNumArgs(0, args);
+    }
+
+    private PProc primE(Function<Env, $<Evaluator, LispVal>> f) {
+        return (env, args) -> args.isNil() ? f.apply(env) : errNumArgs(1, args);
     }
 
     private PProc prim(Function<LispVal, $<Evaluator, LispVal>> f) {

@@ -132,6 +132,10 @@
            (,some-cond ,mc)
          ,@some-actions)))
 
+(defmacro (case-lambda . patterns)
+  (let ((args (gensym)))
+    `(lambda ,args (match ,args ,@patterns))))
+
 ; SRFI 31: A special form rec for recursive evaluation
 (defmacro (rec . args)
   (match args
@@ -140,3 +144,20 @@
     [(name expression)
       `(letrec ((,name ,expression)) ,name)]
     [else (error "rec: bad syntax" args)]))
+
+; Generator based on delimited continuations
+(define (yield a)
+  (shift k (cons a k)))
+
+(defmacro (generator . body)
+  (let ((susp (gensym)))
+    `(let ((,susp (reset ,@body '())))
+      (lambda ()
+        (match ,susp
+          (() #f)
+          ((a . k) (set! ,susp (k '())) a))))))
+
+(define (step proc gen)
+  (do ((x (gen) (gen)))
+      ((not x) (void))
+      (proc x)))

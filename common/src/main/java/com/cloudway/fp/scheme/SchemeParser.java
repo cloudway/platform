@@ -8,7 +8,6 @@ package com.cloudway.fp.scheme;
 
 import java.io.Reader;
 import java.math.BigInteger;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
 import com.cloudway.fp.$;
@@ -29,7 +28,6 @@ import com.cloudway.fp.parser.ParseError;
 import com.cloudway.fp.parser.Stream;
 
 import static com.cloudway.fp.control.Syntax.do_;
-import static com.cloudway.fp.scheme.LispVal.Void.VOID;
 import static com.cloudway.fp.scheme.SchemeParser.Token.*;
 
 // @formatter:off
@@ -41,15 +39,11 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
 
     // Symbol table
 
-    private final MutablePMap<String, Symbol> symtab = new MutablePMap<>(HashPMap.empty());
-    private final AtomicInteger tcounter = new AtomicInteger();
+    private final MutablePMap<String, Symbol> symtab
+        = new MutablePMap<>(HashPMap.empty());
 
     public Symbol getsym(String name) {
         return symtab.compute(name, (k, v) -> v == null ? new Symbol(name) : v);
-    }
-
-    public Symbol newsym() {
-        return new Symbol(" t." + tcounter.incrementAndGet());
     }
 
     // Lexical Analyzer
@@ -213,9 +207,9 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
 
     // Syntax Parser
 
-    private final $<SchemeParser, LispVal> goal = p_toplevel();
+    private final $<SchemeParser, Seq<LispVal>> goal = p_toplevel();
 
-    public Either<ParseError, LispVal> parse(String name, Stream<LispVal> input) {
+    public Either<ParseError, Seq<LispVal>> parse(String name, Stream<LispVal> input) {
         return Trampoline.run(runParser(goal, Unit.U, name, input));
     }
 
@@ -223,18 +217,8 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
         return Trampoline.run(runParser(p_expr(), Unit.U, "", input));
     }
 
-    private $<SchemeParser, LispVal> p_toplevel() {
-        return seqL(choice(p_sequence(), pure(VOID)), eof());
-    }
-
-    private $<SchemeParser, LispVal> p_sequence() {
-        return map(some(p_expr()), this::make_sequence);
-    }
-
-    private LispVal make_sequence(Seq<LispVal> exps) {
-        return exps.isEmpty()        ? VOID :
-               exps.tail().isEmpty() ? exps.head()
-                                     : list(getsym("begin"), exps);
+    private $<SchemeParser, Seq<LispVal>> p_toplevel() {
+        return seqL(many(p_expr()), eof());
     }
 
     private $<SchemeParser, LispVal> p_expr() {
