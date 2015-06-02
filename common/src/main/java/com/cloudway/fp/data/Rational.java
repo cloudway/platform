@@ -233,7 +233,7 @@ public final class Rational extends Number implements Comparable<Rational> {
         return new double[]{d, e};
     }
 
-    public static double ldexp(double d, int e) {
+    private static double ldexp(double d, int e) {
         if (d == 0.0) {
             return 0.0;
         }

@@ -17,6 +17,7 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 
+import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.scheme.LispVal.Symbol;
@@ -25,12 +26,12 @@ import jline.ConsoleReader;
 
 public class REPL implements Completor{
     private final Evaluator evaluator = new Evaluator();
-    private final Env env = evaluator.getStandardEnv();
+    private final Env env = evaluator.getSchemeReportEnv();
 
-    public void runFile(String filename) throws IOException {
+    public Either<LispError, LispVal> runFile(String filename) throws IOException {
         try (InputStream is = Files.newInputStream(Paths.get(filename))) {
             Reader input = new InputStreamReader(is, StandardCharsets.UTF_8);
-            evaluator.run(env, evaluator.parse(filename, input)).getOrThrow(Fn.id());
+            return evaluator.run(env, evaluator.parse(filename, input));
         }
     }
 
@@ -44,20 +45,23 @@ public class REPL implements Completor{
                 break;
             if (line.trim().isEmpty())
                 continue;
-
-            evaluator.run(env, evaluator.parse(line)).either(
-                err -> {
-                    System.err.println(err.getMessage());
-                    return null;
-                },
-
-                res -> {
-                    if (!(res instanceof LispVal.Void))
-                        System.out.println(res.show());
-                    return null;
-                }
-            );
+            printResult(evaluator.run(env, evaluator.parse(line)));
         }
+    }
+
+    private static void printResult(Either<LispError, LispVal> result) {
+        result.either(
+            err -> {
+                System.err.println(err.getMessage());
+                return null;
+            },
+
+            res -> {
+                if (!(res instanceof LispVal.Void))
+                    System.out.println(res.show());
+                return null;
+            }
+        );
     }
 
     @Override
@@ -65,7 +69,8 @@ public class REPL implements Completor{
     public int complete(String buffer, int cursor, List candidates) {
         String prefix = scanSymbol(buffer, cursor, 0);
         if (prefix != null) {
-            completeKeywords(prefix, candidates);
+            if (!prefix.isEmpty())
+                completeKeywords(prefix, candidates);
             completeDefinitions(prefix, candidates);
             Collections.sort(candidates);
             return cursor - prefix.length();
@@ -74,7 +79,7 @@ public class REPL implements Completor{
     }
 
     private static final String[] KEYWORDS = {
-        "define", "defmacro", "lambda", "set!", "if", "cond", "match",
+        "define", "define-macro", "lambda", "set!", "if", "cond", "match",
         "and", "or", "quote", "quasiquote", "unquote", "unquote-splicing",
         "begin", "delay", "let", "let*", "letrec", "do"
     };
@@ -93,7 +98,7 @@ public class REPL implements Completor{
         PMap<Symbol, ?> bindings = env.getBindings();
         for (Symbol var : bindings.keys()) {
             String name = var.name;
-            if (name.startsWith(prefix) && !candidates.contains(name)) {
+            if (!name.startsWith("%") && name.startsWith(prefix) && !candidates.contains(name)) {
                 candidates.add(name + " ");
             }
         }
@@ -134,12 +139,17 @@ public class REPL implements Completor{
 
         if (argIndex < args.length) {
             filename = args[argIndex];
+        } else {
+            interactive = true;
         }
 
         REPL repl = new REPL();
-        if (filename != null)
-            repl.runFile(filename);
-        if (filename == null || interactive)
+        if (interactive) {
+            if (filename != null)
+                printResult(repl.runFile(filename));
             repl.runREPL();
+        } else {
+            repl.runFile(filename).getOrThrow(Fn.id());
+        }
     }
 }

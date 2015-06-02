@@ -60,6 +60,20 @@ public interface LispVal {
     }
 
     /**
+     * Returns true if this Lisp value represents a false value.
+     */
+    default boolean isFalse() {
+        return this == Bool.FALSE;
+    }
+
+    /**
+     * Returns true if this Lisp value represents a true value.
+     */
+    default boolean isTrue() {
+        return this != Bool.FALSE;
+    }
+
+    /**
      * Returns true if this Lisp value evaluating to itself.
      */
     default boolean isSelfEvaluating() {
@@ -120,7 +134,7 @@ public interface LispVal {
     }
 
     final class Text implements LispVal {
-        public final String value;
+        public String value;
 
         public Text(String value) {
             this.value = value;
@@ -228,6 +242,49 @@ public interface LispVal {
                 return true;
             if (obj instanceof Bool)
                 return value == ((Bool)obj).value;
+            return false;
+        }
+    }
+
+    final class Char implements LispVal {
+        public final char value;
+
+        public Char(char value) {
+            this.value = value;
+        }
+
+        @Override
+        public boolean isSelfEvaluating() {
+            return true;
+        }
+
+        @Override
+        public String show() {
+            switch (value) {
+            case '\0':      return "#\\nul";
+            case '\u0007':  return "#\\alarm";
+            case '\u0008':  return "#\\backspace";
+            case '\u0009':  return "#\\tab";
+            case '\n':      return "#\\newline";
+            case '\u000b':  return "#\\vtab";
+            case '\u000c':  return "#\\page";
+            case '\r':      return "#\\return";
+            case '\u001b':  return "#\\esc";
+            case ' ':       return "#\\space";
+            case '\u007f':  return "#\\delete";
+            default:        return "#\\" + value;
+            }
+        }
+
+        public String toString() {
+            return "#Char(" + value + ")";
+        }
+
+        public boolean equals(Object obj) {
+            if (obj == this)
+                return true;
+            if (obj instanceof Char)
+                return value == ((Char)obj).value;
             return false;
         }
     }
@@ -452,11 +509,17 @@ public interface LispVal {
     }
 
     final class Func implements LispVal {
+        public final String  name;
         public final LispVal params;
         public final Env     closure;
         public final Proc    body;
 
         public Func(LispVal params, Proc body, Env closure) {
+            this("", params, body, closure);
+        }
+
+        public Func(String name, LispVal params, Proc body, Env closure) {
+            this.name    = name;
             this.params  = params;
             this.body    = body;
             this.closure = closure;
@@ -464,7 +527,7 @@ public interface LispVal {
 
         @Override
         public String show() {
-            return "(lambda " + params.show() + " ...)";
+            return "#<procedure:" + name + " (lambda " + params.show() + " ...)>";
         }
 
         public String toString() {
@@ -473,21 +536,42 @@ public interface LispVal {
     }
 
     final class Macro implements LispVal {
+        public final String name;
         public final LispVal pattern;
         public final Proc body;
 
-        public Macro(LispVal pattern, Proc body) {
+        public Macro(String name, LispVal pattern, Proc body) {
+            this.name    = name;
             this.pattern = pattern;
             this.body    = body;
         }
 
         @Override
         public String show() {
-            return "(macro " + pattern.show() + " ...)";
+            return "#<macro:" + name + ">";
         }
 
         public String toString() {
             return "#Macro(" + pattern.show() + " " + body.show() + ")";
+        }
+    }
+
+    final class PrimMacro implements LispVal {
+        public final String name;
+        public final BiFunction<Env, LispVal, $<Evaluator, Proc>> proc;
+
+        public PrimMacro(String name, BiFunction<Env, LispVal, $<Evaluator, Proc>> proc) {
+            this.name = name;
+            this.proc = proc;
+        }
+
+        @Override
+        public String show() {
+            return "<macro:" + name + ">";
+        }
+
+        public String toString() {
+            return "#PrimMacro:" + name;
         }
     }
 

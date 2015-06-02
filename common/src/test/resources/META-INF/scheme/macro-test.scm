@@ -8,7 +8,7 @@
 (define (pos-action) (set! probe (+ probe 100)) "positive!")
 
 ; This version is careful to evaluate tval only once
-(defmacro (numeric-if tval ifn ifz ifp)
+(define-macro (numeric-if tval ifn ifz ifp)
   (let ((nit (gensym)))
     `(let ((,nit ,tval))
        (if (number? ,nit)
@@ -32,7 +32,7 @@
 (assert (= 10 probe))
 
 ;;; swap test
-(defmacro (swap var1 var2)
+(define-macro (swap var1 var2)
   (let ((vs (gensym)))
     `(let ((,vs ,var1))
        (set! ,var1 ,var2)

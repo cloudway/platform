@@ -17,6 +17,7 @@ import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.HashPMap;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.MutablePMap;
+import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Rational;
 import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.data.Unit;
@@ -102,6 +103,10 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
         .rule("[-+]?({d}+|{d}+\\.{d}*|{d}*\\.{d}+)([eE][-+]?{d}+)?",
             s -> new Num(Double.parseDouble(s)))
 
+        .rule("#\\\\.",        s -> new Char(s.charAt(2)))
+        .rule("#\\\\x{x}+",    s -> parseCharCode(s.substring(3)))
+        .action("#\\\\[a-z]+", SchemeParser::parseCharConst)
+
         .action("\"", SchemeParser::parseString)
 
         .literal("(",  LP)
@@ -120,6 +125,7 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
 
         .ignore("\\s+")
         .ignore(";.*")
+        .action("#\\|", SchemeParser::parseComment)
 
         .build();
 
@@ -197,6 +203,62 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
         }
     }
 
+    private static final PMap<String, LispVal> CHAR_CONSTS = HashPMap.<String, LispVal>empty()
+        .put("nul",         new Char('\0'))
+        .put("alarm",       new Char('\u0007'))
+        .put("backspace",   new Char('\u0008'))
+        .put("tab",         new Char('\t'))
+        .put("linefeed",    new Char('\n'))
+        .put("newline",     new Char('\n'))
+        .put("vtab",        new Char('\u000b'))
+        .put("page",        new Char('\u000c'))
+        .put("return",      new Char('\r'))
+        .put("esc",         new Char('\u001b'))
+        .put("space",       new Char(' '))
+        .put("delete",      new Char('\u007f'));
+
+    private static Maybe<LispVal> parseCharConst(LexBuilder.InputBuffer s) {
+        String name = s.lexeme().substring(2);
+        Maybe<LispVal> c = CHAR_CONSTS.lookup(name);
+        if (c.isAbsent())
+            s.fail("illegal character constant " + name);
+        return c;
+    }
+
+    private static LispVal parseCharCode(String text) {
+        return new Char((char)Integer.parseInt(text, 16)); // FIXME range check
+    }
+
+    private static Maybe<LispVal> parseComment(LexBuilder.InputBuffer s) {
+        int nested = 1;
+        int state  = 'x';
+        int c;
+
+        while ((c = s.input()) != -1) {
+            if (c == '|') {
+                if (state == '#') {
+                    nested++;
+                    state = 'x';
+                } else {
+                    state = '|';
+                }
+            } else if (c == '#') {
+                if (state == '|') {
+                    if (--nested == 0)
+                        return Maybe.empty();
+                    state = 'x';
+                } else {
+                    state = '#';
+                }
+            } else {
+                state = 'x';
+            }
+        }
+
+        s.fail("end of file in comment");
+        return Maybe.empty();
+    }
+
     public Stream<LispVal> getStream(String input) {
         return lexer.getTokenStream(input);
     }
@@ -234,7 +296,8 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
             token(Symbol.class),
             token(Text.class),
             token(Num.class),
-            token(Bool.class)
+            token(Bool.class),
+            token(Char.class)
         ));
     }
 

@@ -200,7 +200,7 @@
 
 ;;; SECTION 3.5
 
-(defmacro (cons-stream a b)
+(define-macro (cons-stream a b)
   `(cons ,a (delay ,b)))
 
 (define (stream-car s) (car s))

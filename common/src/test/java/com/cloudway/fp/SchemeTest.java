@@ -99,11 +99,11 @@ public class SchemeTest {
 
     @Test
     public void macroTest() {
-        eval("(load \"macro-test.scm\")");
+        eval("(require macro-test)");
     }
 
     @Test
     public void sicpTest() {
-        eval("(load \"sicp-test.scm\")");
+        eval("(require sicp-test)");
     }
 }

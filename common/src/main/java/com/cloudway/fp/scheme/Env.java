@@ -8,26 +8,61 @@ package com.cloudway.fp.scheme;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.cloudway.fp.data.HashPMap;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Ref;
-import com.cloudway.fp.scheme.LispVal.Symbol;
 
-public final class Env {
+public final class Env implements LispVal {
+    private final Ref<PMap<Symbol, Ref<Object>>>  system;
+    private final Ref<PMap<Symbol, LispVal>>      macros;
     private final Ref<PMap<Symbol, Ref<LispVal>>> bindings;
-    private final int quoteLevel;
-    private final AtomicInteger symgen;
 
-    public Env(PMap<Symbol, Ref<LispVal>> bindings) {
-        this.bindings   = new Ref<>(bindings);
+    private final int quoteLevel;
+
+    private static final Symbol SYMGEN = new Symbol("%SYMGEN%");
+
+    public Env() {
+        this.system   = new Ref<>(HashPMap.empty());
+        this.macros   = new Ref<>(HashPMap.empty());
+        this.bindings = new Ref<>(HashPMap.empty());
         this.quoteLevel = 0;
-        this.symgen     = new AtomicInteger();
+
+        setSystem(SYMGEN, new AtomicInteger());
     }
 
-    private Env(Ref<PMap<Symbol, Ref<LispVal>>> b, int q, AtomicInteger g) {
+    private Env(
+            Ref<PMap<Symbol, Ref<Object>>>  s,
+            Ref<PMap<Symbol, LispVal>>      m,
+            Ref<PMap<Symbol, Ref<LispVal>>> b,
+            int q) {
+        this.system     = s;
+        this.macros     = m;
         this.bindings   = b;
         this.quoteLevel = q;
-        this.symgen     = g;
+    }
+
+    public Ref<Object> getSystem(Symbol id, Object init) {
+        Maybe<Ref<Object>> slot = system.get().lookup(id);
+        if (slot.isAbsent()) {
+            Ref<Object> new_slot = new Ref<>(init);
+            system.update(b -> b.put(id, new_slot));
+            return new_slot;
+        } else {
+            return slot.get();
+        }
+    }
+
+    public void setSystem(Symbol id, Object value) {
+        system.update(b -> b.put(id, new Ref<>(value)));
+    }
+
+    public Maybe<LispVal> lookupMacro(Symbol id) {
+        return macros.get().lookup(id);
+    }
+
+    public void putMacro(Symbol id, LispVal macro) {
+        macros.update(b -> b.put(id, macro));
     }
 
     public PMap<Symbol, Ref<LispVal>> getBindings() {
@@ -51,11 +86,11 @@ public final class Env {
     }
 
     public Env extend(PMap<Symbol, Ref<LispVal>> ext) {
-        return new Env(new Ref<>(ext), quoteLevel, symgen);
+        return new Env(system, new Ref<>(macros.get()), new Ref<>(ext), quoteLevel);
     }
 
     public Env extend() {
-        return new Env(new Ref<>(bindings.get()), quoteLevel, symgen);
+        return new Env(system, new Ref<>(macros.get()), new Ref<>(bindings.get()), quoteLevel);
     }
 
     public int getQL() {
@@ -63,14 +98,20 @@ public final class Env {
     }
 
     public Env incrementQL() {
-        return new Env(bindings, quoteLevel + 1, symgen);
+        return new Env(system, macros, bindings, quoteLevel + 1);
     }
 
     public Env decrementQL() {
-        return new Env(bindings, quoteLevel - 1, symgen);
+        return new Env(system, macros, bindings, quoteLevel - 1);
     }
 
     public Symbol newsym() {
+        AtomicInteger symgen = (AtomicInteger)getSystem(SYMGEN, null).get();
         return new Symbol(" t." + symgen.getAndIncrement());
+    }
+
+    @Override
+    public String show() {
+        return "<namespace>";
     }
 }
