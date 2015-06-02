@@ -110,81 +110,77 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     // =======================================================================
 
-    public $<Evaluator, Proc> analyze(LispVal form) {
+    public $<Evaluator, Proc> analyze(Env ctx, LispVal form) {
         return with(form).<$<Evaluator, Proc>>get()
             .when(Datum  (this::analyzeDatum))
             .when(Symbol (this::analyzeVariable))
-            .when(Cons   ((tag, args) -> analyzeList(form, tag, args)))
+            .when(Cons   ((tag, args) -> analyzeList(ctx, form, tag, args)))
             .orElseGet(() -> throwE(new BadSpecialForm("Unrecognized special form", form)));
     }
 
     public $<Evaluator, LispVal> eval(Env env, LispVal exp) {
-        return bind(analyze(exp), proc -> proc.apply(env));
+        return bind(analyze(env, exp), proc -> proc.apply(env));
     }
 
-    private  $<Evaluator, Seq<LispVal>> evalM(Env env, Seq<Proc> procs) {
+    private $<Evaluator, Seq<LispVal>> evalM(Env env, Seq<Proc> procs) {
         return mapM(procs, proc -> proc.apply(env));
     }
 
     public $<Evaluator, LispVal> apply(Env env, LispVal func, LispVal args) {
         return with(func).<$<Evaluator, LispVal>>get()
             .when(Prim(f -> f.apply(env, args)))
-
-            .when(Func(f ->
-              do_(bindVars(f.params, args), bindings ->
-              f.body.apply(f.closure.extend(bindings)))))
-
+            .when(Func(f -> extendEnv(f.closure, f.params, args, f.body)))
             .orElseGet(() -> throwE(new NotFunction("Unrecognized function", func.show())));
     }
 
-    private $<Evaluator, Proc> analyzeList(LispVal form, LispVal tag, LispVal args) {
+    private $<Evaluator, Proc> analyzeList(Env ctx, LispVal form, LispVal tag, LispVal args) {
         if (tag.isSymbol()) {
             switch (((Symbol)tag).name) {
             case "define":
                 return with(args).<$<Evaluator, Proc>>get()
                   .when(List((first, value) ->
                     first.isSymbol()
-                      ? analyzeVariableDefinition((Symbol)first, value)
-                      : analyzeFunctionDefinition(first, Pair.of(value))))
-                  .when(Cons(this::analyzeFunctionDefinition))
+                      ? analyzeVariableDefinition(ctx, (Symbol)first, value)
+                      : analyzeFunctionDefinition(ctx, first, Pair.of(value))))
+                  .when(Cons((first, rest) -> analyzeFunctionDefinition(ctx, first, rest)))
                   .orElseGet(() -> badSyntax("define", form));
 
             case "defmacro":
                 return with(args).<$<Evaluator, Proc>>get()
-                  .when(Cons(this::analyzeMacroDefinition))
+                  .when(Cons((first, rest) -> analyzeMacroDefinition(ctx, first, rest)))
                   .orElseGet(() -> badSyntax("defmacro", form));
 
             case "lambda":
                 return with(args).<$<Evaluator, Proc>>get()
-                  .when(Cons(this::analyzeLambda))
+                  .when(Cons((first, rest) -> analyzeLambda(ctx, first, rest)))
                   .orElseGet(() -> badSyntax("lambda", form));
 
             case "set!":
                 return with(args).<$<Evaluator, Proc>>get()
                   .when(List((id, exp) ->
-                    id.isSymbol() ? analyzeAssignment((Symbol)id, exp)
+                    id.isSymbol() ? analyzeAssignment(ctx, (Symbol)id, exp)
                                   : badSyntax("set!", form)))
                   .orElseGet(() -> badSyntax("set!", form));
 
             case "if":
                 return with(args).<$<Evaluator, Proc>>get()
-                  .when(List((pred, conseq)      -> analyzeIf(pred, conseq, Void.VOID)))
-                  .when(List((pred, conseq, alt) -> analyzeIf(pred, conseq, alt)))
+                  .when(List((pred, conseq)      -> analyzeIf(ctx, pred, conseq, Void.VOID)))
+                  .when(List((pred, conseq, alt) -> analyzeIf(ctx, pred, conseq, alt)))
                   .orElseGet(() -> badSyntax("if", form));
 
             case "cond":
-                return analyzeCond(args);
+                return analyzeCond(ctx, args);
 
             case "match":
                 return with(args).<$<Evaluator, Proc>>get()
-                  .when(Cons(this::analyzeMatch))
+                  .when(Cons((exp, spec) -> analyzeMatch(ctx, exp, spec)))
                   .orElseGet(() -> badSyntax("match", form));
 
             case "and":
-                return analyzeAnd(args);
+                return analyzeAnd(ctx, args);
 
             case "or":
-                return analyzeOr(args);
+                return analyzeOr(ctx, args);
 
             case "quote":
                 return with(args).<$<Evaluator, Proc>>get()
@@ -197,49 +193,55 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
                   .orElseGet(() -> badSyntax("quasiquote", form));
 
             case "begin":
-                return analyzeSequence(args);
+                return analyzeSequence(ctx, args);
 
             case "delay":
-                return map(analyzeSequence(args), proc ->
+                return map(analyzeSequence(ctx, args), proc ->
                        env -> pure(new Promise(env, proc)));
 
             case "reset":
-                return map(analyzeSequence(args), proc -> env -> reset(env, proc));
+                return map(analyzeSequence(ctx, args), proc -> env -> reset(env, proc));
 
             case "shift":
                 return with(args).<$<Evaluator, Proc>>get()
                   .when(Cons((id, body) ->
                     id.isSymbol()
-                      ? map(analyzeSequence(body), proc -> env -> shift(env, (Symbol)id, proc))
+                      ? map(analyzeSequence(ctx, body), proc -> env -> shift(env, (Symbol)id, proc))
                       : badSyntax("shift", form)))
                     .orElseGet(() -> badSyntax("shift", form));
 
             case "let":
                 return args.isPair() && ((Pair)args).head.isSymbol()
-                    ? analyzeLet("let", ((Pair)args).tail, (ps, as, b) ->
+                    ? analyzeLet(ctx, "let", ((Pair)args).tail, (ps, as, b) ->
                         translateNamedLet((Symbol)((Pair)args).head, ps, as, b))
-                    : analyzeLet("let", args, this::translateLet);
+                    : analyzeLet(ctx, "let", args, this::translateLet);
 
             case "let*":
-                return analyzeLet("let*", args, this::translateLetStar);
+                return analyzeLet(ctx, "let*", args, this::translateLetStar);
 
             case "letrec":
-                return analyzeLet("letrec", args, this::translateLetrec);
+                return analyzeLet(ctx, "letrec", args, this::translateLetrec);
 
             case "let-optionals":
                 return with(args).<$<Evaluator, Proc>>get()
                   .when(Cons((first, rest) ->
-                    do_(analyze(first), v ->
-                    do_(analyzeLet("let-optionals", rest, (ps, as, b) ->
+                    do_(analyze(ctx, first), v ->
+                    do_(analyzeLet(ctx, "let-optionals", rest, (ps, as, b) ->
                     translateLetOptionals(ps, as, v, b))))))
                   .orElseGet(() -> badSyntax("let-optionals", form));
 
             case "do":
-                return analyzeDo(args);
+                return analyzeDo(ctx, args);
+
+            default:
+                Maybe<LispVal> mac = ctx.lookup((Symbol)tag);
+                if (mac.isPresent() && (mac.get() instanceof Macro)) {
+                    return expandMacro(ctx, (Macro)mac.get(), args);
+                }
             }
         }
 
-        return analyzeApplication(tag, args);
+        return analyzeApplication(ctx, tag, args);
     }
 
     private $<Evaluator, Proc> analyzeDatum(LispVal datum) {
@@ -251,8 +253,8 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return pure(env -> env.lookup(var).either(this::pure, () -> unbound(var)));
     }
 
-    private $<Evaluator, Proc> analyzeAssignment(Symbol var, LispVal exp) {
-        return map(analyze(exp), vproc -> env -> setVar(env, var, vproc));
+    private $<Evaluator, Proc> analyzeAssignment(Env ctx, Symbol var, LispVal exp) {
+        return map(analyze(ctx, exp), vproc -> env -> setVar(env, var, vproc));
     }
 
     @SuppressWarnings("RedundantTypeArguments")
@@ -263,35 +265,36 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             () -> unbound(var));
     }
 
-    private $<Evaluator, Proc> analyzeVariableDefinition(Symbol var, LispVal exp) {
-        return map(analyze(exp), vproc ->
+    private $<Evaluator, Proc> analyzeVariableDefinition(Env ctx, Symbol var, LispVal exp) {
+        return map(analyze(ctx, exp), vproc ->
                env -> do_(vproc.apply(env), value ->
                       do_action(() -> env.put(var, value))));
     }
 
-    private $<Evaluator, Proc> analyzeFunctionDefinition(LispVal first, LispVal body) {
+    private $<Evaluator, Proc> analyzeFunctionDefinition(Env ctx, LispVal first, LispVal body) {
         return with(first).<$<Evaluator, Proc>>get()
             .when(Cons((var, formals) ->
               var.isSymbol() && checkLambda(formals, body)
-                ? map(analyzeSequence(body), bproc ->
+                ? map(analyzeSequence(ctx.extend(), body), bproc ->
                   env -> do_action(() -> env.put((Symbol)var, new Func(formals, bproc, env))))
                 : badSyntax("define", first)))
             .orElseGet(() -> badSyntax("define", first));
     }
 
-    private $<Evaluator, Proc> analyzeMacroDefinition(LispVal first, LispVal body) {
+    private $<Evaluator, Proc> analyzeMacroDefinition(Env ctx, LispVal first, LispVal body) {
         return with(first).<$<Evaluator, Proc>>get()
             .when(Cons((var, pattern) ->
               var.isSymbol() && checkMacro(pattern, body)
-                ? map(analyzeSequence(body), bproc ->
-                  env -> do_action(() -> env.put((Symbol)var, new Macro(pattern, bproc))))
+                ? do_(analyzeSequence(ctx.extend(), body), bproc ->
+                  do_(action(() -> ctx.put((Symbol)var, new Macro(pattern, bproc))),
+                  pure(env -> pure(Void.VOID))))
                 : badSyntax("defmacro", first)))
             .orElseGet(() -> badSyntax("defmacro", first));
     }
 
-    private $<Evaluator, Proc> analyzeLambda(LispVal formals, LispVal body) {
+    private $<Evaluator, Proc> analyzeLambda(Env ctx, LispVal formals, LispVal body) {
         if (checkLambda(formals, body)) {
-            return map(analyzeSequence(body), bproc ->
+            return map(analyzeSequence(ctx.extend(), body), bproc ->
                    env -> pure(new Func(formals, bproc, env)));
         } else {
             return badSyntax("lambda", formals);
@@ -306,67 +309,22 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return isPattern(pattern) && body.isList() && !body.isNil();
     }
 
-    private $<Evaluator, Proc> analyzeApplication(LispVal operator, LispVal operands) {
-        // We can't determine whether the operator is a function or a macro at
-        // analyze time. We have to save the raw form of operands and analyze
-        // it at runtime, but there is an optimization for this that it will be
-        // analyzed only once.
-        return map(analyze(operator), fproc -> new Apply(fproc, operands));
+    private $<Evaluator, Proc> analyzeApplication(Env ctx, LispVal operator, LispVal operands) {
+        return do_(analyze(ctx, operator), fproc ->
+               do_(operands.mapM(this, x -> analyze(ctx, x)), aprocs ->
+               pure(env -> do_(fproc.apply(env), op ->
+                           do_(aprocs.mapM(this, a -> ((Proc)a).apply(env)), args ->
+                           apply(env, op, args))))));
     }
 
-    private final class Apply implements Proc {
-        private final Proc    operator;
-        private final LispVal operands;
-
-        private $<Evaluator, LispVal> aprocs;
-        private Macro cached_macro;
-        private Proc  cached_macro_proc;
-
-        public Apply(Proc operator, LispVal operands) {
-            this.operator = operator;
-            this.operands = operands;
-        }
-
-        @Override
-        public $<Evaluator, LispVal> apply(Env env) {
-            return do_(operator.apply(env), op ->
-                   op instanceof Macro
-                     ? expandMacro(env, (Macro)op)
-                     : applyFunc(env, op));
-        }
-
-        private $<Evaluator, LispVal> applyFunc(Env env, LispVal op) {
-            return do_(analyzeOperands(), aps ->
-                   do_(aps.mapM(Evaluator.this, a -> ((Proc)a).apply(env)), args ->
-                   Evaluator.this.apply(env, op, args)));
-        }
-
-        private $<Evaluator, LispVal> analyzeOperands() {
-            if (aprocs == null)
-                aprocs = operands.mapM(Evaluator.this, Evaluator.this::analyze);
-            return aprocs;
-        }
-
-        private $<Evaluator, LispVal> expandMacro(Env env, Macro macro) {
-            if (cached_macro == macro) {
-                return cached_macro_proc.apply(env);
-            }
-
-            return match(macro.pattern, operands, HashPMap.empty()).<$<Evaluator, LispVal>>either(
-                err -> throwE(err),
-                bindings ->
-                    do_(macro.body.apply(env.extend(bindings)), mexp ->
-                    do_(analyze(mexp), mproc ->
-                    do_(delay(() -> {
-                        this.cached_macro = macro;
-                        this.cached_macro_proc = mproc;
-                        return mproc.apply(env);
-                    })))));
-        }
+    private $<Evaluator, Proc> expandMacro(Env ctx, Macro macro, LispVal operands) {
+        return match(ctx, macro.pattern, operands).<$<Evaluator, Proc>>either(
+            err  -> throwE(err),
+            eenv -> do_(macro.body.apply(eenv), mexp -> analyze(ctx, mexp)));
     }
 
-    private $<Evaluator, PMap<Symbol, Ref<LispVal>>> bindVars(LispVal params, LispVal args) {
-        PMap<Symbol, Ref<LispVal>> bindings = HashPMap.empty();
+    private $<Evaluator, LispVal> extendEnv(Env env, LispVal params, LispVal args, Proc proc) {
+        PMap<Symbol, Ref<LispVal>> bindings = env.getBindings();
         int nvars = 0;
 
         while (params.isPair() && args.isPair()) {
@@ -397,10 +355,10 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             bindings = bindings.put((Symbol)params, new Ref<>(args));
         }
 
-        return pure(bindings);
+        return proc.apply(env.extend(bindings));
     }
 
-    private $<Evaluator, Proc> analyzeSequence(LispVal exps) {
+    private $<Evaluator, Proc> analyzeSequence(Env ctx, LispVal exps) {
         if (exps.isNil()) {
             return pure(env -> pure(Void.VOID));
         }
@@ -408,10 +366,10 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         if (exps.isPair()) {
             Pair p = (Pair)exps;
             if (p.tail.isNil()) {
-                return analyze(p.head);
+                return analyze(ctx, p.head);
             } else {
-                return do_(analyze(p.head), first ->
-                       do_(analyzeSequence(p.tail), rest ->
+                return do_(analyze(ctx, p.head), first ->
+                       do_(analyzeSequence(ctx, p.tail), rest ->
                        pure(env -> seqR(first.apply(env), () -> rest.apply(env)))));
             }
         }
@@ -419,16 +377,16 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return badSyntax("sequence", exps);
     }
 
-    private $<Evaluator, Proc> analyzeIf(LispVal pred, LispVal conseq, LispVal alt) {
-        return do_(analyze(pred),   pproc ->
-               do_(analyze(conseq), cproc ->
-               do_(analyze(alt),    aproc ->
+    private $<Evaluator, Proc> analyzeIf(Env ctx, LispVal pred, LispVal conseq, LispVal alt) {
+        return do_(analyze(ctx, pred),   pproc ->
+               do_(analyze(ctx, conseq), cproc ->
+               do_(analyze(ctx, alt),    aproc ->
                pure(env -> do_(pproc.apply(env), tval ->
                            isTrue(tval) ? cproc.apply(env)
                                         : aproc.apply(env))))));
     }
 
-    private $<Evaluator, Proc> analyzeAnd(LispVal args) {
+    private $<Evaluator, Proc> analyzeAnd(Env ctx, LispVal args) {
         if (args.isNil()) {
             return pure(env -> pure(Bool.TRUE));
         }
@@ -436,10 +394,10 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         if (args.isPair()) {
             Pair p = (Pair)args;
             if (p.tail.isNil()) {
-                return analyze(p.head);
+                return analyze(ctx, p.head);
             } else {
-                return do_(analyze(p.head), first ->
-                       do_(analyzeAnd(p.tail), rest ->
+                return do_(analyze(ctx, p.head), first ->
+                       do_(analyzeAnd(ctx, p.tail), rest ->
                        pure(env -> do_(first.apply(env), result ->
                                    isFalse(result) ? pure(result)
                                                    : rest.apply(env)))));
@@ -449,7 +407,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return badSyntax("and", args);
     }
 
-    private $<Evaluator, Proc> analyzeOr(LispVal args) {
+    private $<Evaluator, Proc> analyzeOr(Env ctx, LispVal args) {
         if (args.isNil()) {
             return pure(env -> pure(Bool.FALSE));
         }
@@ -457,10 +415,10 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         if (args.isPair()) {
             Pair p = (Pair)args;
             if (p.tail.isNil()) {
-                return analyze(p.head);
+                return analyze(ctx, p.head);
             } else {
-                return do_(analyze(p.head), first ->
-                       do_(analyzeOr(p.tail), rest ->
+                return do_(analyze(ctx, p.head), first ->
+                       do_(analyzeOr(ctx, p.tail), rest ->
                        pure(env -> do_(first.apply(env), result ->
                                    isTrue(result) ? pure(result)
                                                   : rest.apply(env)))));
@@ -476,28 +434,28 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     private final Symbol WHEN = getsym(":when");
     private final Proc   LAST = env -> pure(Void.VOID);
 
-    private $<Evaluator, Proc> analyzeCond(LispVal form) {
+    private $<Evaluator, Proc> analyzeCond(Env ctx, LispVal form) {
         return with(form).<$<Evaluator, Proc>>get()
-            .when(List(last -> analyzeCondClause(last, LAST)))
+            .when(List(last -> analyzeCondClause(ctx, last, LAST)))
             .when(Cons((hd, tl) ->
-              bind(delay(() -> analyzeCond(tl)), rest ->
-              analyzeCondClause(hd, rest))))
+              bind(delay(() -> analyzeCond(ctx, tl)), rest ->
+              analyzeCondClause(ctx, hd, rest))))
             .orElseGet(() -> badSyntax("cond", form));
     }
 
-    private $<Evaluator, Proc> analyzeCondClause(LispVal form, Proc rest) {
+    private $<Evaluator, Proc> analyzeCondClause(Env ctx, LispVal form, Proc rest) {
         return with(form).<$<Evaluator, Proc>>get()
             .when(List((test, mid, exp) ->
               mid.equals(getsym("=>"))
-                ? analyzeRecipientCond(test, exp, rest)
-                : analyzeNormalCond(test, Pair.of(mid, exp), rest)))
-            .when(Cons((test, body) -> analyzeNormalCond(test, body, rest)))
+                ? analyzeRecipientCond(ctx, test, exp, rest)
+                : analyzeNormalCond(ctx, test, Pair.of(mid, exp), rest)))
+            .when(Cons((test, body) -> analyzeNormalCond(ctx, test, body, rest)))
             .orElseGet(() -> badSyntax("cond", form));
     }
 
-    private $<Evaluator, Proc> analyzeRecipientCond(LispVal test, LispVal exp, Proc rest) {
-        return do_(analyze(test), tproc ->
-               do_(analyze(exp),  pproc ->
+    private $<Evaluator, Proc> analyzeRecipientCond(Env ctx, LispVal test, LispVal exp, Proc rest) {
+        return do_(analyze(ctx, test), tproc ->
+               do_(analyze(ctx, exp),  pproc ->
                pure(env -> do_(tproc.apply(env), tval ->
                            isTrue(tval)
                              ? bind(pproc.apply(env), proc ->
@@ -505,23 +463,23 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
                              : rest.apply(env)))));
     }
 
-    private $<Evaluator, Proc> analyzeNormalCond(LispVal test, LispVal body, Proc rest) {
+    private $<Evaluator, Proc> analyzeNormalCond(Env ctx, LispVal test, LispVal body, Proc rest) {
         if (test.equals(ELSE)) {
             if (rest == LAST) {
-                return analyzeSequence(body);
+                return analyzeSequence(ctx, body);
             } else {
                 return badSyntax("cond", new Pair(test, body));
             }
         }
 
         if (body.isNil()) {
-            return map(analyze(test), tproc ->
+            return map(analyze(ctx, test), tproc ->
                    env -> do_(tproc.apply(env), tval ->
                           isTrue(tval) ? pure(tval)
                                        : rest.apply(env)));
         } else {
-            return bind(analyze(test), tproc ->
-                   map(analyzeSequence(body), bproc ->
+            return bind(analyze(ctx, test), tproc ->
+                   map(analyzeSequence(ctx, body), bproc ->
                    env -> do_(tproc.apply(env), tval ->
                           isTrue(tval) ? bproc.apply(env)
                                        : rest.apply(env))));
@@ -530,61 +488,58 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     // -----------------------------------------------------------------------
 
-    private $<Evaluator, Proc> analyzeMatch(LispVal exp, LispVal form) {
-        return do_(analyze(exp), vproc ->
-               do_(analyzeMatchClauses(form), mproc ->
+    private $<Evaluator, Proc> analyzeMatch(Env ctx, LispVal exp, LispVal spec) {
+        return do_(analyze(ctx, exp), vproc ->
+               do_(analyzeMatchClauses(ctx, spec), mproc ->
                pure(env -> do_(vproc.apply(env), val ->
                            mproc.apply(env, val)))));
     }
 
-    private $<Evaluator, PProc> analyzeMatchClauses(LispVal form) {
+    private $<Evaluator, PProc> analyzeMatchClauses(Env ctx, LispVal form) {
         return with(form).<$<Evaluator, PProc>>get()
-            .when(List(last -> analyzeMatchClause(last, null)))
+            .when(List(last -> analyzeMatchClause(ctx, last, null)))
             .when(Cons((hd, tl) ->
-              bind(delay(() -> analyzeMatchClauses(tl)), rest ->
-              analyzeMatchClause(hd, rest))))
+              bind(delay(() -> analyzeMatchClauses(ctx, tl)), rest ->
+              analyzeMatchClause(ctx, hd, rest))))
             .orElseGet(() -> badSyntax("match", form));
     }
 
-    private $<Evaluator, PProc> analyzeMatchClause(LispVal form, PProc rest) {
+    private $<Evaluator, PProc> analyzeMatchClause(Env ctx, LispVal form, PProc rest) {
         return with(form).<$<Evaluator, PProc>>get()
             .when(Cons((pat, body) ->
               pat.equals(ELSE)
                 ? rest == null
-                    ? analyzeSingleMatch(getsym("_"), body, rest)
+                    ? analyzeSingleMatch(ctx, getsym("_"), body, rest)
                     : badSyntax("match", form)
 
                 : with(body).<$<Evaluator, PProc>>get()
                     .when(Cons((key, guard, exps) ->
                       key.equals(WHEN)
-                        ? analyzeGuardedMatch(pat, guard, exps, rest)
-                        : analyzeSingleMatch(pat, body, rest)))
+                        ? analyzeGuardedMatch(ctx, pat, guard, exps, rest)
+                        : analyzeSingleMatch(ctx, pat, body, rest)))
                     .orElseGet(() ->
-                          analyzeSingleMatch(pat, body, rest))))
+                          analyzeSingleMatch(ctx, pat, body, rest))))
 
             .orElseGet(() -> badSyntax("match", form));
     }
 
-    private $<Evaluator, PProc> analyzeSingleMatch(LispVal pattern, LispVal body, PProc rest) {
-        return map(analyzeSequence(body), bproc -> (env, value) ->
-               match(pattern, value, HashPMap.empty()).<$<Evaluator, LispVal>>either(
-                 err -> rest == null ? throwE(err) : rest.apply(env, value),
-                 bindings -> bproc.apply(env.extend(bindings))));
+    private $<Evaluator, PProc> analyzeSingleMatch(Env ctx, LispVal pattern, LispVal body, PProc rest) {
+        return map(analyzeSequence(ctx, body), bproc -> (env, value) ->
+               match(env, pattern, value).<$<Evaluator, LispVal>>either(
+                 err  -> rest == null ? throwE(err) : rest.apply(env, value),
+                 eenv -> bproc.apply(eenv)));
     }
 
-    private $<Evaluator, PProc> analyzeGuardedMatch(LispVal pattern, LispVal guard, LispVal body, PProc rest) {
-        return do_(analyze(guard), gproc ->
-               do_(analyzeSequence(body), bproc ->
+    private $<Evaluator, PProc> analyzeGuardedMatch(Env ctx, LispVal pattern, LispVal guard, LispVal body, PProc rest) {
+        return do_(analyze(ctx, guard), gproc ->
+               do_(analyzeSequence(ctx, body), bproc ->
                pure((env, value) ->
-                 match(pattern, value, HashPMap.empty()).<$<Evaluator, LispVal>>either(
-                   err -> rest == null ? throwE(err) : rest.apply(env, value),
-                   bindings -> {
-                     Env eenv = env.extend(bindings);
-                     return do_(gproc.apply(eenv), tval ->
-                            isTrue(tval) ? bproc.apply(eenv) :
-                            rest == null ? throwE(new PatternMismatch(guard, value))
-                                      : rest.apply(env, value));
-                   }))));
+                 match(env, pattern, value).<$<Evaluator, LispVal>>either(
+                   err  -> rest == null ? throwE(err) : rest.apply(env, value),
+                   eenv -> do_(gproc.apply(eenv), tval ->
+                           isTrue(tval) ? bproc.apply(eenv) :
+                           rest == null ? throwE(new PatternMismatch(guard, value))
+                                        : rest.apply(env, value))))));
     }
 
     // -----------------------------------------------------------------------
@@ -600,8 +555,12 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             .orElse(false);
     }
 
+    private static Either<LispError, Env> match(Env env, LispVal pattern, LispVal value) {
+        return doMatch(pattern, value, env.getBindings()).map(env::extend);
+    }
+
     private static Either<LispError, PMap<Symbol, Ref<LispVal>>>
-    match(LispVal pattern, LispVal value, PMap<Symbol, Ref<LispVal>> bindings) {
+    doMatch(LispVal pattern, LispVal value, PMap<Symbol, Ref<LispVal>> bindings) {
         return with(pattern).<Either<LispError, PMap<Symbol, Ref<LispVal>>>>get()
             .when(Text   (__  -> matchConst(pattern, value, bindings)))
             .when(Num    (__  -> matchConst(pattern, value, bindings)))
@@ -643,9 +602,8 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     matchList(Pair pattern, LispVal value, PMap<Symbol, Ref<LispVal>> bindings) {
         if (value.isPair()) {
             Pair pv = (Pair)value;
-            Either<LispError, PMap<Symbol, Ref<LispVal>>> res
-                = match(pattern.head, pv.head, bindings);
-            return res.isLeft() ? res : match(pattern.tail, pv.tail, res.right());
+            return doMatch(pattern.head, pv.head, bindings).flatMap(b ->
+                   doMatch(pattern.tail, pv.tail, b));
         } else {
             return left(new PatternMismatch(pattern, value));
         }
@@ -658,13 +616,13 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         Seq<LispVal> inits = Seq.nil();
     }
 
-    private $<Evaluator, Proc> analyzeLet(String name, LispVal form,
+    private $<Evaluator, Proc> analyzeLet(Env ctx, String name, LispVal form,
             TriFunction<Seq<Symbol>, Seq<Proc>, Proc, $<Evaluator, Proc>> trans) {
         return with(form).<$<Evaluator, Proc>>get()
             .when(Cons((params, body) ->
               do_(analyzeLetParams(name, params), lp ->
-              do_(mapM(lp.inits, this::analyze), vprocs ->
-              do_(analyzeSequence(body), bproc ->
+              do_(mapM(lp.inits, x -> analyze(ctx, x)), vprocs ->
+              do_(analyzeSequence(ctx.extend(), body), bproc ->
               trans.apply(lp.vars, vprocs, bproc))))))
             .orElseGet(() -> badSyntax(name, form));
     }
@@ -700,7 +658,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     private static $<Evaluator, LispVal>
     extendEnv(Env env, Seq<Symbol> params, Seq<LispVal> args, Proc body) {
-        PMap<Symbol, Ref<LispVal>> bindings = HashPMap.empty();
+        PMap<Symbol, Ref<LispVal>> bindings = env.getBindings();
         while (!params.isEmpty()) {
             bindings = bindings.put(params.head(), new Ref<>(args.head()));
             params = params.tail();
@@ -774,7 +732,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         Seq<LispVal> steps = Seq.nil();
     }
 
-    private $<Evaluator, Proc> analyzeDo(LispVal form) {
+    private $<Evaluator, Proc> analyzeDo(Env ctx, LispVal form) {
         // (do ((var init step) ...)
         //     (test finish ...)
         //   command ...)
@@ -791,11 +749,11 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
               with(exit).<$<Evaluator, Proc>>get()
                 .when(Cons((test, finish) ->
                   do_(analyzeDoParams(params), (DoParams dp) ->
-                  do_(mapM(dp.inits, this::analyze), (Seq<Proc> vprocs) ->
-                  do_(mapM(dp.steps, this::analyzeSequence), (Seq<Proc> sprocs) ->
-                  do_(analyze(test),            tproc ->
-                  do_(analyzeSequence(finish),  fproc ->
-                  do_(analyzeSequence(body),    bproc ->
+                  do_(mapM(dp.inits, x -> analyze(ctx, x)), (Seq<Proc> vprocs) ->
+                  do_(mapM(dp.steps, x -> analyzeSequence(ctx, x)), (Seq<Proc> sprocs) ->
+                  do_(analyze(ctx, test), tproc ->
+                  do_(analyzeSequence(ctx, finish), fproc ->
+                  do_(analyzeSequence(ctx.extend(), body), bproc ->
                   pure(env -> evalDo(env, dp.vars, vprocs, sprocs, tproc, fproc, bproc))))))))))
                 .orElseGet(() -> badSyntax("do", exit))))
             .orElseGet(() -> badSyntax("do", form));

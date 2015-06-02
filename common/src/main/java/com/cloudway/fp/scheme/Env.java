@@ -51,8 +51,11 @@ public final class Env {
     }
 
     public Env extend(PMap<Symbol, Ref<LispVal>> ext) {
-        ext = this.bindings.get().putAll(ext);
         return new Env(new Ref<>(ext), quoteLevel, symgen);
+    }
+
+    public Env extend() {
+        return new Env(new Ref<>(bindings.get()), quoteLevel, symgen);
     }
 
     public int getQL() {
