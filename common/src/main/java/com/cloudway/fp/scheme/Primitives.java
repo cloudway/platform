@@ -18,9 +18,9 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.StringJoiner;
 import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 
 import com.cloudway.fp.$;
-import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Rational;
@@ -33,8 +33,6 @@ import static com.cloudway.fp.control.Syntax.do_;
 import static com.cloudway.fp.scheme.LispError.*;
 import static com.cloudway.fp.scheme.LispVal.*;
 import static com.cloudway.fp.scheme.LispVal.Void;
-import static com.cloudway.fp.data.Either.left;
-import static com.cloudway.fp.data.Either.right;
 import static java.lang.Character.toLowerCase;
 
 @SuppressWarnings("unused")
@@ -48,7 +46,12 @@ public final class Primitives {
 
     @Name("symbol?")
     public static boolean isSymbol(LispVal val) {
-        return val instanceof Symbol;
+        return val.isSymbol();
+    }
+
+    @Name("keyword?")
+    public static boolean isKeyword(LispVal val) {
+        return val instanceof KeySym;
     }
 
     @Name("char?")
@@ -333,6 +336,18 @@ public final class Primitives {
         }
     }
 
+    public static Number quotient(Number x, Number y) {
+        if (x instanceof Double || y instanceof Double) {
+            return Math.round(x.doubleValue() / y.doubleValue());
+        } else if (x instanceof Rational || y instanceof Rational) {
+            return reduce(Rational.valueOf(x).divide(Rational.valueOf(y)).numerator());
+        } else if (x instanceof BigInteger || y instanceof BigInteger) {
+            return reduce(toBigInteger(x).divide(toBigInteger(y)));
+        } else {
+            return x.longValue() / y.longValue();
+        }
+    }
+
     public static Number modulo(Number x, Number y) {
         if (x instanceof Double || y instanceof Double) {
             return x.doubleValue() % y.doubleValue();
@@ -557,13 +572,102 @@ public final class Primitives {
         return args;
     }
 
-    public static Either<LispError, LispVal> length(LispVal x) {
+    public static long length(LispVal lst) {
         long len = 0;
-        while (x.isPair()) {
+        while (lst.isPair()) {
             len++;
-            x = ((Pair)x).tail;
+            lst = ((Pair)lst).tail;
         }
-        return x.isNil() ? right(new Num(len)) : left(new TypeMismatch("pair", x));
+
+        if (lst.isNil()) {
+            return len;
+        } else {
+            throw new TypeMismatch("pair", lst);
+        }
+    }
+
+    public static LispVal list_ref(LispVal lst, int k) {
+        while (k != 0 && lst.isPair()) {
+            k--;
+            lst = ((Pair)lst).tail;
+        }
+
+        if (k == 0 && lst.isPair()) {
+            return ((Pair)lst).head;
+        } else {
+            throw new TypeMismatch("pair", lst);
+        }
+    }
+
+    public static LispVal list_tail(LispVal lst, int k) {
+        while (k != 0 && lst.isPair()) {
+            k--;
+            lst = ((Pair)lst).tail;
+        }
+
+        if (k == 0) {
+            return lst;
+        } else {
+            throw new TypeMismatch("pair", lst);
+        }
+    }
+
+    private static LispVal mem_helper(LispVal item, LispVal lst, BiPredicate<LispVal, LispVal> pred) {
+        while (lst.isPair()) {
+            Pair p = (Pair)lst;
+            if (pred.test(item, p.head))
+                return lst;
+            lst = p.tail;
+        }
+
+        if (lst.isNil()) {
+            return Bool.FALSE;
+        } else {
+            throw new TypeMismatch("pair", lst);
+        }
+    }
+
+    public static LispVal memq(LispVal item, LispVal lst) {
+        return mem_helper(item, lst, Primitives::eq);
+    }
+
+    public static LispVal memv(LispVal item, LispVal lst) {
+        return mem_helper(item, lst, Primitives::eqv);
+    }
+
+    public static LispVal member(LispVal item, LispVal lst) {
+        return mem_helper(item, lst, Primitives::equal);
+    }
+
+    private static LispVal ass_helper(LispVal obj, LispVal alist, BiPredicate<LispVal, LispVal> pred) {
+        while (alist.isPair()) {
+            Pair p = (Pair)alist;
+            if (p.head.isPair()) {
+                if (pred.test(obj, ((Pair)p.head).head))
+                    return p.head;
+            } else {
+                throw new TypeMismatch("pair", p.head);
+            }
+            alist = p.tail;
+        }
+
+        if (alist.isNil()) {
+            return Bool.FALSE;
+        } else {
+            throw new TypeMismatch("pair", alist);
+        }
+    }
+
+    public static LispVal assq(LispVal obj, LispVal alist) {
+        return ass_helper(obj, alist, Primitives::eq);
+    }
+
+    public static LispVal assv(LispVal obj, LispVal alist) {
+        return ass_helper(obj, alist, Primitives::eqv);
+    }
+
+    public static LispVal assoc(LispVal obj, LispVal alist) {
+        return ass_helper(obj, alist, Primitives::equal);
     }
 
     @VarArgs
@@ -700,6 +804,32 @@ public final class Primitives {
         return me.throwE(new TypeMismatch("pair", lst));
     }
 
+    public static $<Evaluator, LispVal>
+    fold_right(Evaluator me, Env env, LispVal op, LispVal init, LispVal lst) {
+        if (lst.isNil()) {
+            return me.pure(init);
+        }
+
+        if (lst.isPair()) {
+            Pair p = (Pair)lst;
+            return do_(me.delay(() -> fold_right(me, env, op, init, p.tail)), rest ->
+                   do_(me.apply(env, op, Pair.of(p.head, rest))));
+        }
+
+        return me.throwE(new TypeMismatch("pair", lst));
+    }
+
+    public static $<Evaluator, LispVal>
+    fold_left(Evaluator me, Env env, LispVal op, LispVal init, LispVal lst) {
+        $<Evaluator, LispVal> res = me.pure(init);
+        while (lst.isPair()) {
+            Pair p = (Pair)lst;
+            res = me.bind(res, r -> me.apply(env, op, Pair.of(r, p.head)));
+            lst = p.tail;
+        }
+        return lst.isNil() ? res : me.throwE(new TypeMismatch("pair", lst));
+    }
+
     private static $<Evaluator, Tuple<LispVal, LispVal>> cars_cdrs(Evaluator me, LispVal lists) {
         LispVal cars = Nil, cdrs = Nil;
 
@@ -737,6 +867,16 @@ public final class Primitives {
     @Name("string->symbol")
     public static Symbol string2symbol(Evaluator me, String str) {
         return me.getsym(str);
+    }
+
+    @Name("keyword->string")
+    public static String keyword2string(KeySym sym) {
+        return sym.name;
+    }
+
+    @Name("string->keyword")
+    public static KeySym string2keyword(Evaluator me, String str) {
+        return me.getkeysym(str);
     }
 
     // ---------------------------------------------------------------------
@@ -1014,6 +1154,29 @@ public final class Primitives {
 
     // ---------------------------------------------------------------------
 
+    public static LispVal box(LispVal value) {
+        return new Box(value);
+    }
+
+    @Name("box?")
+    public static boolean isBox(LispVal val) {
+        return val instanceof Box;
+    }
+
+    public static LispVal unbox(LispVal val) {
+        return (val instanceof Box) ? ((Box)val).value : val;
+    }
+
+    public static void set_box(LispVal box, LispVal value) {
+        if (box instanceof Box) {
+            ((Box)box).value = value;
+        } else {
+            throw new TypeMismatch("box", box);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+
     public static Env scheme_report_environment(Evaluator me, int version) {
         if (version != 5)
             throw new TypeMismatch("<5>", new Num(version));
@@ -1034,8 +1197,29 @@ public final class Primitives {
         return me.eval(env, exp);
     }
 
-    public static $<Evaluator, LispVal> apply(Evaluator me, Env env, LispVal func, LispVal args) {
-        return me.apply(env, func, args);
+    @VarArgs
+    public static $<Evaluator, LispVal>
+    apply(Evaluator me, Env env, LispVal func, LispVal args, LispVal rest) {
+        if (rest.isNil()) {
+            return me.apply(env, func, args);
+        }
+
+        args = Pair.of(args);
+        while (rest.isPair()) {
+            Pair p = (Pair)rest;
+            if (p.tail.isNil()) {
+                rest = p.head;
+                break;
+            } else {
+                args = new Pair(p.head, args);
+                rest = p.tail;
+            }
+        }
+
+        LispVal last = rest;
+        return do_(reverse(me, args), rev ->
+               do_(append(me, rev, last), app ->
+               me.apply(env, func, app)));
     }
 
     @Syntax
@@ -1063,6 +1247,16 @@ public final class Primitives {
     public static $<Evaluator, LispVal>
     call_with_current_continuation(Evaluator me, Env env, LispVal proc) {
         return me.callCC(env, proc);
+    }
+
+    @VarArgs
+    public static $<Evaluator, LispVal> values(Evaluator me, LispVal args) {
+        return me.values(args);
+    }
+
+    public static $<Evaluator, LispVal>
+    call_with_values(Evaluator me, Env env, LispVal producer, LispVal consumer) {
+        return me.callWithValues(env, producer, consumer);
     }
 
     @Syntax
@@ -1171,12 +1365,63 @@ public final class Primitives {
         // args ignored
     }
 
-    public static Symbol gensym(Env env) {
-        return env.newsym();
+    public static Symbol gensym(Env env, Maybe<LispVal> prefix) {
+        if (prefix.isAbsent()) {
+            return env.newsym();
+        }
+
+        LispVal x = prefix.get();
+        if (x instanceof Symbol) {
+            return env.newsym(((Symbol)x).name);
+        } else if (x instanceof Text) {
+            return env.newsym(((Text)x).value);
+        } else {
+            throw new TypeMismatch("string or symbol", x);
+        }
     }
 
     private static <A> $<Evaluator, A> badSyntax(Evaluator me, String name, LispVal val) {
         return me.throwE(new BadSpecialForm(name + ": bad syntax", val));
+    }
+
+    // ---------------------------------------------------------------------
+
+    public static $<Evaluator, LispVal> macroexpand(Evaluator me, Env ctx, LispVal form) {
+        return with(form).<$<Evaluator, LispVal>>get()
+            .when(Datum  (__ -> me.pure(form)))
+            .when(Symbol (__ -> me.pure(form)))
+            .when(Nil    (() -> me.pure(form)))
+            .when(Cons   ((first, rest) -> do_(macroexpand(me, ctx, first), tag ->
+                                           do_(expandList(me, ctx, tag, rest)))))
+            .orElseGet(() -> me.throwE(new BadSpecialForm("Unrecognized special form", form)));
+    }
+
+    private static $<Evaluator, LispVal> expandList(Evaluator me, Env ctx, LispVal tag, LispVal rest) {
+        if (tag.isSymbol()) {
+            switch(((Symbol)tag).name) {
+            case "quote":
+                return me.pure(new Pair(tag, rest));
+
+            case "quasiquote":
+                return with(rest).<$<Evaluator, LispVal>>get()
+                  .when(List(datum ->
+                    do_(me.evalUnquote(ctx.incrementQL(), datum), qexp ->
+                    macroexpand(me, ctx, qexp))))
+                  .orElseGet(() -> badSyntax(me, "quasiquote", rest));
+
+            default:
+                Maybe<LispVal> var = ctx.lookupMacro((Symbol)tag);
+                if (var.isPresent() && var.get() instanceof Macro) {
+                    Macro mac = (Macro)var.get();
+                    return Evaluator.match(ctx, mac.pattern, rest).<$<Evaluator, LispVal>>either(
+                        err -> me.throwE(err),
+                        eenv -> do_(mac.body.apply(eenv), mexp -> macroexpand(me, ctx, mexp)));
+                }
+            }
+        }
+
+        return do_(rest.mapM(me, x -> macroexpand(me, ctx, x)), els ->
+               do_(me.pure(new Pair(tag, els))));
     }
 
     // ---------------------------------------------------------------------

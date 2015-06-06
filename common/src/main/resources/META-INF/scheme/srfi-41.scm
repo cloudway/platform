@@ -1,5 +1,3 @@
-(require srfi-9)
-
 (define (exists pred args)
   (cond ((null? args) #f)
         ((pred (car args)) #t)

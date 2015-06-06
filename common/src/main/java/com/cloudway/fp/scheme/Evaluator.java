@@ -40,7 +40,6 @@ import com.cloudway.fp.parser.Stream;
 import static com.cloudway.fp.control.Conditionals.with;
 import static com.cloudway.fp.control.Syntax.do_;
 import static com.cloudway.fp.control.Syntax.let;
-import static com.cloudway.fp.control.Syntax.loop;
 import static com.cloudway.fp.data.Either.left;
 import static com.cloudway.fp.data.Either.right;
 import static com.cloudway.fp.scheme.LispError.*;
@@ -180,7 +179,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     }
 
     public $<Evaluator, LispVal> apply(Env env, LispVal func, LispVal args) {
-        return with(func).<$<Evaluator, LispVal>>get()
+        return with(func.getValue()).<$<Evaluator, LispVal>>get()
             .when(Prim(f -> f.apply(env, args)))
             .when(Func(f -> extendEnv(f.closure, f.params, args, f.body)))
             .orElseGet(() -> throwE(new NotFunction("Unrecognized function", func.show())));
@@ -197,6 +196,14 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
                       : analyzeFunctionDefinition(ctx, first, Pair.of(value))))
                   .when(Cons((first, rest) -> analyzeFunctionDefinition(ctx, first, rest)))
                   .orElseGet(() -> badSyntax("define", form));
+
+            case "define-values":
+                return with(args).<$<Evaluator, Proc>>get()
+                  .when(List((vars, exp) ->
+                    vars.isList() && vars.allMatch(LispVal::isSymbol)
+                      ? analyzeValuesDefinition(ctx, vars, exp)
+                      : badSyntax("define-values", form)))
+                  .orElseGet(() -> badSyntax("define-values", form));
 
             case "define-macro":
                 return with(args).<$<Evaluator, Proc>>get()
@@ -254,16 +261,8 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             case "letrec":
                 return analyzeLet(ctx, "letrec", args, this::translateLetrec);
 
-            case "let-optionals":
-                return with(args).<$<Evaluator, Proc>>get()
-                  .when(Cons((first, rest) ->
-                    do_(analyze(ctx, first), v ->
-                    do_(analyzeLet(ctx, "let-optionals", rest, (ps, as, b) ->
-                    translateLetOptionals(ps, as, v, b))))))
-                  .orElseGet(() -> badSyntax("let-optionals", form));
-
-            case "do":
-                return analyzeDo(ctx, args);
+            case "letrec*":
+                return analyzeLet(ctx, "letrec*", args, this::translateLetrecStar);
 
             default:
                 Maybe<LispVal> mac = ctx.lookupMacro((Symbol)tag);
@@ -287,7 +286,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     }
 
     private $<Evaluator, Proc> analyzeVariable(Symbol var) {
-        return pure(env -> env.lookup(var).either(this::pure, () -> unbound(var)));
+        return pure(env -> env.lookup(var).either(v -> pure(v.get()), () -> unbound(var)));
     }
 
     private $<Evaluator, Proc> analyzeAssignment(Env ctx, Symbol var, LispVal exp) {
@@ -296,7 +295,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     @SuppressWarnings("RedundantTypeArguments")
     private $<Evaluator, LispVal> setVar(Env env, Symbol var, Proc vproc) {
-        return env.lookupRef(var).<$<Evaluator, LispVal>>either(
+        return env.lookup(var).<$<Evaluator, LispVal>>either(
             slot -> do_(vproc.apply(env), value ->
                     do_action(() -> slot.set(value))),
             () -> unbound(var));
@@ -327,6 +326,39 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
                   pure(env -> pure(Void.VOID))))
                 : badSyntax("define-macro", first)))
             .orElseGet(() -> badSyntax("define-macro", first));
+    }
+
+    private $<Evaluator, Proc> analyzeValuesDefinition(Env ctx, LispVal vars, LispVal exp) {
+        return map(analyze(ctx, exp), vproc ->
+               env -> do_(vproc.apply(env), result ->
+                      result instanceof MultiVal
+                        ? defineValues(env, vars, ((MultiVal)result).value)
+                        : defineValues(env, vars, Pair.of(result))));
+    }
+
+    private $<Evaluator, LispVal> defineValues(Env env, LispVal vars, LispVal vals) {
+        int nvars = 0;
+        while (vars.isPair() && vals.isPair()) {
+            Pair pn = (Pair)vars, pv = (Pair)vals;
+            env.put((Symbol)pn.head, pv.head);
+            vars = pn.tail;
+            vals = pv.tail;
+            nvars++;
+        }
+
+        if (!vars.isNil()) {
+            while (vars.isPair()) {
+                nvars++;
+                vars = ((Pair)vars).tail;
+            }
+            return throwE(new NumArgs(nvars, vals));
+        }
+
+        if (!vals.isNil()) {
+            return throwE(new NumArgs(nvars, vals));
+        }
+
+        return pure(Void.VOID);
     }
 
     private $<Evaluator, Proc> analyzeLambda(Env ctx, LispVal formals, LispVal body) {
@@ -361,15 +393,17 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     }
 
     private $<Evaluator, LispVal> extendEnv(Env env, LispVal params, LispVal args, Proc proc) {
-        PMap<Symbol, Ref<LispVal>> bindings = env.getBindings();
+        Env eenv = env.extend();
         int nvars = 0;
 
         while (params.isPair() && args.isPair()) {
-            Pair   pp  = (Pair)params, pv = (Pair)args;
+            Pair   pp  = (Pair)params;
+            Pair   pv  = (Pair)args;
             Symbol var = (Symbol)pp.head;
-            bindings   = bindings.put(var, new Ref<>(pv.head));
-            params     = pp.tail;
-            args       = pv.tail;
+
+            eenv.put(var, pv.head);
+            params = pp.tail;
+            args   = pv.tail;
             nvars++;
         }
 
@@ -389,10 +423,10 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
         if (params.isSymbol()) {
             // varargs parameter
-            bindings = bindings.put((Symbol)params, new Ref<>(args));
+            eenv.put((Symbol)params, args);
         }
 
-        return proc.apply(env.extend(bindings));
+        return proc.apply(eenv);
     }
 
     public $<Evaluator, Proc> analyzeSequence(Env ctx, LispVal exps) {
@@ -487,7 +521,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return do_(analyze(ctx, exp), vproc ->
                do_(analyzeMatchClauses(ctx, spec), mproc ->
                pure(env -> do_(vproc.apply(env), val ->
-                           mproc.apply(env, val)))));
+                           mproc.apply(env, val.getValue())))));
     }
 
     private $<Evaluator, PProc> analyzeMatchClauses(Env ctx, LispVal form) {
@@ -552,7 +586,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     public static Either<LispError, Env> match(Env env, LispVal pattern, LispVal value) {
         return doMatch(pattern, value, HashPMap.empty()).map(bindings ->
-               env.extend(env.getBindings().putAll(bindings)));
+               env.extend(bindings));
     }
 
     private static Either<LispError, PMap<Symbol, Ref<LispVal>>>
@@ -610,6 +644,16 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     private static final class LetParams {
         Seq<Symbol>  vars  = Seq.nil();
         Seq<LispVal> inits = Seq.nil();
+
+        boolean add(LispVal var, LispVal init) {
+            if (var.isSymbol()) {
+                vars  = Seq.cons((Symbol)var, vars);
+                inits = Seq.cons(init, inits);
+                return true;
+            } else {
+                return false;
+            }
+        }
     }
 
     private $<Evaluator, Proc> analyzeLet(Env ctx, String name, LispVal form,
@@ -628,16 +672,9 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
         for (; p.isPair(); p = ((Pair)p).tail) {
             boolean ok = with(((Pair)p).head).<Boolean>get()
-                .when(List((var, init) -> {
-                    if (var.isSymbol()) {
-                        lp.vars = Seq.cons((Symbol)var, lp.vars);
-                        lp.inits = Seq.cons(init, lp.inits);
-                        return true;
-                    } else {
-                        return false;
-                    }
-                })).orElse(false);
-
+                .when(List((var      ) -> lp.add(var, Void.VOID)))
+                .when(List((var, init) -> lp.add(var, init)))
+                .orElse(false);
             if (!ok) {
                 return badSyntax(name, ((Pair)p).head);
             }
@@ -654,19 +691,18 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     private static $<Evaluator, LispVal>
     extendEnv(Env env, Seq<Symbol> params, Seq<LispVal> args, Proc body) {
-        PMap<Symbol, Ref<LispVal>> bindings = env.getBindings();
+        Env eenv = env.extend();
         while (!params.isEmpty()) {
-            bindings = bindings.put(params.head(), new Ref<>(args.head()));
+            eenv.put(params.head(), args.head());
             params = params.tail();
             args = args.tail();
         }
-
-        return body.apply(env.extend(bindings));
+        return body.apply(eenv);
     }
 
     private $<Evaluator, LispVal> setVariables(Env env, Seq<Symbol> params, Seq<LispVal> args) {
         while (!params.isEmpty()) {
-            env.lookupRef(params.head()).get().set(args.head());
+            env.lookup(params.head()).get().set(args.head());
             params = params.tail();
             args = args.tail();
         }
@@ -687,24 +723,9 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
                     do_(apply(eenv, f, Pair.fromList(args))))))));
     }
 
-    private $<Evaluator, Proc>
-    translateLetOptionals(Seq<Symbol> params, Seq<Proc> defaults, Proc value, Proc body) {
-        return pure(env ->
-            do_(value.apply(env), vs ->
-            do_(vs.toList(this), args -> {
-                int vlen = args.length();
-                if (vlen < params.length()) {
-                    return do_(evalM(env, defaults.drop(vlen)), dvals ->
-                           extendEnv(env, params, args.append(dvals), body));
-                } else {
-                    return extendEnv(env, params, args, body);
-                }
-            })));
-    }
-
     private $<Evaluator, Proc> translateLetStar(Seq<Symbol> params, Seq<Proc> inits, Proc body) {
-        if (params.isEmpty() || params.tail().isEmpty()) {
-            return translateLet(params, inits, body);
+        if (params.isEmpty()) {
+            return pure(env -> body.apply(env.extend()));
         } else {
             return map(translateLetStar(params.tail(), inits.tail(), body), rest ->
                    env -> do_(inits.head().apply(env), val ->
@@ -720,89 +741,11 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
                     do_(body.apply(eenv))))));
     }
 
-    // -----------------------------------------------------------------------
-
-    private static final class DoParams {
-        Seq<Symbol>  vars  = Seq.nil();
-        Seq<LispVal> inits = Seq.nil();
-        Seq<LispVal> steps = Seq.nil();
-    }
-
-    private $<Evaluator, Proc> analyzeDo(Env ctx, LispVal form) {
-        // (do ((var init step) ...)
-        //     (test finish ...)
-        //   command ...)
-        //
-        // ==>
-        //
-        // (letrec ((loop
-        //   (lambda (var ...)
-        //     (if test finish (begin command ... (loop step ...)))))
-        //   (loop init ...)))
-
-        return with(form).<$<Evaluator, Proc>>get()
-            .when(Cons((params, exit, body) ->
-              with(exit).<$<Evaluator, Proc>>get()
-                .when(Cons((test, finish) ->
-                  do_(analyzeDoParams(params), (DoParams dp) ->
-                  do_(mapM(dp.inits, x -> analyze(ctx, x)), (Seq<Proc> vprocs) ->
-                  do_(mapM(dp.steps, x -> analyzeSequence(ctx, x)), (Seq<Proc> sprocs) ->
-                  do_(analyze(ctx, test), tproc ->
-                  do_(analyzeSequence(ctx, finish), fproc ->
-                  do_(analyzeSequence(ctx.extend(), body), bproc ->
-                  pure(env -> evalDo(env, dp.vars, vprocs, sprocs, tproc, fproc, bproc))))))))))
-                .orElseGet(() -> badSyntax("do", exit))))
-            .orElseGet(() -> badSyntax("do", form));
-    }
-
-    private $<Evaluator, LispVal> evalDo(Env         env,
-                                         Seq<Symbol> vars,
-                                         Seq<Proc>   inits,
-                                         Seq<Proc>   steps,
-                                         Proc        test,
-                                         Proc        finish,
-                                         Proc        body) {
-        return do_(evalM(env, inits), vals ->
-               extendEnv(env, vars, vals, eenv ->
-               loop(again ->
-                 do_(test.apply(eenv), tval ->
-                 tval.isTrue()
-                   ? finish.apply(eenv)
-                   : do_(body.apply(eenv),
-                     do_(evalM(eenv, steps), svals ->
-                     do_(setVariables(eenv, vars, svals),
-                     again)))))));
-    }
-
-    private $<Evaluator, DoParams> analyzeDoParams(LispVal p) {
-        DoParams dp = new DoParams();
-
-        for (; p.isPair(); p = ((Pair)p).tail) {
-            boolean ok = with(((Pair)p).head).<Boolean>get()
-                .when(Cons((var, init, step) -> {
-                    if (var.isSymbol()) {
-                        dp.vars  = Seq.cons((Symbol)var, dp.vars);
-                        dp.inits = Seq.cons(init, dp.inits);
-                        dp.steps = Seq.cons(step.isNil() ? Pair.of(var) : step, dp.steps);
-                        return true;
-                    } else {
-                        return false;
-                    }
-                })).orElse(false);
-
-            if (!ok) {
-                return badSyntax("do", ((Pair)p).head);
-            }
-        }
-
-        if (p.isNil()) {
-            dp.vars  = dp.vars.reverse();
-            dp.inits = dp.inits.reverse();
-            dp.steps = dp.steps.reverse();
-            return pure(dp);
-        } else {
-            return badSyntax("do", p);
-        }
+    private $<Evaluator, Proc> translateLetrecStar(Seq<Symbol> params, Seq<Proc> inits, Proc body) {
+        return pure(env ->
+            extendEnv(env, params, params.map(Fn.pure(Void.VOID)),
+            eenv -> do_(zipM_(params, inits, (n, v) -> setVar(eenv, n, v)),
+                    do_(() -> body.apply(eenv.extend())))));
     }
 
     // -----------------------------------------------------------------------
@@ -811,7 +754,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     private final Symbol UNQ = getsym("unquote");
     private final Symbol UNQS = getsym("unquote-splicing");
 
-    private $<Evaluator, LispVal> evalUnquote(Env env, LispVal exp) {
+    public $<Evaluator, LispVal> evalUnquote(Env env, LispVal exp) {
         return with(exp).<$<Evaluator, LispVal>>get()
             .when(Pair   (__ -> unquotePair(env, exp)))
             .when(Vector (v  -> unquoteVector(env, v)))
@@ -896,10 +839,34 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     public $<Evaluator, LispVal> callCC(Env env, LispVal proc) {
         Function<Function<LispVal, $<Evaluator, LispVal>>, $<Evaluator, LispVal>> f =
-            k -> apply(env, proc, Pair.of(makeContFunc(env, k)));
+            k -> apply(env, proc, Pair.of(makeContProc(env, k)));
 
         return $(inner().<Either<LispError, LispVal>>callCC(c ->
             runExcept(f.apply(a -> $(c.escape(right(a)))))));
+    }
+
+    private static Func makeContProc(Env env, Function<LispVal, $<Evaluator, LispVal>> k) {
+        Symbol cid = env.newsym();
+        return new Func(cid, eenv -> k.apply(makeMultiVal(eenv.get(cid))), env);
+    }
+
+    public $<Evaluator, LispVal> values(LispVal args) {
+        return pure(makeMultiVal(args));
+    }
+
+    public $<Evaluator, LispVal> callWithValues(Env env, LispVal producer, LispVal consumer) {
+        return do_(apply(env, producer, Nil), result ->
+               result instanceof MultiVal
+                 ? apply(env, consumer, ((MultiVal)result).value)
+                 : apply(env, consumer, Pair.of(result)));
+    }
+
+    private static LispVal makeMultiVal(LispVal args) {
+        if (args.isPair() && ((Pair)args).tail.isNil()) {
+            return ((Pair)args).head;
+        } else {
+            return new MultiVal(args);
+        }
     }
 
     public $<Evaluator, LispVal> reset(Env env, Proc proc) {
@@ -908,13 +875,13 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     public $<Evaluator, LispVal> shift(Env env, Symbol id, Proc proc) {
         Function<Function<LispVal, $<Evaluator, LispVal>>, $<Evaluator, LispVal>> f =
-            k -> extendEnv(env, Seq.of(id), Seq.of(makeContFunc(env, k)), proc);
+            k -> extendEnv(env, Seq.of(id), Seq.of(makeShiftProc(env, k)), proc);
 
         return $(inner().<Either<LispError,LispVal>, Either<LispError,LispVal>>shift(c ->
             runExcept(f.apply(a -> $(inner().lift(c.apply(right(a))))))));
     }
 
-    private static Func makeContFunc(Env env, Function<LispVal, $<Evaluator, LispVal>> k) {
+    private static Func makeShiftProc(Env env, Function<LispVal, $<Evaluator, LispVal>> k) {
         Symbol cid = env.newsym();
         return new Func(Pair.of(cid), eenv -> k.apply(eenv.get(cid)), env);
     }
@@ -935,6 +902,10 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     public Symbol getsym(String name) {
         return parser.getsym(name);
+    }
+
+    public KeySym getkeysym(String name) {
+        return parser.getkeysym(name);
     }
 
     // =======================================================================
@@ -1129,7 +1100,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
             for (j = 0; j < nreq && args.isPair(); i++, j++) {
                 Pair p = (Pair)args;
-                Either<LispError, Object> v = required[j].apply(p.head);
+                Either<LispError, Object> v = required[j].apply(p.head.getValue());
                 if (v.isLeft())
                     return throwE(v.left());
                 res[i] = v.right();
@@ -1144,7 +1115,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
                     res[i] = Maybe.empty();
                 } else if (args.isPair()) {
                     Pair p = (Pair)args;
-                    Either<LispError,Object> v = optional[j].apply(p.head);
+                    Either<LispError,Object> v = optional[j].apply(p.head.getValue());
                     if (v.isLeft())
                         return throwE(v.left());
                     res[i] = Maybe.of(v.right());
@@ -1155,6 +1126,8 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             }
 
             if (varargs) {
+                if (!args.allMatch(x -> !(x instanceof MultiVal)))
+                    args = args.map(LispVal::getValue);
                 res[i] = args;
             } else if (!args.isNil()) {
                 return throwE(new NumArgs(nreq + nopt, args));

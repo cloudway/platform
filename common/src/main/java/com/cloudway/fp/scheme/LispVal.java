@@ -80,6 +80,29 @@ public interface LispVal {
         return false;
     }
 
+    default LispVal getValue() {
+        return this;
+    }
+
+    default LispVal map(Function<LispVal, LispVal> f) {
+        LispVal rev = Nil;
+        LispVal vals = this;
+        while (vals.isPair()) {
+            Pair p = (Pair)vals;
+            rev = new Pair(f.apply(p.head), rev);
+            vals = p.tail;
+        }
+
+        LispVal res = vals.isNil() ? Nil : f.apply(vals);
+        while (rev.isPair()) {
+            Pair p = (Pair)rev;
+            res = new Pair(p.head, res);
+            rev = p.tail;
+        }
+
+        return res;
+    }
+
     @SuppressWarnings("unchecked")
     default $<Evaluator, LispVal>
     mapM(Evaluator m, Function<LispVal, $<Evaluator, ? extends LispVal>> f) {
@@ -97,9 +120,9 @@ public interface LispVal {
     // -----------------------------------------------------------------------
     // Constructors
 
-    final class Symbol implements LispVal {
+    class Symbol implements LispVal {
         private static final Pattern INVALID_SYMCHAR =
-            Pattern.compile("[^a-z0-9!$%&*+\\-/:.<=>?@^_~]");
+            Pattern.compile("[^a-zA-Z0-9!$%&*+\\-/:.<=>?@^_~]");
 
         public final String name;
 
@@ -123,13 +146,34 @@ public interface LispVal {
         public boolean equals(Object obj) {
             if (obj == this)
                 return true;
-            if (obj instanceof Symbol)
+            if (obj.getClass() == this.getClass())
                 return name.equals(((Symbol)obj).name);
             return false;
         }
 
         public int hashCode() {
             return name.hashCode();
+        }
+    }
+
+    final class KeySym extends Symbol {
+        public KeySym(String name) {
+            super(name);
+        }
+
+        @Override
+        public boolean isSymbol() {
+            return false;
+        }
+
+        @Override
+        public boolean isSelfEvaluating() {
+            return true;
+        }
+
+        @Override
+        public String show() {
+            return super.show() + ":";
         }
     }
 
@@ -489,6 +533,67 @@ public interface LispVal {
         }
     }
 
+    final class MultiVal implements LispVal {
+        public final LispVal value;
+
+        public MultiVal(LispVal value) {
+            this.value = value;
+        }
+
+        @Override
+        public LispVal getValue() {
+            return value.isPair() ? ((Pair)value).head : Void.VOID;
+        }
+
+        @Override
+        public boolean isTrue() {
+            return getValue().isTrue();
+        }
+
+        @Override
+        public boolean isFalse() {
+            return getValue().isFalse();
+        }
+
+        @Override
+        public String show() {
+            StringJoiner sj = new StringJoiner("\n", "", "");
+            LispVal args = value;
+            while (args.isPair()) {
+                Pair p = (Pair)args;
+                sj.add(p.head.show());
+                args = p.tail;
+            }
+            return sj.toString();
+        }
+
+        public String toString() {
+            return "#MultiVal(" + value + ")";
+        }
+    }
+
+    final class Box implements LispVal {
+        public LispVal value;
+
+        public Box(LispVal value) {
+            this.value = value;
+        }
+
+        @Override
+        public boolean isSelfEvaluating() {
+            return true;
+        }
+
+        @Override
+        public String show() {
+            return "#&" + value.show();
+        }
+
+        public String toString() {
+            return "#Box(" + value + ")";
+        }
+    }
+
     final class Prim implements LispVal {
         public final String name;
         public final PProc  proc;
@@ -739,13 +844,6 @@ public interface LispVal {
     Vector(Function<Vector<LispVal>, ? extends R> mapper) {
         return t -> t instanceof Vec
             ? () -> mapper.apply(((Vec)t).value)
-            : null;
-    }
-
-    static <R> ConditionCase<LispVal, R, RuntimeException>
-    Promise(Function<Promise, ? extends R> mapper) {
-        return t -> t instanceof Promise
-            ? () -> mapper.apply((Promise)t)
             : null;
     }
 

@@ -42,9 +42,15 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
 
     private final MutablePMap<String, Symbol> symtab
         = new MutablePMap<>(HashPMap.empty());
+    private final MutablePMap<String, KeySym> keytab
+        = new MutablePMap<>(HashPMap.empty());
 
     public Symbol getsym(String name) {
         return symtab.compute(name, (k, v) -> v == null ? new Symbol(name) : v);
+    }
+
+    public KeySym getkeysym(String name) {
+        return keytab.compute(name, (k, v) -> v == null ? new KeySym(name) : v);
     }
 
     // Lexical Analyzer
@@ -56,6 +62,7 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
         RB("]"),
         DOT("."),
         VECTOR("#("),
+        BOX("#&"),
         QUOTE("'"),
         QUASIQUOTE("`"),
         UNQUOTE(","),
@@ -115,13 +122,16 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
         .literal("]",  RB)
         .literal(".",  DOT)
         .literal("#(", VECTOR)
+        .literal("#&", BOX)
         .literal("'",  QUOTE)
         .literal("`",  QUASIQUOTE)
         .literal(",",  UNQUOTE)
         .literal(",@", UNQUOTE_SPLICING)
 
-        .rule("{c}+",        s -> getsym(s.toLowerCase()))
-        .rule("\\|[^|]*\\|", s -> getsym(s.substring(1, s.length() - 1)))
+        .rule("{c}+:",        s -> getkeysym(s.substring(0, s.length() - 1)))
+        .rule("\\|[^|]*\\|:", s -> getkeysym(s.substring(1, s.length() - 2)))
+        .rule("{c}+",         s -> getsym(s))
+        .rule("\\|[^|]*\\|",  s -> getsym(s.substring(1, s.length() - 1)))
 
         .ignore("\\s+")
         .ignore(";.*")
@@ -288,7 +298,8 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
             p_simple_datum(),
             p_abbreviation(),
             p_list(),
-            p_vector())));
+            p_vector(),
+            p_box())));
     }
 
     private $<SchemeParser, LispVal> p_simple_datum() {
@@ -334,6 +345,12 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
             token(VECTOR), token(RP),
             map(manyAccum(p_expr(), Vector.empty(), Vector::snoc), Vec::new)
         );
+    }
+
+    private $<SchemeParser, LispVal> p_box() {
+        return do_(token(BOX),
+               do_(p_expr(), datum ->
+               do_(pure(new Box(datum)))));
     }
 
     private <A> $<SchemeParser, A> parens($<SchemeParser, A> p) {

@@ -6,7 +6,7 @@
 
 package com.cloudway.fp.scheme;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.cloudway.fp.data.HashPMap;
 import com.cloudway.fp.data.Maybe;
@@ -14,6 +14,12 @@ import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Ref;
 
 public final class Env implements LispVal {
+    private static final class GenSym extends Symbol {
+        public GenSym(String name) {
+            super(name);
+        }
+    }
+
     private final Ref<PMap<Symbol, Ref<Object>>>  system;
     private final Ref<PMap<Symbol, LispVal>>      macros;
     private final Ref<PMap<Symbol, Ref<LispVal>>> bindings;
@@ -28,7 +34,7 @@ public final class Env implements LispVal {
         this.bindings = new Ref<>(HashPMap.empty());
         this.quoteLevel = 0;
 
-        setSystem(SYMGEN, new AtomicInteger());
+        setSystem(SYMGEN, new AtomicLong());
     }
 
     private Env(
@@ -69,28 +75,25 @@ public final class Env implements LispVal {
         return bindings.get();
     }
 
+    public Maybe<Ref<LispVal>> lookup(Symbol id) {
+        return bindings.get().lookup(id);
+    }
+
     public LispVal get(Symbol id) {
         return bindings.get().get(id).get();
-    }
-
-    public Maybe<LispVal> lookup(Symbol id) {
-        return bindings.get().lookup(id).map(Ref::get);
-    }
-
-    public Maybe<Ref<LispVal>> lookupRef(Symbol id) {
-        return bindings.get().lookup(id);
     }
 
     public void put(Symbol id, LispVal value) {
         bindings.update(b -> b.put(id, new Ref<>(value)));
     }
 
-    public Env extend(PMap<Symbol, Ref<LispVal>> ext) {
-        return new Env(system, new Ref<>(macros.get()), new Ref<>(ext), quoteLevel);
-    }
-
     public Env extend() {
         return new Env(system, new Ref<>(macros.get()), new Ref<>(bindings.get()), quoteLevel);
+    }
+
+    public Env extend(PMap<Symbol, Ref<LispVal>> ext) {
+        ext = bindings.get().putAll(ext);
+        return new Env(system, new Ref<>(macros.get()), new Ref<>(ext), quoteLevel);
     }
 
     public int getQL() {
@@ -106,8 +109,12 @@ public final class Env implements LispVal {
     }
 
     public Symbol newsym() {
-        AtomicInteger symgen = (AtomicInteger)getSystem(SYMGEN, null).get();
-        return new Symbol(" t." + symgen.getAndIncrement());
+        return newsym("g");
+    }
+
+    public Symbol newsym(String prefix) {
+        AtomicLong symgen = (AtomicLong)getSystem(SYMGEN, null).get();
+        return new GenSym(prefix + symgen.getAndIncrement());
     }
 
     @Override
