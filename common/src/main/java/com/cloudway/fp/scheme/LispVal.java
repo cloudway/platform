@@ -6,7 +6,9 @@
 
 package com.cloudway.fp.scheme;
 
-import java.util.StringJoiner;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -19,6 +21,8 @@ import com.cloudway.fp.data.Traversable;
 import com.cloudway.fp.data.Vector;
 import com.cloudway.fp.function.ExceptionSupplier;
 import com.cloudway.fp.function.TriFunction;
+import com.cloudway.fp.io.IO;
+import com.cloudway.fp.io.IOConsumer;
 import com.cloudway.fp.scheme.LispError.TypeMismatch;
 
 /**
@@ -29,7 +33,19 @@ public interface LispVal {
     /**
      * Returns a string representation of the value.
      */
-    String show();
+    default String show() {
+        Printer pr = new Printer();
+        pr.add(this);
+        return pr.toString();
+    }
+
+    /**
+     * General purpose display procedure that may handle circular references
+     * and text substitution.
+     */
+    default void show(Printer pr) {
+        pr.add(show());
+    }
 
     /**
      * Returns true if this Lisp value represents an atom.
@@ -390,6 +406,8 @@ public interface LispVal {
             LispVal t = this;
             while (t.isPair()) {
                 t = ((Pair)t).tail;
+                if (t == this)
+                    return false;
             }
             return t.isNil();
         }
@@ -433,16 +451,18 @@ public interface LispVal {
         }
 
         @Override
-        public String show() {
+        public void show(Printer pr) {
             String abbrev = abbreviation();
             if (abbrev != null && tail.isPair()) {
                 Pair second = (Pair)tail;
                 if (second.tail.isNil()) {
-                    return abbrev + second.head.show();
+                    pr.add(abbrev);
+                    pr.add(second.head);
+                    return;
                 }
             }
 
-            return showList();
+            showList(pr);
         }
 
         private String abbreviation() {
@@ -461,22 +481,39 @@ public interface LispVal {
             return null;
         }
 
-        private String showList() {
-            StringJoiner sj = new StringJoiner(" ", "(", ")");
+        private void showList(Printer pr) {
+            Seq<LispVal> refs = Seq.nil();
 
-            LispVal t = this;
+            pr.addReference(this);
+            refs = Seq.cons(this, refs);
+            pr.add("(");
+            pr.add(head);
+
+            LispVal t = tail;
             while (t.isPair()) {
-                Pair p = (Pair)t;
-                sj.add(p.head.show());
-                t = p.tail;
+                if (pr.isReference(t)) {
+                    pr.add(" . ");
+                    pr.add(t);
+                    pr.add(")");
+                    refs.forEach(pr::removeReference);
+                    return;
+                } else {
+                    Pair p = (Pair)t;
+                    pr.add(" ");
+                    pr.addReference(t);
+                    refs = Seq.cons(t, refs);
+                    pr.add(p.head);
+                    t = p.tail;
+                }
             }
 
             if (!t.isNil()) {
-                sj.add(".");
-                sj.add(t.show());
+                pr.add(" . ");
+                pr.add(t);
             }
 
-            return sj.toString();
+            pr.add(")");
+            refs.forEach(pr::removeReference);
         }
 
         public String toString() {
@@ -497,9 +534,20 @@ public interface LispVal {
         }
 
         @Override
-        public String show() {
-            return value.foldLeft(new StringJoiner(" ", "#(", ")"),
-                (sj, x) -> sj.add(x.show())).toString();
+        public void show(Printer pr) {
+            if (value.isEmpty()) {
+                pr.add("#()");
+            } else {
+                pr.addReference(this);
+                pr.add("#(");
+                pr.add(value.head());
+                value.tail().forEach(x -> {
+                    pr.add(" ");
+                    pr.add(x);
+                });
+                pr.add(")");
+                pr.removeReference(this);
+            }
         }
 
         public String toString() {
@@ -556,15 +604,16 @@ public interface LispVal {
         }
 
         @Override
-        public String show() {
-            StringJoiner sj = new StringJoiner("\n", "", "");
+        public void show(Printer pr) {
             LispVal args = value;
             while (args.isPair()) {
                 Pair p = (Pair)args;
-                sj.add(p.head.show());
+                pr.add(p.head);
+                if (p.tail.isNil())
+                    break;
+                pr.add("\n");
                 args = p.tail;
             }
-            return sj.toString();
         }
 
         public String toString() {
@@ -585,8 +634,10 @@ public interface LispVal {
         }
 
         @Override
-        public String show() {
-            return "#&" + value.show();
+        public void show(Printer pr) {
+            pr.addReference(this);
+            pr.add("#&");
+            pr.add(value);
         }
 
         public String toString() {
@@ -631,8 +682,12 @@ public interface LispVal {
         }
 
         @Override
-        public String show() {
-            return "#<procedure:" + name + " (lambda " + params.show() + " ...)>";
+        public void show(Printer pr) {
+            pr.add("#<procedure:");
+            pr.add(name);
+            pr.add(" (lambda ");
+            pr.add(params);
+            pr.add(" ...)>");
         }
 
         public String toString() {
@@ -871,5 +926,82 @@ public interface LispVal {
     static <R, X extends Throwable> ConditionCase<LispVal, R, X>
     Void(ExceptionSupplier<R, X> mapper) {
         return t -> (t instanceof Void) ? mapper : null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Printer
+
+    class Printer {
+        private static class RefID {
+            int ref, pos;
+            boolean active;
+
+            RefID(int ref, int pos, boolean active) {
+                this.ref = ref;
+                this.pos = pos;
+                this.active = active;
+            }
+        }
+
+        private final IdentityHashMap<LispVal, RefID> references = new IdentityHashMap<>();
+        private final ArrayList<String> buffer = new ArrayList<>();
+        private int nextRefId;
+
+        public void addReference(LispVal ref) {
+            RefID refid = references.get(ref);
+            if (refid == null) {
+                references.put(ref, new RefID(-1, buffer.size(), true));
+            } else {
+                refid.active = true;
+            }
+        }
+
+        public void removeReference(LispVal ref) {
+            RefID refid = references.get(ref);
+            if (refid != null) {
+                refid.active = false;
+            }
+        }
+
+        public boolean isReference(LispVal val) {
+            RefID refid = references.get(val);
+            return refid != null && refid.active;
+        }
+
+        public void add(LispVal val) {
+            RefID refid = references.get(val);
+            if (refid != null && refid.active) {
+                if (refid.ref == -1)
+                    refid.ref = nextRefId++;
+                add("#" + refid.ref + "#");
+            } else {
+                val.show(this);
+            }
+        }
+
+        public void add(String literal) {
+            buffer.add(literal);
+        }
+
+        public void print(IOConsumer<String> out) throws IOException {
+            backfill();
+            IO.forEach(buffer, out);
+        }
+
+        public String toString() {
+            backfill();
+            StringBuilder out = new StringBuilder();
+            buffer.forEach(out::append);
+            return out.toString();
+        }
+
+        private void backfill() {
+            for (RefID refid : references.values()) {
+                if (refid.ref != -1) {
+                    String s = buffer.get(refid.pos);
+                    buffer.set(refid.pos, "#" + refid.ref + "=" + s);
+                }
+            }
+        }
     }
 }

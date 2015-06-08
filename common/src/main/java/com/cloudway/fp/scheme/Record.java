@@ -6,8 +6,6 @@
 
 package com.cloudway.fp.scheme;
 
-import java.util.StringJoiner;
-
 /**
  * SRFI-9 record type.
  */
@@ -30,31 +28,39 @@ public class Record implements LispVal {
     }
 
     @Override
-    public String show() {
-        return "#" + getRecordName() + getRecordFields();
+    public void show(Printer pr) {
+        pr.addReference(this);
+        pr.add("#");
+        addRecordName(pr);
+        pr.add("(");
+        addRecordFields(pr);
+        pr.add(")");
     }
 
-    private String getRecordName() {
-        return ((Record)fields[RECORD_TYPE]).fields[RECORD_NAME].show();
+    private void addRecordName(Printer pr) {
+        pr.add(((Record)fields[RECORD_TYPE]).fields[RECORD_NAME]);
     }
 
-    private String getRecordFields() {
-        StringJoiner sj = new StringJoiner(" ", "(", ")");
+    private void addRecordFields(Printer pr) {
         for (int i = 1; i < fields.length; i++) {
-            sj.add(fields[i].show());
+            if (i != 1)
+                pr.add(" ");
+            pr.add(fields[i]);
         }
-        return sj.toString();
     }
 
     @Name("record?")
+    @SuppressWarnings("unused")
     public static boolean isRecord(LispVal x) {
         return x instanceof Record;
     }
 
+    @SuppressWarnings("unused")
     public static LispVal make_record(int size) {
         return new Record(size);
     }
 
+    @SuppressWarnings("unused")
     public static LispVal record_ref(LispVal rec, int i) {
         if (!(rec instanceof Record))
             throw new LispError.TypeMismatch("record", rec);
@@ -62,6 +68,7 @@ public class Record implements LispVal {
     }
 
     @Name("record-set!")
+    @SuppressWarnings("unused")
     public static void record_set(LispVal rec, int i, LispVal x) {
         if (!(rec instanceof Record))
             throw new LispError.TypeMismatch("record", rec);

@@ -57,8 +57,10 @@ public class REPL implements Completor{
             },
 
             res -> {
-                if (!(res instanceof LispVal.Void))
-                    System.out.println(res.show());
+                if (!(res instanceof LispVal.Void)) {
+                    Primitives.write(res);
+                    System.out.println();
+                }
                 return null;
             }
         );

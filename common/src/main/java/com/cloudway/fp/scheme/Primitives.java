@@ -16,7 +16,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.StringJoiner;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 
@@ -1167,6 +1166,7 @@ public final class Primitives {
         return (val instanceof Box) ? ((Box)val).value : val;
     }
 
+    @Name("set-box!")
     public static void set_box(LispVal box, LispVal value) {
         if (box instanceof Box) {
             ((Box)box).value = value;
@@ -1297,18 +1297,21 @@ public final class Primitives {
             return me.throwE(new NumArgs(1, args));
         }
 
-        StringJoiner buf = new StringJoiner(" ");
-        if (caller != null)
-            buf.add(caller.show() + ":");
-        buf.add(message);
+        Printer pr = new Printer();
+        if (caller != null) {
+            pr.add(caller);
+            pr.add(": ");
+        }
+        pr.add(message);
         while (args.isPair()) {
             Pair p = (Pair)args;
-            buf.add(p.head.show());
+            pr.add(" ");
+            pr.add(p.head);
             args = p.tail;
         }
 
         return args.isNil()
-            ? me.throwE(new LispError(buf.toString()))
+            ? me.throwE(new LispError(pr.toString()))
             : me.throwE(new TypeMismatch("pair", args));
     }
 
@@ -1451,15 +1454,40 @@ public final class Primitives {
     }
 
     public static void write(LispVal val) {
-        System.out.print(val.show());
+        Printer pr = new Printer();
+        pr.add(val);
+        pr.print(System.out::print);
     }
 
     public static void display(LispVal val) {
-        if (val instanceof Text) {
-            System.out.print(((Text)val).value);
-        } else {
-            System.out.print(val.show());
+        String text = getText(val);
+        if (text != null) {
+            System.out.print(text);
+            return;
         }
+
+        Printer pr = new Printer() {
+            @Override
+            public void add(LispVal v) {
+                String t = getText(v);
+                if (t != null) {
+                    super.add(t);
+                } else {
+                    super.add(v);
+                }
+            }
+        };
+
+        pr.add(val);
+        pr.print(System.out::print);
+    }
+
+    private static String getText(LispVal val) {
+        if (val instanceof Text)
+            return ((Text)val).value;
+        if (val instanceof Char)
+            return (String.valueOf(((Char)val).value));
+        return null;
     }
 
     public static void newline() {
