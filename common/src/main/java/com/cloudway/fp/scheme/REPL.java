@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.Reader;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -21,6 +22,7 @@ import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.scheme.LispVal.Symbol;
+import com.cloudway.fp.scheme.LispVal.Printer;
 import jline.Completor;
 import jline.ConsoleReader;
 
@@ -58,8 +60,14 @@ public class REPL implements Completor{
 
             res -> {
                 if (!(res instanceof LispVal.Void)) {
-                    Primitives.write(res);
-                    System.out.println();
+                    try {
+                        Printer pr = new Printer();
+                        pr.add(res);
+                        pr.print(System.out::print);
+                        System.out.println();
+                    } catch (IOException ex) {
+                        throw new UncheckedIOException(ex);
+                    }
                 }
                 return null;
             }

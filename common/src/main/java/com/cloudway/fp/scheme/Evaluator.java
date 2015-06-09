@@ -35,7 +35,6 @@ import com.cloudway.fp.data.Tuple;
 import com.cloudway.fp.data.Vector;
 import com.cloudway.fp.function.TriFunction;
 import com.cloudway.fp.parser.ParseError;
-import com.cloudway.fp.parser.Stream;
 
 import static com.cloudway.fp.control.Conditionals.with;
 import static com.cloudway.fp.control.Syntax.do_;
@@ -62,6 +61,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
         reportEnv = new Env();
         loadPrimitives(reportEnv, Primitives.class);
+        loadPrimitives(reportEnv, IOPrimitives.class);
         loadLib(reportEnv, STDLIB).getOrThrow(Fn.id());
     }
 
@@ -122,21 +122,16 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return (Env)env.getSystem(INTERACTION_ENV, env).get();
     }
 
-    public Either<ParseError, Seq<LispVal>> parse(String name, Stream<LispVal> input) {
-        return parser.parse(name, input);
+    public SchemeParser getParser() {
+        return parser;
     }
 
     public Either<ParseError, Seq<LispVal>> parse(String input) {
-        return parse("", parser.getStream(input));
+        return parser.parse("", parser.getStream(input));
     }
 
     public Either<ParseError, Seq<LispVal>> parse(String name, Reader input) {
-        return parse(name, parser.getStream(input));
-    }
-
-    public $<Evaluator, LispVal> read(Reader input) {
-        return parser.parseExpr(parser.getStream(input)).<$<Evaluator, LispVal>>either(
-            err -> throwE(new LispError.Parser(err)), this::pure);
+        return parser.parse(name, parser.getStream(input));
     }
 
     public Either<LispError, LispVal> run(Env env, Either<ParseError, Seq<LispVal>> form) {

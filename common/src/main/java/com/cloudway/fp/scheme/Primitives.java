@@ -1449,58 +1449,6 @@ public final class Primitives {
         }
     }
 
-    public static $<Evaluator, LispVal> read(Evaluator me) {
-        return me.read(new InputStreamReader(System.in));
-    }
-
-    public static void write(LispVal val) {
-        Printer pr = new Printer();
-        pr.add(val);
-        pr.print(System.out::print);
-    }
-
-    public static void display(LispVal val) {
-        String text = getText(val);
-        if (text != null) {
-            System.out.print(text);
-            return;
-        }
-
-        Printer pr = new Printer() {
-            @Override
-            public void add(LispVal v) {
-                String t = getText(v);
-                if (t != null) {
-                    super.add(t);
-                } else {
-                    super.add(v);
-                }
-            }
-        };
-
-        pr.add(val);
-        pr.print(System.out::print);
-    }
-
-    private static String getText(LispVal val) {
-        if (val instanceof Text)
-            return ((Text)val).value;
-        if (val instanceof Char)
-            return (String.valueOf(((Char)val).value));
-        return null;
-    }
-
-    public static void newline() {
-        System.out.println();
-    }
-
-    public static void print(LispVal val) {
-        display(val);
-        newline();
-    }
-
-    // ---------------------------------------------------------------------
-
     public static void import_library(Evaluator me, Env env, String cls) {
         try {
             me.loadPrimitives(env, Class.forName(cls));
