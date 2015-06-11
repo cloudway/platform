@@ -6,8 +6,6 @@
 
 package com.cloudway.fp.scheme;
 
-import com.cloudway.fp.parser.ParseError;
-
 @SuppressWarnings("serial")
 public class LispError extends RuntimeException {
     public LispError(String message) {
@@ -67,13 +65,30 @@ public class LispError extends RuntimeException {
     }
 
     public static class Parser extends LispError {
-        public Parser(ParseError err) {
-            super(err);
+        public final String filename;
+        public final int line, column;
+
+        public Parser(String filename, int line, int column, String message) {
+            super(message);
+            this.filename = filename;
+            this.line = line;
+            this.column = column;
         }
 
         @Override
-        public ParseError getCause() {
-            return (ParseError)super.getCause();
+        public String getMessage() {
+            StringBuilder sb = new StringBuilder();
+            if (filename != null && !filename.isEmpty()) {
+                sb.append('"').append(filename).append("\" ");
+            }
+            if (line != -1 && column != -1) {
+                sb.append("(line ").append(line);
+                sb.append(", column ").append(column);
+                sb.append(")");
+            }
+            sb.append("\n");
+            sb.append(super.getMessage());
+            return sb.toString();
         }
     }
 

@@ -98,6 +98,57 @@ public class SchemeTest {
     }
 
     @Test
+    public void curlyInfixListText() {
+        nfx("{n <= 5}", "(<= n 5)");
+        nfx("{x + 1}", "(+ x 1)");
+        nfx("{a + b + c}", "(+ a b c)");
+        nfx("{x ,op y ,op z}", "(,op x y z)");
+        nfx("{x eqv? `a}", "(eqv? x `a)");
+        nfx("{'a eq? b}", "(eq? 'a b)");
+        nfx("{n-1 + n-2}", "(+ n-1 n-2)");
+        nfx("{a * {b + c}}", "(* a (+ b c))");
+        nfx("{a + {b - c}}", "(+ a (- b c))");
+        nfx("{{a + b} - c}", "(- (+ a b) c)");
+        nfx("{{a > 0} and {b >= 1}}", "(and (> a 0) (>= b 1))");
+        nfx("{}", "()");
+        nfx("{5}", "5");
+        nfx("{- x}", "(- x)");
+        nfx("{length(x) >= 6}", "(>= (length x) 6)");
+        nfx("{f(x) + g(y) + h(z)}", "(+ (f x) (g y) (h z))");
+        nfx("{(f a b) + (g h)}", "(+ (f a b) (g h))");
+        nfx("{f(a b) + g(h)}", "(+ (f a b) (g h))");
+        nfx("'{a + f(b) + x}", "'(+ a (f b) x)");
+        nfx("{(- a) / b}", "(/ (- a) b)");
+        nfx("{-(a) / b}", "(/ (- a) b)");
+        nfx("{cos(q)}", "(cos q)");
+        nfx("{e{}}", "(e)");
+        nfx("{pi()}", "(pi)");
+        nfx("{'f(x)}", "'(f x)");
+        nfx("{ (f (g h(x))) }", "(f (g (h x)))");
+        nfx("{#(1 2 f(a) 4)}", "#(1 2 (f a) 4)");
+        nfx("{(f #;g(x) h(x))}", "(f (h x))");
+        nfx("{(map - ns)}", "(map - ns)");
+        nfx("{map(- ns)}", "(map - ns)");
+        nfx("{n * factorial{n - 1}}", "(* n (factorial (- n 1)))");
+        nfx("{2 * sin{- x}}", "(* 2 (sin (- x)))");
+        nfx("{3 + 4 +}", "($nfx$ 3 + 4 +)");
+        nfx("{3 + 4 + 5 +}", "($nfx$ 3 + 4 + 5 +)");
+        nfx("{a . z}", "($nfx$ a . z)");
+        nfx("{a + b - c}", "($nfx$ a + b - c)");
+        nfx("{read(. options)}", "(read . options)");
+        nfx("{a(x)(y)}", "((a x) y)");
+        nfx("{x[a]}", "($bracket-apply$ x a)");
+        nfx("{y[a b]}", "($bracket-apply$ y a b)");
+        nfx("{f{n - 1}(x)}", "((f (- n 1)) x)");
+        nfx("{f{n - 1}{y - 1}}", "((f (- n 1)) (- y 1))");
+        nfx("{f{- x}[y]}", "($bracket-apply$ (f (- x)) y)");
+    }
+
+    private void nfx(String expression, String expected) {
+        assertEquals(expected, eval("'" + expression).show());
+    }
+
+    @Test
     public void macroTest() {
         eval("(require macro-test)");
     }

@@ -34,7 +34,6 @@ import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.data.Tuple;
 import com.cloudway.fp.data.Vector;
 import com.cloudway.fp.function.TriFunction;
-import com.cloudway.fp.parser.ParseError;
 
 import static com.cloudway.fp.control.Conditionals.with;
 import static com.cloudway.fp.control.Syntax.do_;
@@ -126,27 +125,25 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return parser;
     }
 
-    public Either<ParseError, Seq<LispVal>> parse(String input) {
-        return parser.parse("", parser.getStream(input));
+    public Seq<Either<LispError, LispVal>> parse(String input) {
+        return parser.parse(input);
     }
 
-    public Either<ParseError, Seq<LispVal>> parse(String name, Reader input) {
-        return parser.parse(name, parser.getStream(input));
+    public Seq<Either<LispError, LispVal>> parse(String name, Reader input) {
+        return parser.parse(name, input);
     }
 
-    public Either<LispError, LispVal> run(Env env, Either<ParseError, Seq<LispVal>> form) {
-        if (form.isLeft()) {
-            return left(new LispError.Parser(form.left()));
-        } else {
-            return runSequence(env, form.right());
-        }
-    }
-
-    private Either<LispError, LispVal> runSequence(Env env, Seq<LispVal> exps) {
+    public Either<LispError, LispVal> run(Env env, Seq<Either<LispError, LispVal>> exps) {
         Either<LispError, LispVal> res = right(Void.VOID);
         while (!exps.isEmpty() && res.isRight()) {
-            res = Trampoline.run(ContT.eval(runExcept(eval(env, exps.head()))));
-            exps = exps.tail();
+            Either<LispError, LispVal> exp = exps.head();
+            if (exp.isLeft()) {
+                res = exp;
+                break;
+            } else {
+                res = Trampoline.run(ContT.eval(runExcept(eval(env, exp.right()))));
+                exps = exps.tail();
+            }
         }
         return res;
     }
@@ -185,11 +182,15 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             switch (((Symbol)tag).name) {
             case "define":
                 return with(args).<$<Evaluator, Proc>>get()
-                  .when(List((first, value) ->
+                  .when(List(id -> id.isSymbol()
+                      ? analyzeVariableDefinition(ctx, (Symbol)id, Void.VOID)
+                      : badSyntax("define", form)))
+                  .when(List((first, exp) ->
                     first.isSymbol()
-                      ? analyzeVariableDefinition(ctx, (Symbol)first, value)
-                      : analyzeFunctionDefinition(ctx, first, Pair.of(value))))
-                  .when(Cons((first, rest) -> analyzeFunctionDefinition(ctx, first, rest)))
+                      ? analyzeVariableDefinition(ctx, (Symbol)first, exp)
+                      : analyzeFunctionDefinition(ctx, first, Pair.of(exp))))
+                  .when(Cons((first, rest) ->
+                      analyzeFunctionDefinition(ctx, first, rest)))
                   .orElseGet(() -> badSyntax("define", form));
 
             case "define-values":
@@ -212,10 +213,14 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
             case "set!":
                 return with(args).<$<Evaluator, Proc>>get()
-                  .when(List((id, exp) ->
-                    id.isSymbol() ? analyzeAssignment(ctx, (Symbol)id, exp)
-                                  : badSyntax("set!", form)))
-                  .orElseGet(() -> badSyntax("set!", form));
+                  .when(List((first, exp) ->
+                    with(first).<$<Evaluator, Proc>>get()
+                      .when(Symbol(id ->
+                        analyzeAssignment(ctx, id, exp)))
+                      .when(Cons((proc, pargs) ->
+                        analyzeGetterWithSetter(ctx, proc, pargs, exp)))
+                      .orElseGet(() -> badSyntax("set!", args))))
+                  .orElseGet(() -> badSyntax("set!", args));
 
             case "if":
                 return with(args).<$<Evaluator, Proc>>get()
@@ -286,6 +291,12 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     private $<Evaluator, Proc> analyzeAssignment(Env ctx, Symbol var, LispVal exp) {
         return map(analyze(ctx, exp), vproc -> env -> setVar(env, var, vproc));
+    }
+
+    private $<Evaluator, Proc> analyzeGetterWithSetter(Env ctx, LispVal proc, LispVal args, LispVal exp) {
+        LispVal setter = Pair.of(getsym("setter"), proc);
+        return do_(Primitives.append(this, args, Pair.of(exp)), sargs ->
+               do_(analyze(ctx, new Pair(setter, sargs))));
     }
 
     @SuppressWarnings("RedundantTypeArguments")

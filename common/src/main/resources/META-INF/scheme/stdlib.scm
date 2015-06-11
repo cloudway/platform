@@ -549,7 +549,6 @@
         (error "modifier applied to bad value" type tag thing)))))
 
 ; Definition of DEFINE-RECORD-TYPE
-
 (define-macro (define-record-type type (constructor . constructor-tags) predicate . field-specs)
   `(begin
      (define ,type
@@ -566,6 +565,59 @@
                    (define ,accessor (record-accessor ,type ',field-tag))
                    (define ,modifier (record-modifier ,type ',field-tag)))))
             field-specs)))
+
+; SRFI 17: Generalized set!
+(define setter
+  (let ((setters '()))
+    (letrec ((setter
+               (lambda (proc)
+                 (let ((probe (assv proc setters)))
+                   (if probe
+                       (cdr probe)
+                       (error "No setter for" proc)))))
+             (set-setter!
+               (lambda (proc setter)
+                 (set! setters (cons (cons proc setter) setters)))))
+      (set-setter! setter set-setter!)
+      setter)))
+
+(define (getter-with-setter get set)
+  (let ((proc (lambda args (apply get args))))
+    (set! (setter proc) set)
+    proc))
+
+(set! (setter car) set-car!)
+(set! (setter cdr) set-cdr!)
+(set! (setter caar) (lambda (x v) (set-car! (car x) v)))
+(set! (setter cadr) (lambda (x v) (set-car! (cdr x) v)))
+(set! (setter cdar) (lambda (x v) (set-cdr! (car x) v)))
+(set! (setter cddr) (lambda (x v) (set-cdr! (cdr x) v)))
+(set! (setter caaar) (lambda (x v) (set-car! (caar x) v)))
+(set! (setter caadr) (lambda (x v) (set-car! (cadr x) v)))
+(set! (setter cadar) (lambda (x v) (set-car! (cdar x) v)))
+(set! (setter caddr) (lambda (x v) (set-car! (cddr x) v)))
+(set! (setter cdaar) (lambda (x v) (set-cdr! (caar x) v)))
+(set! (setter cdadr) (lambda (x v) (set-cdr! (cadr x) v)))
+(set! (setter cddar) (lambda (x v) (set-cdr! (cdar x) v)))
+(set! (setter cdddr) (lambda (x v) (set-cdr! (cddr x) v)))
+(set! (setter caaaar) (lambda (x v) (set-car! (caaar x) v)))
+(set! (setter caaadr) (lambda (x v) (set-car! (caadr x) v)))
+(set! (setter caadar) (lambda (x v) (set-car! (cadar x) v)))
+(set! (setter caaddr) (lambda (x v) (set-car! (caddr x) v)))
+(set! (setter cadaar) (lambda (x v) (set-car! (cdaar x) v)))
+(set! (setter cadadr) (lambda (x v) (set-car! (cdadr x) v)))
+(set! (setter caddar) (lambda (x v) (set-car! (cddar x) v)))
+(set! (setter cadddr) (lambda (x v) (set-car! (cdddr x) v)))
+(set! (setter cdaaar) (lambda (x v) (set-cdr! (caaar x) v)))
+(set! (setter cdaadr) (lambda (x v) (set-cdr! (caadr x) v)))
+(set! (setter cdadar) (lambda (x v) (set-cdr! (cadar x) v)))
+(set! (setter cdaddr) (lambda (x v) (set-cdr! (caddr x) v)))
+(set! (setter cddaar) (lambda (x v) (set-cdr! (cdaar x) v)))
+(set! (setter cddadr) (lambda (x v) (set-cdr! (cdadr x) v)))
+(set! (setter cdddar) (lambda (x v) (set-cdr! (cddar x) v)))
+(set! (setter cddddr) (lambda (x v) (set-cdr! (cdddr x) v)))
+(set! (setter vector-ref) vector-set!)
+(set! (setter string-ref) string-set!)
 
 ; SRFI 26: Notation for Specializing Parameters without Currying
 (define-macro (cut . form)

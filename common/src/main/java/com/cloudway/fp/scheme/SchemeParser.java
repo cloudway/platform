@@ -8,10 +8,9 @@ package com.cloudway.fp.scheme;
 
 import java.io.Reader;
 import java.math.BigInteger;
-import java.util.function.Predicate;
+import java.util.function.BiFunction;
+import java.util.function.Supplier;
 
-import com.cloudway.fp.$;
-import com.cloudway.fp.control.Trampoline;
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.HashPMap;
@@ -20,24 +19,16 @@ import com.cloudway.fp.data.MutablePMap;
 import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Rational;
 import com.cloudway.fp.data.Seq;
-import com.cloudway.fp.data.Unit;
 import com.cloudway.fp.data.Vector;
-import com.cloudway.fp.parser.GenParserTC;
 import com.cloudway.fp.parser.LexBuilder;
 import com.cloudway.fp.parser.Lexer;
-import com.cloudway.fp.parser.ParseError;
-import com.cloudway.fp.parser.Stream;
+import com.cloudway.fp.parser.Scanner;
 
-import static com.cloudway.fp.control.Syntax.do_;
 import static com.cloudway.fp.scheme.SchemeParser.Token.*;
 
 // @formatter:off
 
-public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Trampoline.µ> {
-    public SchemeParser() {
-        super(Trampoline.tclass);
-    }
-
+public class SchemeParser {
     // Symbol table
 
     private final MutablePMap<String, Symbol> symtab
@@ -56,17 +47,29 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
     // Lexical Analyzer
 
     enum Token implements LispVal {
-        LP("("),
-        RP(")"),
-        LB("["),
-        RB("]"),
+        EOI("end of input"),
+
+        SYMBOL("symbol"),
+
+        LP("("), RP(")"),
+        LB("["), RB("]"),
+        LC("{"), RC("}"),
+
+        SLP(" ("),
+        SLB(" ["),
+        SLC(" {"),
+
         DOT("."),
         VECTOR("#("),
         BOX("#&"),
+
         QUOTE("'"),
         QUASIQUOTE("`"),
         UNQUOTE(","),
-        UNQUOTE_SPLICING(",@");
+        UNQUOTE_SPLICING(",@"),
+
+        DIRECTIVE("#!"),
+        COMMENT("#;");
 
         private final String name;
 
@@ -84,7 +87,7 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
         }
     }
 
-    private final Lexer<LispVal> lexer = new LexBuilder<LispVal>()
+    private static final Lexer<LispVal> lexer = new LexBuilder<LispVal>()
         .macro("symbol",    "[!$%&*+\\-/:.<=>?@^_~]")
         .macro("letter",    "[a-zA-Z]")
         .macro("digit",     "[0-9]")
@@ -116,22 +119,33 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
 
         .action("\"", SchemeParser::parseString)
 
+        // These rules are used in parsing curly-infix-expressions. In some
+        // lexical construct the whitespace characters are significant,
+        // e.g. 'sin(x)' is different from 'sin (x)'
+        .rule("\\s\\(", Fn.pure(SLP))
+        .rule("\\s\\[", Fn.pure(SLB))
+        .rule("\\s\\{", Fn.pure(SLC))
+
         .literal("(",  LP)
         .literal(")",  RP)
         .literal("[",  LB)
         .literal("]",  RB)
+        .literal("{",  LC)
+        .literal("}",  RC)
+
         .literal(".",  DOT)
         .literal("#(", VECTOR)
         .literal("#&", BOX)
+
         .literal("'",  QUOTE)
         .literal("`",  QUASIQUOTE)
         .literal(",",  UNQUOTE)
         .literal(",@", UNQUOTE_SPLICING)
 
-        .rule("{c}+:",        s -> getkeysym(s.substring(0, s.length() - 1)))
-        .rule("\\|[^|]*\\|:", s -> getkeysym(s.substring(1, s.length() - 2)))
-        .rule("{c}+",         s -> getsym(s))
-        .rule("\\|[^|]*\\|",  s -> getsym(s.substring(1, s.length() - 1)))
+        .rule("({c}*|\\|[^|]*\\|)+", Fn.pure(SYMBOL))
+
+        .literal("#;",  COMMENT)
+        .rule("#!{c}+", Fn.pure(DIRECTIVE))
 
         .ignore("\\s+")
         .ignore(";.*")
@@ -269,105 +283,358 @@ public class SchemeParser extends GenParserTC<SchemeParser, LispVal, Unit, Tramp
         return Maybe.empty();
     }
 
-    public Stream<LispVal> getStream(String input) {
-        return lexer.getTokenStream(input);
-    }
-
-    public Stream<LispVal> getStream(Reader input) {
-        return lexer.getTokenStream(input);
-    }
-
     // Syntax Parser
 
-    private final $<SchemeParser, Seq<LispVal>> goal = p_toplevel();
-
-    public Either<ParseError, Seq<LispVal>> parse(String name, Stream<LispVal> input) {
-        return Trampoline.run(runParser(goal, Unit.U, name, input));
+    public Seq<Either<LispError, LispVal>> parse(String name, Reader input) {
+        Parser parser = new Parser(name, lexer.getScanner(input));
+        return parser.p_top_level();
     }
 
-    public Either<ParseError, LispVal> parseExpr(Stream<LispVal> input) {
-        return Trampoline.run(runParser(p_expr(), Unit.U, "", input));
+    public Seq<Either<LispError, LispVal>> parse(String input) {
+        Parser parser = new Parser("", lexer.getScanner(input));
+        return parser.p_top_level();
     }
 
-    private $<SchemeParser, Seq<LispVal>> p_toplevel() {
-        return seqL(many(p_expr()), eof());
+    public Either<LispError, LispVal> parseExpr(Reader input) {
+        try {
+            Parser parser = new Parser("", lexer.getScanner(input));
+            return Either.right(parser.p_expression());
+        } catch (LispError ex) {
+            return Either.left(ex);
+        } catch (Exception ex) {
+            return Either.left(new LispError(ex));
+        }
     }
 
-    private $<SchemeParser, LispVal> p_expr() {
-        return label("expression", delay(() -> choice(
-            p_simple_datum(),
-            p_abbreviation(),
-            p_list(),
-            p_vector(),
-            p_box())));
-    }
+    private final class Parser {
+        private final String filename;
+        private final Scanner<LispVal> scanner;
+        private LispVal token;
 
-    private $<SchemeParser, LispVal> p_simple_datum() {
-        return label("", choice(
-            token(Symbol.class),
-            token(Text.class),
-            token(Num.class),
-            token(Bool.class),
-            token(Char.class)
-        ));
-    }
+        private boolean foldcase = false;
 
-    private $<SchemeParser, LispVal> p_abbreviation() {
-        return choice(
-            do_(token(QUOTE),
-            do_(p_expr(), datum -> pure(list(getsym("quote"), datum))))
-            ,
-            do_(token(QUASIQUOTE),
-            do_(p_expr(), datum -> pure(list(getsym("quasiquote"), datum))))
-            ,
-            do_(token(UNQUOTE),
-            do_(p_expr(), datum -> pure(list(getsym("unquote"), datum))))
-            ,
-            do_(token(UNQUOTE_SPLICING),
-            do_(p_expr(), datum -> pure(list(getsym("unquote-splicing"), datum))))
-        );
-    }
+        public Parser(String filename, Scanner<LispVal> scanner) {
+            this.filename = filename;
+            this.scanner = scanner;
+        }
 
-    private $<SchemeParser, LispVal> p_list() {
-        return parens(choice(
-            do_(someAccum(p_expr(), Seq.<LispVal>nil(), Fn.flip(Seq::cons)), hd ->
-            do_(dotted(), tl -> pure(hd.foldLeft(tl, Fn.flip(Pair::new)))))
-            ,
-            pure(LispVal.Nil)));
-    }
+        private void advance() {
+            if (scanner.hasNext()) {
+                token = scanner.next();
+            } else {
+                token = EOI;
+            }
+        }
 
-    private $<SchemeParser, LispVal> dotted() {
-        return choice(do_(token(DOT), p_expr()), pure(LispVal.Nil));
-    }
+        private <A> A error(String message) {
+            throw new LispError.Parser(filename, scanner.line(), scanner.column(), message);
+        }
 
-    private $<SchemeParser, LispVal> p_vector() {
-        return between(
-            token(VECTOR), token(RP),
-            map(manyAccum(p_expr(), Vector.empty(), Vector::snoc), Vec::new)
-        );
-    }
+        private <A> A expect(String name) {
+            return error("unexpected " + token.show() + ", expecting " + name);
+        }
 
-    private $<SchemeParser, LispVal> p_box() {
-        return do_(token(BOX),
-               do_(p_expr(), datum ->
-               do_(pure(new Box(datum)))));
-    }
+        private void scan(Supplier<LispVal> pexp) {
+            advance();
 
-    private <A> $<SchemeParser, A> parens($<SchemeParser, A> p) {
-        return choice(between(token(LP), token(RP), p),
-                      between(token(LB), token(RB), p));
-    }
+            while (true) {
+                if (token == COMMENT) {
+                    advance();
+                    pexp.get();
+                } else if (token == DIRECTIVE) {
+                    process_directive(scanner.text().substring(2));
+                    advance();
+                } else {
+                    return;
+                }
+            }
+        }
 
-    @Override
-    public $<SchemeParser, LispVal> satisfy(Predicate<? super LispVal> p) {
-        return tokenPrim(p, LispVal::show);
-    }
+        private void process_directive(String directive) {
+            switch (directive) {
+            case "fold-case":
+                foldcase = true;
+                break;
 
-    private static LispVal list(Symbol id, LispVal arg) {
-        return Pair.of(id, arg);
-    }
+            case "no-fold-case":
+                foldcase = false;
+                break;
 
-    private static LispVal list(Symbol id, Seq<LispVal> args) {
-        return Pair.fromList(Seq.cons(id, args));
+            default:
+                // ignore unknown directive
+            }
+        }
+
+        private boolean scan(Token t, Supplier<LispVal> pexp) {
+            if (token == t) {
+                scan(pexp);
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        private void expect(Token t, Supplier<LispVal> pexp) {
+            if (token == t) {
+                scan(pexp);
+            } else {
+                expect(t.show());
+            }
+        }
+
+        public Seq<Either<LispError, LispVal>> p_top_level() {
+            try {
+                if (token == null)
+                    scan(this::p_expression);
+
+                if (token == EOI)
+                    return Seq.nil();
+
+                return Seq.cons(Either.right(p_expression()), this::p_top_level);
+            } catch (LispError ex) {
+                return Seq.of(Either.left(ex));
+            } catch (Exception ex) {
+                return Seq.of(Either.left(new LispError(ex)));
+            }
+        }
+
+        public LispVal p_expression() {
+            return p_term(this::p_expression);
+        }
+
+        private LispVal p_term(Supplier<LispVal> pexp) {
+            if (token instanceof Token) {
+                switch ((Token)token) {
+                case SYMBOL:
+                    return p_symbol(pexp);
+
+                case QUOTE:
+                case QUASIQUOTE:
+                case UNQUOTE:
+                case UNQUOTE_SPLICING:
+                    return p_abbreviation(pexp);
+
+                case VECTOR:
+                    scan(pexp);
+                    return p_vector(pexp);
+
+                case BOX:
+                    scan(pexp);
+                    return p_box(pexp);
+
+                case LP: case SLP:
+                    scan(pexp);
+                    return p_list(pexp, RP);
+
+                case LB: case SLB:
+                    scan(pexp);
+                    return p_list(pexp, RB);
+
+                case LC: case SLC:
+                    scan(pexp);
+                    return p_curly_infix_list();
+
+                default:
+                    return expect("expression");
+                }
+            } else {
+                LispVal val = token;
+                scan(pexp);
+                return val;
+            }
+        }
+
+        private LispVal p_symbol(Supplier<LispVal> pexp) {
+            String text = scanner.text();
+
+            boolean keyword;
+            if (keyword = text.endsWith(":")) {
+                text = text.substring(0, text.length() - 1);
+            }
+
+            if (text.indexOf('|') != -1) {
+                int len = text.length();
+                StringBuilder buf = new StringBuilder(len);
+                boolean q = false;
+
+                for (int i = 0; i < len; i++) {
+                    char c = text.charAt(i);
+                    if (c == '|') {
+                        q = !q;
+                    } else if (q || !foldcase) {
+                        buf.append(c);
+                    } else {
+                        buf.append(Character.toLowerCase(c));
+                    }
+                }
+                text = buf.toString();
+            } else {
+                if (foldcase) {
+                    text = text.toLowerCase();
+                }
+            }
+
+            scan(pexp);
+            return keyword ? getkeysym(text) : getsym(text);
+        }
+
+        private LispVal p_abbreviation(Supplier<LispVal> pexp) {
+            String tag;
+
+            switch ((Token)token) {
+            case QUOTE:
+                tag = "quote";
+                break;
+
+            case QUASIQUOTE:
+                tag = "quasiquote";
+                break;
+
+            case UNQUOTE:
+                tag = "unquote";
+                break;
+
+            case UNQUOTE_SPLICING:
+                tag = "unquote-splicing";
+                break;
+
+            default:
+                throw new Error();
+            }
+
+            scan(pexp);
+            return Pair.of(getsym(tag), pexp.get());
+        }
+
+        private LispVal p_vector(Supplier<LispVal> pexp) {
+            Vector<LispVal> vec = Vector.empty();
+            while (!scan(RP, pexp)) {
+                vec = vec.snoc(pexp.get());
+            }
+            return new Vec(vec);
+        }
+
+        private LispVal p_box(Supplier<LispVal> pexp) {
+            return new Box(pexp.get());
+        }
+
+        private LispVal p_list(Supplier<LispVal> pexp, Token delim) {
+            Seq<LispVal> hd = Seq.nil();
+            LispVal tl = LispVal.Nil;
+
+            while (token != delim && token != DOT) {
+                hd = Seq.cons(pexp.get(), hd);
+            }
+
+            if (!hd.isEmpty() && scan(DOT, pexp)) {
+                tl = pexp.get();
+            }
+
+            expect(delim, pexp);
+            return make_reverse_list(hd, tl);
+        }
+
+        private LispVal make_reverse_list(Seq<LispVal> hd, LispVal tl) {
+            LispVal res = tl;
+            while (!hd.isEmpty()) {
+                res = new Pair(hd.head(), res);
+                hd = hd.tail();
+            }
+            return res;
+        }
+
+        private LispVal p_curly_infix_list() {
+            return p_neoteric_list(RC, this::p_neoteric, this::transform_infix_list);
+        }
+
+        private LispVal
+        p_neoteric_list(Token delim, Supplier<LispVal> pexp, BiFunction<Seq<LispVal>, LispVal, LispVal> cont) {
+            Seq<LispVal> hd = Seq.nil();
+            LispVal tl = LispVal.Nil;
+
+            while (token != delim && token != DOT) {
+                hd = Seq.cons(pexp.get(), hd);
+            }
+
+            if (scan(DOT, pexp)) {
+                tl = pexp.get();
+            }
+
+            expect(delim, pexp);
+            return cont.apply(hd, tl);
+        }
+
+        private LispVal p_neoteric() {
+            LispVal term = p_term(this::p_neoteric);
+            while (token == LP || token == LB || token == LC) {
+                term = p_neoteric_term(term, this::p_neoteric);
+            }
+            return term;
+        }
+
+        private LispVal p_neoteric_term(LispVal lhs, Supplier<LispVal> pexp) {
+            LispVal rhs;
+
+            switch ((Token)token) {
+            case LP:
+                scan(pexp);
+                rhs = p_neoteric_list(RP, pexp, this::make_reverse_list);
+                return new Pair(lhs, rhs);
+
+            case LC:
+                scan(pexp);
+                rhs = p_neoteric_list(RC, pexp, this::transform_infix_list);
+                return rhs.isNil() ? Pair.of(lhs) : Pair.of(lhs, rhs);
+
+            case LB:
+                scan(pexp);
+                rhs = p_neoteric_list(RB, pexp, this::make_reverse_list);
+                return new Pair(getsym("$bracket-apply$"), new Pair(lhs, rhs));
+
+            default:
+                return lhs;
+            }
+        }
+
+        private LispVal transform_infix_list(Seq<LispVal> hd, LispVal tl) {
+            if (hd.isEmpty())
+                return tl;
+
+            if (tl.isNil()) {
+                int len = hd.length();
+                if (len == 0)
+                    return Nil;
+                if (len == 1)
+                    return hd.head();
+                if (len == 2)
+                    return make_reverse_list(hd, Nil);
+                if (len % 2 != 0)
+                    return transform_infix(hd);
+            }
+
+            return new Pair(getsym("$nfx$"), make_reverse_list(hd, tl));
+        }
+
+        private LispVal transform_infix(Seq<LispVal> exps) {
+            LispVal operator = null;
+            LispVal operands = Pair.of(exps.head());
+
+            for (Seq<LispVal> p = exps.tail(); !p.isEmpty(); p = p.tail().tail()) {
+                LispVal op = p.head();
+                if (operator == null) {
+                    operator = op;
+                } else if (!Primitives.equal(op, operator)) {
+                    operator = null;
+                    break;
+                }
+                operands = new Pair(p.tail().head(), operands);
+            }
+
+            if (operator != null) {
+                return new Pair(operator, operands);
+            }
+
+            return new Pair(getsym("$nfx$"), make_reverse_list(exps, Nil));
+        }
     }
 }

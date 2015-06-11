@@ -26,7 +26,6 @@ import static com.cloudway.fp.control.Syntax.let;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Ref;
 import com.cloudway.fp.io.IOConsumer;
-import com.cloudway.fp.parser.Stream;
 
 import static com.cloudway.fp.control.Syntax.do_;
 import com.cloudway.fp.scheme.LispError.TypeMismatch;
@@ -42,12 +41,10 @@ public final class IOPrimitives {
     public static final class InputPort implements LispVal {
         public final String name;
         public final Reader input;
-        public final Stream<LispVal> stream;
 
-        public InputPort(String name, Reader input, Stream<LispVal> stream) {
+        public InputPort(String name, Reader input) {
             this.name   = name;
             this.input  = input;
-            this.stream = stream;
         }
 
         public void close() {
@@ -119,8 +116,7 @@ public final class IOPrimitives {
             try {
                 InputStream is = new FileInputStream(filename);
                 Reader input = new BufferedReader(new InputStreamReader(is));
-                Stream<LispVal> stream = me.getParser().getStream(input);
-                return me.pure(new InputPort(filename, input, stream));
+                return me.pure(new InputPort(filename, input));
             } catch (IOException ex) {
                 return me.throwE(new LispError(ex));
             }
@@ -140,9 +136,7 @@ public final class IOPrimitives {
     }
 
     public static $<Evaluator, LispVal> open_input_string(Evaluator me, String str) {
-        Reader input = new StringReader(str);
-        Stream<LispVal> stream = me.getParser().getStream(input);
-        return me.pure(new InputPort("(string)", input, stream));
+        return me.pure(new InputPort("(string)", new StringReader(str)));
     }
 
     public static $<Evaluator, LispVal> open_output_string(Evaluator me) {
@@ -194,9 +188,7 @@ public final class IOPrimitives {
     }
 
     private static InputPort getStandardInput(Evaluator me) {
-        Reader input = new InputStreamReader(System.in);
-        Stream<LispVal> stream = me.getParser().getStream(input);
-        return new InputPort("(stdin)", input, stream);
+        return new InputPort("(stdin)", new InputStreamReader(System.in));
     }
 
     private static OutputPort getStandardOutput() {
@@ -261,8 +253,10 @@ public final class IOPrimitives {
         }
 
         SchemeParser parser = me.getParser();
-        return parser.parseExpr(((InputPort)port).stream).<$<Evaluator, LispVal>>either(
-            err -> me.throwE(new LispError.Parser(err)), me::pure);
+        Reader input = ((InputPort)port).input;
+        return parser.parseExpr(input).<$<Evaluator, LispVal>>either(
+            err -> me.throwE(err),
+            val -> me.pure(val));
     }
 
     private static void forOutputPort(Env env, Maybe<LispVal> arg, IOConsumer<OutputPort> proc)
