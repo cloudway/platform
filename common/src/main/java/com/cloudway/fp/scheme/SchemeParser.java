@@ -447,8 +447,8 @@ public class SchemeParser {
         private LispVal p_symbol(Supplier<LispVal> pexp) {
             String text = scanner.text();
 
-            boolean keyword;
-            if (keyword = text.endsWith(":")) {
+            boolean keyword = text.endsWith(":") && !":".equals(text);
+            if (keyword ) {
                 text = text.substring(0, text.length() - 1);
             }
 

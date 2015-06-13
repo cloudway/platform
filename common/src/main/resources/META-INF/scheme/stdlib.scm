@@ -36,6 +36,8 @@
       (cons init '())
       (cons init (unfold func (func init) pred))))
 
+(define call/cc call-with-current-continuation)
+
 ;;; Numerical operations
 
 (define (zero? n)       (= n 0))
@@ -169,58 +171,6 @@
        (if ,test
            (begin ,@finish)
            (begin ,@body (,loop ,@(map step bindings)))))))
-
-;;; dynamic-wind
-;
-; This implementation is relatively costly: we have to shadow call/cc
-; with a new version that unwinds suspended thunks, but for this to
-; happen the return-values of the escaping procedure have to be saved
-; temporarily in a list. Since call/cc is very efficient under this
-; implementation, and because allocation of memory that is to be
-; garbage soon has also quite low overhead, the performance-penalty
-; might be acceptable.
-
-(define %%sys%dynamic-winds #f)
-
-(define (dynamic-wind before thunk after)
-  (unless %%sys%dynamic-winds
-    (letrec ([sys:call/cc call-with-current-continuation]
-      [call-cc (lambda (proc)
-        (let ((winds %%sys%dynamic-winds))
-          (sys:call/cc
-            (lambda (cont)
-              (proc (lambda results
-                      (unless (eq? %%sys%dynamic-winds winds)
-                        (dynamic-unwind winds (- (length %%sys%dynamic-winds)
-                                                 (length winds))))
-                      (apply cont results)))))))]
-
-      [dynamic-unwind (lambda (winds n)
-         (cond [(eq? %%sys%dynamic-winds winds)]
-               [(< n 0)
-                 (dynamic-unwind (cdr winds) (+ n 1))
-                 ((car (car winds)))
-                 (set! %%sys%dynamic-winds winds)]
-               [else
-                 (let ([after (cdr (car %%sys%dynamic-winds))])
-                   (set! %%sys%dynamic-winds (cdr %%sys%dynamic-winds))
-                   (after)
-                   (dynamic-unwind winds (- n 1)))]))])
-
-      (set! %%sys%dynamic-winds '())
-      (set! call-with-current-continuation call-cc)
-      (set! call/cc call-cc)))
-
-  (before)
-  (set! %%sys%dynamic-winds (cons (cons before after) %%sys%dynamic-winds))
-  (call-with-values
-    thunk
-    (lambda results
-      (set! %%sys%dynamic-winds (cdr %%sys%dynamic-winds))
-      (after)
-      (apply values results))))
-
-(define call/cc call-with-current-continuation)
 
 ;;; Multiple values
 
@@ -430,7 +380,6 @@
           (void))
         (lambda () ,@body)
         (lambda ()
-          ,@(map (lambda (nt id) `(set! ,nt ,id)) new-tmps ids)
           ,@(map (lambda (id ot) `(set! ,id ,ot)) ids old-tmps)
           (void))))))
 
@@ -679,13 +628,71 @@
       `(letrec ((,name ,expression)) ,name)]
     [else (error 'rec "bad syntax" args)]))
 
+; SRFI 34: Exception handling for programs
+(define-macro (guard (var . clauses) . body)
+  (define (guard-aux reraise clauses)
+    (match clauses
+      [(('else . result))
+       `(begin ,@result)]
+
+      [((test '=> result))
+       (with-gensyms (temp)
+         `(let ((,temp ,test))
+           (if ,temp
+               (,result ,temp)
+               ,reraise)))]
+
+      [((test '=> result) . rest)
+       (with-gensyms (temp)
+         `(let ((,temp ,test))
+            (if ,temp
+                (,result ,temp)
+                ,(guard-aux reraise rest))))]
+
+      [((test)) test]
+
+      [((test) . rest)
+       (with-gensyms (temp)
+         `(let ((,temp ,test))
+            (if ,temp
+                ,temp
+                ,(guard-aux reraise rest))))]
+
+       [((test . result))
+        `(if ,test
+             (begin ,@result)
+             ,reraise)]
+
+       [((test . result) . rest)
+        `(if ,test
+             (begin ,@result)
+             ,(guard-aux reraise rest))]))
+
+  (with-gensyms (guard-k condition handler-k)
+    `((call-with-current-continuation
+      (lambda (,guard-k)
+        (with-exception-handler
+          (lambda (,condition)
+            ((call-with-current-continuation
+               (lambda (,handler-k)
+                 (,guard-k
+                   (lambda ()
+                     (let ((,var ,condition))
+                       ,(guard-aux `(,handler-k (lambda () (raise ,condition)))
+                                   clauses))))))))
+          (lambda ()
+            (call-with-values
+              (lambda () ,@body)
+              (lambda args
+                (,guard-k (lambda () (apply values args))))))))))))
+
 ; SRFI 39: Parameter objects
 (define (make-parameter init . conv)
   (let ((converter (if (null? conv) (lambda (x) x) (car conv))))
     (let ((global-cell (cons #f (converter init))))
       (letrec ((parameter
                  (lambda new-val
-                   (let ((cell ((%%sys%dynamic-env-local 'lookup) parameter global-cell)))
+                   (let ((cell (%%sys%dynamic-env-local 'lookup parameter global-cell)))
                      (cond ((null? new-val)
                             (cdr cell))
                            ((null? (cdr new-val))
@@ -696,7 +703,7 @@
         parameter))))
 
 (define-macro (parameterize bindings . body)
-  `((%%sys%dynamic-env-local 'bind)
+  `(%%sys%dynamic-env-local 'bind
       (list ,@(map car bindings))
       (list ,@(map cadr bindings))
       (lambda () ,@body)))
@@ -719,10 +726,10 @@
       (or (assq parameter dynamic-env-local)
           global-cell))
 
-    (lambda (m)
-      (cond ((eq? m 'bind) bind)
-            ((eq? m 'lookup) lookup)
-            (else (error "unknown request " m))))))
+    (lambda (action . args)
+      (cond ((eq? action 'bind) (apply bind args))
+            ((eq? action 'lookup) (apply lookup args))
+            (else (error "unknown request " action))))))
 
 ; SRFI 89: Optional positional and named parameters
 

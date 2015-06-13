@@ -92,7 +92,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     }
 
     private static boolean isModuleLoaded(Env env, Symbol module) {
-        LispVal list = (LispVal)env.getSystem(LOADED_MODULES, Nil).get();
+        LispVal list = env.getSystem(LOADED_MODULES, Nil).get();
         while (list.isPair()) {
             Pair p = (Pair)list;
             if (module.equals(p.head))
@@ -103,8 +103,8 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     }
 
     private static void addLoadedModule(Env env, Symbol module) {
-        Ref<Object> slot = env.getSystem(LOADED_MODULES, Nil);
-        slot.set(new Pair(module, (LispVal)slot.get()));
+        Ref<LispVal> slot = env.getSystem(LOADED_MODULES, Nil);
+        slot.set(new Pair(module, slot.get()));
     }
 
     public Env getNullEnv() {
@@ -118,7 +118,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     }
 
     public Env getInteractionEnv(Env env) {
-        return (Env)env.getSystem(INTERACTION_ENV, env).get();
+        return env.getSystem(INTERACTION_ENV, env).get();
     }
 
     public SchemeParser getParser() {
@@ -843,6 +843,17 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     // -----------------------------------------------------------------------
 
+    private static final Symbol DYNAMIC_WINDS = new Symbol("%DYNAMIC-WINDS%");
+
+    private static Ref<Seq<Pair>> getDynamicWinds(Env env) {
+        return env.getSystem(DYNAMIC_WINDS, Seq.<Pair>nil());
+    }
+
+    private static Seq<Pair> addDynamicWind(Env env, LispVal before, LispVal after) {
+        Ref<Seq<Pair>> winds = getDynamicWinds(env);
+        return winds.getAndSet(Seq.cons(new Pair(before, after), winds.get()));
+    }
+
     public $<Evaluator, LispVal> callCC(Env env, LispVal proc) {
         Function<Function<LispVal, $<Evaluator, LispVal>>, $<Evaluator, LispVal>> f =
             k -> apply(env, proc, Pair.of(makeContProc(env, k)));
@@ -851,9 +862,42 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             runExcept(f.apply(a -> $(c.escape(right(a)))))));
     }
 
-    private static Func makeContProc(Env env, Function<LispVal, $<Evaluator, LispVal>> k) {
-        Symbol cid = env.newsym();
-        return new Func(cid, eenv -> k.apply(makeMultiVal(eenv.get(cid))), env);
+    private Func makeContProc(Env env, Function<LispVal, $<Evaluator, LispVal>> k) {
+        Seq<Pair> previous = getDynamicWinds(env).get();
+        Symbol rid = env.newsym();
+
+        return new Func(rid, eenv -> {
+            Seq<Pair> current = getDynamicWinds(env).get();
+            int n = current.length() - previous.length();
+            return do_(dynamicUnwind(eenv, previous, n),
+                   do_(k.apply(makeMultiVal(eenv.get(rid)))));
+        }, env);
+    }
+
+    private $<Evaluator, LispVal> dynamicUnwind(Env env, Seq<Pair> previous, int n) {
+        Ref<Seq<Pair>> winds = getDynamicWinds(env);
+        Seq<Pair> current = winds.get();
+
+        if (n == 0 || current == previous) {
+            return pure(Void.VOID);
+        } else if (n < 0) {
+            return guard(action(() -> winds.set(previous)),
+                   guard(delay (() -> apply(env, previous.head().head, Nil)),
+                         delay (() -> dynamicUnwind(env, previous.tail(), n + 1))));
+        } else {
+            return guard(delay(() -> dynamicUnwind(env, previous, n - 1)),
+                   do_(action (() -> winds.set(current.tail())),
+                   do_(delay  (() -> apply(env, current.head().tail, Nil)))));
+        }
+    }
+
+    public $<Evaluator, LispVal> dynamicWind(Env env, LispVal before, LispVal thunk, LispVal after) {
+        return do_(apply(env, before, Nil),
+               do_(lazy(() -> addDynamicWind(env, before, after)), previous ->
+               guard(delay(() -> {
+                   getDynamicWinds(env).set(previous);
+                   return apply(env, after, Nil);
+               }), apply(env, thunk, Nil))));
     }
 
     public $<Evaluator, LispVal> values(LispVal args) {

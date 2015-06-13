@@ -157,4 +157,9 @@ public class SchemeTest {
     public void sicpTest() {
         eval("(require sicp-test)");
     }
+
+    @Test
+    public void srfi42Test() {
+        eval("(require srfi-42-test)");
+    }
 }

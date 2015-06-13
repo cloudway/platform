@@ -21,6 +21,7 @@ import java.util.List;
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.PMap;
+import com.cloudway.fp.data.Ref;
 import com.cloudway.fp.scheme.LispVal.Symbol;
 import com.cloudway.fp.scheme.LispVal.Printer;
 import jline.Completor;
@@ -41,13 +42,21 @@ public class REPL implements Completor{
         ConsoleReader console = new ConsoleReader(System.in, new PrintWriter(System.out));
         console.addCompletor(this);
 
+        Symbol lastVar = evaluator.getsym("_");
+        env.put(lastVar, LispVal.Void.VOID);
+        Ref<LispVal> lastResult = env.lookup(lastVar).get();
+
         String line;
         while ((line = console.readLine("> ")) != null) {
             if ("quit".equals(line.trim()))
                 break;
             if (line.trim().isEmpty())
                 continue;
-            printResult(evaluator.run(env, evaluator.parse(line)));
+
+            Either<LispError, LispVal> result = evaluator.run(env, evaluator.parse(line));
+            if (result.isRight())
+                lastResult.set(result.right());
+            printResult(result);
         }
     }
 

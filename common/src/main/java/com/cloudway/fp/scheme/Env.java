@@ -20,7 +20,7 @@ public final class Env implements LispVal {
         }
     }
 
-    private final Ref<PMap<Symbol, Ref<Object>>>  system;
+    private final Ref<PMap<Symbol, Ref<?>>>       system;
     private final Ref<PMap<Symbol, LispVal>>      macros;
     private final Ref<PMap<Symbol, Ref<LispVal>>> bindings;
 
@@ -38,7 +38,7 @@ public final class Env implements LispVal {
     }
 
     private Env(
-            Ref<PMap<Symbol, Ref<Object>>>  s,
+            Ref<PMap<Symbol, Ref<?>>>       s,
             Ref<PMap<Symbol, LispVal>>      m,
             Ref<PMap<Symbol, Ref<LispVal>>> b,
             int q) {
@@ -48,14 +48,15 @@ public final class Env implements LispVal {
         this.quoteLevel = q;
     }
 
-    public Ref<Object> getSystem(Symbol id, Object init) {
-        Maybe<Ref<Object>> slot = system.get().lookup(id);
+    @SuppressWarnings("unchecked")
+    public <A> Ref<A> getSystem(Symbol id, A init) {
+        Maybe<Ref<?>> slot = system.get().lookup(id);
         if (slot.isAbsent()) {
-            Ref<Object> new_slot = new Ref<>(init);
+            Ref<A> new_slot = new Ref<>(init);
             system.update(b -> b.put(id, new_slot));
             return new_slot;
         } else {
-            return slot.get();
+            return (Ref<A>)slot.get();
         }
     }
 

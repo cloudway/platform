@@ -133,4 +133,17 @@ public class LispError extends RuntimeException {
             return super.getMessage() + ": " + varname;
         }
     }
+
+    public static class Condition extends LispError {
+        public final LispVal value;
+
+        public Condition(LispVal value) {
+            this.value = value;
+        }
+
+        @Override
+        public String getMessage() {
+            return "uncaught exception: " + value.show();
+        }
+    }
 }

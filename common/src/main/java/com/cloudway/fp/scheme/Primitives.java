@@ -20,6 +20,7 @@ import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 
 import com.cloudway.fp.$;
+import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Rational;
@@ -1218,14 +1219,14 @@ public final class Primitives {
 
         LispVal last = rest;
         return do_(reverse(me, args), rev ->
-               do_(append(me, rev, last), app ->
-               me.apply(env, func, app)));
+            do_(append(me, rev, last), app ->
+                me.apply(env, func, app)));
     }
 
     @Syntax
     public static $<Evaluator, Proc> delay(Evaluator me, Env ctx, LispVal args) {
         return me.map(me.analyzeSequence(ctx, args), proc ->
-               env -> me.pure(new Promise(env, proc)));
+            env -> me.pure(new Promise(env, proc)));
     }
 
     public static $<Evaluator, LispVal> force(Evaluator me, LispVal t) {
@@ -1237,8 +1238,7 @@ public final class Primitives {
             }
 
             return me.catchE(err -> p.result = me.throwE(err),
-                             do_(p.body.apply(p.env), res ->
-                             do_(p.result = me.pure(res))));
+                             p.result = p.body.apply(p.env));
         } else {
             return me.pure(t);
         }
@@ -1257,6 +1257,11 @@ public final class Primitives {
     public static $<Evaluator, LispVal>
     call_with_values(Evaluator me, Env env, LispVal producer, LispVal consumer) {
         return me.callWithValues(env, producer, consumer);
+    }
+
+    public static $<Evaluator, LispVal>
+    dynamic_wind(Evaluator me, Env env, LispVal before, LispVal thunk, LispVal after) {
+        return me.dynamicWind(env, before, thunk, after);
     }
 
     @Syntax
@@ -1313,6 +1318,18 @@ public final class Primitives {
         return args.isNil()
             ? me.throwE(new LispError(pr.toString()))
             : me.throwE(new TypeMismatch("pair", args));
+    }
+
+    public static Either<LispError, LispVal> raise(LispVal obj) {
+        return Either.left(new Condition(obj));
+    }
+
+    public static $<Evaluator, LispVal>
+    with_exception_handler(Evaluator me, Env env, LispVal handler, LispVal thunk) {
+        return me.catchE(e -> e instanceof Condition
+                             ? me.apply(env, handler, Pair.of(((Condition)e).value))
+                             : me.throwE(e),
+                         me.apply(env, thunk, Nil));
     }
 
     @Syntax
@@ -1390,16 +1407,26 @@ public final class Primitives {
     // ---------------------------------------------------------------------
 
     public static $<Evaluator, LispVal> macroexpand(Evaluator me, Env ctx, LispVal form) {
+        return expand(me, ctx, form, false);
+    }
+
+    public static $<Evaluator, LispVal> macroexpand_1(Evaluator me, Env ctx, LispVal form) {
+        return expand(me, ctx, form, true);
+    }
+
+    private static $<Evaluator, LispVal>
+    expand(Evaluator me, Env ctx, LispVal form, boolean single) {
         return with(form).<$<Evaluator, LispVal>>get()
             .when(Datum  (__ -> me.pure(form)))
             .when(Symbol (__ -> me.pure(form)))
             .when(Nil    (() -> me.pure(form)))
-            .when(Cons   ((first, rest) -> do_(macroexpand(me, ctx, first), tag ->
-                                           do_(expandList(me, ctx, tag, rest)))))
+            .when(Cons   ((first, rest) -> do_(expand(me, ctx, first, single), tag ->
+                                           do_(expandList(me, ctx, tag, rest, single)))))
             .orElseGet(() -> me.throwE(new BadSpecialForm("Unrecognized special form", form)));
     }
 
-    private static $<Evaluator, LispVal> expandList(Evaluator me, Env ctx, LispVal tag, LispVal rest) {
+    private static $<Evaluator, LispVal>
+    expandList(Evaluator me, Env ctx, LispVal tag, LispVal rest, boolean single) {
         if (tag.isSymbol()) {
             switch(((Symbol)tag).name) {
             case "quote":
@@ -1409,7 +1436,7 @@ public final class Primitives {
                 return with(rest).<$<Evaluator, LispVal>>get()
                   .when(List(datum ->
                     do_(me.evalUnquote(ctx.incrementQL(), datum), qexp ->
-                    macroexpand(me, ctx, qexp))))
+                    expand(me, ctx, qexp, single))))
                   .orElseGet(() -> badSyntax(me, "quasiquote", rest));
 
             default:
@@ -1418,12 +1445,14 @@ public final class Primitives {
                     Macro mac = (Macro)var.get();
                     return Evaluator.match(ctx, mac.pattern, rest).<$<Evaluator, LispVal>>either(
                         err -> me.throwE(err),
-                        eenv -> do_(mac.body.apply(eenv), mexp -> macroexpand(me, ctx, mexp)));
+                        eenv -> single ? mac.body.apply(eenv)
+                                       : do_(mac.body.apply(eenv), mexp ->
+                                         expand(me, ctx, mexp, false)));
                 }
             }
         }
 
-        return do_(rest.mapM(me, x -> macroexpand(me, ctx, x)), els ->
+        return do_(rest.mapM(me, x -> expand(me, ctx, x, single)), els ->
                do_(me.pure(new Pair(tag, els))));
     }
 
