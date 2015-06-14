@@ -147,7 +147,7 @@ public final class IOPrimitives {
         if (arg instanceof OutputPort) {
             Writer out = ((OutputPort)arg).output;
             if (out instanceof StringWriter) {
-                return me.pure(new Text(out.toString()));
+                return me.pure(new MText(out.toString()));
             }
         }
         return me.throwE(new TypeMismatch("output string port", arg));
@@ -297,9 +297,12 @@ public final class IOPrimitives {
     private static void print(LispVal val, OutputPort port, boolean newline)
         throws IOException
     {
-        String text = getText(val);
-        if (text != null) {
-            port.output.write(text);
+        if (val instanceof CText) {
+            port.output.write(((CText)val).value);
+        } else if (val instanceof MText) {
+            port.output.write(((MText)val).value);
+        } else if (val instanceof Char) {
+            port.output.write(((Char)val).value);
         } else {
             writeValue(port.output, val);
         }
@@ -310,21 +313,14 @@ public final class IOPrimitives {
             port.output.flush();
     }
 
-    private static String getText(LispVal val) {
-        if (val instanceof Text)
-            return ((Text)val).value;
-        if (val instanceof Char)
-            return (String.valueOf(((Char)val).value));
-        return null;
-    }
-
     private static void writeValue(Writer out, LispVal val) throws IOException {
         Printer pr = new Printer() {
             @Override
             public void add(LispVal v) {
-                String t = getText(v);
-                if (t != null) {
-                    super.add(t);
+                if (v instanceof Text) {
+                    super.add(((Text)v).value());
+                } else if (v instanceof Char) {
+                    super.add(String.valueOf(((Char)v).value));
                 } else {
                     super.add(v);
                 }

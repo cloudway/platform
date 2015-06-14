@@ -223,7 +223,7 @@ public class SchemeParser {
             s.fail("unterminated string literal");
             return Maybe.empty();
         } else {
-            return Maybe.of(new Text(buf.toString()));
+            return Maybe.of(new CText(buf.toString()));
         }
     }
 

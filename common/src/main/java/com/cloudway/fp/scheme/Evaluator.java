@@ -1086,7 +1086,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         for (int j = 0; j < nparams; i++, j++) {
             Maybe<Unpacker> unpacker = getUnpacker(params[i]);
             if (unpacker.isAbsent())
-                throw new LispError("Unrecognized java type: " + params[i].getName());
+                throw new LispError("Unrecognized java type: " + params[i].getName() + " in " + method);
             required[j] = unpacker.get();
         }
 
@@ -1248,7 +1248,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         Tuple.of(java.lang.Void.TYPE , obj -> pure(Void.VOID)),
         Tuple.of(Boolean.TYPE,   obj -> pure(Bool.valueOf((Boolean)obj))),
         Tuple.of(Character.TYPE, obj -> pure(new Char((Character)obj))),
-        Tuple.of(String.class,   obj -> pure(new Text((String)obj))),
+        Tuple.of(String.class,   obj -> pure(new MText((String)obj))),
         Tuple.of(Double.TYPE,    obj -> pure(new Num((Double)obj))),
         Tuple.of(Integer.TYPE,   obj -> pure(new Num((long)(Integer)obj))),
         Tuple.of(Long.TYPE,      obj -> pure(new Num((Long)obj))),
@@ -1278,7 +1278,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     private static Either<LispError, Object> unpackString(LispVal val) {
         return val instanceof Text
-            ? right(((Text)val).value)
+            ? right(((Text)val).value())
             : left(new TypeMismatch("string", val));
     }
 

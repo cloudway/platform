@@ -24,7 +24,6 @@ import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Rational;
-import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.data.Tuple;
 import com.cloudway.fp.data.Vector;
 
@@ -976,16 +975,16 @@ public final class Primitives {
 
     // ---------------------------------------------------------------------
 
-    public static String make_string(int k, Maybe<Character> c) {
+    public static Text make_string(int k, Maybe<Character> c) {
         if (k < 0) throw new TypeMismatch("nonnegative-integer", new Num((long)k));
 
         char[] chars = new char[k];
-        Arrays.fill(chars, c.orElse('\0'));
-        return new String(chars);
+        Arrays.fill(chars, c.orElse(' '));
+        return new MText(chars);
     }
 
     @VarArgs
-    public static String string(LispVal args) {
+    public static Text string(LispVal args) {
         StringBuilder buf = new StringBuilder();
         while (!args.isNil()) {
             Pair p = (Pair)args;
@@ -996,71 +995,64 @@ public final class Primitives {
         }
 
         if (args.isNil()) {
-            return buf.toString();
+            return new MText(buf.toString());
         } else {
             throw new TypeMismatch("pair", args);
         }
     }
 
-    public static int string_length(String str) {
+    public static int string_length(Text str) {
         return str.length();
     }
 
-    public static char string_ref(String str, int k) {
-        return str.charAt(k);
+    public static char string_ref(Text str, int k) {
+        return str.get(k);
     }
 
     @Name("string-set!")
     public static void string_set(Text t, int k, char c) {
-        String str = t.value;
-        int len = str.length();
-        char[] chars = new char[len];
-        str.getChars(0, len, chars, 0);
-        chars[k] = c;
-        t.value = new String(chars);
+        t.set(k, c);
     }
 
     @Name("string-fill!")
     public static void string_fill(Text t, char c) {
-        char[] chars = new char[t.value.length()];
-        Arrays.fill(chars, c);
-        t.value = new String(chars);
+        t.fill(c);
     }
 
-    public static String substring(String str, int start, int end) {
+    public static Text substring(Text str, int start, int end) {
         return str.substring(start, end);
     }
 
     @VarArgs
-    public static String string_append(LispVal args) {
+    public static Text string_append(LispVal args) {
         StringBuilder buf = new StringBuilder();
         while (args.isPair()) {
             Pair p = (Pair)args;
             if (!(p.head instanceof Text))
                 throw new TypeMismatch("string", p.head);
-            buf.append(((Text)p.head).value);
+            ((Text)p.head).append(buf);
             args = p.tail;
         }
 
         if (!args.isNil()) {
             throw new TypeMismatch("pair", args);
         } else {
-            return buf.toString();
+            return new MText(buf.toString());
         }
     }
 
     @Name("string->list")
-    public static LispVal string2list(String str) {
-        return Pair.fromList(Seq.wrap(str).map(Char::new));
+    public static LispVal string2list(Text str) {
+        return str.toList();
     }
 
     @Name("list->string")
-    public static String list2string(LispVal lst) {
+    public static Text list2string(LispVal lst) {
         return string(lst);
     }
 
-    public static String string_copy(String str) {
-        return str;
+    public static Text string_copy(Text str) {
+        return str.copy();
     }
 
     @Name("string=?")
@@ -1293,7 +1285,7 @@ public final class Primitives {
         if (args.isPair()) {
             Pair p = (Pair)args;
             if (p.head instanceof Text) {
-                message = ((Text)p.head).value;
+                message = ((Text)p.head).value();
                 args = p.tail;
             } else {
                 return me.throwE(new TypeMismatch("string", p.head));
@@ -1394,7 +1386,7 @@ public final class Primitives {
         if (x instanceof Symbol) {
             return env.newsym(((Symbol)x).name);
         } else if (x instanceof Text) {
-            return env.newsym(((Text)x).value);
+            return env.newsym(((Text)x).value());
         } else {
             throw new TypeMismatch("string or symbol", x);
         }

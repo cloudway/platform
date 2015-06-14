@@ -8,6 +8,7 @@ package com.cloudway.fp.scheme;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -193,16 +194,82 @@ public interface LispVal {
         }
     }
 
-    final class Text implements LispVal {
-        public String value;
+    interface Text extends LispVal {
+        @Override
+        default boolean isSelfEvaluating() {
+            return true;
+        }
 
-        public Text(String value) {
+        String value();
+
+        int length();
+        char get(int i);
+        void set(int i, char c);
+
+        void fill(char c);
+        Text copy();
+        Text substring(int start, int end);
+        void append(StringBuilder dest);
+
+        LispVal toList();
+    }
+
+    final class CText implements Text {
+        public final String value;
+
+        public CText(String value) {
             this.value = value;
         }
 
         @Override
-        public boolean isSelfEvaluating() {
-            return true;
+        public String value() {
+            return value;
+        }
+
+        @Override
+        public int length() {
+            return value.length();
+        }
+
+        @Override
+        public char get(int i) {
+            return value.charAt(i);
+        }
+
+        @Override
+        public void set(int i, char c) {
+            throw new LispError("string-set!: cannot modify constant string");
+        }
+
+        @Override
+        public void fill(char c) {
+            throw new LispError("string-fill!: cannot modify constant string");
+        }
+
+        @Override
+        public Text copy() {
+            char[] chars = new char[value.length()];
+            value.getChars(0, value.length(), chars, 0);
+            return new MText(chars);
+        }
+
+        @Override
+        public Text substring(int start, int end) {
+            return new MText(value.substring(start, end));
+        }
+
+        @Override
+        public void append(StringBuilder dest) {
+            dest.append(value);
+        }
+
+        @Override
+        public LispVal toList() {
+            LispVal res = Nil;
+            for (int i = value.length(); --i >= 0; ) {
+                res = new Pair(new Char(value.charAt(i)), res);
+            }
+            return res;
         }
 
         @Override
@@ -233,9 +300,103 @@ public interface LispVal {
         public boolean equals(Object obj) {
             if (obj == this)
                 return true;
-            if (obj instanceof Text)
-                return value.equals(((Text)obj).value);
+            if (obj instanceof CText)
+                return value.equals(((CText)obj).value);
             return false;
+        }
+    }
+
+    final class MText implements Text {
+        public final char[] value;
+
+        public MText(char[] value) {
+            this.value = value;
+        }
+
+        public MText(String str) {
+            int len = str.length();
+            value = new char[len];
+            str.getChars(0, len, value, 0);
+        }
+
+        @Override
+        public String value() {
+            return new String(value);
+        }
+
+        @Override
+        public int length() {
+            return value.length;
+        }
+
+        @Override
+        public char get(int i) {
+            return value[i];
+        }
+
+        @Override
+        public void set(int i, char c) {
+            value[i] = c;
+        }
+
+        @Override
+        public void fill(char c) {
+            Arrays.fill(value, c);
+        }
+
+        @Override
+        public Text copy() {
+            return new MText(value.clone());
+        }
+
+        @Override
+        public Text substring(int start, int end) {
+            if (start < 0)
+                throw new LispError("substring: index out of range: " + start + " " + end);
+            if (end > value.length)
+                throw new LispError("substring: index out of range: " + start + " " + end);
+            if (end < start)
+                throw new LispError("substring: index out of range: " + start + " " + end);
+            return new MText(Arrays.copyOfRange(value, start, end));
+        }
+
+        @Override
+        public void append(StringBuilder dest) {
+            dest.append(value);
+        }
+
+        @Override
+        public LispVal toList() {
+            LispVal res = Nil;
+            for (int i = value.length; --i >= 0; ) {
+                res = new Pair(new Char(value[i]), res);
+            }
+            return res;
+        }
+
+        @Override
+        public String show() {
+            StringBuilder buf = new StringBuilder(value.length + 2);
+            buf.append('"');
+            for (char c : value) {
+                switch (c) {
+                case '\b': buf.append("\\b"); break;
+                case '\t': buf.append("\\t"); break;
+                case '\f': buf.append("\\f"); break;
+                case '\r': buf.append("\\r"); break;
+                case '\n': buf.append("\\n"); break;
+                case '\\': buf.append("\\\\"); break;
+                case '"':  buf.append("\\\""); break;
+                default:   buf.append(c);
+                }
+            }
+            buf.append('"');
+            return buf.toString();
+        }
+
+        @Override
+        public String toString() {
+            return "#Text(\"" + new String(value) + "\")";
         }
     }
 
@@ -787,9 +948,9 @@ public interface LispVal {
     }
 
     static <R> ConditionCase<LispVal, R, RuntimeException>
-    Text(Function<String, ? extends R> mapper) {
+    Text(Function<Text, ? extends R> mapper) {
         return t -> t instanceof Text
-            ? () -> mapper.apply(((Text)t).value)
+            ? () -> mapper.apply((Text)t)
             : null;
     }
 
