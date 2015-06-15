@@ -692,11 +692,14 @@ public abstract class ParserT<P, T, U, M extends Monad<M>>
     }
 
     /**
-     * This parser only succeeds at the end of the input. This is not a primitive
-     * parser but it is defined using {@link #notFollowedBy}.
+     * This parser only succeeds at the end of the input.
      */
     public $<P, Unit> eof() {
-        return label("end of input", notFollowedBy(anyToken()));
+        return label("end of input", $((s, cok, cerr, eok, eerr) ->
+            s.input.uncons(
+                (c, cs) -> eerr.apply(unexpectError(s, String.valueOf(c))),
+                () -> eok.apply(Unit.U, s, unknownError(s)),
+                e  -> eerr.apply(updateErrorPos(e, s)))));
     }
 
     /**

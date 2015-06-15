@@ -14,6 +14,7 @@ import com.cloudway.fp.$;
 import com.cloudway.fp.control.ForwardingMonad;
 import com.cloudway.fp.control.Monad;
 import com.cloudway.fp.data.Fn;
+import com.cloudway.fp.data.Unit;
 
 /**
  * The {@link ContT} monad typeclass definition.
@@ -78,7 +79,7 @@ public abstract class ContTC<T, M extends Monad<M>>
      */
     @SuppressWarnings("unchecked")
     public <R, A> $<M, R> runCont($<T, A> m, Function<? super A, ? extends $<M, R>> k) {
-        return ((Monadic.K<A,M,R>)((Monadic<T,M,A>)m).kf).apply((Function<A, $<M, R>>)k);
+        return nm.delay(() -> ((Monadic.K<A,M,R>)((Monadic<T,M,A>)m).kf).apply((Function<A, $<M, R>>)k));
     }
 
     /**
@@ -98,8 +99,11 @@ public abstract class ContTC<T, M extends Monad<M>>
      *
      * @param k the function that accept computation value and return nothing
      */
-    public <A> void execCont($<T, A> m, Consumer<? super A> k) {
-        runCont(m, x -> { k.accept(x); return null; });
+    public <A> $<M, Unit> execCont($<T, A> m, Consumer<? super A> k) {
+        return runCont(m, x -> {
+            k.accept(x);
+            return nm.pure(Unit.U);
+        });
     }
 
     /**

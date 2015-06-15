@@ -277,7 +277,7 @@ public interface IO<A> extends $<IO.µ, A> {
         throws IOException
     {
         try {
-            stream.forEach(IOConsumer.wrap(action));
+            stream.forEach(action);
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
@@ -287,7 +287,7 @@ public interface IO<A> extends $<IO.µ, A> {
         throws IOException
     {
         try {
-            collection.forEach(IOConsumer.wrap(action));
+            collection.forEach(action);
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
@@ -297,7 +297,7 @@ public interface IO<A> extends $<IO.µ, A> {
         throws IOException
     {
         try {
-            map.forEach(IOBiConsumer.wrap(action));
+            map.forEach(action);
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }
@@ -307,7 +307,7 @@ public interface IO<A> extends $<IO.µ, A> {
         throws IOException
     {
         try {
-            map.forEach(IOBiConsumer.wrap(action));
+            map.forEach(action);
         } catch (UncheckedIOException ex) {
             throw ex.getCause();
         }

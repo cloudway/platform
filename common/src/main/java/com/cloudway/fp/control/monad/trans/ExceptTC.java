@@ -159,6 +159,14 @@ public abstract class ExceptTC<T, E, M extends Monad<M>> implements MonadTrans<T
     }
 
     /**
+     * Guard the given action with a cleanup action.
+     */
+    public <A> $<T, A> guard($<T, ?> cleanup, $<T, A> action) {
+        return bind(catchE(e -> seqR(cleanup, throwE(e)), action), result ->
+               seqR(cleanup, pure(result)));
+    }
+
+    /**
      * Transfer a exception computation by feeding the value to the given
      * function and wrap the result to a new computation.
      */

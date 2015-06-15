@@ -37,6 +37,12 @@ public class ParseError extends RuntimeException {
         this.errorPos = pos;
     }
 
+    public ParseError(Throwable cause) {
+        super(cause);
+        this.messages = Seq.nil();
+        this.errorPos = new SourcePos("", SourcePos.NOPOS);
+    }
+
     public SourcePos getErrorPos() {
         return errorPos;
     }

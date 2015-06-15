@@ -80,6 +80,23 @@ public final class Conditionals {
     }
 
     /**
+     * A shortcut for single condition pattern matching.
+     *
+     * @param <T> the type of input argument
+     * @param <R> the type of result
+     * @param value the input argument
+     * @param cond the pattern to be matched
+     * @param deflt the default value if pattern doesn't matches input argument
+     * @return the result from the pattern matching, or {@code deflt} if pattern
+     * doesn't matches input argument
+     */
+    public static <T, R> R inCaseOf(T value, ConditionCase<? super T, ? extends R, RuntimeException> cond,
+                                    Supplier<? extends R> deflt) {
+        ExceptionSupplier<? extends R, RuntimeException> sup = cond.evaluate(value);
+        return sup != null ? sup.produce() : deflt.get();
+    }
+
+    /**
      * A sugar method that surround a constant value to make code readable.
      *
      * @param <T> the type of constant value
