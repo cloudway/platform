@@ -38,60 +38,8 @@
 
 (define call/cc call-with-current-continuation)
 
-;;; Numerical operations
-
-(define (zero? n)       (= n 0))
-(define (positive? n)   (> n 0))
-(define (negative? n)   (< n 0))
-(define (odd? n)        (= (remainder n 2) 1))
-(define (even? n)       (= (remainder n 2) 0))
-
-(define (abs x) (if (< x 0) (- x) x))
-
-(define (max first . rest)
-    (fold (lambda (old new) (if (> old new) old new)) first rest))
-
-(define (min first . rest)
-    (fold (lambda (old new) (if (< old new) old new)) first rest))
-
-(define (gcd . vals)
-  (define (g a b)
-    (if (zero? b) a (g b (remainder a b))))
-  (abs (fold g 0 vals)))
-
-(define (lcm . vals)
-  (/ (abs (apply * vals)) (apply gcd vals)))
-
-;;; Pairs and lists
-
-(define (caar pair) (car (car pair)))
-(define (cadr pair) (car (cdr pair)))
-(define (cdar pair) (cdr (car pair)))
-(define (cddr pair) (cdr (cdr pair)))
-(define (caaar pair) (car (car (car pair))))
-(define (caadr pair) (car (car (cdr pair))))
-(define (cadar pair) (car (cdr (car pair))))
-(define (caddr pair) (car (cdr (cdr pair))))
-(define (cdaar pair) (cdr (car (car pair))))
-(define (cdadr pair) (cdr (car (cdr pair))))
-(define (cddar pair) (cdr (cdr (car pair))))
-(define (cdddr pair) (cdr (cdr (cdr pair))))
-(define (caaaar pair) (car (car (car (car pair)))))
-(define (caaadr pair) (car (car (car (cdr pair)))))
-(define (caadar pair) (car (car (cdr (car pair)))))
-(define (caaddr pair) (car (car (cdr (cdr pair)))))
-(define (cadaar pair) (car (cdr (car (car pair)))))
-(define (cadadr pair) (car (cdr (car (cdr pair)))))
-(define (caddar pair) (car (cdr (cdr (car pair)))))
-(define (cadddr pair) (car (cdr (cdr (cdr pair)))))
-(define (cdaaar pair) (cdr (car (car (car pair)))))
-(define (cdaadr pair) (cdr (car (car (cdr pair)))))
-(define (cdadar pair) (cdr (car (cdr (car pair)))))
-(define (cdaddr pair) (cdr (car (cdr (cdr pair)))))
-(define (cddaar pair) (cdr (cdr (car (car pair)))))
-(define (cddadr pair) (cdr (cdr (car (cdr pair)))))
-(define (cdddar pair) (cdr (cdr (cdr (car pair)))))
-(define (cddddr pair) (cdr (cdr (cdr (cdr pair)))))
+(define-macro (let/cc k . body)
+  `(call/cc (lambda (,k) ,@body)))
 
 ;;; Basic Macros
 
@@ -171,6 +119,85 @@
        (if ,test
            (begin ,@finish)
            (begin ,@body (,loop ,@(map step bindings)))))))
+
+;;; Numerical operations
+
+(define (odd? n)  (= (remainder n 2) 1))
+(define (even? n) (= (remainder n 2) 0))
+
+(define (max first . rest)
+    (fold (lambda (old new) (if (> old new) old new)) first rest))
+
+(define (min first . rest)
+    (fold (lambda (old new) (if (< old new) old new)) first rest))
+
+(define (gcd . vals)
+  (define (g a b)
+    (if (zero? b) a (g b (remainder a b))))
+  (abs (fold g 0 vals)))
+
+(define (lcm . vals)
+  (/ (abs (apply * vals)) (apply gcd vals)))
+
+(define (rationalize x y)
+  (define (check x)
+    (unless (real? x) (error 'rationalize "Invalid type: expected real, found" x)))
+
+  (define (find-between lo hi)
+    (if (integer? lo)
+        lo
+        (let ([lo-int (floor lo)]
+              [hi-int (floor hi)])
+          (if (< lo-int hi-int)
+              (+ 1 lo-int)
+              (+ lo-int
+                 (/ (find-between (/ (- hi lo-int)) (/ (- lo lo-int)))))))))
+
+  (define (do-find-between lo hi)
+    (cond
+      [(negative? lo) (- (find-between (- hi) (- lo)))]
+      [else (find-between lo hi)]))
+
+  (check x) (check y)
+  (let* ([delta (abs y)]
+         [lo (- x delta)]
+         [hi (+ x delta)])
+    (cond
+     [(<= lo 0 hi) (if (exact? x) 0 0.0)]
+     [(or (inexact? lo) (inexact? hi))
+      (exact->inexact (do-find-between (inexact->exact lo) (inexact->exact hi)))]
+     [else (do-find-between lo hi)])))
+
+;;; Pairs and lists
+
+(define (caar pair) (car (car pair)))
+(define (cadr pair) (car (cdr pair)))
+(define (cdar pair) (cdr (car pair)))
+(define (cddr pair) (cdr (cdr pair)))
+(define (caaar pair) (car (car (car pair))))
+(define (caadr pair) (car (car (cdr pair))))
+(define (cadar pair) (car (cdr (car pair))))
+(define (caddr pair) (car (cdr (cdr pair))))
+(define (cdaar pair) (cdr (car (car pair))))
+(define (cdadr pair) (cdr (car (cdr pair))))
+(define (cddar pair) (cdr (cdr (car pair))))
+(define (cdddr pair) (cdr (cdr (cdr pair))))
+(define (caaaar pair) (car (car (car (car pair)))))
+(define (caaadr pair) (car (car (car (cdr pair)))))
+(define (caadar pair) (car (car (cdr (car pair)))))
+(define (caaddr pair) (car (car (cdr (cdr pair)))))
+(define (cadaar pair) (car (cdr (car (car pair)))))
+(define (cadadr pair) (car (cdr (car (cdr pair)))))
+(define (caddar pair) (car (cdr (cdr (car pair)))))
+(define (cadddr pair) (car (cdr (cdr (cdr pair)))))
+(define (cdaaar pair) (cdr (car (car (car pair)))))
+(define (cdaadr pair) (cdr (car (car (cdr pair)))))
+(define (cdadar pair) (cdr (car (cdr (car pair)))))
+(define (cdaddr pair) (cdr (car (cdr (cdr pair)))))
+(define (cddaar pair) (cdr (cdr (car (car pair)))))
+(define (cddadr pair) (cdr (cdr (car (cdr pair)))))
+(define (cdddar pair) (cdr (cdr (cdr (car pair)))))
+(define (cddddr pair) (cdr (cdr (cdr (cdr pair)))))
 
 ;;; Multiple values
 
@@ -701,6 +728,15 @@
                             (converter (car new-val))))))))
         (set-car! global-cell parameter)
         parameter))))
+
+(define-macro (define-parameter . form)
+  (match form
+    [(name value guard)
+     `(define ,name (make-parameter ,value ,guard))]
+    [(name value)
+     `(define ,name (make-parameter ,value))]
+    [(name)
+     `(define ,name (make-parameter (void)))]))
 
 (define-macro (parameterize bindings . body)
   `(%%sys%dynamic-env-local 'bind

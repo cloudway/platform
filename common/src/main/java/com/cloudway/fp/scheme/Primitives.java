@@ -10,22 +10,20 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.lang.reflect.Method;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 
 import com.cloudway.fp.$;
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.Maybe;
-import com.cloudway.fp.data.Rational;
 import com.cloudway.fp.data.Tuple;
 import com.cloudway.fp.data.Vector;
+import com.cloudway.fp.scheme.numsys.Num;
 
 import static com.cloudway.fp.control.Conditionals.with;
 import static com.cloudway.fp.control.Syntax.do_;
@@ -56,31 +54,6 @@ public final class Primitives {
     @Name("char?")
     public static boolean isChar(LispVal val) {
         return val instanceof Char;
-    }
-
-    @Name("number?")
-    public static boolean isNumber(LispVal val) {
-        return val instanceof Num;
-    }
-
-    @Name("integer?")
-    public static boolean isInteger(LispVal val) {
-        if (val instanceof Num) {
-            Number n = ((Num)val).value;
-            return (n instanceof Long) || (n instanceof BigInteger);
-        } else {
-            return false;
-        }
-    }
-
-    @Name("real?")
-    public static boolean isReal(LispVal val) {
-        return (val instanceof Num) && (((Num)val).value instanceof Double);
-    }
-
-    @Name("rational?")
-    public static boolean isRational(LispVal val) {
-        return (val instanceof Num) && (((Num)val).value instanceof Rational);
     }
 
     @Name("string?")
@@ -119,16 +92,6 @@ public final class Primitives {
     }
 
     // ---------------------------------------------------------------------
-
-    @Name("exact?")
-    public static boolean isExact(Number x) {
-        return !isInexact(x);
-    }
-
-    @Name("inexact?")
-    public static boolean isInexact(Number x) {
-        return x instanceof Double || x instanceof Float;
-    }
 
     @Name("eq?")
     public static boolean eq(LispVal x, LispVal y) {
@@ -174,372 +137,6 @@ public final class Primitives {
                 return false;
         }
         return true;
-    }
-
-    // ---------------------------------------------------------------------
-
-    private static final int LT = 0x01;
-    private static final int GT = 0x02;
-    private static final int EQ = 0x04;
-    private static final int LE = LT | EQ;
-    private static final int GE = GT | EQ;
-
-    private static int compare(Number x, Number y) {
-        int cmp;
-        if (x instanceof Double || y instanceof Double) {
-            cmp = Double.compare(x.doubleValue(), y.doubleValue());
-        } else if (x instanceof Rational || y instanceof Rational) {
-            cmp = Rational.valueOf(x).compareTo(Rational.valueOf(y));
-        } else if (x instanceof BigInteger || y instanceof BigInteger) {
-            cmp = toBigInteger(x).compareTo(toBigInteger(y));
-        } else {
-            cmp = Long.compare(x.longValue(), y.longValue());
-        }
-        return cmp < 0 ? LT : cmp > 0 ? GT : EQ;
-    }
-
-    private static boolean compare(int ord, Number x, Number y, LispVal ys) {
-        if ((compare(x, y) & ord) == 0) {
-            return false;
-        }
-
-        while (ys.isPair()) {
-            Pair p = (Pair)ys;
-            Number z = unpackNum(p.head);
-            if ((compare(y, z) & ord) == 0)
-                return false;
-            y = z;
-            ys = p.tail;
-        }
-
-        return true;
-    }
-
-    @Name("=") @VarArgs
-    public static boolean num_eq(Number x, Number y, LispVal ys) {
-        return compare(EQ, x, y, ys);
-    }
-
-    @Name("<") @VarArgs
-    public static boolean num_lt(Number x, Number y, LispVal ys) {
-        return compare(LT, x, y, ys);
-    }
-
-    @Name("<=") @VarArgs
-    public static boolean num_le(Number x, Number y, LispVal ys) {
-        return compare(LE, x, y, ys);
-    }
-
-    @Name(">") @VarArgs
-    public static boolean num_gt(Number x, Number y, LispVal ys) {
-        return compare(GT, x, y, ys);
-    }
-
-    @Name(">=") @VarArgs
-    public static boolean num_ge(Number x, Number y, LispVal ys) {
-        return compare(GE, x, y, ys);
-    }
-
-    // ---------------------------------------------------------------------
-
-    @Name("+") @VarArgs
-    public static Number plus(LispVal args) {
-        return accumulate(Primitives::plus, 0L, args);
-    }
-
-    private static Number plus(Number x, Number y) {
-        if (x instanceof Double || y instanceof Double) {
-            return x.doubleValue() + y.doubleValue();
-        } else if (x instanceof Rational || y instanceof Rational) {
-            return reduce(Rational.valueOf(x).add(Rational.valueOf(y)));
-        } else if (x instanceof BigInteger || y instanceof BigInteger) {
-            return reduce(toBigInteger(x).add(toBigInteger(y)));
-        } else {
-            long a = x.longValue(), b = y.longValue();
-            long c = a + b;
-            if (((a ^ c) & (b ^ c)) < 0) {
-                return BigInteger.valueOf(a).add(BigInteger.valueOf(b));
-            } else {
-                return c;
-            }
-        }
-    }
-
-    @Name("-") @VarArgs
-    public static Number minus(Number first, LispVal rest) {
-        if (rest.isNil())
-            return minus(0L, first);
-        return accumulate(Primitives::minus, first, rest);
-    }
-
-    private static Number minus(Number x, Number y) {
-        if (x instanceof Double || y instanceof Double) {
-            return x.doubleValue() - y.doubleValue();
-        } else if (x instanceof Rational || y instanceof Rational) {
-            return reduce(Rational.valueOf(x).subtract(Rational.valueOf(y)));
-        } else if (x instanceof BigInteger || y instanceof BigInteger) {
-            return reduce(toBigInteger(x).subtract(toBigInteger(y)));
-        } else {
-            long a = x.longValue(), b = y.longValue();
-            long c = a - b;
-            if (((a ^ b) & (a ^ c)) < 0) {
-                return BigInteger.valueOf(a).add(BigInteger.valueOf(b));
-            } else {
-                return c;
-            }
-        }
-    }
-
-    @Name("*") @VarArgs
-    public static Number times(LispVal args) {
-        return accumulate(Primitives::times, 1L, args);
-    }
-
-    private static Number times(Number x, Number y) {
-        if (x instanceof Double || y instanceof Double) {
-            return x.doubleValue() * y.doubleValue();
-        } else if (x instanceof Rational || y instanceof Rational) {
-            return reduce(Rational.valueOf(x).multiply(Rational.valueOf(y)));
-        } else if (x instanceof BigInteger || y instanceof BigInteger) {
-            return reduce(toBigInteger(x).multiply(toBigInteger(y)));
-        } else {
-            long a = x.longValue(), b = y.longValue();
-            long c = a * b;
-            if (b != 0 && c / b != a) {
-                return BigInteger.valueOf(a).multiply(BigInteger.valueOf(b));
-            } else {
-                return c;
-            }
-        }
-    }
-
-    @Name("/") @VarArgs
-    public static Number divide(Number first, LispVal rest) {
-        if (rest.isNil())
-            return divide(1L, first);
-        return accumulate(Primitives::divide, first, rest);
-    }
-
-    private static Number divide(Number x, Number y) {
-        if (x instanceof Double || y instanceof Double) {
-            return x.doubleValue() / y.doubleValue();
-        } else if (x instanceof Rational || y instanceof Rational) {
-            return reduce(Rational.valueOf(x).divide(Rational.valueOf(y)));
-        } else if (x instanceof BigInteger || y instanceof BigInteger) {
-            BigInteger a = toBigInteger(x), b = toBigInteger(y);
-            BigInteger[] divMod = a.divideAndRemainder(b);
-            return divMod[1].signum() == 0 ? reduce(divMod[0]) : Rational.make(a, b);
-        } else {
-            long a = x.longValue(), b = y.longValue();
-            return (a % b == 0) ? (a / b) : Rational.make(a, b);
-        }
-    }
-
-    public static Number quotient(Number x, Number y) {
-        if (x instanceof Double || y instanceof Double) {
-            return Math.round(x.doubleValue() / y.doubleValue());
-        } else if (x instanceof Rational || y instanceof Rational) {
-            return reduce(Rational.valueOf(x).divide(Rational.valueOf(y)).numerator());
-        } else if (x instanceof BigInteger || y instanceof BigInteger) {
-            return reduce(toBigInteger(x).divide(toBigInteger(y)));
-        } else {
-            return x.longValue() / y.longValue();
-        }
-    }
-
-    public static Number modulo(Number x, Number y) {
-        if (x instanceof Double || y instanceof Double) {
-            return x.doubleValue() % y.doubleValue();
-        } else if (x instanceof Rational || y instanceof Rational) {
-            return reduce(Rational.valueOf(x).remainder(Rational.valueOf(y)));
-        } else if (x instanceof BigInteger || y instanceof BigInteger) {
-            return reduce(toBigInteger(x).mod(toBigInteger(y)));
-        } else {
-            return Math.floorMod(x.longValue(), y.longValue());
-        }
-    }
-
-    public static Number remainder(Number x, Number y) {
-        if (x instanceof Double || y instanceof Double) {
-            return x.doubleValue() % y.doubleValue();
-        } else if (x instanceof Rational || y instanceof Rational) {
-            return reduce(Rational.valueOf(x).remainder(Rational.valueOf(y)));
-        } else if (x instanceof BigInteger || y instanceof BigInteger) {
-            return reduce(toBigInteger(x).remainder(toBigInteger(y)));
-        } else {
-            return x.longValue() % y.longValue();
-        }
-    }
-
-    private static Number accumulate(BiFunction<Number, Number, Number> op, Number z, LispVal args) {
-        while (args.isPair()) {
-            Pair p = (Pair)args;
-            z = op.apply(z, unpackNum(p.head));
-            args = p.tail;
-        }
-
-        if (args.isNil()) {
-            return z;
-        } else {
-            throw new TypeMismatch("list", args);
-        }
-    }
-
-    private static Number unpackNum(LispVal val) {
-        if (val instanceof Num) {
-            return ((Num)val).value;
-        } else {
-            throw new TypeMismatch("number", val);
-        }
-    }
-
-    private static BigInteger toBigInteger(Number n) {
-        return (n instanceof BigInteger) ? (BigInteger)n : BigInteger.valueOf(n.longValue());
-    }
-
-    private static Number reduce(BigInteger n) {
-        return n.bitLength() < 64 ? n.longValue() : n;
-    }
-
-    private static Number reduce(Rational rat) {
-        BigInteger n = rat.numerator(), d = rat.denominator();
-        if (n.signum() == 0) {
-            return 0L;
-        } else if (n.bitLength() < 64 && d.equals(BigInteger.ONE)) {
-            return n.longValue();
-        } else {
-            return rat;
-        }
-    }
-
-    // ---------------------------------------------------------------------
-
-    public static double floor(double x) {
-        return Math.floor(x);
-    }
-
-    public static double ceiling(double x) {
-        return Math.ceil(x);
-    }
-
-    public static double truncate(double x) {
-        return Math.rint(x);
-    }
-
-    public static long round(double x) {
-        return Math.round(x);
-    }
-
-    public static Number numerator(Number x) {
-        if (x instanceof Rational) {
-            return reduce(((Rational)x).numerator());
-        } else if (x instanceof Double) {
-            return Rational.valueOf(x).numerator().doubleValue();
-        } else {
-            return x;
-        }
-    }
-
-    public static Number denominator(Number x) {
-        if (x instanceof Rational) {
-            return reduce(((Rational)x).denominator());
-        } else if (x instanceof Double) {
-            return Rational.valueOf(x).denominator().doubleValue();
-        } else {
-            return 1L;
-        }
-    }
-
-    public static double exp(double x) {
-        return Math.exp(x);
-    }
-
-    public static double log(double x) {
-        return Math.log(x);
-    }
-
-    public static double sin(double x) {
-        return Math.sin(x);
-    }
-
-    public static double cos(double x) {
-        return Math.cos(x);
-    }
-
-    public static double tan(double x) {
-        return Math.tan(x);
-    }
-
-    public static double asin(double x) {
-        return Math.asin(x);
-    }
-
-    public static double acos(double x) {
-        return Math.acos(x);
-    }
-
-    public static double atan(double x, Maybe<Double> y) {
-        return y.isAbsent() ? Math.atan(x) : Math.atan2(x, y.get());
-    }
-
-    public static double sqrt(double x) {
-        return Math.sqrt(x);
-    }
-
-    public static Number expt(Number x, Number y) {
-        if (!(x instanceof Double) &&
-              ((y instanceof Integer) ||
-               (y instanceof Long && y.intValue() == y.longValue()))) {
-            int n = y.intValue();
-            if (x instanceof Rational) {
-                return reduce(((Rational)x).pow(n));
-            } else {
-                return reduce(toBigInteger(x).pow(n));
-            }
-        } else {
-            return Math.pow(x.doubleValue(), y.doubleValue());
-        }
-    }
-
-    // ---------------------------------------------------------------------
-
-    @Name("exact->inexact")
-    public static double exact2inexact(Number x) {
-        return x.doubleValue();
-    }
-
-    @Name("inexact->exact")
-    public static Number inexact2exact(Number x) {
-        return reduce(Rational.valueOf(x));
-    }
-
-    @Name("number->string")
-    public static String number2string(Num z, Maybe<Integer> r) {
-        int radix = r.orElse(10);
-
-        if (radix == 10)
-            return z.show();
-
-        if (z.value instanceof Double)
-            throw new LispError("inexact numbers can only be represented in base 10");
-
-        if (z.value instanceof Rational) {
-            Rational rat = (Rational)z.value;
-            return rat.numerator().toString(radix) +
-                   "/" +
-                   rat.denominator().toString(radix);
-        }
-
-        if (z.value instanceof BigInteger)
-            return ((BigInteger)z.value).toString(radix);
-
-        return Long.toString(z.value.longValue(), radix);
-    }
-
-    @Name("string->number")
-    public static long string2number(String str, Maybe<Integer> r) {
-        int radix = r.orElse(10);
-        return Long.parseLong(str, radix); // FIXME
     }
 
     // ---------------------------------------------------------------------
@@ -976,7 +573,7 @@ public final class Primitives {
     // ---------------------------------------------------------------------
 
     public static Text make_string(int k, Maybe<Character> c) {
-        if (k < 0) throw new TypeMismatch("nonnegative-integer", new Num((long)k));
+        if (k < 0) throw new TypeMismatch("nonnegative-integer", Num.make(k));
 
         char[] chars = new char[k];
         Arrays.fill(chars, c.orElse(' '));
@@ -1108,7 +705,7 @@ public final class Primitives {
     // ---------------------------------------------------------------------
 
     public static Vec make_vector(int k, Maybe<LispVal> fill) {
-        return new Vec(Vector.iterate(k, __ -> fill.orElse(new Num(0L))));
+        return new Vec(Vector.iterate(k, __ -> fill.orElse(Num.ZERO)));
     }
 
     @VarArgs
@@ -1172,13 +769,13 @@ public final class Primitives {
 
     public static Env scheme_report_environment(Evaluator me, int version) {
         if (version != 5)
-            throw new TypeMismatch("<5>", new Num(version));
+            throw new TypeMismatch("<5>", Num.make(version));
         return me.getSchemeReportEnv();
     }
 
     public static Env null_environment(Evaluator me, int version) {
         if (version != 5)
-            throw new TypeMismatch("<5>", new Num(version));
+            throw new TypeMismatch("<5>", Num.make(version));
         return me.getNullEnv();
     }
 
@@ -1446,6 +1043,10 @@ public final class Primitives {
 
         return do_(rest.mapM(me, x -> expand(me, ctx, x, single)), els ->
                do_(me.pure(new Pair(tag, els))));
+    }
+
+    public static String dump(LispVal val) {
+        return val.toString();
     }
 
     // ---------------------------------------------------------------------

@@ -10,6 +10,8 @@ import java.io.Reader;
 import java.math.BigInteger;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
@@ -25,6 +27,8 @@ import com.cloudway.fp.parser.Lexer;
 import com.cloudway.fp.parser.Scanner;
 
 import static com.cloudway.fp.scheme.SchemeParser.Token.*;
+import com.cloudway.fp.scheme.numsys.Complex;
+import com.cloudway.fp.scheme.numsys.Num;
 
 // @formatter:off
 
@@ -97,21 +101,33 @@ public class SchemeParser {
         .macro("d",         "[0-9]")
         .macro("x",         "[0-9a-fA-F]")
 
+        .macro("dec",       "{d}+(/{d}+)?")
+        .macro("bin",       "{b}+(/{b}+)?")
+        .macro("oct",       "{o}+(/{o}+)?")
+        .macro("hex",       "{x}+(/{x}+)?")
+        .macro("float",     "({d}+|{d}+\\.{d}*|{d}*\\.{d}+)([eE][-+]?{d}+)?")
+
         .rule("#[tT]",      Fn.pure(Bool.TRUE))
         .rule("#[fF]",      Fn.pure(Bool.FALSE))
 
-        .rule("[-+]?{d}+(/{d}+)?",   s -> new Num(parseNum(s, 10)))
-        .rule("#b[-+]?{b}+(/{b}+)?", s -> new Num(parseNum(s.substring(2), 2)))
-        .rule("#o[-+]?{o}+(/{o}+)?", s -> new Num(parseNum(s.substring(2), 8)))
-        .rule("#d[-+]?{d}+(/{d}+)?", s -> new Num(parseNum(s.substring(2), 10)))
-        .rule("#x[-+]?{x}+(/{x}+)?", s -> new Num(parseNum(s.substring(2), 16)))
+        .rule("([-+]?{dec})?[-+]{dec}?i",   s -> parseComplex(s, 10))
+        .rule("#b([-+]?{bin})?[-+]{bin}?i", s -> parseComplex(s.substring(2), 2))
+        .rule("#o([-+]?{oct})?[-+]{oct}?i", s -> parseComplex(s.substring(2), 8))
+        .rule("#d([-+]?{dec})?[-+]{dec}?i", s -> parseComplex(s.substring(2), 10))
+        .rule("#x([-+]?{hex})?[-+]{hex}?i", s -> parseComplex(s.substring(2), 16))
+
+        .rule("[-+]?{dec}",   s -> parseNum(s, 10))
+        .rule("#b[-+]?{bin}", s -> parseNum(s.substring(2), 2))
+        .rule("#o[-+]?{oct}", s -> parseNum(s.substring(2), 8))
+        .rule("#d[-+]?{dec}", s -> parseNum(s.substring(2), 10))
+        .rule("#x[-+]?{hex}", s -> parseNum(s.substring(2), 16))
 
         .action("#[bodx]{c}*", s -> { s.fail("invalid number format");
                                       return Maybe.empty();
                                     })
 
-        .rule("[-+]?({d}+|{d}+\\.{d}*|{d}*\\.{d}+)([eE][-+]?{d}+)?",
-            s -> new Num(Double.parseDouble(s)))
+        .rule("[-+]?{float}", s -> Num.make(Double.parseDouble(s)))
+        .rule("([-+]?{float})?[-+]{float}?i", SchemeParser::parseFloatComplex)
 
         .rule("#\\\\.",        s -> new Char(s.charAt(2)))
         .rule("#\\\\x{x}+",    s -> parseCharCode(s.substring(3)))
@@ -153,9 +169,96 @@ public class SchemeParser {
 
         .build();
 
-    private static Number parseNum(String input, int radix) {
+    private static final Pattern INTEGER_PATTERN
+        = Pattern.compile("[-+]?\\p{Alnum}+(/\\p{Alnum}+)?");
+
+    private static final Pattern COMPLEX_PATTERN
+        = Pattern.compile("([-+]?\\p{Alnum}+(/\\p{Alnum}+)?)?[-+](\\p{Alnum}+(/\\p{Alnum}+)?)?i");
+
+    private static final String FLOAT_PATTERN_STRING =
+        "([-+]?(\\d+|\\d+\\.\\d*|\\d*\\.\\d+)([eE][-+]?\\d+)?)";
+
+    private static final Pattern FLOAT_PATTERN
+        = Pattern.compile(FLOAT_PATTERN_STRING);
+
+    private static final Pattern FLOAT_COMPLEX_PATTERN
+        = Pattern.compile(FLOAT_PATTERN_STRING + "?([-+]" + FLOAT_PATTERN_STRING + "?)i");
+
+    public static Num parseNumber(String input, int radix) {
+        if (COMPLEX_PATTERN.matcher(input).matches())
+            return parseComplex(input, radix);
+
+        if (FLOAT_COMPLEX_PATTERN.matcher(input).matches())
+            return parseFloatComplex(input);
+
+        if (INTEGER_PATTERN.matcher(input).matches())
+            return parseNum(input, radix);
+
+        if (FLOAT_PATTERN.matcher(input).matches())
+            return Num.make(Double.parseDouble(input));
+
+        throw new NumberFormatException("For input string: " + input);
+    }
+
+    private static Num parseComplex(String input, int radix) {
+        int i = input.lastIndexOf('+');
+        if (i == -1)
+            i = input.lastIndexOf('-');
+
+        String real_part = input.substring(0, i);
+        String imag_part = input.substring(i, input.length()-1);
+
+        Num real, imag;
+
+        if (real_part.isEmpty()) {
+            real = Num.ZERO;
+        } else {
+            real = parseNum(real_part, radix);
+        }
+
+        if ("+".equals(imag_part)) {
+            imag = Num.make(1);
+        } else if ("-".equals(imag_part)) {
+            imag = Num.make(-1);
+        } else {
+            imag = parseNum(imag_part, radix);
+        }
+
+        return new Complex(real, imag).lower();
+    }
+
+    private static Num parseFloatComplex(String input) {
+        Matcher m = FLOAT_COMPLEX_PATTERN.matcher(input);
+        if (!m.matches())
+            throw new NumberFormatException("For input string: " + input);
+
+        // notice the group index
+        String real_part = m.group(1);
+        String imag_part = m.group(4);
+
+        double real, imag;
+
+        if (real_part == null) {
+            real = 0;
+        } else {
+            real = Double.parseDouble(real_part);
+        }
+
+        if ("+".equals(imag_part)) {
+            imag = 1;
+        } else if ("-".equals(imag_part)) {
+            imag = -1;
+        } else {
+            imag = Double.parseDouble(imag_part);
+        }
+
+        // noinspection FloatingPointEquality
+        return imag == 0 ? Num.make(real) : new Complex(real, imag);
+    }
+
+    private static Num parseNum(String input, int radix) {
         if (input.indexOf('/') != -1) {
-            return Rational.valueOf(input, radix);
+            return Num.make(Rational.valueOf(input, radix)).lower();
         }
 
         int     len      = input.length();
@@ -172,15 +275,23 @@ public class SchemeParser {
         }
 
         for (; i < len && !overflow; i++) {
+            int d = digitToInt(input.charAt(i));
+            if (d < 0 || d >= radix)
+                throw new NumberFormatException("For input string: \"" + input + "\"");
             overflow = (value*radix)/radix != value;
-            value = value * radix + digitToInt(input.charAt(i));
+            value = value * radix + d;
             overflow |= (value - 1 < -1);
         }
 
         if (overflow) {
-            return new BigInteger(input, radix);
+            return Num.make(new BigInteger(input, radix));
+        }
+
+        value = sign * value;
+        if ((int)value == value) {
+            return Num.make((int)value);
         } else {
-            return sign * value;
+            return Num.make(value);
         }
     }
 

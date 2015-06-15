@@ -35,6 +35,7 @@ public class Record implements LispVal {
         pr.add("(");
         addRecordFields(pr);
         pr.add(")");
+        pr.removeReference(this);
     }
 
     private void addRecordName(Printer pr) {

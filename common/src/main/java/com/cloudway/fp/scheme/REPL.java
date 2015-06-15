@@ -42,7 +42,7 @@ public class REPL implements Completor{
         ConsoleReader console = new ConsoleReader(System.in, new PrintWriter(System.out));
         console.addCompletor(this);
 
-        Symbol lastVar = evaluator.getsym("_");
+        Symbol lastVar = evaluator.getsym("?");
         env.put(lastVar, LispVal.Void.VOID);
         Ref<LispVal> lastResult = env.lookup(lastVar).get();
 

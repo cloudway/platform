@@ -25,6 +25,7 @@ import com.cloudway.fp.function.TriFunction;
 import com.cloudway.fp.io.IO;
 import com.cloudway.fp.io.IOConsumer;
 import com.cloudway.fp.scheme.LispError.TypeMismatch;
+import com.cloudway.fp.scheme.numsys.Num;
 
 /**
  * Represents a Lisp value.
@@ -400,36 +401,6 @@ public interface LispVal {
         }
     }
 
-    final class Num implements LispVal {
-        public final Number value;
-
-        public Num(Number value) {
-            this.value = value;
-        }
-
-        @Override
-        public boolean isSelfEvaluating() {
-            return true;
-        }
-
-        @Override
-        public String show() {
-            return value.toString();
-        }
-
-        public String toString() {
-            return "#Num(" + value.getClass().getSimpleName() + ", " + value + ")";
-        }
-
-        public boolean equals(Object obj) {
-            if (obj == this)
-                return true;
-            if (obj instanceof Num)
-                return value.equals(((Num)obj).value);
-            return false;
-        }
-    }
-
     final class Bool implements LispVal {
         public static final Bool TRUE  = new Bool(true);
         public static final Bool FALSE = new Bool(false);
@@ -799,6 +770,7 @@ public interface LispVal {
             pr.addReference(this);
             pr.add("#&");
             pr.add(value);
+            pr.removeReference(this);
         }
 
         public String toString() {
@@ -955,9 +927,9 @@ public interface LispVal {
     }
 
     static <R> ConditionCase<LispVal, R, RuntimeException>
-    Num(Function<Number, ? extends R> mapper) {
+    Num(Function<Num, ? extends R> mapper) {
         return t -> t instanceof Num
-            ? () -> mapper.apply(((Num)t).value)
+            ? () -> mapper.apply((Num)t)
             : null;
     }
 

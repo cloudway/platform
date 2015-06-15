@@ -35,6 +35,13 @@ import com.cloudway.fp.data.Tuple;
 import com.cloudway.fp.data.Vector;
 import com.cloudway.fp.function.TriFunction;
 
+import com.cloudway.fp.scheme.numsys.Int32;
+import com.cloudway.fp.scheme.numsys.Int64;
+import com.cloudway.fp.scheme.numsys.Num;
+import com.cloudway.fp.scheme.numsys.NumberPrimitives;
+import com.cloudway.fp.scheme.numsys.Field;
+import com.cloudway.fp.scheme.numsys.Real;
+
 import static com.cloudway.fp.control.Conditionals.with;
 import static com.cloudway.fp.control.Syntax.do_;
 import static com.cloudway.fp.control.Syntax.let;
@@ -60,6 +67,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
         reportEnv = new Env();
         loadPrimitives(reportEnv, Primitives.class);
+        loadPrimitives(reportEnv, NumberPrimitives.class);
         loadPrimitives(reportEnv, IOPrimitives.class);
         loadLib(reportEnv, STDLIB).getOrThrow(Fn.id());
     }
@@ -1233,7 +1241,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         Tuple.of(Integer.TYPE,    Evaluator::unpackInt),
         Tuple.of(Long.class,      Evaluator::unpackLong),
         Tuple.of(Long.TYPE,       Evaluator::unpackLong),
-        Tuple.of(Number.class,    Evaluator::unpackNumber),
+        Tuple.of(Num.class,       Evaluator::unpackNumber),
         Tuple.of(Symbol.class,    Evaluator::unpackSymbol),
         Tuple.of(Text.class,      Evaluator::unpackText),
         Tuple.of(Pair.class,      Evaluator::unpackPair),
@@ -1249,10 +1257,9 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         Tuple.of(Boolean.TYPE,   obj -> pure(Bool.valueOf((Boolean)obj))),
         Tuple.of(Character.TYPE, obj -> pure(new Char((Character)obj))),
         Tuple.of(String.class,   obj -> pure(new MText((String)obj))),
-        Tuple.of(Double.TYPE,    obj -> pure(new Num((Double)obj))),
-        Tuple.of(Integer.TYPE,   obj -> pure(new Num((long)(Integer)obj))),
-        Tuple.of(Long.TYPE,      obj -> pure(new Num((Long)obj))),
-        Tuple.of(Number.class,   obj -> pure(new Num((Number)obj))),
+        Tuple.of(Integer.TYPE,   obj -> pure(Num.make((Integer)obj))),
+        Tuple.of(Long.TYPE,      obj -> pure(Num.make((Long)obj))),
+        Tuple.of(Double.TYPE,    obj -> pure(Num.make((Double)obj))),
         Tuple.of(LispVal.class,  obj -> pure((LispVal)obj))
     );
 
@@ -1282,27 +1289,39 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             : left(new TypeMismatch("string", val));
     }
 
-    private static Either<LispError, Object> unpackDouble(LispVal val) {
-        return val instanceof Num
-            ? right(((Num)val).value.doubleValue())
-            : left(new TypeMismatch("real", val));
-    }
-
     private static Either<LispError, Object> unpackInt(LispVal val) {
-        return val instanceof Num
-            ? right(((Num)val).value.intValue())
-            : left(new TypeMismatch("integer", val));
+        if (val instanceof Num) {
+            Int32 n = Field.raise(((Num)val).lower(), Int32.TAG);
+            if (n != null) {
+                return right(n.value);
+            }
+        }
+        return left(new TypeMismatch("integer", val));
     }
 
     private static Either<LispError, Object> unpackLong(LispVal val) {
-        return val instanceof Num
-            ? right(((Num)val).value.longValue())
-            : left(new TypeMismatch("long", val));
+        if (val instanceof Num) {
+            Int64 n = Field.raise(((Num)val).lower(), Int64.TAG);
+            if (n != null) {
+                return right(n.value);
+            }
+        }
+        return left(new TypeMismatch("integer", val));
+    }
+
+    private static Either<LispError, Object> unpackDouble(LispVal val) {
+        if (val instanceof Num) {
+            Real n = Field.raise(((Num)val).lower(), Real.TAG);
+            if (n != null) {
+                return right(n.value);
+            }
+        }
+        return left(new TypeMismatch("real", val));
     }
 
     private static Either<LispError, Object> unpackNumber(LispVal val) {
         return val instanceof Num
-            ? right(((Num)val).value)
+            ? right((Num)val)
             : left(new TypeMismatch("number", val));
     }
 
