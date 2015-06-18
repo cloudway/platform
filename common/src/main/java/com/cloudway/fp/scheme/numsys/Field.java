@@ -6,8 +6,10 @@
 
 package com.cloudway.fp.scheme.numsys;
 
+import java.math.BigInteger;
 import java.util.function.Function;
 
+import com.cloudway.fp.data.Rational;
 import com.cloudway.fp.function.TriFunction;
 import com.cloudway.fp.scheme.LispError;
 import com.google.common.collect.HashBasedTable;
@@ -95,7 +97,11 @@ public abstract class Field<N extends Num> {
 
     public Num pow(N x, int n) {
         BigInt a = raise_e(x, BigInt.TAG);
-        return new BigInt(a.value.pow(n)).lower();
+        if (n < 0) {
+            return new Ratio(Rational.valueOf(BigInteger.ONE, a.value.pow(-n))).lower();
+        } else {
+            return new BigInt(a.value.pow(n)).lower();
+        }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -105,15 +111,29 @@ public abstract class Field<N extends Num> {
             if (n instanceof Int32) {
                 Field xt = x.tag();
                 return xt.pow(x, ((Int32)n).value);
+            } else if (n instanceof Int16) {
+                Field xt = x.tag();
+                return xt.pow(x, ((Int16)n).value);
             }
+        }
+
+        if (x.isZero()) {
+            Num r = NumberPrimitives.real_part(y);
+            if (y.isZero())
+                return new Real(1);
+            if (r.isZero())
+                return new Real(Double.NaN);
+            if (r.isNegative())
+                return new Real(Double.POSITIVE_INFINITY);
+            return new Real(0);
         }
 
         if (x instanceof Complex || y instanceof Complex) {
             Complex a = raise_e(x, Complex.TAG);
             Complex b = raise_e(y, Complex.TAG);
             return a.expt(b);
-        } else {
-            return new Real(Math.pow(x.toReal(), y.toReal()));
         }
+
+        return new Real(Math.pow(x.toReal(), y.toReal()));
     }
 }

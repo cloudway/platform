@@ -24,6 +24,7 @@ import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Ref;
 import com.cloudway.fp.scheme.LispVal.Symbol;
 import com.cloudway.fp.scheme.LispVal.Printer;
+
 import jline.Completor;
 import jline.ConsoleReader;
 
@@ -43,7 +44,7 @@ public class REPL implements Completor{
         console.addCompletor(this);
 
         Symbol lastVar = evaluator.getsym("?");
-        env.put(lastVar, LispVal.Void.VOID);
+        env.put(lastVar, LispVal.VOID);
         Ref<LispVal> lastResult = env.lookup(lastVar).get();
 
         String line;
@@ -68,7 +69,7 @@ public class REPL implements Completor{
             },
 
             res -> {
-                if (!(res instanceof LispVal.Void)) {
+                if (res != LispVal.VOID) {
                     try {
                         Printer pr = new Printer();
                         pr.add(res);

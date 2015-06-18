@@ -109,13 +109,18 @@ public class Complex extends Num {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean eqv(Object obj) {
         if (this == obj)
             return true;
         if (!(obj instanceof Complex))
             return false;
         Complex that = (Complex)obj;
         return real.equals(that.real) && imag.equals(that.imag);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return eqv(obj);
     }
 
     @Override

@@ -43,24 +43,19 @@
 (define my-check-wrong   0)
 
 (define-macro (my-check ec '=> desired-result)
-  `(begin
-     (newline)
-     (write ',ec)
-     (newline)
-     (let ((actual-result ,ec))
+  `(let ((actual-result ,ec))
+     (unless (my-equal? actual-result ,desired-result)
+       (newline)
+       (write ',ec)
+       (newline)
        (display " => ")
        (write actual-result)
-       (if (my-equal? actual-result ,desired-result)
-           (begin
-             (display " ; correct")
-             (set! my-check-correct (+ my-check-correct 1)))
-           (begin
-             (display "; *** wrong ***, desired result:")
-             (newline)
-             (display " => ")
-             (write ,desired-result)
-             (set! my-check-wrong (+ my-check-wrong 1))))
-       (newline))))
+       (display "; *** wrong ***, desired result:")
+       (newline)
+       (display " => ")
+       (write ,desired-result)
+       (newline)
+       (set! my-check-wrong (+ my-check-wrong 1)))))
 
 ; ==========================================================================
 ; do-ec
@@ -534,15 +529,9 @@
 ; Summary
 ; ==========================================================================
 
-(begin
-  (newline)
-  (newline)
-  (display "correct examples : ")
-  (display my-check-correct)
+(when (not (= my-check-wrong 0))
   (newline)
   (display "wrong examples   : ")
   (display my-check-wrong)
   (newline)
-  (newline)
-  (if (not (= my-check-wrong 0))
-      (error "test failed!")))
+  (error "test failed!"))

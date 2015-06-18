@@ -37,6 +37,11 @@ public final class Rational extends Number implements Comparable<Rational> {
      */
     public static final Rational NEGATIVE_INFINITY = new Rational(BigInteger.ONE.negate(), BigInteger.ZERO);
 
+    /**
+     * The rational number represents Not-a-Number (0/0).
+     */
+    public static final Rational NaN = new Rational(BigInteger.ZERO, BigInteger.ZERO);
+
     // the numerator and denominator components of this rational number.
     private BigInteger numer, denom;
 
@@ -133,7 +138,9 @@ public final class Rational extends Number implements Comparable<Rational> {
      */
     public static Rational make(long numer, long denom) {
         if (denom == 0)
-            return (numer >= 0) ? POSITIVE_INFINITY : NEGATIVE_INFINITY;
+            return numer > 0 ? POSITIVE_INFINITY :
+                   numer < 0 ? NEGATIVE_INFINITY
+                             : NaN;
         if (numer == 0)
             return ZERO;
         if (numer == denom)
@@ -576,7 +583,8 @@ public final class Rational extends Number implements Comparable<Rational> {
      */
     public String toString() {
         if (denom.signum() == 0) {
-            return numer.signum() >= 0 ? "Infinity" : "-Infinity";
+            int sign = numer.signum();
+            return sign > 0 ? "Infinity" : sign < 0 ? "-Infinity" : "NaN";
         } else if (denom.equals(BigInteger.ONE)) {
             return numer.toString();
         } else {
@@ -593,13 +601,21 @@ public final class Rational extends Number implements Comparable<Rational> {
      */
     @Override
     public int compareTo(Rational that) {
+        int s1 = this.signum();
+        int s2 = that.signum();
+        if (s1 != s2)
+            return s1 - s2;
+
         return this.numer.multiply(that.denom).compareTo(
                that.numer.multiply(this.denom));
     }
 
     private Rational normalize() {
         if (denom.signum() == 0) {
-            return numer.signum() >= 0 ? POSITIVE_INFINITY : NEGATIVE_INFINITY;
+            int sign = numer.signum();
+            return sign > 0 ? POSITIVE_INFINITY :
+                   sign < 0 ? NEGATIVE_INFINITY
+                            : NaN;
         }
 
         if (denom.signum() < 0) {

@@ -38,6 +38,16 @@ public class Int16 extends Num {
     }
 
     @Override
+    public Object getObject() {
+        return value;
+    }
+
+    @Override
+    public Class<?> getObjectType() {
+        return Short.class;
+    }
+
+    @Override
     public double toReal() {
         return value;
     }
@@ -62,7 +72,7 @@ public class Int16 extends Num {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean eqv(Object obj) {
         if (obj == this)
             return true;
         return (obj instanceof Num) && ((Num)obj).equals(value);
@@ -71,6 +81,11 @@ public class Int16 extends Num {
     @Override
     public boolean equals(long value) {
         return value == this.value;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return eqv(obj);
     }
 
     @Override

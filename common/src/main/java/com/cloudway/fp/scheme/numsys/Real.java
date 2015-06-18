@@ -47,6 +47,16 @@ public class Real extends Num {
     }
 
     @Override
+    public Object getObject() {
+        return value;
+    }
+
+    @Override
+    public Class<?> getObjectType() {
+        return Double.class;
+    }
+
+    @Override
     public boolean isExact() {
         return false;
     }
@@ -114,6 +124,12 @@ public class Real extends Num {
 
     @Override
     public String show() {
+        if (value == Double.POSITIVE_INFINITY)
+            return "+inf.0";
+        if (value == Double.NEGATIVE_INFINITY)
+            return "-inf.0";
+        if (Double.isNaN(value))
+            return "+nan.0";
         return Double.toString(value);
     }
 
@@ -125,10 +141,19 @@ public class Real extends Num {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean eqv(Object obj) {
+        if (Double.isNaN(value))
+            return false;
         if (obj == this)
             return true;
-        return (obj instanceof Real) && value == ((Real)obj).value;
+        if (obj instanceof Real)
+            return value == ((Real)obj).value;
+        return false;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return eqv(obj);
     }
 
     @Override

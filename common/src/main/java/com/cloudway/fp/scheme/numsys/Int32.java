@@ -43,7 +43,21 @@ public class Int32 extends Num {
 
     @Override
     public Num lower() {
+        if ((short)value == value)
+            return new Int16((short)value);
         return this;
+    }
+
+    @Override
+    public Object getObject() {
+        return value;
+    }
+
+    @Override
+    public Class<?> getObjectType() {
+        if ((short)value == value)
+            return Short.class;
+        return Integer.class;
     }
 
     @Override
@@ -66,7 +80,7 @@ public class Int32 extends Num {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean eqv(Object obj) {
         if (obj == this)
             return true;
         return (obj instanceof Num) && ((Num)obj).equals(value);
@@ -75,6 +89,11 @@ public class Int32 extends Num {
     @Override
     public boolean equals(long value) {
         return value == this.value;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return eqv(obj);
     }
 
     @Override

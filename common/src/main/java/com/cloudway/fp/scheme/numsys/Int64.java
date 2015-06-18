@@ -41,11 +41,28 @@ public class Int64 extends Num {
     @Override
     public Num lower() {
         long r = value;
+        if ((short)r == r)
+            return new Int16((short)r);
         if ((int)r == r) {
             return new Int32((int)r);
         } else {
             return this;
         }
+    }
+
+    @Override
+    public Object getObject() {
+        return value;
+    }
+
+    @Override
+    public Class<?> getObjectType() {
+        long r = value;
+        if ((short)r == r)
+            return Short.class;
+        if ((int)r == r)
+            return Integer.class;
+        return Long.class;
     }
 
     @Override
@@ -73,7 +90,7 @@ public class Int64 extends Num {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean eqv(Object obj) {
         if (obj == this)
             return true;
         return (obj instanceof Num) && ((Num)obj).equals(value);
@@ -82,6 +99,11 @@ public class Int64 extends Num {
     @Override
     public boolean equals(long value) {
         return value == this.value;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return eqv(obj);
     }
 
     @Override

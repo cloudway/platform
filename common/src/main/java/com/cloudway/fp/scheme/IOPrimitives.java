@@ -23,14 +23,15 @@ import java.io.Writer;
 
 import com.cloudway.fp.$;
 import static com.cloudway.fp.control.Syntax.let;
+import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Ref;
+import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.io.IOConsumer;
 
 import static com.cloudway.fp.control.Syntax.do_;
 import com.cloudway.fp.scheme.LispError.TypeMismatch;
 import static com.cloudway.fp.scheme.LispVal.*;
-import static com.cloudway.fp.scheme.LispVal.Void;
 
 // @formatter:off
 
@@ -41,6 +42,7 @@ public final class IOPrimitives {
     public static final class InputPort implements LispVal {
         public final String name;
         public final Reader input;
+        public Seq<Either<LispError, LispVal>> stream;
 
         public InputPort(String name, Reader input) {
             this.name   = name;
@@ -156,7 +158,7 @@ public final class IOPrimitives {
     public static $<Evaluator, LispVal> close_input_port(Evaluator me, LispVal arg) {
         if (arg instanceof InputPort) {
             return do_(me.action(((InputPort)arg)::close),
-                   do_(me.pure(Void.VOID)));
+                   do_(me.pure(VOID)));
         } else {
             return me.throwE(new TypeMismatch("input port", arg));
         }
@@ -165,7 +167,7 @@ public final class IOPrimitives {
     public static $<Evaluator, LispVal> close_output_port(Evaluator me, LispVal arg) {
         if (arg instanceof OutputPort) {
             return do_(me.action(((OutputPort)arg)::close),
-                   do_(me.pure(Void.VOID)));
+                   do_(me.pure(VOID)));
         } else {
             return me.throwE(new TypeMismatch("output port", arg));
         }
@@ -246,17 +248,22 @@ public final class IOPrimitives {
                do_(() -> get_output_string(me, port))))));
     }
 
-    public static $<Evaluator, LispVal> read(Evaluator me, Env env, Maybe<LispVal> port_arg) {
-        LispVal port = port_arg.orElseGet(() -> current_input_port(me, env));
-        if (!(port instanceof InputPort)) {
-            return me.throwE(new TypeMismatch("input port", port));
+    public static $<Evaluator, LispVal> read(Evaluator me, Env env, Maybe<LispVal> maybe_port) {
+        LispVal port_val = maybe_port.orElseGet(() -> current_input_port(me, env));
+        if (!(port_val instanceof InputPort)) {
+            return me.throwE(new TypeMismatch("input port", port_val));
         }
 
-        SchemeParser parser = me.getParser();
-        Reader input = ((InputPort)port).input;
-        return parser.parseExpr(input).<$<Evaluator, LispVal>>either(
-            err -> me.throwE(err),
-            val -> me.pure(val));
+        InputPort port = (InputPort)port_val;
+        if (port.stream == null) {
+            port.stream = me.getParser().parse(port.name, port.input);
+        } else if (!port.stream.isEmpty()) {
+            port.stream = port.stream.tail();
+        }
+
+        return port.stream.isEmpty()
+            ? me.pure(EOF)
+            : me.except(port.stream.head());
     }
 
     private static void forOutputPort(Env env, Maybe<LispVal> arg, IOConsumer<OutputPort> proc)

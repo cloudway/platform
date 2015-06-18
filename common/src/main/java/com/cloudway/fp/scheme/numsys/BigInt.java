@@ -43,11 +43,30 @@ public class BigInt extends Num {
     public Num lower() {
         BigInteger r = value;
         int sz = r.bitLength();
+        if (sz < 16)
+            return new Int16(r.shortValue());
         if (sz < 32)
             return new Int32(r.intValue());
         if (sz < 64)
             return new Int64(r.longValue());
         return this;
+    }
+
+    @Override
+    public Object getObject() {
+        return value;
+    }
+
+    @Override
+    public Class<?> getObjectType() {
+        int sz = value.bitLength();
+        if (sz < 16)
+            return Short.class;
+        if (sz < 32)
+            return Integer.class;
+        if (sz < 64)
+            return Long.class;
+        return BigInteger.class;
     }
 
     @Override
@@ -102,7 +121,7 @@ public class BigInt extends Num {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean eqv(Object obj) {
         if (obj == this)
             return true;
         if (!(obj instanceof Num))
@@ -115,6 +134,11 @@ public class BigInt extends Num {
     @Override
     public boolean equals(long value) {
         return this.value.equals(BigInteger.valueOf(value));
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return eqv(obj);
     }
 
     @Override

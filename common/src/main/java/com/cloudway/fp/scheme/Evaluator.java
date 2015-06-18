@@ -9,6 +9,9 @@ package com.cloudway.fp.scheme;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.lang.reflect.Array;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Executable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -28,19 +31,13 @@ import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.HashPMap;
 import com.cloudway.fp.data.Maybe;
+import com.cloudway.fp.data.MutablePMap;
 import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Ref;
 import com.cloudway.fp.data.Seq;
-import com.cloudway.fp.data.Tuple;
-import com.cloudway.fp.data.Vector;
 import com.cloudway.fp.function.TriFunction;
 
-import com.cloudway.fp.scheme.numsys.Int32;
-import com.cloudway.fp.scheme.numsys.Int64;
-import com.cloudway.fp.scheme.numsys.Num;
 import com.cloudway.fp.scheme.numsys.NumberPrimitives;
-import com.cloudway.fp.scheme.numsys.Field;
-import com.cloudway.fp.scheme.numsys.Real;
 
 import static com.cloudway.fp.control.Conditionals.with;
 import static com.cloudway.fp.control.Syntax.do_;
@@ -49,7 +46,6 @@ import static com.cloudway.fp.data.Either.left;
 import static com.cloudway.fp.data.Either.right;
 import static com.cloudway.fp.scheme.LispError.*;
 import static com.cloudway.fp.scheme.LispVal.*;
-import static com.cloudway.fp.scheme.LispVal.Void;
 
 // @formatter:off
 
@@ -92,7 +88,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
                 return left(new LispError(ex));
             }
         }
-        return right(Void.VOID);
+        return right(VOID);
     }
 
     private static InputStream getModuleResource(String name) {
@@ -142,18 +138,22 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     }
 
     public Either<LispError, LispVal> run(Env env, Seq<Either<LispError, LispVal>> exps) {
-        Either<LispError, LispVal> res = right(Void.VOID);
+        Either<LispError, LispVal> res = right(VOID);
         while (!exps.isEmpty() && res.isRight()) {
             Either<LispError, LispVal> exp = exps.head();
             if (exp.isLeft()) {
                 res = exp;
                 break;
             } else {
-                res = Trampoline.run(ContT.eval(runExcept(eval(env, exp.right()))));
+                res = run(eval(env, exp.right()));
                 exps = exps.tail();
             }
         }
         return res;
+    }
+
+    public <A> Either<LispError, A> run($<Evaluator, A> result) {
+        return Trampoline.run(ContT.eval(runExcept(result)));
     }
 
     public Either<LispError, LispVal> evaluate(String form) {
@@ -179,9 +179,11 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     }
 
     public $<Evaluator, LispVal> apply(Env env, LispVal func, LispVal args) {
-        return with(func.getValue()).<$<Evaluator, LispVal>>get()
-            .when(Prim(f -> f.apply(env, args)))
-            .when(Func(f -> extendEnv(f.closure, f.params, args, f.body)))
+        return with(func.normalize()).<$<Evaluator, LispVal>>get()
+            .when(Prim    (p -> p.proc.apply(env, null, args)))
+            .when(Func    (f -> extendEnv(f.closure, f.params, args, f.body)))
+            .when(JClass  (c -> applyJObject(env, c, null, args)))
+            .when(JObject (o -> applyJObject(env, o.getClass(), o, args)))
             .orElseGet(() -> throwE(new NotFunction("Unrecognized function", func.show())));
     }
 
@@ -191,7 +193,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             case "define":
                 return with(args).<$<Evaluator, Proc>>get()
                   .when(List(id -> id.isSymbol()
-                      ? analyzeVariableDefinition(ctx, (Symbol)id, Void.VOID)
+                      ? analyzeVariableDefinition(ctx, (Symbol)id, VOID)
                       : badSyntax("define", form)))
                   .when(List((first, exp) ->
                     first.isSymbol()
@@ -232,7 +234,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
             case "if":
                 return with(args).<$<Evaluator, Proc>>get()
-                  .when(List((pred, conseq)      -> analyzeIf(ctx, pred, conseq, Void.VOID)))
+                  .when(List((pred, conseq)      -> analyzeIf(ctx, pred, conseq, VOID)))
                   .when(List((pred, conseq, alt) -> analyzeIf(ctx, pred, conseq, alt)))
                   .orElseGet(() -> badSyntax("if", form));
 
@@ -337,7 +339,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
               var.isSymbol() && checkMacro(pattern, body)
                 ? do_(analyzeSequence(ctx.extend(), body), bproc ->
                   do_(action(() -> ctx.putMacro((Symbol)var, new Macro(var.show(), pattern, bproc))),
-                  pure(env -> pure(Void.VOID))))
+                  pure(env -> pure(VOID))))
                 : badSyntax("define-macro", first)))
             .orElseGet(() -> badSyntax("define-macro", first));
     }
@@ -372,7 +374,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             return throwE(new NumArgs(nvars, vals));
         }
 
-        return pure(Void.VOID);
+        return pure(VOID);
     }
 
     private $<Evaluator, Proc> analyzeLambda(Env ctx, LispVal formals, LispVal body) {
@@ -445,7 +447,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     public $<Evaluator, Proc> analyzeSequence(Env ctx, LispVal exps) {
         if (exps.isNil()) {
-            return pure(env -> pure(Void.VOID));
+            return pure(env -> pure(VOID));
         }
 
         if (exps.isPair()) {
@@ -475,7 +477,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     private final Symbol ELSE = getsym("else");
     private final Symbol WHEN = getsym(":when");
-    private final Proc   LAST = env -> pure(Void.VOID);
+    private final Proc   LAST = env -> pure(VOID);
 
     private $<Evaluator, Proc> analyzeCond(Env ctx, LispVal form) {
         return with(form).<$<Evaluator, Proc>>get()
@@ -535,7 +537,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return do_(analyze(ctx, exp), vproc ->
                do_(analyzeMatchClauses(ctx, spec), mproc ->
                pure(env -> do_(vproc.apply(env), val ->
-                           mproc.apply(env, val.getValue())))));
+                           mproc.apply(env, val.normalize())))));
     }
 
     private $<Evaluator, PProc> analyzeMatchClauses(Env ctx, LispVal form) {
@@ -686,7 +688,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
         for (; p.isPair(); p = ((Pair)p).tail) {
             boolean ok = with(((Pair)p).head).<Boolean>get()
-                .when(List((var      ) -> lp.add(var, Void.VOID)))
+                .when(List((var      ) -> lp.add(var, VOID)))
                 .when(List((var, init) -> lp.add(var, init)))
                 .orElse(false);
             if (!ok) {
@@ -720,7 +722,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             params = params.tail();
             args = args.tail();
         }
-        return pure(Void.VOID);
+        return pure(VOID);
     }
 
     private $<Evaluator, Proc> translateLet(Seq<Symbol> params, Seq<Proc> inits, Proc body) {
@@ -731,7 +733,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     translateNamedLet(Symbol tag, Seq<Symbol> params, Seq<Proc> inits, Proc body) {
         return pure(env ->
             do_(evalM(env, inits), args ->
-            extendEnv(env, Seq.of(tag), Seq.of(Void.VOID),
+            extendEnv(env, Seq.of(tag), Seq.of(VOID),
             eenv -> let(new Func(Pair.fromList(params), body, eenv), f ->
                     do_(setVar(eenv, tag, __ -> pure(f)),
                     do_(apply(eenv, f, Pair.fromList(args))))))));
@@ -749,7 +751,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     private $<Evaluator, Proc> translateLetrec(Seq<Symbol> params, Seq<Proc> inits, Proc body) {
         return pure(env ->
-            extendEnv(env, params, params.map(Fn.pure(Void.VOID)),
+            extendEnv(env, params, params.map(Fn.pure(VOID)),
             eenv -> do_(evalM(eenv, inits), args ->
                     do_(setVariables(eenv, params, args),
                     do_(body.apply(eenv))))));
@@ -757,7 +759,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     private $<Evaluator, Proc> translateLetrecStar(Seq<Symbol> params, Seq<Proc> inits, Proc body) {
         return pure(env ->
-            extendEnv(env, params, params.map(Fn.pure(Void.VOID)),
+            extendEnv(env, params, params.map(Fn.pure(VOID)),
             eenv -> do_(zipM_(params, inits, (n, v) -> setVar(eenv, n, v)),
                     do_(() -> body.apply(eenv.extend())))));
     }
@@ -812,25 +814,13 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
               pure(new Pair(x, ys)))));
     }
 
-    private $<Evaluator, LispVal> unquoteVector(Env env, Vector<LispVal> vec) {
-        return map(vec.foldLeft(pure(Vector.empty()),
-                      (r, x) -> vectorSplice(env, r, x)),
-               Vec::new);
-    }
+    private $<Evaluator, LispVal> unquoteVector(Env env, LispVal[] vec) {
+        if (vec.length == 0)
+            return pure(new Vec(vec));
 
-    private $<Evaluator, Vector<LispVal>>
-    vectorSplice(Env env, $<Evaluator, Vector<LispVal>> res, LispVal val) {
-        return with(val).<$<Evaluator, Vector<LispVal>>>get()
-            .when(TaggedList(UNQS, datum ->
-              do_(res, r ->
-              do_(unquote(env, datum, true), x ->
-              do_(x.toList(this), xs ->
-              pure(r.append(Vector.fromList(xs))))))))
-
-            .orElseGet(() ->
-              do_(res, r ->
-              do_(evalUnquote(env, val), x ->
-              pure(r.snoc(x)))));
+        Pair pair = (Pair)Pair.fromList(Seq.of(vec));
+        return do_(unquotePair(env, pair.head, pair.tail), r ->
+               Primitives.vector(this, r));
     }
 
     private <R> ConditionCase<LispVal, $<Evaluator, R>, RuntimeException>
@@ -887,7 +877,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         Seq<Pair> current = winds.get();
 
         if (n == 0 || current == previous) {
-            return pure(Void.VOID);
+            return pure(VOID);
         } else if (n < 0) {
             return guard(action(() -> winds.set(previous)),
                    guard(delay (() -> apply(env, previous.head().head, Nil)),
@@ -955,7 +945,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     }
 
     private $<Evaluator, LispVal> do_action(Runnable action) {
-        return seqR(action(action), pure(Void.VOID));
+        return seqR(action(action), pure(VOID));
     }
 
     public Symbol getsym(String name) {
@@ -970,55 +960,23 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
     public void loadPrimitives(Env env, Class<?> primLib) {
         for (Method method : primLib.getMethods()) {
-            int mods = method.getModifiers();
-            if (Modifier.isPublic(mods) && Modifier.isStatic(mods)) {
-                String name = getPrimName(method);
-                LispVal prim = loadPrimitive(name, method);
+            if (Modifier.isStatic(method.getModifiers())) {
+                LispVal prim = loadPrimitive(method);
                 if (prim instanceof PrimMacro) {
-                    env.putMacro(getsym(name), prim);
+                    env.putMacro(getsym(((PrimMacro)prim).name), prim);
                 } else {
-                    env.put(getsym(name), prim);
+                    env.put(getsym(((Prim)prim).name), prim);
                 }
             }
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public LispVal loadPrimitive(String name, Method method) {
-        int mods = method.getModifiers();
-        if (!(Modifier.isPublic(mods) && Modifier.isStatic(mods))) {
-            throw new LispError("The primitive method must be public and static: " + method);
-        }
-
+    public LispVal loadPrimitive(Method method) {
+        String name = getPrimName(method);
         if (method.isAnnotationPresent(Syntax.class)) {
-            if (!checkMacroMethod(method)) {
-                throw new LispError("Invalid syntax method: " + method);
-            }
-
-            return new PrimMacro(name, (env, args) -> {
-                try {
-                    return ($<Evaluator, Proc>)method.invoke(null, this, env, args);
-                } catch (InvocationTargetException ex) {
-                    return throwE(new LispError(ex.getTargetException()));
-                } catch (Exception ex) {
-                    return throwE(new LispError(ex));
-                }
-            });
+            return new PrimMacro(name, makeMacroDispatcher(method));
         } else {
-            if (!checkPrimMethod(method)) {
-                throw new LispError("Invalid primitive method: " + method);
-            }
-
-            BiFunction<Env, LispVal, $<Evaluator, Object[]>>
-                unpacker = unpackArgs(method);
-            Packer packer = packRetval(method.getReturnType());
-
-            return new Prim(name, (env, args) ->
-                do_(unpacker.apply(env, args), jargs ->
-                do_(invoke(method, jargs), result ->
-                result == null
-                  ? pure(Void.VOID)
-                  : packer.apply(result))));
+            return new Prim(name, makePrimDispatcher(method));
         }
     }
 
@@ -1027,8 +985,136 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return nameTag != null ? nameTag.value() : method.getName().replace('_', '-');
     }
 
-    private static boolean isVarArgs(Method method) {
-        return method.isAnnotationPresent(VarArgs.class);
+    @SuppressWarnings("unchecked")
+    private BiFunction<Env, LispVal, $<Evaluator, Proc>>
+    makeMacroDispatcher(Method method) {
+        if (!checkMacroMethod(method)) {
+            throw new LispError("Invalid syntax method: " + method);
+        }
+
+        return (env, args) -> {
+            try {
+                return ($<Evaluator, Proc>)method.invoke(null, this, env, args);
+            } catch (InvocationTargetException ex) {
+                return throwE(new LispError(ex.getTargetException()));
+            } catch (Exception ex) {
+                return throwE(new LispError(ex));
+            }
+        };
+    }
+
+    private TriFunction<Env, Object, LispVal, $<Evaluator, LispVal>>
+    makePrimDispatcher(Method method) {
+        if (!checkPrimMethod(method)) {
+            throw new LispError("Invalid primitive method: " + method);
+        }
+
+        return makeMethodDispatcher(method);
+    }
+
+    private TriFunction<Env, Object, LispVal, $<Evaluator, LispVal>>
+    makeMethodDispatcher(Method method) {
+        BiFunction<Env, LispVal, $<Evaluator, Object[]>>
+            unpacker = getArgumentsUnpacker(method);
+        Packer packer = Packer.get(method.getReturnType());
+
+        method.setAccessible(true);
+
+        return (env, target, args) ->
+            do_(unpacker.apply(env, args), jargs ->
+            do_(invoke(method, target, jargs), result ->
+            do_(packResult(packer, method.getReturnType(), result))));
+    }
+
+    private BiFunction<Env, LispVal, $<Evaluator, LispVal>>
+    makeConstructorDispatcher(Constructor<?> cons) {
+        BiFunction<Env, LispVal, $<Evaluator, Object[]>>
+            unpacker = getArgumentsUnpacker(cons);
+
+        cons.setAccessible(true);
+
+        return (env, args) ->
+            do_(unpacker.apply(env, args), jargs ->
+            do_(newInstance(cons, jargs)));
+    }
+
+    private static final Symbol JCLASS_DECLS = new Symbol("%JCLASS_DECLS*");
+
+    private JClassDecl getJClassDecl(Env env, Class<?> cls) {
+        Ref<MutablePMap<Class<?>, JClassDecl>> decls = env.getSystem(JCLASS_DECLS, null);
+        if (decls.get() == null) {
+            decls.set(new MutablePMap<>(HashPMap.empty()));
+        }
+        return decls.get().computeIfAbsent(cls, this::createJClassDecl);
+    }
+
+    private JClassDecl createJClassDecl(Class<?> cls) {
+        JClassDecl.Builder builder = new JClassDecl.Builder();
+
+        for (Constructor<?> cons : cls.getConstructors()) {
+            builder.addConstructor(cons, makeConstructorDispatcher(cons));
+        }
+
+        for (Method method : cls.getMethods()) {
+            if (checkPrimMethod(method)) {
+                builder.addMethod(getPrimName(method), method, makeMethodDispatcher(method));
+            }
+        }
+
+        return builder.build();
+    }
+
+    private $<Evaluator, LispVal> applyJObject(Env env, Class<?> cls, Object obj, LispVal args) {
+        if (!args.isPair()) {
+            return throwE(new TypeMismatch("list", args));
+        }
+
+        Pair p = (Pair)args;
+        if (!(p.head instanceof Symbol)) {
+            return throwE(new TypeMismatch("keyword", p.head));
+        }
+
+        try {
+            String name = ((Symbol)p.head).name;
+            if (obj == null && "new".equals(name)) {
+                return invokeConstructor(env, cls, p.tail);
+            } else {
+                return invokeMethod(env, cls, name, obj, p.tail);
+            }
+        } catch (LispError ex) {
+            return throwE(ex);
+        } catch (Exception ex) {
+            return throwE(new LispError(ex));
+        }
+    }
+
+    private $<Evaluator, LispVal> invokeConstructor(Env env, Class<?> cls, LispVal args)
+        throws IllegalAccessException, InstantiationException
+    {
+        if (args.isNil()) {
+            return pure(new JObject(cls.newInstance()));
+        }
+
+        Maybe<BiFunction<Env, LispVal, $<Evaluator, LispVal>>>
+            dispatcher = getJClassDecl(env, cls).getConstructorDispatcher(args);
+
+        if (dispatcher.isAbsent()) {
+            return throwE(new LispError(cls.getName() + ": constructor not found or argument type don't match"));
+        }
+
+        return dispatcher.get().apply(env, args);
+    }
+
+    private $<Evaluator, LispVal>
+    invokeMethod(Env env, Class<?> cls, String name, Object obj, LispVal args) {
+        Maybe<TriFunction<Env, Object, LispVal, $<Evaluator, LispVal>>>
+            dispatcher = getJClassDecl(env, cls).getMethodDispatcher(obj == null, name, args);
+
+        if (dispatcher.isAbsent()) {
+            return throwE(new LispError(name + ": method not found or argument type don't match"));
+        }
+
+        return dispatcher.get().apply(env, obj, args);
     }
 
     private static boolean checkPrimMethod(Method method) {
@@ -1060,13 +1146,13 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return ret.getRawType() == rawType && Arrays.equals(targs, args);
     }
 
-    private BiFunction<Env, LispVal, $<Evaluator, Object[]>> unpackArgs(Method method) {
+    private BiFunction<Env, LispVal, $<Evaluator, Object[]>> getArgumentsUnpacker(Executable method) {
         Class<?>[] params  = method.getParameterTypes();
-        boolean    varargs = isVarArgs(method);
         boolean    passMe  = false;
         boolean    passEnv = false;
         int        nparams = params.length;
         Unpacker[] required, optional;
+        Unpacker   varargs;
         int        i       = 0;
 
         if (nparams > 0 && params[i] == Evaluator.class) {
@@ -1081,40 +1167,39 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             i++;
         }
 
-        if (varargs) {
-            if (nparams == 0 || params[params.length - 1] != LispVal.class)
-                throw new LispError("The last argument of a VarArgs method must be a LispVal");
-            nparams--;
-        }
+        varargs  = getVarArgUnpacker(method);
+        optional = getOptionalUnpackers(method, varargs != null, params);
 
-        optional = getOptionalArgs(method, varargs);
+        if (varargs != null)
+            nparams--;
         nparams -= optional.length;
 
         required = new Unpacker[nparams];
         for (int j = 0; j < nparams; i++, j++) {
-            Maybe<Unpacker> unpacker = getUnpacker(params[i]);
-            if (unpacker.isAbsent())
-                throw new LispError("Unrecognized java type: " + params[i].getName() + " in " + method);
-            required[j] = unpacker.get();
+            required[j] = Unpacker.get(params[i]);
         }
 
-        return unpackArgs(params.length, passMe, passEnv, required, optional, varargs);
+        return unpackArgs(params, passMe, passEnv, required, optional, varargs);
     }
 
-    private Unpacker[] getOptionalArgs(Method method, boolean varargs) {
+    private static final Unpacker[] NO_OPTIONALS = new Unpacker[0];
+
+    private static Unpacker[]
+    getOptionalUnpackers(Executable method, boolean varargs, Class<?>[] actual_types) {
         Type[]      params   = method.getGenericParameterTypes();
         int         nparams  = params.length - (varargs ? 1 : 0);
         int         iopt     = -1;
-        Unpacker[]  optional = new Unpacker[0];
+        Unpacker[]  optional = NO_OPTIONALS;
 
         for (int i = 0; i < nparams; i++) {
-            Unpacker unpacker = getOptionalUnpacker(params[i]);
-            if (unpacker != null) {
+            Class<?> type = getOptionalType(params[i]);
+            if (type != null) {
                 if (iopt == -1) {
                     optional = new Unpacker[nparams - i];
                     iopt = 0;
                 }
-                optional[iopt++] = unpacker;
+                optional[iopt++] = Unpacker.get(type);
+                actual_types[i] = type;
             } else {
                 if (iopt != -1) {
                     throw new LispError("Optional arguments must be contiguous: " + method);
@@ -1125,31 +1210,74 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return optional;
     }
 
-    private Unpacker getOptionalUnpacker(Type param) {
+    private static Class<?> getOptionalType(Type param) {
         if (param instanceof ParameterizedType) {
             ParameterizedType t = (ParameterizedType)param;
             Type[] as = t.getActualTypeArguments();
-
             if (t.getRawType() == Maybe.class && as.length == 1 && as[0] instanceof Class) {
-                Maybe<Unpacker> v = getUnpacker((Class)as[0]);
-                if (v.isAbsent())
-                    throw new LispError("Unrecognized java type: " + as[0].getTypeName());
-                return v.get();
+                return (Class<?>)as[0];
             }
+        }
+        return null;
+    }
+
+    private static Unpacker getVarArgUnpacker(Executable method) {
+        Class<?>[] params = method.getParameterTypes();
+        int nparams = params.length;
+
+        if (method.isAnnotationPresent(VarArgs.class)) {
+            if (nparams == 0 || params[nparams - 1] != LispVal.class)
+                throw new LispError("The last argument of a VarArgs method must be a LispVal");
+
+            return (type, args) -> Either.right(args);
+        }
+
+        if (method.isVarArgs()) {
+            assert nparams > 0 && params[nparams - 1].isArray();
+            Class<?> va_type = params[nparams - 1].getComponentType();
+            Unpacker va_unpacker = Unpacker.get(va_type);
+
+            return (type, val) -> {
+                int nargs = 0;
+                for (LispVal p = val; p.isPair(); p = ((Pair)p).tail)
+                    nargs++;
+
+                Object args = Array.newInstance(va_type, nargs);
+                Either<LispError, Object> v;
+
+                for (int i = 0; i < nargs; i++) {
+                    Pair p = (Pair)val;
+                    v = va_unpacker.apply(va_type, p.head);
+                    if (v.isLeft())
+                        return v;
+                    Array.set(args, i, v.right());
+                    val = p.tail;
+                }
+
+                return val.isNil() ? right(args) : left(new TypeMismatch("pair", val));
+            };
         }
 
         return null;
     }
 
     private BiFunction<Env, LispVal, $<Evaluator, Object[]>>
-    unpackArgs(int nargs, boolean passMe, boolean passEnv,
-               Unpacker[] required, Unpacker[] optional, boolean varargs) {
+    unpackArgs(Class<?>[] params, boolean passMe, boolean passEnv,
+               Unpacker[] required, Unpacker[] optional, Unpacker varargs) {
         return (env, args) -> {
-            Object[] res = new Object[nargs];
+            Object[] res = new Object[params.length];
             int nreq = required.length;
             int nopt = optional.length;
-            int i    = 0;
+            int i = 0;
             int j;
+            Either<LispError, Object> v;
+
+            // normalize arguments
+            for (LispVal x = args; x.isPair(); ) {
+                Pair p = (Pair)x;
+                p.head = p.head.normalize();
+                x = p.tail;
+            }
 
             if (passMe)
                 res[i++] = this;
@@ -1158,7 +1286,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
             for (j = 0; j < nreq && args.isPair(); i++, j++) {
                 Pair p = (Pair)args;
-                Either<LispError, Object> v = required[j].apply(p.head.getValue());
+                v = required[j].apply(params[i], p.head);
                 if (v.isLeft())
                     return throwE(v.left());
                 res[i] = v.right();
@@ -1173,7 +1301,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
                     res[i] = Maybe.empty();
                 } else if (args.isPair()) {
                     Pair p = (Pair)args;
-                    Either<LispError,Object> v = optional[j].apply(p.head.getValue());
+                    v = optional[j].apply(params[i], p.head);
                     if (v.isLeft())
                         return throwE(v.left());
                     res[i] = Maybe.of(v.right());
@@ -1183,10 +1311,11 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
                 }
             }
 
-            if (varargs) {
-                if (!args.allMatch(x -> !(x instanceof MultiVal)))
-                    args = args.map(LispVal::getValue);
-                res[i] = args;
+            if (varargs != null) {
+                v = varargs.apply(params[i], args);
+                if (v.isLeft())
+                    return throwE(v.left());
+                res[i] = v.right();
             } else if (!args.isNil()) {
                 return throwE(new NumArgs(nreq + nopt, args));
             }
@@ -1195,18 +1324,24 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         };
     }
 
-    private Packer packRetval(Class<?> type) {
-        Maybe<Packer> v = getPacker(type);
-        if (v.isPresent()) {
-            return v.get();
-        } else {
-            throw new LispError("Unrecognized java type: " + type.getName());
-        }
+    @SuppressWarnings("unchecked")
+    private $<Evaluator, LispVal> packResult(Packer packer, Class<?> type, Object obj) {
+        if (obj == null)
+            return pure(VOID);
+
+        if (type == $.class)
+            return ($<Evaluator, LispVal>)obj;
+
+        if (type == Either.class)
+            return except((Either<LispError, LispVal>)obj);
+
+        return pure(packer.apply(obj));
     }
 
-    private $<Evaluator, Object> invoke(Method method, Object[] args) {
+
+    private $<Evaluator, Object> invoke(Method method, Object target, Object[] args) {
         try {
-            return pure(method.invoke(null, args));
+            return pure(method.invoke(target, args));
         } catch (InvocationTargetException ex) {
             Throwable cause = ex.getTargetException();
             if (cause instanceof LispError)
@@ -1217,135 +1352,16 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         }
     }
 
-    // ---------------------------------------------------------------------
-
-    @FunctionalInterface
-    private interface Unpacker {
-        Either<LispError, Object> apply(LispVal val);
-    }
-
-    @FunctionalInterface
-    private interface Packer {
-        $<Evaluator, LispVal> apply(Object obj);
-    }
-
-    private final Seq<Tuple<Class<?>, Unpacker>> unpackers = Seq.of(
-        Tuple.of(Boolean.class,   Evaluator::unpackBoolean),
-        Tuple.of(Boolean.TYPE,    Evaluator::unpackBoolean),
-        Tuple.of(Character.class, Evaluator::unpackChar),
-        Tuple.of(Character.TYPE,  Evaluator::unpackChar),
-        Tuple.of(String.class,    Evaluator::unpackString),
-        Tuple.of(Double.class,    Evaluator::unpackDouble),
-        Tuple.of(Double.TYPE,     Evaluator::unpackDouble),
-        Tuple.of(Integer.class,   Evaluator::unpackInt),
-        Tuple.of(Integer.TYPE,    Evaluator::unpackInt),
-        Tuple.of(Long.class,      Evaluator::unpackLong),
-        Tuple.of(Long.TYPE,       Evaluator::unpackLong),
-        Tuple.of(Num.class,       Evaluator::unpackNumber),
-        Tuple.of(Symbol.class,    Evaluator::unpackSymbol),
-        Tuple.of(Text.class,      Evaluator::unpackText),
-        Tuple.of(Pair.class,      Evaluator::unpackPair),
-        Tuple.of(Vec.class,       Evaluator::unpackVector),
-        Tuple.of(LispVal.class,   val -> right(val))
-    );
-
-    @SuppressWarnings("unchecked")
-    private final Seq<Tuple<Class<?>, Packer>> packers = Seq.of(
-        Tuple.of(Either.class,   obj -> except((Either<LispError, LispVal>)obj)),
-        Tuple.of($.class,        obj -> ($<Evaluator, LispVal>)obj),
-        Tuple.of(java.lang.Void.TYPE , obj -> pure(Void.VOID)),
-        Tuple.of(Boolean.TYPE,   obj -> pure(Bool.valueOf((Boolean)obj))),
-        Tuple.of(Character.TYPE, obj -> pure(new Char((Character)obj))),
-        Tuple.of(String.class,   obj -> pure(new MText((String)obj))),
-        Tuple.of(Integer.TYPE,   obj -> pure(Num.make((Integer)obj))),
-        Tuple.of(Long.TYPE,      obj -> pure(Num.make((Long)obj))),
-        Tuple.of(Double.TYPE,    obj -> pure(Num.make((Double)obj))),
-        Tuple.of(LispVal.class,  obj -> pure((LispVal)obj))
-    );
-
-    private Maybe<Unpacker> getUnpacker(Class<?> type) {
-        return unpackers.findFirst(t -> t.first().isAssignableFrom(type)).map(Tuple::second);
-    }
-
-    private Maybe<Packer> getPacker(Class<?> type) {
-        return packers.findFirst(t -> t.first().isAssignableFrom(type)).map(Tuple::second);
-    }
-
-    private static Either<LispError, Object> unpackBoolean(LispVal val) {
-        return val instanceof Bool
-            ? right(((Bool)val).value)
-            : left(new TypeMismatch("boolean", val));
-    }
-
-    private static Either<LispError, Object> unpackChar(LispVal val) {
-        return val instanceof Char
-            ? right(((Char)val).value)
-            : left(new TypeMismatch("char", val));
-    }
-
-    private static Either<LispError, Object> unpackString(LispVal val) {
-        return val instanceof Text
-            ? right(((Text)val).value())
-            : left(new TypeMismatch("string", val));
-    }
-
-    private static Either<LispError, Object> unpackInt(LispVal val) {
-        if (val instanceof Num) {
-            Int32 n = Field.raise(((Num)val).lower(), Int32.TAG);
-            if (n != null) {
-                return right(n.value);
-            }
+    private $<Evaluator, LispVal> newInstance(Constructor<?> cons, Object[] args) {
+        try {
+            return pure(new JObject(cons.newInstance(args)));
+        } catch (InvocationTargetException ex) {
+            Throwable cause = ex.getTargetException();
+            if (cause instanceof LispError)
+                return throwE((LispError)cause);
+            return throwE(new LispError(cause));
+        } catch (Exception ex) {
+            return throwE(new LispError(ex));
         }
-        return left(new TypeMismatch("integer", val));
-    }
-
-    private static Either<LispError, Object> unpackLong(LispVal val) {
-        if (val instanceof Num) {
-            Int64 n = Field.raise(((Num)val).lower(), Int64.TAG);
-            if (n != null) {
-                return right(n.value);
-            }
-        }
-        return left(new TypeMismatch("integer", val));
-    }
-
-    private static Either<LispError, Object> unpackDouble(LispVal val) {
-        if (val instanceof Num) {
-            Real n = Field.raise(((Num)val).lower(), Real.TAG);
-            if (n != null) {
-                return right(n.value);
-            }
-        }
-        return left(new TypeMismatch("real", val));
-    }
-
-    private static Either<LispError, Object> unpackNumber(LispVal val) {
-        return val instanceof Num
-            ? right((Num)val)
-            : left(new TypeMismatch("number", val));
-    }
-
-    private static Either<LispError, Object> unpackSymbol(LispVal val) {
-        return val instanceof Symbol
-            ? right(val)
-            : left(new TypeMismatch("symbol", val));
-    }
-
-    private static Either<LispError, Object> unpackText(LispVal val) {
-        return val instanceof Text
-            ? right(val)
-            : left(new TypeMismatch("string", val));
-    }
-
-    private static Either<LispError, Object> unpackPair(LispVal val) {
-        return val instanceof Pair
-            ? right(val)
-            : left(new TypeMismatch("pair", val));
-    }
-
-    private static Either<LispError, Object> unpackVector(LispVal val) {
-        return val instanceof Vec
-            ? right(val)
-            : left(new TypeMismatch("vector", val));
     }
 }

@@ -60,16 +60,10 @@
   `(if (not ,pred) (begin ,@actions)))
 
 (define-macro (while some-cond . some-actions)
-  (let ((mc (gensym)))
-    `(do ((,mc 0 (+ ,mc 1)))
-         ((not ,some-cond) ,mc)
-       ,@some-actions)))
+  `(do () ((not ,some-cond)) ,@some-actions))
 
 (define-macro (until some-cond . some-actions)
-  (let ((mc (gensym)))
-      `(do ((,mc 0 (+ ,mc 1)))
-           (,some-cond ,mc)
-         ,@some-actions)))
+  `(do () (,some-cond) ,@some-actions))
 
 (define-macro (case-lambda . patterns)
   (let ((args (gensym)))
@@ -120,16 +114,55 @@
            (begin ,@finish)
            (begin ,@body (,loop ,@(map step bindings)))))))
 
+; Java interop
+
+(define-macro (new class . args)
+  `(,(jclass class) new: ,@args))
+
+(define-macro (jlambda class formals . body)
+  `(make-jlambda ,(jclass class) (lambda ,formals ,@body)))
+
+(define-macro (reify class . dispatch)
+  `(make-proxy ,(jclass class)
+               (list ,@(map (lambda (method)
+                              (match method
+                                ((name formals . body) :when (symbol? name)
+                                  `(cons ',name (lambda ,formals ,@body)))))
+                            dispatch))))
+
+(define-macro (do-with obj . actions)
+  (with-gensyms (val)
+    `(let ((,val ,obj))
+      ,@(map (case-lambda
+               (((name . args)) :when (keyword? name)
+                `(,val ,name ,@args)))
+             actions)
+      ,val)))
+
+(define-macro (-> obj . calls)
+  (match calls
+    [() obj]
+    [(name) :when (or (symbol? name) (keyword? name))
+     `(,obj ',name)]
+    [(name . rest) :when (or (symbol? name) (keyword? name))
+     `(-> (,obj ',name) ,@rest)]
+    [((name . args)) :when (keyword? name)
+     `(,obj ,name ,@args)]
+    [((name . args) . rest) :when (keyword? name)
+     `(-> (,obj ,name ,@args) ,@rest)]
+    [else (error '-> "bad syntax" calls)]))
+
+
 ;;; Numerical operations
 
 (define (odd? n)  (= (remainder n 2) 1))
 (define (even? n) (= (remainder n 2) 0))
 
 (define (max first . rest)
-    (fold (lambda (old new) (if (> old new) old new)) first rest))
+  (fold (lambda (old new) (if (> old new) old new)) first rest))
 
 (define (min first . rest)
-    (fold (lambda (old new) (if (< old new) old new)) first rest))
+  (fold (lambda (old new) (if (< old new) old new)) first rest))
 
 (define (gcd . vals)
   (define (g a b)
@@ -138,6 +171,18 @@
 
 (define (lcm . vals)
   (/ (abs (apply * vals)) (apply gcd vals)))
+
+(define (exact-floor x)
+  (inexact->exact (floor x)))
+
+(define (exact-ceiling x)
+  (inexact->exact (ceiling x)))
+
+(define (exact-truncate x)
+  (inexact->exact (truncate x)))
+
+(define (exact-round x)
+  (inexact->exact (round x)))
 
 (define (rationalize x y)
   (define (check x)
@@ -412,7 +457,7 @@
 
 ; SRFI 9: Defining Record Types
 
-(import-library "com.cloudway.fp.scheme.Record")
+(import-library com.cloudway.fp.scheme.Record)
 
 ; We define the following precedures:
 ;
@@ -594,6 +639,7 @@
 (set! (setter cddddr) (lambda (x v) (set-cdr! (cdddr x) v)))
 (set! (setter vector-ref) vector-set!)
 (set! (setter string-ref) string-set!)
+(set! (setter get-field) set-field!)
 
 ; SRFI 26: Notation for Specializing Parameters without Currying
 (define-macro (cut . form)
@@ -766,6 +812,157 @@
       (cond ((eq? action 'bind) (apply bind args))
             ((eq? action 'lookup) (apply lookup args))
             (else (error "unknown request " action))))))
+
+; SRFI-69 Basic hash tables
+
+(define *default-bound* (- (expt 2 29) 3))
+
+(define (%string-hash s ch-conv bound)
+  (let ((hash 31)
+        (len (string-length s)))
+    (do ((index 0 (+ index 1)))
+        ((>= index len) (modulo hash bound))
+        (set! hash (modulo (+ (* 37 hash)
+                              (char->integer (ch-conv (string-ref s index))))
+                           *default-bound*)))))
+
+(define (string-hash s . maybe-bound)
+  (%string-hash s (lambda (x) x) (:optional maybe-bound *default-bound*)))
+
+(define (string-ci-hash s . maybe-bound)
+  (%string-hash s char-downcase (:optional maybe-bound *default-bound*)))
+
+(define (symbol-hash s . maybe-bound)
+  (let ((bound (:optional maybe-bound *default-bound*)))
+    (%string-hash (symbol->string s) (lambda (x) x) bound)))
+
+(define (hash obj . maybe-bound)
+  (let ((bound (:optional maybe-bound *default-bound*)))
+    (cond ((integer? obj) (modulo obj bound))
+          ((string? obj) (string-hash obj bound))
+          ((symbol? obj) (symbol-hash obj bound))
+          ((real? obj) (modulo (+ (numerator obj) (denominator obj)) bound))
+          ((number? obj)
+            (modulo (+ (hash (real-part obj)) (* 3 (hash (imag-part obj))))
+                    bound))
+          ((char? obj) (modulo (char->integer obj) bound))
+          ((vector? obj) (vector-hash obj bound))
+          ((pair? obj) (modulo (+ (hash (car obj)) (* 3 (hash (cdr obj))))
+                               bound))
+          ((null? obj) 0)
+          ((not obj) 0)
+          ((procedure? obj) (error "hash: procedures cannot be hashed" obj))
+          ((jobject? obj) (obj hashCode:))
+          (else 1))))
+
+(define hash-by-identity hash)
+
+(define (vector-hash v bound)
+  (let ((hashvalue 571)
+        (len (vector-length v)))
+    (do ((index 0 (+ index 1)))
+        ((>= index len) (modulo hashvalue bound))
+        (set! hashvalue (modulo (+ (* 257 hashvalue) (hash (vector-ref v index)))
+                                *default-bound*)))))
+
+(define (make-hash-table . args)
+  (new java.util.LinkedHashMap))
+
+(define (hash-table? obj)
+  (instance-of? obj #!java.util.Map))
+
+(define (%check-hash-table obj)
+  (if (not (hash-table? obj))
+      (error "type mismatch. required hash-table, found" obj)))
+
+(define (alist->hash-table alist . args)
+  (let ((hash-table (apply make-hash-table args)))
+    (for-each
+      (lambda (elem)
+        (hash-table-update!/default
+          hash-table (car elem) (lambda (x) x) (cdr elem)))
+      alist)
+    hash-table))
+
+(define (hash-table-ref hash-table key . maybe-default)
+  (%check-hash-table hash-table)
+  (cond ((hash-table containsKey: key)
+         (hash-table get: key))
+        ((null? maybe-default)
+         (error 'hash-table-ref "no value associated with" key))
+        (else ((car maybe-default)))))
+
+(define (hash-table-ref/default hash-table key default)
+  (%check-hash-table hash-table)
+  (hash-table getOrDefault: key default))
+
+(define (hash-table-set! hash-table key value)
+  (%check-hash-table hash-table)
+  (hash-table put: key value)
+  (void))
+
+(define (hash-table-delete! hash-table key)
+  (%check-hash-table hash-table)
+  (hash-table remove: key)
+  (void))
+
+(define (hash-table-exists? hash-table key)
+  (%check-hash-table hash-table)
+  (hash-table contains: key))
+
+(define (hash-table-update! hash-table key function . maybe-default)
+  (%check-hash-table hash-table)
+  (cond ((hash-table containsKey: key)
+         (hash-table put: key (function (hash-table get: key))))
+        ((null? maybe-default)
+         (error 'hash-table-update! "no value exists for key" key))
+        (else (hash-table put: key (function ((car maybe-default)))))))
+
+(define (hash-table-update!/default hash-table key function default)
+  (hash-table-update! hash-table key function (lambda () default)))
+
+(define (hash-table-size hash-table)
+  (%check-hash-table hash-table)
+  (hash-table size:))
+
+(define (hash-table-walk hash-table proc)
+  (%check-hash-table hash-table)
+  (let ((it ((hash-table entrySet:) iterator:)))
+    (do () ((not (it hasNext:)))
+      (let ((node (it next:)))
+        (proc (node getKey:) (node getValue:))))))
+
+(define (hash-table-fold hash-table f acc)
+  (hash-table-walk
+    hash-table
+    (lambda (key value) (set! acc (f key value acc))))
+  acc)
+
+(define (hash-table-copy hash-table)
+  (%check-hash-table hash-table)
+  (new java.util.LinkedHashMap hash-table))
+
+(define (hash-table-merge! hash-table1 hash-table2)
+  (hash-table-walk
+    hash-table2
+    (lambda (key value) (hash-table-set! hash-table1 key value)))
+  hash-table1)
+
+(define (hash-table-clear! hash-table)
+  (%check-hash-table hash-table)
+  (hash-table clear:))
+
+(define (hash-table->alist hash-table)
+  (hash-table-fold
+    hash-table
+    (lambda (key val acc) (cons (cons key val) acc)) '()))
+
+(define (hash-table-keys hash-table)
+  (hash-table-fold hash-table (lambda (key val acc) (cons key acc)) '()))
+
+(define (hash-table-values hash-table)
+  (hash-table-fold hash-table (lambda (key val acc) (cons val acc)) '()))
+
 
 ; SRFI 89: Optional positional and named parameters
 
@@ -963,7 +1160,7 @@
                     (,$args
                       ($process-keys
                         ,$args
-                        ',(make-perfect-hash-table
+                        ',(alist->hash-table
                             (map (lambda (x i)
                                    (cons (car x) i))
                                  named
@@ -1001,64 +1198,7 @@
 
     (apply expand (parse-formals formals)))
 
-  (define (make-perfect-hash-table alist)
-
-    ; "alist" is a list of pairs of the form "(keyword . value)"
-
-    ; The result is a perfect hash-table represented as a vector of
-    ; length 2*N, where N is the hash modulus.  If the keyword K is in
-    ; the hash-table it is at index
-    ;
-    ;   X = (* 2 ($hash-keyword K N))
-    ;
-    ; and the associated value is at index X+1.
-
-    (let loop1 ((n (length alist)))
-      (let ((v (make-vector (* 2 n) #f)))
-        (let loop2 ((lst alist))
-          (if (pair? lst)
-            (let* ((key-val (car lst))
-                   (key (car key-val)))
-              (let ((x (* 2 ($hash-keyword key n))))
-                (if (vector-ref v x)
-                    (loop1 (+ n 1))
-                    (begin
-                      (vector-set! v x key)
-                      (vector-set! v (+ x 1) (cdr key-val))
-                      (loop2 (cdr lst))))))
-            v)))))
-
-  (define ($hash-keyword key n)
-    (let ((str (keyword->string key)))
-      (let loop ((h 0) (i 0))
-        (if (< i (string-length str))
-            (loop (modulo (+ (* h 65536) (char->integer (string-ref str i)))
-                          n)
-                  (+ i 1))
-            h))))
-
   (expand-lambda* formals body))
-
-; ---------------------------------------------------------------------------
-
-; Procedures needed at run time (called by the expanded code):
-
-; Perfect hash-tables with keyword keys
-
-(define ($hash-keyword key n)
-  (let ((str (keyword->string key)))
-    (let loop ((h 0) (i 0))
-      (if (< i (string-length str))
-          (loop (modulo (+ (* h 65536) (char->integer (string-ref str i)))
-                        n)
-                (+ i 1))
-          h))))
-
-(define ($perfect-hash-table-lookup table key)
-  (let* ((n (quotient (vector-length table) 2))
-         (x (* 2 ($hash-keyword key n))))
-    (and (eq? (vector-ref table x) key)
-         (vector-ref table (+ x 1)))))
 
 ; Handling of named parameters
 
@@ -1083,7 +1223,7 @@
         (let ((k (car args)))
           (if (not (keyword? k))
               args
-              (let ((i ($perfect-hash-table-lookup key-hash-table k)))
+              (let ((i (hash-table-ref/default key-hash-table k #f)))
                 (if (not i)
                     (error "unknown parameter keyword" k)
                     (if (null? (cdr args))
@@ -1110,3 +1250,23 @@
 
 (define-macro (define-generator name . body)
   `(define ,name (generator ,@body)))
+
+
+; SRFI 98: An interface to access environment variables.
+
+(define (get-environment-variable name)
+  (#!java.lang.System getenv: name))
+
+(define (get-environment-variables)
+  (hash-table->alist (#!java.lang.System getenv:)))
+
+(define getenv get-environment-variable)
+
+; SRFI 112: Environment Inquiry
+
+(define (implementation-name) "Scheva")
+(define (implementation-version) "1.0")
+(define (machine-name) "unknown")
+(define (os-type) (#!java.lang.System getProperty: "os.name"))
+(define (os-version) (#!java.lang.System getProperty: "os.version"))
+(define (cpu-architecture) (#!java.lang.System getProperty: "os.arch"))

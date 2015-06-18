@@ -51,6 +51,16 @@ public class Ratio extends Num {
     }
 
     @Override
+    public Object getObject() {
+        return value;
+    }
+
+    @Override
+    public Class<?> getObjectType() {
+        return Rational.class;
+    }
+
+    @Override
     public double toReal() {
         return value.doubleValue();
     }
@@ -136,21 +146,33 @@ public class Ratio extends Num {
 
     @Override
     public String show() {
-        return value.toString();
+        return show(10);
     }
 
     @Override
     public String show(int radix) {
-        return value.numerator().toString(radix) +
-               "/" +
-               value.denominator().toString(radix);
+        if (value.denominator().signum() == 0) {
+            int sign = value.numerator().signum();
+            return sign < 0 ? "-inf.0" : sign > 0 ? "+inf.0" : "+nan.0";
+        } else if (value.denominator().equals(BigInteger.ONE)) {
+            return value.numerator().toString(radix);
+        } else {
+            return value.numerator().toString(radix) +
+                   "/" +
+                   value.denominator().toString(radix);
+        }
+    }
+
+    @Override
+    public boolean eqv(Object obj) {
+        if (obj == this)
+            return true;
+        return (obj instanceof Ratio) && value.equals(((Ratio)obj).value);
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (obj == this)
-            return true;
-        return (obj instanceof Ratio) && value.equals(((Ratio)obj).value);
+        return eqv(obj);
     }
 
     @Override

@@ -7,6 +7,7 @@
 package com.cloudway.fp.scheme.numsys;
 
 import com.cloudway.fp.data.Maybe;
+import com.cloudway.fp.data.Rational;
 import com.cloudway.fp.function.TriFunction;
 import com.cloudway.fp.scheme.LispError.TypeMismatch;
 import com.cloudway.fp.scheme.LispVal;
@@ -47,6 +48,30 @@ public final class NumberPrimitives {
     @Name("complex?")
     public static boolean isComplex(LispVal val) {
         return (val instanceof Num) && Field.implies((Num)val, Complex.TAG);
+    }
+
+    @Name("infinite?")
+    public static boolean isInfinite(LispVal val) {
+        if (val instanceof Real) {
+            return Double.isInfinite(((Real)val).value);
+        } else if (val instanceof Ratio) {
+            Rational ratio = ((Ratio)val).value;
+            return ratio.numerator().signum() != 0 && ratio.denominator().signum() == 0;
+        } else {
+            return false;
+        }
+    }
+
+    @Name("finite?")
+    public static boolean isFinite(LispVal val) {
+        if (val instanceof Real) {
+            return Double.isFinite(((Real)val).value);
+        } else if (val instanceof Ratio) {
+            Rational ratio = ((Ratio)val).value;
+            return ratio.denominator().signum() != 0;
+        } else {
+            return true;
+        }
     }
 
     @Name("exact?")

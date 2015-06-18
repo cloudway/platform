@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -18,13 +19,10 @@ import java.util.regex.Pattern;
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.ConditionCase;
 import com.cloudway.fp.data.Seq;
-import com.cloudway.fp.data.Traversable;
-import com.cloudway.fp.data.Vector;
 import com.cloudway.fp.function.ExceptionSupplier;
 import com.cloudway.fp.function.TriFunction;
 import com.cloudway.fp.io.IO;
 import com.cloudway.fp.io.IOConsumer;
-import com.cloudway.fp.scheme.LispError.TypeMismatch;
 import com.cloudway.fp.scheme.numsys.Num;
 
 /**
@@ -98,27 +96,20 @@ public interface LispVal {
         return false;
     }
 
-    default LispVal getValue() {
+    default LispVal normalize() {
         return this;
     }
 
-    default LispVal map(Function<LispVal, LispVal> f) {
-        LispVal rev = Nil;
-        LispVal vals = this;
-        while (vals.isPair()) {
-            Pair p = (Pair)vals;
-            rev = new Pair(f.apply(p.head), rev);
-            vals = p.tail;
-        }
+    default Object getObject() {
+        return this;
+    }
 
-        LispVal res = vals.isNil() ? Nil : f.apply(vals);
-        while (rev.isPair()) {
-            Pair p = (Pair)rev;
-            res = new Pair(p.head, res);
-            rev = p.tail;
-        }
+    default Class<?> getObjectType() {
+        return getClass();
+    }
 
-        return res;
+    default boolean eqv(Object obj) {
+        return this == obj;
     }
 
     @SuppressWarnings("unchecked")
@@ -129,10 +120,6 @@ public interface LispVal {
 
     default boolean allMatch(Predicate<LispVal> p) {
         return p.test(this);
-    }
-
-    default $<Evaluator, Seq<LispVal>> toList(Evaluator m) {
-        return m.throwE(new TypeMismatch("pair", this));
     }
 
     // -----------------------------------------------------------------------
@@ -161,12 +148,17 @@ public interface LispVal {
             return "#Symbol('" + name + "')";
         }
 
-        public boolean equals(Object obj) {
+        @Override
+        public boolean eqv(Object obj) {
             if (obj == this)
                 return true;
             if (obj.getClass() == this.getClass())
                 return name.equals(((Symbol)obj).name);
             return false;
+        }
+
+        public boolean equals(Object obj) {
+            return eqv(obj);
         }
 
         public int hashCode() {
@@ -199,6 +191,16 @@ public interface LispVal {
         @Override
         default boolean isSelfEvaluating() {
             return true;
+        }
+
+        @Override
+        default Object getObject() {
+            return value();
+        }
+
+        @Override
+        default Class<?> getObjectType() {
+            return String.class;
         }
 
         String value();
@@ -294,16 +296,32 @@ public interface LispVal {
             return buf.toString();
         }
 
+        @Override
         public String toString() {
             return "#Text(\"" + value + "\")";
         }
 
-        public boolean equals(Object obj) {
+        @Override
+        public boolean eqv(Object obj) {
             if (obj == this)
                 return true;
             if (obj instanceof CText)
                 return value.equals(((CText)obj).value);
             return false;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == this)
+                return true;
+            if (obj instanceof Text)
+                return value.equals(((Text)obj).value());
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return value.hashCode();
         }
     }
 
@@ -399,6 +417,20 @@ public interface LispVal {
         public String toString() {
             return "#Text(\"" + new String(value) + "\")";
         }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == this)
+                return true;
+            if (obj instanceof Text)
+                return value().equals(((Text)obj).value());
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(value);
+        }
     }
 
     final class Bool implements LispVal {
@@ -421,20 +453,36 @@ public interface LispVal {
         }
 
         @Override
+        public Object getObject() {
+            return value;
+        }
+
+        @Override
+        public Class<?> getObjectType() {
+            return Boolean.class;
+        }
+
+        @Override
         public String show() {
             return value ? "#t" : "#f";
         }
 
+        @Override
         public String toString() {
             return "#Bool(" + value + ")";
         }
 
-        public boolean equals(Object obj) {
+        @Override
+        public boolean eqv(Object obj) {
             if (obj == this)
                 return true;
             if (obj instanceof Bool)
                 return value == ((Bool)obj).value;
             return false;
+        }
+
+        public boolean equals(Object obj) {
+            return eqv(obj);
         }
     }
 
@@ -448,6 +496,16 @@ public interface LispVal {
         @Override
         public boolean isSelfEvaluating() {
             return true;
+        }
+
+        @Override
+        public Object getObject() {
+            return value;
+        }
+
+        @Override
+        public Class<?> getObjectType() {
+            return Character.class;
         }
 
         @Override
@@ -472,12 +530,17 @@ public interface LispVal {
             return "#Char(" + value + ")";
         }
 
-        public boolean equals(Object obj) {
+        @Override
+        public boolean eqv(Object obj) {
             if (obj == this)
                 return true;
             if (obj instanceof Char)
                 return value == ((Char)obj).value;
             return false;
+        }
+
+        public boolean equals(Object obj) {
+            return eqv(obj);
         }
     }
 
@@ -496,11 +559,6 @@ public interface LispVal {
         @Override
         public boolean allMatch(Predicate<LispVal> p) {
             return true;
-        }
-
-        @Override
-        public $<Evaluator, Seq<LispVal>> toList(Evaluator m) {
-            return m.pure(Seq.nil());
         }
 
         @Override
@@ -542,24 +600,6 @@ public interface LispVal {
                     return false;
             }
             return t.isNil();
-        }
-
-        @Override
-        public $<Evaluator, Seq<LispVal>> toList(Evaluator m) {
-            Seq<LispVal> res = Seq.nil();
-
-            LispVal t = this;
-            while (t.isPair()) {
-                Pair p = (Pair)t;
-                res = Seq.cons(p.head, res);
-                t = p.tail;
-            }
-
-            if (t.isNil()) {
-                return m.pure(res.reverse());
-            } else {
-                return m.throwE(new TypeMismatch("pair", t));
-            }
         }
 
         @Override
@@ -651,13 +691,32 @@ public interface LispVal {
         public String toString() {
             return "#Pair(" + head + " " + tail + ")";
         }
+
+        public boolean equals(Object obj) {
+            if (obj == this)
+                return true;
+            if (obj instanceof Pair)
+                return equals(this, (LispVal)obj);
+            return false;
+        }
+
+        private static boolean equals(LispVal xs, LispVal ys) {
+            while (xs.isPair() && ys.isPair()) {
+                Pair px = (Pair)xs, py = (Pair)ys;
+                if (!px.head.equals(py.head))
+                    return false;
+                xs = px.tail;
+                ys = py.tail;
+            }
+            return xs.equals(ys);
+        }
     }
 
     final class Vec implements LispVal {
-        public Vector<LispVal> value;
+        public final LispVal[] value;
 
-        public Vec(Traversable<Vector.µ, LispVal> value) {
-            this.value = (Vector<LispVal>)value;
+        public Vec(LispVal[] value) {
+            this.value = value;
         }
 
         @Override
@@ -667,23 +726,31 @@ public interface LispVal {
 
         @Override
         public void show(Printer pr) {
-            if (value.isEmpty()) {
+            if (value.length == 0) {
                 pr.add("#()");
             } else {
                 pr.addReference(this);
                 pr.add("#(");
-                pr.add(value.head());
-                value.tail().forEach(x -> {
+                pr.add(value[0]);
+                for (int i = 1; i < value.length; i++) {
                     pr.add(" ");
-                    pr.add(x);
-                });
+                    pr.add(value[i]);
+                }
                 pr.add(")");
                 pr.removeReference(this);
             }
         }
 
         public String toString() {
-            return value.show(" ", "#Vector(", ")");
+            return show();
+        }
+
+        public boolean equals(Object obj) {
+            if (obj == this)
+                return true;
+            if (obj instanceof Vec)
+                return Arrays.equals(value, ((Vec)obj).value);
+            return false;
         }
     }
 
@@ -721,18 +788,28 @@ public interface LispVal {
         }
 
         @Override
-        public LispVal getValue() {
-            return value.isPair() ? ((Pair)value).head : Void.VOID;
+        public LispVal normalize() {
+            return value.isPair() ? ((Pair)value).head : VOID;
+        }
+
+        @Override
+        public Object getObject() {
+            return normalize().getObject();
+        }
+
+        @Override
+        public Class<?> getObjectType() {
+            return normalize().getObjectType();
         }
 
         @Override
         public boolean isTrue() {
-            return getValue().isTrue();
+            return normalize().isTrue();
         }
 
         @Override
         public boolean isFalse() {
-            return getValue().isFalse();
+            return normalize().isFalse();
         }
 
         @Override
@@ -776,13 +853,21 @@ public interface LispVal {
         public String toString() {
             return "#Box(" + value + ")";
         }
+
+        public boolean equals(Object obj) {
+            if (obj == this)
+                return true;
+            if (obj instanceof Box)
+                return value.equals(((Box)obj).value);
+            return false;
+        }
     }
 
     final class Prim implements LispVal {
         public final String name;
-        public final PProc  proc;
+        public final TriFunction<Env, Object, LispVal, $<Evaluator, LispVal>> proc;
 
-        public Prim(String name, PProc proc) {
+        public Prim(String name, TriFunction<Env, Object, LispVal, $<Evaluator, LispVal>> proc) {
             this.name = name;
             this.proc = proc;
         }
@@ -868,11 +953,7 @@ public interface LispVal {
         }
     }
 
-    final class Void implements LispVal {
-        public static final Void VOID = new Void();
-
-        private Void() {}
-
+    LispVal VOID = new LispVal() {
         @Override
         public boolean isSelfEvaluating() {
             return true;
@@ -885,6 +966,161 @@ public interface LispVal {
 
         public String toString() {
             return "#Void";
+        }
+
+        @Override
+        public Object getObject() {
+            return null;
+        }
+
+        @Override
+        public Class<?> getObjectType() {
+            return Void.TYPE;
+        }
+    };
+
+    // -----------------------------------------------------------------------
+    // Java interface
+
+    final class JClass implements LispVal {
+        public final Class<?> value;
+
+        public JClass(Class<?> value) {
+            this.value = value;
+        }
+
+        @Override
+        public boolean isSelfEvaluating() {
+            return true;
+        }
+
+        @Override
+        public Object getObject() {
+            return value;
+        }
+
+        @Override
+        public Class<?> getObjectType() {
+            return Class.class;
+        }
+
+        @Override
+        public String show() {
+            return "#!" + value.getName();
+        }
+
+        @Override
+        public boolean eqv(Object obj) {
+            if (obj == this)
+                return true;
+            if (obj instanceof JClass)
+                return value.equals(((JClass)obj).value);
+            return false;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return eqv(obj);
+        }
+
+        @Override
+        public int hashCode() {
+            return value.hashCode();
+        }
+    }
+
+    final class JObject implements LispVal {
+        public final Object value;
+
+        public JObject(Object value) {
+            this.value = value;
+        }
+
+        @Override
+        public boolean isSelfEvaluating() {
+            return true;
+        }
+
+        @Override
+        public Object getObject() {
+            return value;
+        }
+
+        @Override
+        public Class<?> getObjectType() {
+            return value.getClass();
+        }
+
+        @Override
+        public void show(Printer pr) {
+            if (value instanceof Map) {
+                showHashTable(pr, (Map<?,?>)value);
+            } else {
+                pr.add("#<jobject:" + value.getClass().getName() + ">");
+            }
+        }
+
+        private void showHashTable(Printer pr, Map<?,?> map) {
+            pr.addReference(this);
+            pr.add("#hash(");
+
+            boolean first = true;
+            for (Map.Entry<?,?> e : map.entrySet()) {
+                if (first)
+                    first = false;
+                else
+                    pr.add(" ");
+
+                Object key = e.getKey();
+                Object val = e.getValue();
+
+                pr.add("(");
+                if (key instanceof LispVal) {
+                    pr.add((LispVal)key);
+                } else {
+                    pr.add(key.toString());
+                }
+
+                pr.add(" . ");
+
+                if (val instanceof LispVal) {
+                    pr.add((LispVal)val);
+                } else {
+                    pr.add(val.toString());
+                }
+                pr.add(")");
+            }
+
+            pr.add(")");
+            pr.removeReference(this);
+        }
+
+        @Override
+        public String toString() {
+            return "#JObject(" + value + ")";
+        }
+
+        @Override
+        public boolean eqv(Object obj) {
+            if (obj == this)
+                return true;
+            if (obj instanceof JObject)
+                return value == ((JObject)obj).value;
+            return false;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == this)
+                return true;
+            if (obj instanceof JObject)
+                return value.equals(((JObject)obj).value);
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return value.hashCode();
         }
     }
 
@@ -1029,16 +1265,16 @@ public interface LispVal {
     }
 
     static <R> ConditionCase<LispVal, R, RuntimeException>
-    Vector(Function<Vector<LispVal>, ? extends R> mapper) {
+    Vector(Function<LispVal[], ? extends R> mapper) {
         return t -> t instanceof Vec
             ? () -> mapper.apply(((Vec)t).value)
             : null;
     }
 
     static <R> ConditionCase<LispVal, R, RuntimeException>
-    Prim(Function<PProc, ? extends R> mapper) {
+    Prim(Function<Prim, ? extends R> mapper) {
         return t -> t instanceof Prim
-            ? () -> mapper.apply(((Prim)t).proc)
+            ? () -> mapper.apply((Prim)t)
             : null;
     }
 
@@ -1056,9 +1292,18 @@ public interface LispVal {
             : null;
     }
 
-    static <R, X extends Throwable> ConditionCase<LispVal, R, X>
-    Void(ExceptionSupplier<R, X> mapper) {
-        return t -> (t instanceof Void) ? mapper : null;
+    static <R> ConditionCase<LispVal, R, RuntimeException>
+    JClass(Function<Class<?>, ? extends R> mapper) {
+        return t -> t instanceof JClass
+            ? () -> mapper.apply(((JClass)t).value)
+            : null;
+    }
+
+    static <R> ConditionCase<LispVal, R, RuntimeException>
+    JObject(Function<Object, ? extends R> mapper) {
+        return t -> t instanceof JObject
+            ? () -> mapper.apply(((JObject)t).value)
+            : null;
     }
 
     // -----------------------------------------------------------------------

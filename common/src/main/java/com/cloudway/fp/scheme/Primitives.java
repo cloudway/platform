@@ -9,12 +9,16 @@ package com.cloudway.fp.scheme;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.BiPredicate;
 
 import com.cloudway.fp.$;
@@ -22,14 +26,15 @@ import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Tuple;
-import com.cloudway.fp.data.Vector;
 import com.cloudway.fp.scheme.numsys.Num;
+
+import com.google.common.reflect.AbstractInvocationHandler;
+import com.google.common.reflect.Reflection;
 
 import static com.cloudway.fp.control.Conditionals.with;
 import static com.cloudway.fp.control.Syntax.do_;
 import static com.cloudway.fp.scheme.LispError.*;
 import static com.cloudway.fp.scheme.LispVal.*;
-import static com.cloudway.fp.scheme.LispVal.Void;
 import static java.lang.Character.toLowerCase;
 
 @SuppressWarnings("unused")
@@ -95,48 +100,17 @@ public final class Primitives {
 
     @Name("eq?")
     public static boolean eq(LispVal x, LispVal y) {
-        return x.equals(y);
+        return x.eqv(y);
     }
 
     @Name("eqv?")
     public static boolean eqv(LispVal x, LispVal y) {
-        return x.equals(y);
+        return x.eqv(y);
     }
 
     @Name("equal?")
     public static boolean equal(LispVal x, LispVal y) {
-        if (x == y) {
-            return true;
-        }
-
-        return with(x, y).<Boolean>get()
-            .when(Pair(xs -> Pair(ys -> listEqual(xs, ys))))
-            .when(Vector(xs -> Vector(ys -> vectorEqual(xs, ys))))
-            .orElseGet(() -> x.equals(y));
-    }
-
-    private static boolean listEqual(LispVal xs, LispVal ys) {
-        while (xs.isPair() && ys.isPair()) {
-            Pair px = (Pair)xs, py = (Pair)ys;
-            if (!equal(px.head, py.head))
-                return false;
-            xs = px.tail;
-            ys = py.tail;
-        }
-        return xs.equals(ys);
-    }
-
-    private static boolean vectorEqual(Vector<LispVal> x, Vector<LispVal> y) {
-        if (x.size() != y.size())
-            return false;
-
-        Iterator<LispVal> i1 = x.iterator();
-        Iterator<LispVal> i2 = y.iterator();
-        while (i1.hasNext() && i2.hasNext()) {
-            if (!equal(i1.next(), i2.next()))
-                return false;
-        }
-        return true;
+        return x.equals(y);
     }
 
     // ---------------------------------------------------------------------
@@ -382,7 +356,7 @@ public final class Primitives {
     public static $<Evaluator, LispVal>
     for_each(Evaluator me, Env env, LispVal proc, LispVal lst, LispVal more) {
         if (lst.isNil()) {
-            return me.pure(Void.VOID);
+            return me.pure(VOID);
         }
 
         if (lst.isPair()) {
@@ -705,40 +679,58 @@ public final class Primitives {
     // ---------------------------------------------------------------------
 
     public static Vec make_vector(int k, Maybe<LispVal> fill) {
-        return new Vec(Vector.iterate(k, __ -> fill.orElse(Num.ZERO)));
+        LispVal[] vec = new LispVal[k];
+        Arrays.fill(vec, fill.orElse(Num.ZERO));
+        return new Vec(vec);
     }
 
     @VarArgs
     public static $<Evaluator, LispVal> vector(Evaluator me, LispVal args) {
-        return me.map(args.toList(me), xs -> new Vec(Vector.fromList(xs)));
+        ArrayList<LispVal> lst = new ArrayList<>();
+        while (args.isPair()) {
+            Pair p = (Pair)args;
+            lst.add(p.head);
+            args = p.tail;
+        }
+
+        if (args.isNil()) {
+            return me.pure(new Vec(lst.toArray(new LispVal[lst.size()])));
+        } else {
+            return me.throwE(new TypeMismatch("pair", args));
+        }
     }
 
     public static int vector_length(Vec vec) {
-        return vec.value.size();
+        return vec.value.length;
     }
 
     public static LispVal vector_ref(Vec vec, int k) {
-        return vec.value.at(k);
+        return vec.value[k];
     }
 
     @Name("vector-set!")
     public static void vector_set(Vec vec, int k, LispVal obj) {
-        vec.value = vec.value.update(k, obj);
+        vec.value[k] = obj;
     }
 
     @Name("vector->list")
     public static LispVal vector2list(Vec vec) {
-        return Pair.fromList(vec.value.asList());
+        LispVal res = Nil;
+        LispVal[] els = vec.value;
+        for (int i = els.length; --i >= 0; ) {
+            res = new Pair(els[i], res);
+        }
+        return res;
     }
 
     @Name("list->vector")
     public static $<Evaluator, LispVal> list2vector(Evaluator me, LispVal lst) {
-        return me.map(lst.toList(me), xs -> new Vec(Vector.fromList(xs)));
+        return vector(me, lst);
     }
 
     @Name("vector-fill!")
     public static void vector_fill(Vec vec, LispVal fill) {
-        vec.value = vec.value.map(Fn.pure(fill));
+        Arrays.fill(vec.value, fill);
     }
 
     // ---------------------------------------------------------------------
@@ -783,8 +775,9 @@ public final class Primitives {
         return me.getInteractionEnv(env);
     }
 
-    public static $<Evaluator, LispVal> eval(Evaluator me, LispVal exp, Env env) {
-        return me.eval(env, exp);
+    public static $<Evaluator, LispVal>
+    eval(Evaluator me, Env env, LispVal exp, Maybe<Env> env_spec) {
+        return me.eval(env_spec.orElse(me.getInteractionEnv(env)), exp);
     }
 
     @VarArgs
@@ -808,8 +801,8 @@ public final class Primitives {
 
         LispVal last = rest;
         return do_(reverse(me, args), rev ->
-            do_(append(me, rev, last), app ->
-                me.apply(env, func, app)));
+               do_(append(me, rev, last), app ->
+               me.apply(env, func, app)));
     }
 
     @Syntax
@@ -910,7 +903,12 @@ public final class Primitives {
     }
 
     public static Either<LispError, LispVal> raise(LispVal obj) {
-        return Either.left(new Condition(obj));
+        if ((obj instanceof JObject) && ((JObject)obj).value instanceof Throwable) {
+            Throwable cause = (Throwable)((JObject)obj).value;
+            return Either.left(new LispError(cause));
+        } else {
+            return Either.left(new Condition(obj));
+        }
     }
 
     public static $<Evaluator, LispVal>
@@ -1071,36 +1069,236 @@ public final class Primitives {
         }
     }
 
-    public static void import_library(Evaluator me, Env env, String cls) {
-        try {
-            me.loadPrimitives(env, Class.forName(cls));
-        } catch (LispError ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new LispError(ex);
+    @Syntax
+    public static $<Evaluator, Proc> import_library(Evaluator me, Env ctx, LispVal args) {
+        if (args.isPair()) {
+            Pair p = (Pair)args;
+            if (p.head.isSymbol() && p.tail.isNil()) {
+                String cls = ((Symbol)p.head).name;
+                return me.pure(env -> {
+                    try {
+                        me.loadPrimitives(env, Class.forName(cls));
+                        return me.pure(VOID);
+                    } catch (LispError ex) {
+                        return me.throwE(ex);
+                    } catch (Exception ex) {
+                        return me.throwE(new LispError(ex));
+                    }
+                });
+            }
+        }
+        return me.throwE(new BadSpecialForm("load-library: bad-syntax", args));
+    }
+
+    @Name("jclass?")
+    public static boolean isJClass(LispVal val) {
+        return val instanceof JClass;
+    }
+
+    @Name("jobject?")
+    public static boolean isJObject(LispVal val) {
+        return val instanceof JObject;
+    }
+
+    public static JClass jclass(LispVal arg) throws ClassNotFoundException {
+        String name;
+
+        if (arg instanceof Symbol) {
+            name = ((Symbol)arg).name;
+        } else if (arg instanceof Text) {
+            name = ((Text)arg).value();
+        } else {
+            throw new TypeMismatch("symbol or string", arg);
+        }
+
+        if (name.indexOf('.') == -1)
+            name = "java.lang." + name;
+        return new JClass(Class.forName(name));
+    }
+
+    public static JClass jobject_class(JObject obj) {
+        return new JClass(obj.value.getClass());
+    }
+
+    @Name("instance-of?")
+    public static boolean instance_of(Object obj, JClass cls) {
+        return cls.value.isInstance(obj);
+    }
+
+    public static $<Evaluator, LispVal>
+    get_field(Evaluator me, LispVal obj, Symbol name) throws Exception {
+        if (obj instanceof JClass) {
+            return getField(me, ((JClass)obj).value, null, name.name);
+        } else if (obj instanceof JObject) {
+            Object jobj = ((JObject)obj).value;
+            return getField(me, jobj.getClass(), jobj, name.name);
+        } else {
+            throw new TypeMismatch("jclass or jobject", obj);
         }
     }
 
-    public static LispVal import_method(Evaluator me, String cls, String mth) {
-        try {
-            Method method = findMethod(Class.forName(cls), mth);
-            return me.loadPrimitive(getPrimName(method), method);
-        } catch (LispError ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new LispError(ex);
+    private static $<Evaluator, LispVal>
+    getField(Evaluator me, Class<?> cls, Object obj, String name)
+        throws NoSuchFieldException, IllegalAccessException
+    {
+        if (obj == null && "class".equals(name))
+            return me.pure(new JObject(cls));
+
+        Field field = cls.getField(name);
+        if (Modifier.isStatic(field.getModifiers()) != (obj == null))
+            throw new NoSuchFieldException(name);
+        return me.pure(Packer.pack(field.get(obj)));
+    }
+
+    @Name("set-field!")
+    public static $<Evaluator, LispVal>
+    set_field(Evaluator me, LispVal obj, Symbol name, LispVal value) throws Exception {
+        if (obj instanceof JClass) {
+            return setField(me, ((JClass)obj).value, null, name.name, value);
+        } else if (obj instanceof JObject) {
+            Object jobj = ((JObject)obj).value;
+            return setField(me, jobj.getClass(), jobj, name.name, value);
+        } else {
+            return me.throwE(new TypeMismatch("jclass or jobject", obj));
         }
     }
 
-    private static Method findMethod(Class<?> c, String name) {
-        for (Method method : c.getMethods())
-            if (name.equals(method.getName()))
-                return method;
-        throw new LispError(name + ": method not found");
+    private static $<Evaluator, LispVal>
+    setField(Evaluator me, Class<?> cls, Object obj, String name, LispVal value)
+        throws NoSuchFieldException, IllegalAccessException
+    {
+        Field field = cls.getField(name);
+        if (Modifier.isStatic(field.getModifiers()) != (obj == null))
+            throw new NoSuchFieldException(name);
+
+        Either<LispError, Object> val = Unpacker.unpack(field.getType(), value.normalize());
+        if (val.isLeft()) {
+            return me.throwE(val.left());
+        } else {
+            field.set(obj, val.right());
+            return me.pure(VOID);
+        }
     }
 
-    private static String getPrimName(Method method) {
-        Name nameTag = method.getAnnotation(Name.class);
-        return nameTag != null ? nameTag.value() : method.getName().replace('_', '-');
+    private static class JLambda {
+        private final Packer[] packers;
+        private final Unpacker unpacker;
+        private final Class<?> ret;
+        private final LispVal  lambda;
+
+        private JLambda(Packer[] packers, Unpacker unpacker, Class<?> ret, LispVal lambda) {
+            this.packers  = packers;
+            this.unpacker = unpacker;
+            this.ret      = ret;
+            this.lambda   = lambda;
+        }
+
+        static JLambda make(Method method, LispVal lambda) {
+            Class<?>[] params = method.getParameterTypes();
+            Packer[] packers = new Packer[params.length];
+            for (int i = 0; i < params.length; i++) {
+                packers[i] = Packer.get(params[i]);
+            }
+
+            Class<?> ret = method.getReturnType();
+            Unpacker unpacker = Unpacker.get(ret);
+
+            return new JLambda(packers, unpacker, ret, lambda);
+        }
+
+        Object invoke(Evaluator me, Env env, Object[] args) {
+            $<Evaluator, Object> result =
+                do_(me.apply(env, lambda, packArguments(me, args, packers)), r ->
+                do_(me.except(unpacker.apply(ret, r.normalize()))));
+            return me.run(result).getOrThrow(Fn.id());
+        }
+
+        private static LispVal packArguments(Evaluator me, Object[] args, Packer[] packers) {
+            assert args.length == packers.length;
+            LispVal res = Nil;
+
+            for (int i = args.length; --i >= 0; ) {
+                LispVal x;
+                if (args[i] == null) {
+                    x = VOID;
+                } else if (args[i] instanceof LispVal) {
+                    x = (LispVal)args[i];
+                } else {
+                    x = packers[i].apply(args[i]);
+                }
+                res = new Pair(x, res);
+            }
+            return res;
+        }
+    }
+
+    public static Object make_jlambda(Evaluator me, Env env, Class<?> cls, LispVal lambda) {
+        Method method = findInterfaceMethod(cls);
+        if (method == null) {
+            throw new LispError(cls.getName() + ": not a functional interface");
+        }
+
+        JLambda jlambda = JLambda.make(method, lambda);
+        return Reflection.newProxy(cls, new AbstractInvocationHandler() {
+            @Override
+            protected Object handleInvocation(Object proxy, Method method, Object[] args) throws Throwable {
+                return jlambda.invoke(me, env, args);
+            }
+        });
+    }
+
+    public static Object make_proxy(Evaluator me, Env env, Class<?> cls, LispVal fns) {
+        Map<Method, JLambda> dispatch = createProxyDispatch(cls, fns);
+
+        return Reflection.newProxy(cls, new AbstractInvocationHandler() {
+            @Override
+            protected Object handleInvocation(Object proxy, Method method, Object[] args) throws Throwable {
+                JLambda jlambda = dispatch.get(method);
+                if (jlambda == null)
+                    throw new LispError(method.getName() + ": method is not implemented");
+                return jlambda.invoke(me, env, args);
+            }
+        });
+    }
+
+    private static Method findInterfaceMethod(Class<?> cls) {
+        Method interface_method = null;
+        if (cls.isInterface()) {
+            for (Method method : cls.getMethods()) {
+                if (Modifier.isAbstract(method.getModifiers())) {
+                    if (interface_method != null)
+                        return null;
+                    interface_method = method;
+                }
+            }
+        }
+        return interface_method;
+    }
+
+    private static Map<Method, JLambda> createProxyDispatch(Class<?> cls, LispVal fns) {
+        if (!cls.isInterface())
+            throw new LispError(cls.getName() + ": not a interface");
+
+        Map<Method, JLambda> dispatch = new HashMap<>();
+        for (Method method : cls.getMethods()) {
+            LispVal fn = searchAlist(method.getName(), fns);
+            if (fn != null) {
+                dispatch.put(method, JLambda.make(method, fn));
+            }
+        }
+        return dispatch;
+    }
+
+    private static LispVal searchAlist(String name, LispVal alist) {
+        while (alist.isPair()) {
+            Pair p = (Pair)alist;
+            if (p.head.isPair()) {
+                Pair a = (Pair)p.head;
+                if ((a.head instanceof Symbol) && name.equals(((Symbol)a.head).name))
+                    return a.tail;
+            }
+            alist = p.tail;
+        }
+        return null;
     }
 }

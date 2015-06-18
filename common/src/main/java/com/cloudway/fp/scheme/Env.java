@@ -84,8 +84,12 @@ public final class Env implements LispVal {
         return bindings.get().get(id).get();
     }
 
+    public void putRef(Symbol id, Ref<LispVal> ref) {
+        bindings.update(b -> b.put(id, ref));
+    }
+
     public void put(Symbol id, LispVal value) {
-        bindings.update(b -> b.put(id, new Ref<>(value)));
+        putRef(id, new Ref<>(value));
     }
 
     public Env extend() {

@@ -7,7 +7,11 @@
 package com.cloudway.fp.scheme;
 
 import java.io.Reader;
+import java.lang.reflect.Array;
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -21,7 +25,6 @@ import com.cloudway.fp.data.MutablePMap;
 import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Rational;
 import com.cloudway.fp.data.Seq;
-import com.cloudway.fp.data.Vector;
 import com.cloudway.fp.parser.LexBuilder;
 import com.cloudway.fp.parser.Lexer;
 import com.cloudway.fp.parser.Scanner;
@@ -65,7 +68,9 @@ public class SchemeParser {
 
         DOT("."),
         VECTOR("#("),
+        HASH("#hash("),
         BOX("#&"),
+        CLASS("#!"),
 
         QUOTE("'"),
         QUASIQUOTE("`"),
@@ -95,6 +100,7 @@ public class SchemeParser {
         .macro("symbol",    "[!$%&*+\\-/:.<=>?@^_~]")
         .macro("letter",    "[a-zA-Z]")
         .macro("digit",     "[0-9]")
+
         .macro("c",         "{letter}|{symbol}|{digit}")
         .macro("b",         "[01]")
         .macro("o",         "[0-7]")
@@ -129,6 +135,11 @@ public class SchemeParser {
         .rule("[-+]?{float}", s -> Num.make(Double.parseDouble(s)))
         .rule("([-+]?{float})?[-+]{float}?i", SchemeParser::parseFloatComplex)
 
+        .literal("+inf.0", Num.make(Double.POSITIVE_INFINITY))
+        .literal("-inf.0", Num.make(Double.NEGATIVE_INFINITY))
+        .literal("+nan.0", Num.make(Double.NaN))
+        .literal("-nan.0", Num.make(Double.NaN))
+
         .rule("#\\\\.",        s -> new Char(s.charAt(2)))
         .rule("#\\\\x{x}+",    s -> parseCharCode(s.substring(3)))
         .action("#\\\\[a-z]+", SchemeParser::parseCharConst)
@@ -151,7 +162,10 @@ public class SchemeParser {
 
         .literal(".",  DOT)
         .literal("#(", VECTOR)
+        .literal("#hash(", HASH)
         .literal("#&", BOX)
+
+        .rule("#![a-zA-Z0-9_$.]+(\\[\\])*(/[a-zA-Z0-9_$]+)*", Fn.pure(CLASS))
 
         .literal("'",  QUOTE)
         .literal("`",  QUASIQUOTE)
@@ -185,6 +199,13 @@ public class SchemeParser {
         = Pattern.compile(FLOAT_PATTERN_STRING + "?([-+]" + FLOAT_PATTERN_STRING + "?)i");
 
     public static Num parseNumber(String input, int radix) {
+        if ("+inf.0".equals(input))
+            return Num.make(Double.POSITIVE_INFINITY);
+        if ("-inf.0".equals(input))
+            return Num.make(Double.NEGATIVE_INFINITY);
+        if ("+nan.0".equals(input) || "-nan.0".equals(input))
+            return Num.make(Double.NaN);
+
         if (COMPLEX_PATTERN.matcher(input).matches())
             return parseComplex(input, radix);
 
@@ -406,17 +427,6 @@ public class SchemeParser {
         return parser.p_top_level();
     }
 
-    public Either<LispError, LispVal> parseExpr(Reader input) {
-        try {
-            Parser parser = new Parser("", lexer.getScanner(input));
-            return Either.right(parser.p_expression());
-        } catch (LispError ex) {
-            return Either.left(ex);
-        } catch (Exception ex) {
-            return Either.left(new LispError(ex));
-        }
-    }
-
     private final class Parser {
         private final String filename;
         private final Scanner<LispVal> scanner;
@@ -424,7 +434,12 @@ public class SchemeParser {
 
         private boolean foldcase = false;
 
-        public Parser(String filename, Scanner<LispVal> scanner) {
+        // Internal state used to read a single expression from input stream.
+        // If this value is set to 0, and an expression has been read, more
+        // tokens should be kept in stream for next read.
+        private int nested = 0;
+
+        Parser(String filename, Scanner<LispVal> scanner) {
             this.filename = filename;
             this.scanner = scanner;
         }
@@ -451,13 +466,21 @@ public class SchemeParser {
             while (true) {
                 if (token == COMMENT) {
                     advance();
+                    nested++;
                     pexp.get();
+                    nested--;
                 } else if (token == DIRECTIVE) {
                     process_directive(scanner.text().substring(2));
                     advance();
                 } else {
                     return;
                 }
+            }
+        }
+
+        private void more(Supplier<LispVal> pexp) {
+            if (nested > 0) {
+                scan(pexp);
             }
         }
 
@@ -487,16 +510,15 @@ public class SchemeParser {
 
         private void expect(Token t, Supplier<LispVal> pexp) {
             if (token == t) {
-                scan(pexp);
+                more(pexp);
             } else {
                 expect(t.show());
             }
         }
 
-        public Seq<Either<LispError, LispVal>> p_top_level() {
+        Seq<Either<LispError, LispVal>> p_top_level() {
             try {
-                if (token == null)
-                    scan(this::p_expression);
+                scan(this::p_expression);
 
                 if (token == EOI)
                     return Seq.nil();
@@ -509,7 +531,7 @@ public class SchemeParser {
             }
         }
 
-        public LispVal p_expression() {
+        private LispVal p_expression() {
             return p_term(this::p_expression);
         }
 
@@ -518,6 +540,9 @@ public class SchemeParser {
                 switch ((Token)token) {
                 case SYMBOL:
                     return p_symbol(pexp);
+
+                case CLASS:
+                    return p_class(pexp);
 
                 case QUOTE:
                 case QUASIQUOTE:
@@ -528,6 +553,10 @@ public class SchemeParser {
                 case VECTOR:
                     scan(pexp);
                     return p_vector(pexp);
+
+                case HASH:
+                    scan(pexp);
+                    return p_hashtable(pexp);
 
                 case BOX:
                     scan(pexp);
@@ -542,7 +571,7 @@ public class SchemeParser {
                     return p_list(pexp, RB);
 
                 case LC: case SLC:
-                    scan(pexp);
+                    scan(this::p_neoteric);
                     return p_curly_infix_list();
 
                 default:
@@ -550,26 +579,27 @@ public class SchemeParser {
                 }
             } else {
                 LispVal val = token;
-                scan(pexp);
+                more(pexp);
                 return val;
             }
         }
 
         private LispVal p_symbol(Supplier<LispVal> pexp) {
-            String text = scanner.text();
+            String name = scanner.text();
+            more(pexp);
 
-            boolean keyword = text.endsWith(":") && !":".equals(text);
+            boolean keyword = name.endsWith(":") && !":".equals(name);
             if (keyword ) {
-                text = text.substring(0, text.length() - 1);
+                name = name.substring(0, name.length() - 1);
             }
 
-            if (text.indexOf('|') != -1) {
-                int len = text.length();
+            if (name.indexOf('|') != -1) {
+                int len = name.length();
                 StringBuilder buf = new StringBuilder(len);
                 boolean q = false;
 
                 for (int i = 0; i < len; i++) {
-                    char c = text.charAt(i);
+                    char c = name.charAt(i);
                     if (c == '|') {
                         q = !q;
                     } else if (q || !foldcase) {
@@ -578,15 +608,45 @@ public class SchemeParser {
                         buf.append(Character.toLowerCase(c));
                     }
                 }
-                text = buf.toString();
+                name = buf.toString();
             } else {
                 if (foldcase) {
-                    text = text.toLowerCase();
+                    name = name.toLowerCase();
                 }
             }
 
-            scan(pexp);
-            return keyword ? getkeysym(text) : getsym(text);
+            return keyword ? getkeysym(name) : getsym(name);
+        }
+
+        private LispVal p_class(Supplier<LispVal> pexp) {
+            String name = scanner.text().substring(2);
+            more(pexp);
+
+            String fields = null;
+            int sep = name.indexOf('/');
+            if (sep != -1) {
+                fields = name.substring(sep + 1);
+                name = name.substring(0, sep);
+            }
+
+            try {
+                LispVal val = new JClass(loadClass(name));
+                if (fields != null)
+                    val = p_fields(val, fields);
+                return val;
+            } catch (Exception ex) {
+                return error(name + ": class not found");
+            }
+        }
+
+        private LispVal p_fields(LispVal val, String fields) {
+            for (int i = 0, j; i < fields.length(); i = j + 1) {
+                if ((j = fields.indexOf('/', i)) < 0)
+                    j = fields.length();
+                String field = fields.substring(i, j);
+                val = new Pair(getsym("get-field"), Pair.of(val, getkeysym(field)));
+            }
+            return val;
         }
 
         private LispVal p_abbreviation(Supplier<LispVal> pexp) {
@@ -618,11 +678,38 @@ public class SchemeParser {
         }
 
         private LispVal p_vector(Supplier<LispVal> pexp) {
-            Vector<LispVal> vec = Vector.empty();
-            while (!scan(RP, pexp)) {
-                vec = vec.snoc(pexp.get());
+            ArrayList<LispVal> vec = new ArrayList<>();
+
+            nested++;
+            while (token != RP) {
+                vec.add(pexp.get());
             }
-            return new Vec(vec);
+
+            nested--;
+            expect(RP, pexp);
+            return new Vec(vec.toArray(new LispVal[vec.size()]));
+        }
+
+        private LispVal p_hashtable(Supplier<LispVal> pexp) {
+            LinkedHashMap<LispVal, LispVal> map = new LinkedHashMap<>();
+
+            nested++;
+            while (token != RP) {
+                if (token == LP || token == SLP)
+                    scan(pexp);
+                else
+                    expect("(");
+
+                LispVal key = pexp.get();
+                expect(DOT, pexp);
+                LispVal val = pexp.get();
+                expect(RP, pexp);
+                map.put(key, val);
+            }
+            nested--;
+
+            expect(RP, pexp);
+            return new JObject(map);
         }
 
         private LispVal p_box(Supplier<LispVal> pexp) {
@@ -633,6 +720,7 @@ public class SchemeParser {
             Seq<LispVal> hd = Seq.nil();
             LispVal tl = LispVal.Nil;
 
+            nested++;
             while (token != delim && token != DOT) {
                 hd = Seq.cons(pexp.get(), hd);
             }
@@ -641,6 +729,7 @@ public class SchemeParser {
                 tl = pexp.get();
             }
 
+            nested--;
             expect(delim, pexp);
             return make_reverse_list(hd, tl);
         }
@@ -663,6 +752,7 @@ public class SchemeParser {
             Seq<LispVal> hd = Seq.nil();
             LispVal tl = LispVal.Nil;
 
+            nested++;
             while (token != delim && token != DOT) {
                 hd = Seq.cons(pexp.get(), hd);
             }
@@ -671,6 +761,7 @@ public class SchemeParser {
                 tl = pexp.get();
             }
 
+            nested--;
             expect(delim, pexp);
             return cont.apply(hd, tl);
         }
@@ -747,5 +838,42 @@ public class SchemeParser {
 
             return new Pair(getsym("$nfx$"), make_reverse_list(exps, Nil));
         }
+    }
+
+    static Class<?> loadClass(String name) throws ClassNotFoundException {
+        Class<?> type;
+
+        int dim = 0;
+        while (name.endsWith("[]")) {
+            dim++;
+            name = name.substring(0, name.length()-2);
+        }
+
+        type = getPrimitiveClass(name);
+        if (type == null) {
+            if (name.indexOf('.') == -1)
+                name = "java.lang." + name;
+            type = Class.forName(name);
+        }
+
+        if (dim == 0) {
+            return type;
+        } else {
+            return Array.newInstance(type, new int[dim]).getClass();
+        }
+    }
+
+    private static final String[] PRIMITIVE_NAMES = {
+        "boolean", "byte", "char", "double", "float", "int", "long", "short", "void"
+    };
+
+    private static final Class<?>[] PRIMITIVE_TYPES = {
+        Boolean.TYPE, Byte.TYPE, Character.TYPE, Double.TYPE, Float.TYPE,
+        Integer.TYPE, Long.TYPE, Short.TYPE, Void.TYPE
+    };
+
+    private static Class<?> getPrimitiveClass(String name) {
+        int i = Arrays.binarySearch(PRIMITIVE_NAMES, name);
+        return (i >= 0) ? PRIMITIVE_TYPES[i] : null;
     }
 }
