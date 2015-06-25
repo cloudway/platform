@@ -18,11 +18,13 @@ import java.util.regex.Pattern;
 
 import com.cloudway.fp.$;
 import com.cloudway.fp.control.ConditionCase;
+import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.function.ExceptionSupplier;
 import com.cloudway.fp.function.TriFunction;
 import com.cloudway.fp.io.IO;
 import com.cloudway.fp.io.IOConsumer;
+import com.cloudway.fp.scheme.LispError.TypeMismatch;
 import com.cloudway.fp.scheme.numsys.Num;
 
 /**
@@ -270,7 +272,7 @@ public interface LispVal {
         public LispVal toList() {
             LispVal res = Nil;
             for (int i = value.length(); --i >= 0; ) {
-                res = new Pair(new Char(value.charAt(i)), res);
+                res = Pair.cons(new Char(value.charAt(i)), res);
             }
             return res;
         }
@@ -388,7 +390,7 @@ public interface LispVal {
         public LispVal toList() {
             LispVal res = Nil;
             for (int i = value.length; --i >= 0; ) {
-                res = new Pair(new Char(value[i]), res);
+                res = Pair.cons(new Char(value[i]), res);
             }
             return res;
         }
@@ -574,21 +576,55 @@ public interface LispVal {
     final class Pair implements LispVal {
         public LispVal head, tail;
 
-        public static LispVal of(LispVal x) {
-            return new Pair(x, Nil);
+        private Pair(LispVal head, LispVal tail) {
+            this.head = head;
+            this.tail = tail;
         }
 
-        public static LispVal of(LispVal x, LispVal y) {
-            return new Pair(x, new Pair(y, Nil));
+        public static Pair cons(LispVal hd, LispVal tl) {
+            return new Pair(hd, tl);
+        }
+
+        public static LispVal list(LispVal x) {
+            return cons(x, Nil);
+        }
+
+        public static LispVal list(LispVal x, LispVal y) {
+            return cons(x, cons(y, Nil));
+        }
+
+        public static LispVal list(LispVal x, LispVal y, LispVal z) {
+            return cons(x, cons(y, cons(z, Nil)));
         }
 
         public static LispVal fromList(Seq<? extends LispVal> vals) {
-            return vals.foldRight_(Nil, Pair::new);
+            return vals.foldRight_(Nil, Pair::cons);
         }
 
-        public Pair(LispVal head, LispVal tail) {
-            this.head = head;
-            this.tail = tail;
+        public static Either<LispError, LispVal> append(LispVal xs, LispVal ys) {
+            if (xs.isNil()) {
+                return Either.right(ys);
+            } else if (ys.isNil()) {
+                return Either.right(xs);
+            } else {
+                return reverse(xs).flatMap(rev -> appendReverse(rev, ys));
+            }
+        }
+
+        public static Either<LispError, LispVal> reverse(LispVal xs) {
+            return appendReverse(xs, Nil);
+        }
+
+        public static Either<LispError, LispVal> appendReverse(LispVal hd, LispVal tl) {
+            while (hd.isPair()) {
+                Pair p = (Pair)hd;
+                tl = cons(p.head, tl);
+                hd = p.tail;
+            }
+
+            return hd.isNil()
+                ? Either.right(tl)
+                : Either.left(new TypeMismatch("pair", hd));
         }
 
         @Override
@@ -607,7 +643,7 @@ public interface LispVal {
         mapM(Evaluator m, Function<LispVal, $<Evaluator, ? extends LispVal>> f) {
             return m.bind(f.apply(head), x ->
                    m.map(tail.mapM(m, f), y ->
-                   new Pair(x, y)));
+                   cons(x, y)));
         }
 
         @Override

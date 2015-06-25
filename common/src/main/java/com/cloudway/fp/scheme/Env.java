@@ -7,11 +7,13 @@
 package com.cloudway.fp.scheme;
 
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 import com.cloudway.fp.data.HashPMap;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Ref;
+import com.cloudway.fp.data.Seq;
 
 public final class Env implements LispVal {
     private static final class GenSym extends Symbol {
@@ -20,32 +22,59 @@ public final class Env implements LispVal {
         }
     }
 
-    private final Ref<PMap<Symbol, Ref<?>>>       system;
-    private final Ref<PMap<Symbol, LispVal>>      macros;
-    private final Ref<PMap<Symbol, Ref<LispVal>>> bindings;
+    private final Env outer;
+    private final LispVal source;
 
-    private final int quoteLevel;
+    private Ref<PMap<Symbol, Ref<?>>> system;
+    private Ref<PMap<Symbol, LispVal>> macros;
+    private Ref<PMap<Symbol, Ref<LispVal>>> bindings;
 
-    private static final Symbol SYMGEN = new Symbol("%SYMGEN%");
+    private int quoteLevel;
+    private AtomicLong symgen;
 
+    /**
+     * Construct a top-level environment.
+     */
     public Env() {
-        this.system   = new Ref<>(HashPMap.empty());
-        this.macros   = new Ref<>(HashPMap.empty());
-        this.bindings = new Ref<>(HashPMap.empty());
+        this.outer      = null;
+        this.source     = LispVal.VOID;
+        this.system     = new Ref<>(HashPMap.empty());
+        this.macros     = new Ref<>(HashPMap.empty());
+        this.bindings   = new Ref<>(HashPMap.empty());
         this.quoteLevel = 0;
-
-        setSystem(SYMGEN, new AtomicLong());
+        this.symgen     = new AtomicLong();
     }
 
-    private Env(
-            Ref<PMap<Symbol, Ref<?>>>       s,
-            Ref<PMap<Symbol, LispVal>>      m,
-            Ref<PMap<Symbol, Ref<LispVal>>> b,
-            int q) {
-        this.system     = s;
-        this.macros     = m;
-        this.bindings   = b;
-        this.quoteLevel = q;
+    /**
+     * Construct an empty environment, later initialized by copy.
+     */
+    private Env(Env outer, LispVal source) {
+        this.outer = outer;
+        this.source = source;
+    }
+
+    private Env copy(Env outer, LispVal source) {
+        Env copy = new Env(outer, source);
+        copy.system     = this.system;
+        copy.macros     = this.macros;
+        copy.bindings   = this.bindings;
+        copy.quoteLevel = quoteLevel;
+        copy.symgen     = symgen;
+        return copy;
+    }
+
+    private Env copy() {
+        return copy(this, LispVal.VOID);
+    }
+
+    public Seq<LispVal> getCallTrace() {
+        Seq<LispVal> trace = Seq.nil();
+        for (Env env = this; env != null; env = env.outer) {
+            if (env.source != LispVal.VOID) {
+                trace = Seq.cons(env.source, trace);
+            }
+        }
+        return trace;
     }
 
     @SuppressWarnings("unchecked")
@@ -53,6 +82,18 @@ public final class Env implements LispVal {
         Maybe<Ref<?>> slot = system.get().lookup(id);
         if (slot.isAbsent()) {
             Ref<A> new_slot = new Ref<>(init);
+            system.update(b -> b.put(id, new_slot));
+            return new_slot;
+        } else {
+            return (Ref<A>)slot.get();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <A> Ref<A> getSystem(Symbol id, Supplier<? extends A> init) {
+        Maybe<Ref<?>> slot = system.get().lookup(id);
+        if (slot.isAbsent()) {
+            Ref<A> new_slot = new Ref<>(init.get());
             system.update(b -> b.put(id, new_slot));
             return new_slot;
         } else {
@@ -92,13 +133,26 @@ public final class Env implements LispVal {
         putRef(id, new Ref<>(value));
     }
 
-    public Env extend() {
-        return new Env(system, new Ref<>(macros.get()), new Ref<>(bindings.get()), quoteLevel);
+    public Env extend(Env outer, LispVal source) {
+        Env ext = copy(outer, source);
+        ext.bindings = new Ref<>(bindings.get());
+        ext.macros = new Ref<>(macros.get());
+        return ext;
     }
 
-    public Env extend(PMap<Symbol, Ref<LispVal>> ext) {
-        ext = bindings.get().putAll(ext);
-        return new Env(system, new Ref<>(macros.get()), new Ref<>(ext), quoteLevel);
+    public Env extend() {
+        return extend(this, LispVal.VOID);
+    }
+
+    public Env extend(Env outer, LispVal source, PMap<Symbol, Ref<LispVal>> bindings) {
+        Env ext = copy(outer, source);
+        ext.bindings = new Ref<>(this.bindings.get().putAll(bindings));
+        ext.macros = new Ref<>(macros.get());
+        return ext;
+    }
+
+    public Env extend(PMap<Symbol, Ref<LispVal>> bindings) {
+        return extend(this, LispVal.VOID, bindings);
     }
 
     public int getQL() {
@@ -106,11 +160,15 @@ public final class Env implements LispVal {
     }
 
     public Env incrementQL() {
-        return new Env(system, macros, bindings, quoteLevel + 1);
+        Env ext = copy();
+        ext.quoteLevel = this.quoteLevel + 1;
+        return ext;
     }
 
     public Env decrementQL() {
-        return new Env(system, macros, bindings, quoteLevel - 1);
+        Env ext = copy();
+        ext.quoteLevel = this.quoteLevel - 1;
+        return ext;
     }
 
     public Symbol newsym() {
@@ -118,7 +176,6 @@ public final class Env implements LispVal {
     }
 
     public Symbol newsym(String prefix) {
-        AtomicLong symgen = (AtomicLong)getSystem(SYMGEN, null).get();
         return new GenSym(prefix + symgen.getAndIncrement());
     }
 

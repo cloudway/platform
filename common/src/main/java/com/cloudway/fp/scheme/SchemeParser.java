@@ -644,7 +644,7 @@ public class SchemeParser {
                 if ((j = fields.indexOf('/', i)) < 0)
                     j = fields.length();
                 String field = fields.substring(i, j);
-                val = new Pair(getsym("get-field"), Pair.of(val, getkeysym(field)));
+                val = Pair.cons(getsym("get-field"), Pair.list(val, getkeysym(field)));
             }
             return val;
         }
@@ -674,7 +674,7 @@ public class SchemeParser {
             }
 
             scan(pexp);
-            return Pair.of(getsym(tag), pexp.get());
+            return Pair.list(getsym(tag), pexp.get());
         }
 
         private LispVal p_vector(Supplier<LispVal> pexp) {
@@ -737,7 +737,7 @@ public class SchemeParser {
         private LispVal make_reverse_list(Seq<LispVal> hd, LispVal tl) {
             LispVal res = tl;
             while (!hd.isEmpty()) {
-                res = new Pair(hd.head(), res);
+                res = Pair.cons(hd.head(), res);
                 hd = hd.tail();
             }
             return res;
@@ -781,17 +781,17 @@ public class SchemeParser {
             case LP:
                 scan(pexp);
                 rhs = p_neoteric_list(RP, pexp, this::make_reverse_list);
-                return new Pair(lhs, rhs);
+                return Pair.cons(lhs, rhs);
 
             case LC:
                 scan(pexp);
                 rhs = p_neoteric_list(RC, pexp, this::transform_infix_list);
-                return rhs.isNil() ? Pair.of(lhs) : Pair.of(lhs, rhs);
+                return rhs.isNil() ? Pair.list(lhs) : Pair.list(lhs, rhs);
 
             case LB:
                 scan(pexp);
                 rhs = p_neoteric_list(RB, pexp, this::make_reverse_list);
-                return new Pair(getsym("$bracket-apply$"), new Pair(lhs, rhs));
+                return Pair.cons(getsym("$bracket-apply$"), Pair.cons(lhs, rhs));
 
             default:
                 return lhs;
@@ -814,12 +814,12 @@ public class SchemeParser {
                     return transform_infix(hd);
             }
 
-            return new Pair(getsym("$nfx$"), make_reverse_list(hd, tl));
+            return Pair.cons(getsym("$nfx$"), make_reverse_list(hd, tl));
         }
 
         private LispVal transform_infix(Seq<LispVal> exps) {
             LispVal operator = null;
-            LispVal operands = Pair.of(exps.head());
+            LispVal operands = Pair.list(exps.head());
 
             for (Seq<LispVal> p = exps.tail(); !p.isEmpty(); p = p.tail().tail()) {
                 LispVal op = p.head();
@@ -829,14 +829,14 @@ public class SchemeParser {
                     operator = null;
                     break;
                 }
-                operands = new Pair(p.tail().head(), operands);
+                operands = Pair.cons(p.tail().head(), operands);
             }
 
             if (operator != null) {
-                return new Pair(operator, operands);
+                return Pair.cons(operator, operands);
             }
 
-            return new Pair(getsym("$nfx$"), make_reverse_list(exps, Nil));
+            return Pair.cons(getsym("$nfx$"), make_reverse_list(exps, Nil));
         }
     }
 

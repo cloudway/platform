@@ -174,19 +174,11 @@ public final class IOPrimitives {
     }
 
     public static InputPort current_input_port(Evaluator me, Env env) {
-        Ref<Object> ref = env.getSystem(CURRENT_INPUT, null);
-        if (ref.get() == null) {
-            ref.set(getStandardInput(me));
-        }
-        return (InputPort)ref.get();
+        return env.getSystem(CURRENT_INPUT, () -> getStandardInput(me)).get();
     }
 
     public static OutputPort current_output_port(Env env) {
-        Ref<Object> ref = env.getSystem(CURRENT_OUTPUT, null);
-        if (ref.get() == null) {
-            ref.set(getStandardOutput());
-        }
-        return (OutputPort)ref.get();
+        return env.getSystem(CURRENT_OUTPUT, () -> getStandardOutput()).get();
     }
 
     private static InputPort getStandardInput(Evaluator me) {
@@ -201,19 +193,19 @@ public final class IOPrimitives {
     call_with_input_file(Evaluator me, Env env, String filename, LispVal proc) {
         return do_(open_input_file(me, filename), port ->
                me.guard(close_input_port(me, port),
-               me.apply(env, proc, Pair.of(port))));
+               me.apply(env, proc, Pair.list(port))));
     }
 
     public static $<Evaluator, LispVal>
     call_with_output_file(Evaluator me, Env env, String filename, LispVal proc) {
         return do_(open_output_file(me, filename), port ->
                me.guard(close_output_port(me, port),
-               me.apply(env, proc, Pair.of(port))));
+               me.apply(env, proc, Pair.list(port))));
     }
 
     public static $<Evaluator, LispVal>
     with_input_from_file(Evaluator me, Env env, String filename, LispVal thunk) {
-        Ref<Object> ref = env.getSystem(CURRENT_INPUT, null);
+        Ref<LispVal> ref = env.getSystem(CURRENT_INPUT, (LispVal)null);
         return do_(open_input_file(me, filename), port ->
                let(ref.getAndSet(port), current ->
                me.guard(do_(me.action(() -> ref.set(current)), close_input_port(me, port)),
@@ -222,7 +214,7 @@ public final class IOPrimitives {
 
     public static $<Evaluator, LispVal>
     with_output_to_file(Evaluator me, Env env, String filename, LispVal thunk) {
-        Ref<Object> ref = env.getSystem(CURRENT_OUTPUT, null);
+        Ref<LispVal> ref = env.getSystem(CURRENT_OUTPUT, (LispVal)null);
         return do_(open_output_file(me, filename), port ->
                let(ref.getAndSet(port), current ->
                me.guard(do_(me.action(() -> ref.set(current)), close_output_port(me, port)),
@@ -231,7 +223,7 @@ public final class IOPrimitives {
 
     public static $<Evaluator, LispVal>
     with_input_from_string(Evaluator me, Env env, String input, LispVal thunk) {
-        Ref<Object> ref = env.getSystem(CURRENT_INPUT, null);
+        Ref<LispVal> ref = env.getSystem(CURRENT_INPUT, (LispVal)null);
         return do_(open_input_string(me, input), port ->
                let(ref.getAndSet(port), current ->
                me.guard(me.action(() -> ref.set(current)),
@@ -240,7 +232,7 @@ public final class IOPrimitives {
 
     public static $<Evaluator, LispVal>
     with_output_to_string(Evaluator me, Env env, LispVal thunk) {
-        Ref<Object> ref = env.getSystem(CURRENT_OUTPUT, null);
+        Ref<LispVal> ref = env.getSystem(CURRENT_OUTPUT, (LispVal)null);
         return do_(open_output_string(me), port ->
                let(ref.getAndSet(port), current ->
                me.guard(me.action(() -> ref.set(current)),

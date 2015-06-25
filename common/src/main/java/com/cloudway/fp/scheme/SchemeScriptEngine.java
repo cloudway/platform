@@ -132,7 +132,7 @@ class SchemeScriptEngine extends AbstractScriptEngine
     private static LispVal packArgs(Object[] args) {
         LispVal res = LispVal.Nil;
         for (int i = args.length; --i >= 0; ) {
-            res = new Pair(Packer.pack(args[i]), res);
+            res = Pair.cons(Packer.pack(args[i]), res);
         }
         return res;
     }
