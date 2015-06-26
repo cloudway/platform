@@ -50,10 +50,26 @@ public interface LispVal {
     }
 
     /**
-     * Returns true if this Lisp value represents an atom.
+     * Returns true if this Lisp value represents a symbol.
      */
     default boolean isSymbol() {
-        return this instanceof Symbol;
+        return false;
+    }
+
+    /**
+     * Returns the symbol value if this Lisp value represents a symbol, otherwise
+     * throws an exception.
+     */
+    default Symbol getSymbol() {
+        throw new IllegalArgumentException("not a symbol");
+    }
+
+    /**
+     * Returns the symbol name if this Lisp value represents a symbol, otherwise
+     * throws an exception.
+     */
+    default String getSymbolName() {
+        throw new IllegalArgumentException("not a symbol");
     }
 
     /**
@@ -138,6 +154,21 @@ public interface LispVal {
         }
 
         @Override
+        public boolean isSymbol() {
+            return true;
+        }
+
+        @Override
+        public Symbol getSymbol() {
+            return this;
+        }
+
+        @Override
+        public String getSymbolName() {
+            return name;
+        }
+
+        @Override
         public String show() {
             if (name.isEmpty() || INVALID_SYMCHAR.matcher(name).find()) {
                 return '|' + name + '|';
@@ -154,8 +185,13 @@ public interface LispVal {
         public boolean eqv(Object obj) {
             if (obj == this)
                 return true;
-            if (obj.getClass() == this.getClass())
-                return name.equals(((Symbol)obj).name);
+
+            if ((obj instanceof LispVal) && ((LispVal)obj).isSymbol()) {
+                Symbol other = ((LispVal)obj).getSymbol();
+                return other.getClass() == this.getClass() &&
+                       name.equals(other.name);
+            }
+
             return false;
         }
 
@@ -186,6 +222,70 @@ public interface LispVal {
         @Override
         public String show() {
             return super.show() + ":";
+        }
+    }
+
+    final class Scoped implements LispVal {
+        public final Env scope;
+        public final Symbol symbol;
+
+        public Scoped(Env scope, Symbol symbol) {
+            this.scope = scope;
+            this.symbol = symbol;
+        }
+
+        @Override
+        public boolean isSymbol() {
+            return true;
+        }
+
+        @Override
+        public Symbol getSymbol() {
+            return symbol;
+        }
+
+        @Override
+        public String getSymbolName() {
+            return symbol.name;
+        }
+
+        @Override
+        public String show() {
+            return symbol.show();
+        }
+
+        @Override
+        public void show(Printer pr) {
+            symbol.show(pr);
+        }
+
+        @Override
+        public boolean eqv(Object obj) {
+            if (obj == this)
+                return true;
+
+            if (obj instanceof Scoped) {
+                Scoped other = (Scoped)obj;
+                return scope == other.scope &&
+                       symbol.equals(other.symbol);
+            }
+
+            return false;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return eqv(obj);
+        }
+
+        @Override
+        public int hashCode() {
+            return symbol.hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return "#Scoped(" + scope.getSource() + " '" + symbol.name + "')";
         }
     }
 
@@ -675,7 +775,7 @@ public interface LispVal {
 
         private String abbreviation() {
             if (head.isSymbol()) {
-                switch (((Symbol)head).name) {
+                switch (head.getSymbolName()) {
                 case "quote":
                     return "'";
                 case "quasiquote":
@@ -921,8 +1021,8 @@ public interface LispVal {
     final class Func implements LispVal {
         public final String  name;
         public final LispVal params;
-        public final Env     closure;
         public final Proc    body;
+        public final Env     closure;
 
         public Func(LispVal params, Proc body, Env closure) {
             this("", params, body, closure);
@@ -945,19 +1045,21 @@ public interface LispVal {
         }
 
         public String toString() {
-            return "#Lambda(" + params.show() + " " + body.show() + ")";
+            return "#Lambda(" + name + " " + params.show() + ")";
         }
     }
 
     final class Macro implements LispVal {
-        public final String name;
+        public final String  name;
         public final LispVal pattern;
-        public final Proc body;
+        public final Proc    body;
+        public final Env     closure;
 
-        public Macro(String name, LispVal pattern, Proc body) {
+        public Macro(String name, LispVal pattern, Proc body, Env closure) {
             this.name    = name;
             this.pattern = pattern;
             this.body    = body;
+            this.closure = closure;
         }
 
         @Override
@@ -966,7 +1068,7 @@ public interface LispVal {
         }
 
         public String toString() {
-            return "#Macro(" + pattern.show() + " " + body.show() + ")";
+            return "#Macro(" + name + " " + pattern.show() + ")";
         }
     }
 
@@ -1186,8 +1288,15 @@ public interface LispVal {
 
     static <R> ConditionCase<LispVal, R, RuntimeException>
     Symbol(Function<Symbol, ? extends R> mapper) {
-        return t -> t instanceof Symbol
-            ? () -> mapper.apply((Symbol)t)
+        return t -> t.isSymbol()
+            ? () -> mapper.apply(t.getSymbol())
+            : null;
+    }
+
+    static <R> ConditionCase<LispVal, R, RuntimeException>
+    Scoped(Function<Scoped, ? extends R> mapper) {
+        return t -> t instanceof Scoped
+            ? () -> mapper.apply((Scoped)t)
             : null;
     }
 
@@ -1218,7 +1327,7 @@ public interface LispVal {
             Pair p, pp;
             if ((t.isPair()) &&
                 (p = (Pair)t).head.isSymbol() &&
-                "quote".equals(((Symbol)p.head).name) &&
+                "quote".equals(p.head.getSymbolName()) &&
                 p.tail.isPair() &&
                 (pp = (Pair)p.tail).tail.isNil()) {
                 return () -> mapper.apply(pp.head);

@@ -20,12 +20,12 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.Writer;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.cloudway.fp.$;
 import static com.cloudway.fp.control.Syntax.let;
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Maybe;
-import com.cloudway.fp.data.Ref;
 import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.io.IOConsumer;
 
@@ -205,7 +205,7 @@ public final class IOPrimitives {
 
     public static $<Evaluator, LispVal>
     with_input_from_file(Evaluator me, Env env, String filename, LispVal thunk) {
-        Ref<LispVal> ref = env.getSystem(CURRENT_INPUT, (LispVal)null);
+        AtomicReference<LispVal> ref = env.getSystem(CURRENT_INPUT, (LispVal)null);
         return do_(open_input_file(me, filename), port ->
                let(ref.getAndSet(port), current ->
                me.guard(do_(me.action(() -> ref.set(current)), close_input_port(me, port)),
@@ -214,7 +214,7 @@ public final class IOPrimitives {
 
     public static $<Evaluator, LispVal>
     with_output_to_file(Evaluator me, Env env, String filename, LispVal thunk) {
-        Ref<LispVal> ref = env.getSystem(CURRENT_OUTPUT, (LispVal)null);
+        AtomicReference<LispVal> ref = env.getSystem(CURRENT_OUTPUT, (LispVal)null);
         return do_(open_output_file(me, filename), port ->
                let(ref.getAndSet(port), current ->
                me.guard(do_(me.action(() -> ref.set(current)), close_output_port(me, port)),
@@ -222,8 +222,21 @@ public final class IOPrimitives {
     }
 
     public static $<Evaluator, LispVal>
+    call_with_input_string(Evaluator me, Env env, String input, LispVal proc) {
+        return do_(open_input_string(me, input), port ->
+               me.apply(env, proc, Pair.list(port)));
+    }
+
+    public static $<Evaluator, LispVal>
+    call_with_output_string(Evaluator me, Env env, LispVal proc) {
+        return do_(open_output_string(me), port ->
+               do_(me.apply(env, proc, Pair.list(port)),
+               do_(() -> get_output_string(me, port))));
+    }
+
+    public static $<Evaluator, LispVal>
     with_input_from_string(Evaluator me, Env env, String input, LispVal thunk) {
-        Ref<LispVal> ref = env.getSystem(CURRENT_INPUT, (LispVal)null);
+        AtomicReference<LispVal> ref = env.getSystem(CURRENT_INPUT, (LispVal)null);
         return do_(open_input_string(me, input), port ->
                let(ref.getAndSet(port), current ->
                me.guard(me.action(() -> ref.set(current)),
@@ -232,7 +245,7 @@ public final class IOPrimitives {
 
     public static $<Evaluator, LispVal>
     with_output_to_string(Evaluator me, Env env, LispVal thunk) {
-        Ref<LispVal> ref = env.getSystem(CURRENT_OUTPUT, (LispVal)null);
+        AtomicReference<LispVal> ref = env.getSystem(CURRENT_OUTPUT, (LispVal)null);
         return do_(open_output_string(me), port ->
                let(ref.getAndSet(port), current ->
                me.guard(me.action(() -> ref.set(current)),

@@ -139,55 +139,51 @@
 ;disjunction
 
 (define-macro (%or . gg)
-  (with-gensyms (__fk __sk)
-    `(lambda (,__fk)
-      (call-with-current-continuation
-        (lambda (,__sk)
-          ,@(map (lambda (g)
-                   `(call-with-current-continuation
-                      (lambda (,__fk)
-                        (,__sk ((schelog:deref* ,g) ,__fk)))))
-                 gg)
-          (,__fk 'fail))))))
+  `(lambda (__fk)
+    (call-with-current-continuation
+      (lambda (__sk)
+        ,@(map (lambda (g)
+                 `(call-with-current-continuation
+                    (lambda (__fk)
+                      (__sk ((schelog:deref* ,g) __fk)))))
+               gg)
+        (__fk 'fail)))))
 
 ;conjunction
 
 (define-macro (%and . gg)
-  (with-gensyms (__fk)
-    `(lambda (,__fk)
-      (let* ,(map (lambda (g) `(,__fk ((schelog:deref* ,g) ,__fk))) gg)
-        ,__fk))))
+  `(lambda (__fk)
+    (let* ,(map (lambda (g) `(__fk ((schelog:deref* ,g) __fk))) gg)
+      __fk)))
 
 ;cut
 
 (define-macro (%cut-delimiter g)
-  (with-gensyms (__fk __fk2)
-    `(lambda (,__fk)
-      (let ((! (lambda (,__fk2) ,__fk)))
-        ((schelog:deref* ,g) ,__fk)))))
+  `(lambda (__fk)
+    (let ((! (lambda (__fk2) __fk)))
+      ((schelog:deref* ,g) __fk))))
 
 ;Prolog-like sugar
 
 (define-macro (%rel vv . cc)
-  (with-gensyms (__fmls __fk __sk)
-    `(lambda ,__fmls
-       (lambda (,__fk)
-         (call-with-current-continuation
-           (lambda (,__sk)
-             (let ((! (lambda (fk1) ,__fk)))
-               (%let ,vv
-                     ,@(map (lambda (c)
-                              `(call-with-current-continuation
-                                 (lambda (,__fk)
-                                   (let* ((,__fk ((%= ,__fmls (list ,@(car c)))
-                                                 ,__fk))
-                                          ,@(map (lambda (sg)
-                                                   `(,__fk ((schelog:deref* ,sg)
-                                                           ,__fk)))
-                                                 (cdr c)))
-                                     (,__sk ,__fk)))))
-                            cc)
-                     (,__fk 'fail)))))))))
+  `(lambda __fmls
+     (lambda (__fk)
+       (call-with-current-continuation
+         (lambda (__sk)
+           (let ((! (lambda (fk1) __fk)))
+             (%let ,vv
+                   ,@(map (lambda (c)
+                            `(call-with-current-continuation
+                              (lambda (__fk)
+                                (let* ((__fk ((%= __fmls (list ,@(car c)))
+                                              __fk))
+                                       ,@(map (lambda (sg)
+                                                `(__fk ((schelog:deref* ,sg)
+                                                        __fk)))
+                                              (cdr c)))
+                                  (__sk __fk)))))
+                          cc)
+                   (__fk 'fail))))))))
 
 ;the fail and true preds
 
@@ -201,19 +197,18 @@
 ;arithmetic
 
 (define-macro (%is v e)
-  (with-gensyms (__fk)
-    (letrec ((%is-help (lambda (e)
-                         (cond ((pair? e)
-                                (cond ((eq? (car e) 'quote) e)
-                                      (else
-                                        (map (lambda (e1)
-                                               (%is-help e1)) e))))
-                               (else
-                                 `(if (and (schelog:ref? ,e)
-                                           (schelog:unbound-ref? ,e))
-                                    (,__fk 'fail) (schelog:deref* ,e)))))))
-      `(lambda (,__fk)
-         ((%= ,v ,(%is-help e)) ,__fk)))))
+  (letrec ((%is-help (lambda (e)
+                       (cond ((pair? e)
+                              (cond ((eq? (car e) 'quote) e)
+                                    (else
+                                      (map (lambda (e1)
+                                             (%is-help e1)) e))))
+                             (else
+                               `(if (and (schelog:ref? ,e)
+                                         (schelog:unbound-ref? ,e))
+                                  (__fk 'fail) (schelog:deref* ,e)))))))
+    `(lambda (__fk)
+       ((%= ,v ,(%is-help e)) __fk))))
 
 ;defining arithmetic comparison operators
 
@@ -417,22 +412,20 @@
 (define (%empty-rel . args) %fail)
 
 (define-macro (%assert rel-name vv . cc)
-  (with-gensyms (__old-rel __new-addition __fmls)
-    `(set! ,rel-name
-           (let ((,__old-rel ,rel-name)
-                 (,__new-addition (%rel ,vv ,@cc)))
-             (lambda ,__fmls
-               (%or (apply ,__old-rel ,__fmls)
-                    (apply ,__new-addition ,__fmls)))))))
+  `(set! ,rel-name
+         (let ((__old-rel ,rel-name)
+               (__new-addition (%rel ,vv ,@cc)))
+           (lambda __fmls
+             (%or (apply __old-rel __fmls)
+                  (apply __new-addition __fmls))))))
 
 (define-macro (%assert-a rel-name vv . cc)
-  (with-gensyms (__old-rel __new-addition __fmls)
-    `(set! ,rel-name
-       (let ((,__old-rel ,rel-name)
-             (,__new-addition (%rel ,vv ,@cc)))
-         (lambda ,__fmls
-           (%or (apply ,__new-addition ,__fmls)
-                (apply ,__old-rel ,__fmls)))))))
+  `(set! ,rel-name
+    (let ((__old-rel ,rel-name)
+          (__new-addition (%rel ,vv ,@cc)))
+      (lambda __fmls
+        (%or (apply __new-addition __fmls)
+             (apply __old-rel __fmls))))))
 
 ;set predicates
 
@@ -513,20 +506,19 @@
 (define schelog:*more-fk* 'forward)
 
 (define-macro (%which vv g)
-  (with-gensyms (__qk)
-    `(%let ,vv
-       (call-with-current-continuation
-         (lambda (,__qk)
-           (set! schelog:*more-k* ,__qk)
-           (set! schelog:*more-fk*
-             ((schelog:deref* ,g)
-              (lambda (d)
-                (set! schelog:*more-fk* #f)
-                (schelog:*more-k* #f))))
-           (schelog:*more-k*
-             (map (lambda (nam val) (list nam (schelog:deref* val)))
-                  ',vv
-                  (list ,@vv))))))))
+  `(%let ,vv
+    (call-with-current-continuation
+      (lambda (__qk)
+        (set! schelog:*more-k* __qk)
+        (set! schelog:*more-fk*
+          ((schelog:deref* ,g)
+           (lambda (d)
+             (set! schelog:*more-fk* #f)
+             (schelog:*more-k* #f))))
+        (schelog:*more-k*
+          (map (lambda (nam val) (list nam (schelog:deref* val)))
+               ',vv
+               (list ,@vv)))))))
 
 (define (%more)
   (call-with-current-continuation

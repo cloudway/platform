@@ -1,3 +1,205 @@
+;;; Basic macros
+
+(define-macro (define . form)
+  (match form
+    [((var . formals) . body)
+     (if (pair? var)
+         `(define ,var (sys:lambda ,formals ,@body))
+         `(sys:define ,var (sys:lambda ,formals ,@body)))]
+    [(var exp)
+     `(sys:define ,var ,exp)]
+    [(var)
+     `(sys:define ,var ,(void))]
+    [else (error 'define "bad syntax" form)]))
+
+(define-macro (lambda . form)
+  `(sys:lambda ,@form))
+
+(define-macro (set! . form)
+  (match form
+    [((proc . args) exp)
+     `((setter ,proc) ,@args ,exp)]
+    [(var exp)
+     `(sys:set! ,var ,exp)]
+    [else (error 'set! "bad syntax" form)]))
+
+(define-macro (let . form)
+  (match form
+    [(tag bindings . body) :when (symbol? tag)
+     `((sys:letrec ((,tag (sys:lambda ,(map car bindings) ,@body)))
+         ,tag)
+       ,@(map (lambda (x) (car (cdr x))) bindings))]
+    [(bindings . body)
+     `(sys:let ,bindings ,@body)]
+    [else (error 'let "bad syntax" form)]))
+
+(define-macro (letrec . form)
+  `(sys:letrec ,@form))
+
+(define-macro (let* . form)
+  (match form
+    [(() . body)
+     `(let () ,@body)]
+    [(((name init)) . body)
+     `(let ((,name ,init)) ,@body)]
+    [(((name init) . more) . body)
+     `(let ((,name ,init))
+       (let* ,more ,@body))]))
+
+(define-macro (letrec* bindings . body)
+  `(sys:let ,(map (lambda (x) (list (car x))) bindings)
+     ,@(map (lambda (x) `(sys:set! ,@x)) bindings)
+     (sys:let () ,@body)))
+
+(define-macro (defmacro . form)
+  `(define-macro ,@form))
+
+(define-macro (with-gensyms syms . body)
+  `(let ,(map (lambda (s) `(,s (gensym ',s))) syms) ,@body))
+
+(define-macro (cond . form)
+  (define (cond/maybe-more test consequent more)
+    (if (null? more)
+        `(if ,test ,consequent)
+        `(if ,test ,consequent (cond ,@more))))
+
+  (match form
+    [(('else result . results))
+      `(begin ,result ,@results)]
+    [(('else))
+     (error 'cond "missing expression in 'else' clause" form)]
+    [(('else . _) . _)
+     (error 'cond "bad syntax ('else' clause must be last)" form)]
+
+    [((test '=> receiver) . more)
+     (with-gensyms (t)
+       `(let ((,t ,test))
+         ,(cond/maybe-more t `(,receiver ,t) more)))]
+
+    [((generator guard '=> receiver) . more)
+     (with-gensyms (t)
+       `(call-with-values (lambda () ,generator)
+         (lambda ,t ,(cond/maybe-more `(apply ,guard ,t)
+                                      `(apply ,receiver ,t)
+                                      more))))]
+
+    [((test)) test]
+    [((test) . more)
+     (with-gensyms (t)
+       `(let ((,t ,test))
+         ,(cond/maybe-more t t more)))]
+    [((test . results) . more)
+     (cond/maybe-more test `(begin ,@results) more)]
+
+    [else (error 'cond "bad syntax" form)]))
+
+(define-macro (case key . clauses)
+  (define (expand-clause atoms result rest)
+    (let ((test (if (= 1 (length atoms))
+                    `(eqv? ,key ',(car atoms))
+                    `(memv ,key ',atoms))))
+      (if (null? rest)
+          `(if ,test ,result)
+          `(if ,test ,result (case ,key ,@rest)))))
+
+  (if (not (symbol? key))
+      `(let ((atom-key ,key)) (case atom-key ,@clauses))
+      (match clauses
+        [(('else '=> receiver))
+         `(,receiver ,key)]
+        [(('else result . results))
+          `(begin ,result ,@results)]
+        [(('else))
+          (error 'case "missing expression in 'else' clause" clauses)]
+        [(('else . _) . _)
+          (error 'case "bad syntax ('else' clause must be last" clauses)]
+        [((atoms) . _)
+          (error 'case "missing expression after datum sequence" (list atoms))]
+        [(((atom . atoms) '=> receiver) . rest)
+          (expand-clause (cons atom atoms) `(,receiver ,key) rest)]
+        [(((atom . atoms) . results) . rest)
+          (expand-clause (cons atom atoms) `(begin ,@results) rest)]
+        [((atom . results) . rest)
+          `(case ,key ((,atom) ,@results) ,@rest)]
+        [else (error 'case "bad syntax" clauses)])))
+
+(define-macro (do bindings (test . finish) . body)
+  (define (init b)
+    (match b
+      ((var init . _) :when (symbol? var)
+        (list var init))
+      (else
+        (error 'do "bad syntax" b))))
+
+  (define (step b)
+    (match b
+      ((var _) var)
+      ((_ _ step) step)
+      (else (error 'do "bad syntax" b))))
+
+  `(let loop ,(map init bindings)
+     (if ,test
+         (begin ,@finish)
+         (begin ,@body (loop ,@(map step bindings))))))
+
+(define-macro (assert some-cond)
+  `(if (not ,some-cond)
+     (error 'assert "assertion failure" ',some-cond)))
+
+(define-macro (when pred . actions)
+  `(if ,pred (begin ,@actions)))
+
+(define-macro (unless pred . actions)
+  `(if (not ,pred) (begin ,@actions)))
+
+(define-macro (while some-cond . some-actions)
+  `(do () ((not ,some-cond)) ,@some-actions))
+
+(define-macro (until some-cond . some-actions)
+  `(do () (,some-cond) ,@some-actions))
+
+(define-macro (case-lambda . patterns)
+  `(lambda args (match args ,@patterns)))
+
+; Java interop
+
+(define-macro (new class . args)
+  `(,(jclass class) new: ,@args))
+
+(define-macro (jlambda class formals . body)
+  `(make-jlambda ,(jclass class) (lambda ,formals ,@body)))
+
+(define-macro (reify class . dispatch)
+  `(make-proxy ,(jclass class)
+               (list ,@(map (lambda (method)
+                              (match method
+                                ((name formals . body) :when (symbol? name)
+                                  `(cons ',name (lambda ,formals ,@body)))))
+                            dispatch))))
+
+(define-macro (do-with obj . actions)
+  (with-gensyms (val)
+    `(let ((,val ,obj))
+      ,@(map (case-lambda
+               (((name . args)) :when (keyword? name)
+                `(,val ,name ,@args)))
+             actions)
+      ,val)))
+
+(define-macro (-> obj . calls)
+  (match calls
+    [() obj]
+    [(name) :when (or (symbol? name) (keyword? name))
+     `(,obj ',name)]
+    [(name . rest) :when (or (symbol? name) (keyword? name))
+     `(-> (,obj ',name) ,@rest)]
+    [((name . args)) :when (keyword? name)
+     `(,obj ,name ,@args)]
+    [((name . args) . rest) :when (keyword? name)
+     `(-> (,obj ,name ,@args) ,@rest)]
+    [else (error '-> "bad syntax" calls)]))
+
+
 ;;; Utilities
 
 (define true  #t)
@@ -41,117 +243,11 @@
 (define-macro (let/cc k . body)
   `(call/cc (lambda (,k) ,@body)))
 
-;;; Basic Macros
-
-(define-macro (defmacro . form)
-  `(define-macro ,@form))
-
-(define-macro (with-gensyms syms . body)
-  `(let ,(map (lambda (s) `(,s (gensym ',s))) syms) ,@body))
-
-(define-macro (assert some-cond)
-  `(if (not ,some-cond)
-     (error 'assert "assertion failure" ',some-cond)))
-
-(define-macro (when pred . actions)
-  `(if ,pred (begin ,@actions)))
-
-(define-macro (unless pred . actions)
-  `(if (not ,pred) (begin ,@actions)))
-
-(define-macro (while some-cond . some-actions)
-  `(do () ((not ,some-cond)) ,@some-actions))
-
-(define-macro (until some-cond . some-actions)
-  `(do () (,some-cond) ,@some-actions))
-
-(define-macro (case-lambda . patterns)
-  (let ((args (gensym)))
-    `(lambda ,args (match ,args ,@patterns))))
-
-(define-macro (case key . clauses)
-  (define (expand-clause atoms result rest)
-    (let ((mem (if (= 1 (length atoms))
-                   `(eqv? ,key ',(car atoms))
-                   `(memv ,key ',atoms))))
-      (if (null? rest)
-          `(if ,mem ,result)
-          `(if ,mem ,result (case ,key ,@rest)))))
-
-  (if (not (symbol? key))
-      (let ((atom-key (gensym)))
-        `(let ((,atom-key ,key)) (case ,atom-key ,@clauses)))
-      (match clauses
-        [(('else '=> result))
-         `(,result ,key)]
-        [(('else . result))
-          `(begin ,@result)]
-        [(((atom . atoms) '=> result) . rest)
-          (expand-clause (cons atom atoms) (list result key) rest)]
-        [(((atom . atoms) . result) . rest)
-          (expand-clause (cons atom atoms) (cons 'begin result) rest)]
-        [((atom . result) . rest) :when (not (eqv? atom 'else))
-          `(case ,key ((,atom) ,@result) ,@rest)]
-        [else (error 'case "bad syntax" clauses)])))
-
-(define-macro (do bindings (test . finish) . body)
-  (define (init b)
-    (match b
-      ((var init . _) :when (symbol? var)
-        (list var init))
-      (else
-        (error 'do "bad syntax" b))))
-
-  (define (step b)
-    (match b
-      ((var _) var)
-      ((_ _ step) step)
-      (else (error 'do "bad syntax" b))))
-
-  (let ((loop (gensym)))
-    `(let ,loop ,(map init bindings)
-       (if ,test
-           (begin ,@finish)
-           (begin ,@body (,loop ,@(map step bindings)))))))
-
-; Java interop
-
-(define-macro (new class . args)
-  `(,(jclass class) new: ,@args))
-
-(define-macro (jlambda class formals . body)
-  `(make-jlambda ,(jclass class) (lambda ,formals ,@body)))
-
-(define-macro (reify class . dispatch)
-  `(make-proxy ,(jclass class)
-               (list ,@(map (lambda (method)
-                              (match method
-                                ((name formals . body) :when (symbol? name)
-                                  `(cons ',name (lambda ,formals ,@body)))))
-                            dispatch))))
-
-(define-macro (do-with obj . actions)
-  (with-gensyms (val)
-    `(let ((,val ,obj))
-      ,@(map (case-lambda
-               (((name . args)) :when (keyword? name)
-                `(,val ,name ,@args)))
-             actions)
-      ,val)))
-
-(define-macro (-> obj . calls)
-  (match calls
-    [() obj]
-    [(name) :when (or (symbol? name) (keyword? name))
-     `(,obj ',name)]
-    [(name . rest) :when (or (symbol? name) (keyword? name))
-     `(-> (,obj ',name) ,@rest)]
-    [((name . args)) :when (keyword? name)
-     `(,obj ,name ,@args)]
-    [((name . args) . rest) :when (keyword? name)
-     `(-> (,obj ,name ,@args) ,@rest)]
-    [else (error '-> "bad syntax" calls)]))
-
+(define (object->string obj . maybe-printer)
+  (let ((printer (if (pair? maybe-printer)
+                     (car maybe-printer)
+                     write)))
+    (with-output-to-string (lambda () (printer obj)))))
 
 ;;; Numerical operations
 
@@ -251,6 +347,20 @@
   `(call-with-values (lambda () ,expression)
                      (lambda ,formals ,@body)))
 
+(define-macro (define-values vars exp)
+  (if (null? vars)
+      `(call-with-values
+        (lambda () ,exp)
+        (lambda () (void)))
+      (let ((tmps (map (lambda (var) (gensym var)) vars)))
+        `(begin
+          ,@(map (lambda (var) `(define ,var)) vars)
+          (call-with-values
+            (lambda () ,exp)
+            (lambda ,tmps
+              ,@(map (lambda (var tmp) `(set! ,var ,tmp))
+                     vars tmps)))))))
+
 (define-macro (let-values bindings . body)
   (letrec ((append* (lambda (il l)
                       (if (not (pair? il))
@@ -271,7 +381,7 @@
                                       ((pair? llist) (append* llist acc))
                                       (else (cons llist acc)))))
                          (loop (cdr llists) new-acc))))]
-           [aliases (map (lambda (v) (cons v (gensym))) vars)]
+           [aliases (map (lambda (v) (cons v (gensym v))) vars)]
            [lookup (lambda (v) (cdr (assq v aliases)))]
            [llists2 (let loop ((llists llists) (acc '()))
                       (if (null? llists)
@@ -297,18 +407,18 @@
                      ,(car llists2)
                      ,(fold (cdr llists) (cdr exps) (cdr llists2))))))))))
 
-(define-macro (let*-values bindings . body)
-  (let fold ([bindings bindings])
-    (if (null? bindings)
-        `(let () ,@body)
-        `(let-values (,(car bindings))
-                     ,(fold (cdr bindings))))))
+(define-macro (let*-values . form)
+  (match form
+    [(() . body)
+     `(let () ,@body)]
+    [((binding . more) . body)
+     `(let-values (,binding)
+       (let*-values ,more ,@body))]))
 
 (define-macro (nth-value n values)
-  (let ((v (gensym)))
-    `(call-with-values
-      (lambda () ,values)
-      (lambda ,v (list-ref ,v ,n)))))
+  `(call-with-values
+    (lambda () ,values)
+    (lambda v (list-ref v ,n))))
 
 ;;; Extended Macros
 
@@ -1160,11 +1270,11 @@
                     (,$args
                       ($process-keys
                         ,$args
-                        ',(alist->hash-table
-                            (map (lambda (x i)
-                                   (cons (car x) i))
-                                 named
-                                 (range 0 (length named))))
+                        ,(alist->hash-table
+                          (map (lambda (x i)
+                                 (cons (car x) i))
+                               named
+                               (range 0 (length named))))
                         ,$key-values))
                     ,@(map (lambda (x i)
                              `(,(cadr x)

@@ -326,7 +326,7 @@ public class SchemeParser {
         StringBuilder buf = new StringBuilder();
         int c;
 
-        loop: while ((c = s.input()) != -1 && c != '\n' && c != '"') {
+        loop: while ((c = s.input()) != -1 && c != '"') {
             if (c == '\\') {
                 switch (c = s.input()) {
                 case 'a':   c = '\u0007'; break;

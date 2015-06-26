@@ -7,70 +7,97 @@
 package com.cloudway.fp.scheme;
 
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.cloudway.fp.data.HashPMap;
 import com.cloudway.fp.data.Maybe;
+import com.cloudway.fp.data.MutablePMap;
 import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Ref;
 import com.cloudway.fp.data.Seq;
+import static java.util.Objects.requireNonNull;
 
-public final class Env implements LispVal {
-    private static final class GenSym extends Symbol {
+public final class Env implements LispVal, Cloneable {
+    static final class GenSym extends Symbol {
         public GenSym(String name) {
             super(name);
         }
+
+        public String toString() {
+            return "#GenSym('" + name + "')";
+        }
     }
 
-    private final Env outer;
-    private final LispVal source;
+    private Env outer;
+    private LispVal source;
 
-    private Ref<PMap<Symbol, Ref<?>>> system;
-    private Ref<PMap<Symbol, LispVal>> macros;
-    private Ref<PMap<Symbol, Ref<LispVal>>> bindings;
+    private final MutablePMap<Symbol, AtomicReference<?>> system;
+    private MutablePMap<Symbol, Ref<LispVal>> bindings;
 
+    private MutablePMap<Symbol, LispVal> macros;
+    private MutablePMap<Symbol, Scoped> scopedVars;
+    private MutablePMap<Scoped, Symbol> renamedVars;
+
+    private Function<Symbol, LispVal> translator;
     private int quoteLevel;
-    private AtomicLong symgen;
+    private boolean rewriting;
+
+    private final AtomicLong symgen;
 
     /**
      * Construct a top-level environment.
      */
     public Env() {
-        this.outer      = null;
-        this.source     = LispVal.VOID;
-        this.system     = new Ref<>(HashPMap.empty());
-        this.macros     = new Ref<>(HashPMap.empty());
-        this.bindings   = new Ref<>(HashPMap.empty());
-        this.quoteLevel = 0;
-        this.symgen     = new AtomicLong();
+        this.outer       = null;
+        this.source      = LispVal.VOID;
+        this.system      = new MutablePMap<>(HashPMap.empty());
+        this.bindings    = new MutablePMap<>(HashPMap.empty());
+        this.macros      = new MutablePMap<>(HashPMap.empty());
+        this.scopedVars  = new MutablePMap<>(HashPMap.empty());
+        this.renamedVars = new MutablePMap<>(HashPMap.empty());
+        this.translator  = sym -> sym;
+        this.quoteLevel  = 0;
+        this.rewriting   = false;
+        this.symgen      = new AtomicLong();
     }
 
-    /**
-     * Construct an empty environment, later initialized by copy.
-     */
-    private Env(Env outer, LispVal source) {
-        this.outer = outer;
-        this.source = source;
+    @Override
+    protected Env clone() {
+        try {
+            Env c = (Env)super.clone();
+            c.outer = this;
+            c.source = VOID;
+            return c;
+        } catch (CloneNotSupportedException e) {
+            throw new InternalError();
+        }
     }
 
-    private Env copy(Env outer, LispVal source) {
-        Env copy = new Env(outer, source);
-        copy.system     = this.system;
-        copy.macros     = this.macros;
-        copy.bindings   = this.bindings;
-        copy.quoteLevel = quoteLevel;
-        copy.symgen     = symgen;
-        return copy;
+    private Env clone(Env outer, LispVal source) {
+        Env c = clone();
+        c.outer = outer;
+        c.source = source;
+        return c;
     }
 
-    private Env copy() {
-        return copy(this, LispVal.VOID);
+    public Env getOuter() {
+        return outer;
+    }
+
+    public LispVal getSource() {
+        for (Env env = this; env != null; env = env.outer) {
+            if (env.source != VOID)
+                return env.source;
+        }
+        return VOID;
     }
 
     public Seq<LispVal> getCallTrace() {
         Seq<LispVal> trace = Seq.nil();
         for (Env env = this; env != null; env = env.outer) {
-            if (env.source != LispVal.VOID) {
+            if (env.source != VOID) {
                 trace = Seq.cons(env.source, trace);
             }
         }
@@ -78,81 +105,126 @@ public final class Env implements LispVal {
     }
 
     @SuppressWarnings("unchecked")
-    public <A> Ref<A> getSystem(Symbol id, A init) {
-        Maybe<Ref<?>> slot = system.get().lookup(id);
+    public <A> AtomicReference<A> getSystem(Symbol id, A init) {
+        Maybe<AtomicReference<?>> slot = system.lookup(id);
         if (slot.isAbsent()) {
-            Ref<A> new_slot = new Ref<>(init);
-            system.update(b -> b.put(id, new_slot));
+            AtomicReference<A> new_slot = new AtomicReference<>(init);
+            system.put(id, new_slot);
             return new_slot;
         } else {
-            return (Ref<A>)slot.get();
+            return (AtomicReference<A>)slot.get();
         }
     }
 
     @SuppressWarnings("unchecked")
-    public <A> Ref<A> getSystem(Symbol id, Supplier<? extends A> init) {
-        Maybe<Ref<?>> slot = system.get().lookup(id);
+    public <A> AtomicReference<A> getSystem(Symbol id, Supplier<? extends A> init) {
+        Maybe<AtomicReference<?>> slot = system.lookup(id);
         if (slot.isAbsent()) {
-            Ref<A> new_slot = new Ref<>(init.get());
-            system.update(b -> b.put(id, new_slot));
+            AtomicReference<A> new_slot = new AtomicReference<>(init.get());
+            system.put(id, new_slot);
             return new_slot;
         } else {
-            return (Ref<A>)slot.get();
+            return (AtomicReference<A>)slot.get();
         }
     }
 
     public void setSystem(Symbol id, Object value) {
-        system.update(b -> b.put(id, new Ref<>(value)));
+        system.put(id, new AtomicReference<>(value));
     }
 
     public Maybe<LispVal> lookupMacro(Symbol id) {
-        return macros.get().lookup(id);
+        return macros.lookup(id);
     }
 
     public void putMacro(Symbol id, LispVal macro) {
-        macros.update(b -> b.put(id, macro));
+        macros.put(id, macro);
     }
 
     public PMap<Symbol, Ref<LispVal>> getBindings() {
-        return bindings.get();
+        return bindings.snapshot();
     }
 
     public Maybe<Ref<LispVal>> lookup(Symbol id) {
-        return bindings.get().lookup(id);
+        return bindings.lookup(id);
     }
 
     public LispVal get(Symbol id) {
-        return bindings.get().get(id).get();
+        return requireNonNull(bindings.get(id)).get();
     }
 
     public void putRef(Symbol id, Ref<LispVal> ref) {
-        bindings.update(b -> b.put(id, ref));
+        bindings.put(id, ref);
     }
 
     public void put(Symbol id, LispVal value) {
         putRef(id, new Ref<>(value));
     }
 
+    public Env extend() {
+        return extend(this, VOID);
+    }
+
     public Env extend(Env outer, LispVal source) {
-        Env ext = copy(outer, source);
-        ext.bindings = new Ref<>(bindings.get());
-        ext.macros = new Ref<>(macros.get());
+        Env ext = clone(outer, source);
+        ext.bindings = new MutablePMap<>(bindings.snapshot());
+        ext.macros = new MutablePMap<>(macros.snapshot());
         return ext;
     }
 
-    public Env extend() {
-        return extend(this, LispVal.VOID);
-    }
-
     public Env extend(Env outer, LispVal source, PMap<Symbol, Ref<LispVal>> bindings) {
-        Env ext = copy(outer, source);
-        ext.bindings = new Ref<>(this.bindings.get().putAll(bindings));
-        ext.macros = new Ref<>(macros.get());
+        Env ext = clone(outer, source);
+        ext.bindings = new MutablePMap<>(getBindings().putAll(bindings));
+        ext.macros = new MutablePMap<>(macros.snapshot());
         return ext;
     }
 
     public Env extend(PMap<Symbol, Ref<LispVal>> bindings) {
-        return extend(this, LispVal.VOID, bindings);
+        return extend(this, VOID, bindings);
+    }
+
+    public Env macroExtend(Env outer, LispVal source) {
+        Env ext = extend(outer, source);
+        ext.rewriting = true;
+        ext.translator = ext::makeScopedVar;
+        ext.scopedVars = new MutablePMap<>(HashPMap.empty());
+        return ext;
+    }
+
+    public Env lexicalExtend() {
+        Env ext = clone();
+        ext.renamedVars = new MutablePMap<>(this.renamedVars.snapshot());
+        return ext;
+    }
+
+    private Scoped makeScopedVar(Symbol sym) {
+        return scopedVars.computeIfAbsent(sym, k -> new Scoped(this, sym));
+    }
+
+    public Symbol rename(LispVal var) {
+        if (var instanceof Scoped) {
+            return renamedVars.computeIfAbsent((Scoped)var, k -> newsym(k.getSymbolName()));
+        } else {
+            return var.getSymbol();
+        }
+    }
+
+    public Symbol rename(LispVal var, Symbol sym) {
+        if (var instanceof Scoped) {
+            renamedVars.putIfAbsent((Scoped)var, sym);
+        }
+        return sym;
+    }
+
+    public boolean isRenamed(LispVal var) {
+        return (var instanceof Scoped) && renamedVars.containsKey(var);
+    }
+
+    public Symbol getRenamed(LispVal var) {
+        if (var instanceof Scoped) {
+            return renamedVars.getOrDefault(var, var.getSymbol());
+        } else {
+            return var.getSymbol();
+        }
     }
 
     public int getQL() {
@@ -160,15 +232,29 @@ public final class Env implements LispVal {
     }
 
     public Env incrementQL() {
-        Env ext = copy();
+        Env ext = clone();
         ext.quoteLevel = this.quoteLevel + 1;
         return ext;
     }
 
     public Env decrementQL() {
-        Env ext = copy();
+        Env ext = clone();
         ext.quoteLevel = this.quoteLevel - 1;
         return ext;
+    }
+
+    public Env disableRewrite() {
+        Env ext = clone();
+        ext.rewriting = false;
+        return ext;
+    }
+
+    public LispVal rewrite(Symbol sym) {
+        if (quoteLevel == 1 && rewriting) {
+            return translator.apply(sym);
+        } else {
+            return sym;
+        }
     }
 
     public Symbol newsym() {

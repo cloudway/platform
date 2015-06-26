@@ -35,6 +35,7 @@ import static com.cloudway.fp.control.Conditionals.with;
 import static com.cloudway.fp.control.Syntax.do_;
 import static com.cloudway.fp.scheme.LispError.*;
 import static com.cloudway.fp.scheme.LispVal.*;
+import static com.cloudway.fp.scheme.Evaluator.match;
 import static java.lang.Character.toLowerCase;
 
 @SuppressWarnings("unused")
@@ -385,7 +386,8 @@ public final class Primitives {
         return lst.isNil() ? res : me.throwE(env, new TypeMismatch("pair", lst));
     }
 
-    private static $<Evaluator, Tuple<LispVal, LispVal>> cars_cdrs(Evaluator me, Env env, LispVal lists) {
+    private static $<Evaluator, Tuple<LispVal, LispVal>>
+    cars_cdrs(Evaluator me, Env env, LispVal lists) {
         LispVal cars = Nil, cdrs = Nil;
 
         while (lists.isPair()) {
@@ -665,7 +667,7 @@ public final class Primitives {
 
     public static Vec make_vector(int k, Maybe<LispVal> fill) {
         LispVal[] vec = new LispVal[k];
-        Arrays.fill(vec, fill.orElse(Num.ZERO));
+        Arrays.fill(vec, fill.orElse(VOID));
         return new Vec(vec);
     }
 
@@ -793,7 +795,7 @@ public final class Primitives {
     @Syntax
     public static $<Evaluator, Proc> delay(Evaluator me, Env ctx, LispVal args) {
         return me.map(me.analyzeSequence(ctx, args), proc ->
-            env -> me.pure(new Promise(env, proc)));
+               env -> me.pure(new Promise(env, proc)));
     }
 
     public static $<Evaluator, LispVal> force(Evaluator me, LispVal t) {
@@ -840,10 +842,10 @@ public final class Primitives {
     public static $<Evaluator, Proc> shift(Evaluator me, Env ctx, LispVal args) {
         return with(args).<$<Evaluator, Proc>>get()
             .when(Cons((id, body) ->
-               id.isSymbol()
-                 ? me.map(me.analyzeSequence(ctx, body), proc ->
-                   env -> me.shift(env, (Symbol)id, proc))
-                 : badSyntax(me, ctx, "shift", args)))
+              id.isSymbol()
+                ? me.map(me.analyzeSequence(ctx, body), proc ->
+                  env -> me.shift(env, id.getSymbol(), proc))
+                : badSyntax(me, ctx, "shift", args)))
             .orElseGet(() -> badSyntax(me, ctx, "shift", args));
     }
 
@@ -963,8 +965,8 @@ public final class Primitives {
         }
 
         LispVal x = prefix.get();
-        if (x instanceof Symbol) {
-            return env.newsym(((Symbol)x).name);
+        if (x.isSymbol()) {
+            return env.newsym(x.getSymbolName());
         } else if (x instanceof Text) {
             return env.newsym(((Text)x).value());
         } else {
@@ -989,9 +991,10 @@ public final class Primitives {
     private static $<Evaluator, LispVal>
     expand(Evaluator me, Env ctx, LispVal form, boolean single) {
         return with(form).<$<Evaluator, LispVal>>get()
-            .when(Datum  (__ -> me.pure(form)))
-            .when(Symbol (__ -> me.pure(form)))
-            .when(Nil    (() -> me.pure(form)))
+            .when(Datum  (__  -> me.pure(form)))
+            .when(Scoped (var -> me.pure(ctx.getRenamed(var))))
+            .when(Symbol (__  -> me.pure(form)))
+            .when(Nil    (()  -> me.pure(form)))
             .when(Cons   ((first, rest) -> do_(expand(me, ctx, first, single), tag ->
                                            do_(expandList(me, ctx, tag, rest, single)))))
             .orElseGet(() -> me.throwE(ctx, new BadSpecialForm("Unrecognized special form", form)));
@@ -1000,7 +1003,18 @@ public final class Primitives {
     private static $<Evaluator, LispVal>
     expandList(Evaluator me, Env ctx, LispVal tag, LispVal rest, boolean single) {
         if (tag.isSymbol()) {
-            switch(((Symbol)tag).name) {
+            switch(tag.getSymbolName()) {
+            case "sys:define":
+            case "define-macro":
+                return expandForm(me, renameDefinedVars(ctx, rest), tag, rest, single);
+
+            case "sys:lambda":
+                return expandForm(me, renameLambdaVars(ctx, rest), tag, rest, single);
+
+            case "sys:let":
+            case "sys:letrec":
+                return expandForm(me, renameLetVars(ctx, rest), tag, rest, single);
+
             case "quote":
                 return me.pure(Pair.cons(tag, rest));
 
@@ -1012,11 +1026,11 @@ public final class Primitives {
                   .orElseGet(() -> badSyntax(me, ctx, "quasiquote", rest));
 
             default:
-                Maybe<LispVal> var = ctx.lookupMacro((Symbol)tag);
+                Maybe<LispVal> var = ctx.lookupMacro(tag.getSymbol());
                 if (var.isPresent() && var.get() instanceof Macro) {
                     Macro mac = (Macro)var.get();
-                    return Evaluator.match(ctx, mac.pattern, rest).<$<Evaluator, LispVal>>either(
-                        err -> me.throwE(ctx, err),
+                    return match(mac.closure.macroExtend(ctx, mac), mac.pattern, rest).<$<Evaluator, LispVal>>either(
+                        err  -> me.throwE(ctx, err),
                         eenv -> single ? mac.body.apply(eenv)
                                        : do_(mac.body.apply(eenv), mexp ->
                                          expand(me, ctx, mexp, false)));
@@ -1024,8 +1038,92 @@ public final class Primitives {
             }
         }
 
-        return do_(rest.mapM(me, x -> expand(me, ctx, x, single)), els ->
-               do_(me.pure(Pair.cons(tag, els))));
+        return expandForm(me, ctx, tag, rest, single);
+    }
+
+    private static $<Evaluator, LispVal>
+    expandForm(Evaluator me, Env ctx, LispVal tag, LispVal form, boolean single) {
+        return do_(form.mapM(me, x -> expand(me, ctx, x, single)), args ->
+               do_(me.pure(Pair.cons(tag, args))));
+    }
+
+    private static void renamePattern(Env ctx, LispVal pattern) {
+        while (pattern.isPair()) {
+            Pair p = (Pair)pattern;
+            renamePattern(ctx, p.head);
+            pattern = p.tail;
+        }
+
+        if (pattern instanceof Scoped) {
+            ctx.rename(pattern);
+        }
+    }
+
+    private static Env renameDefinedVars(Env ctx, LispVal form) {
+        LispVal var, formals;
+
+        if (form.isPair()) {
+            LispVal def = ((Pair)form).head;
+            if (def.isSymbol()) {
+                ctx.rename(def);
+                return ctx;
+            } else if (def.isPair()) {
+                var = ((Pair)def).head;
+                formals = ((Pair)def).tail;
+            } else {
+                return ctx;
+            }
+        } else {
+            return ctx;
+        }
+
+        if (var instanceof Scoped) {
+            ctx.rename(var);
+        }
+
+        Env lctx = ctx.lexicalExtend();
+        renamePattern(lctx, formals);
+        return lctx;
+    }
+
+    private static Env renameLambdaVars(Env ctx, LispVal form) {
+        if (form.isPair()) {
+            Env lctx = ctx.lexicalExtend();
+            renamePattern(lctx, ((Pair)form).head);
+            return lctx;
+        } else {
+            return ctx;
+        }
+    }
+
+    private static Env renameLetVars(Env ctx, LispVal form) {
+        LispVal tag = null, bindings;
+
+        if (form.isPair() && ((Pair)form).head.isSymbol()) {
+            tag = ((Pair)form).head;
+            form = ((Pair)form).tail;
+        }
+
+        if (form.isPair()) {
+            bindings = ((Pair)form).head;
+        } else {
+            return ctx;
+        }
+
+        Env lctx = ctx.lexicalExtend();
+
+        if (tag instanceof Scoped) {
+            lctx.rename(tag);
+        }
+
+        while (bindings.isPair()) {
+            Pair p = (Pair)bindings;
+            if (p.head.isPair() && (((Pair)p.head).head instanceof Scoped))
+                lctx.rename(((Pair)p.head).head);
+            bindings = p.tail;
+        }
+
+        return lctx;
     }
 
     public static String dump(LispVal val) {
@@ -1039,7 +1137,8 @@ public final class Primitives {
         if (args.isPair()) {
             Pair p = (Pair)args;
             if (p.head.isSymbol() && p.tail.isNil()) {
-                return me.pure(env -> me.except(me.loadLib(env, (Symbol)p.head)));
+                Symbol name = p.head.getSymbol();
+                return me.pure(env -> me.except(me.loadLib(env, name)));
             }
         }
         return me.throwE(ctx, new BadSpecialForm("require: bad syntax", args));
@@ -1048,7 +1147,7 @@ public final class Primitives {
     public static $<Evaluator, LispVal> load(Evaluator me, Env env, String name) {
         try (InputStream is = Files.newInputStream(Paths.get(name))) {
             Reader input = new InputStreamReader(is, StandardCharsets.UTF_8);
-            return me.except(me.run(env, me.parse(name, input)));
+            return me.except(me.run(env.getOuter(), me.parse(name, input)));
         } catch (Exception ex) {
             return me.throwE(env, new LispError(ex));
         }
@@ -1059,7 +1158,7 @@ public final class Primitives {
         if (args.isPair()) {
             Pair p = (Pair)args;
             if (p.head.isSymbol() && p.tail.isNil()) {
-                String cls = ((Symbol)p.head).name;
+                String cls = p.head.getSymbolName();
                 return me.pure(env -> {
                     try {
                         me.loadPrimitives(env, Class.forName(cls));
@@ -1085,17 +1184,8 @@ public final class Primitives {
         return val instanceof JObject;
     }
 
-    public static JClass jclass(LispVal arg) throws ClassNotFoundException {
-        String name;
-
-        if (arg instanceof Symbol) {
-            name = ((Symbol)arg).name;
-        } else if (arg instanceof Text) {
-            name = ((Text)arg).value();
-        } else {
-            throw new TypeMismatch("symbol or string", arg);
-        }
-
+    public static JClass jclass(Symbol cls) throws ClassNotFoundException {
+        String name = cls.getSymbolName();
         if (name.indexOf('.') == -1)
             name = "java.lang." + name;
         return new JClass(Class.forName(name));
@@ -1273,7 +1363,7 @@ public final class Primitives {
             Pair p = (Pair)alist;
             if (p.head.isPair()) {
                 Pair a = (Pair)p.head;
-                if ((a.head instanceof Symbol) && name.equals(((Symbol)a.head).name))
+                if (a.head.isSymbol() && name.equals(a.head.getSymbolName()))
                     return a.tail;
             }
             alist = p.tail;
