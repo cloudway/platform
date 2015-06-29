@@ -6,15 +6,13 @@
 
 package com.cloudway.fp.scheme;
 
+import java.lang.reflect.Method;
 import java.math.BigInteger;
 
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.data.Tuple;
 import com.cloudway.fp.scheme.LispError.TypeMismatch;
-import static com.cloudway.fp.scheme.LispVal.*;
-import static com.cloudway.fp.data.Either.left;
-import static com.cloudway.fp.data.Either.right;
 import com.cloudway.fp.scheme.numsys.BigInt;
 import com.cloudway.fp.scheme.numsys.Field;
 import com.cloudway.fp.scheme.numsys.Int16;
@@ -22,21 +20,32 @@ import com.cloudway.fp.scheme.numsys.Int32;
 import com.cloudway.fp.scheme.numsys.Int64;
 import com.cloudway.fp.scheme.numsys.Num;
 import com.cloudway.fp.scheme.numsys.Real;
+import com.google.common.reflect.AbstractInvocationHandler;
+import com.google.common.reflect.Reflection;
+
+import static com.cloudway.fp.scheme.LispVal.*;
+import static com.cloudway.fp.data.Either.left;
+import static com.cloudway.fp.data.Either.right;
 
 /**
  * Convert Scheme object to Java object.
  */
 @FunctionalInterface
 interface Unpacker {
-    Either<LispError, Object> apply(Class<?> type, LispVal val);
+    Either<LispError, Object> apply(Env env, Class<?> type, LispVal val);
     
     static Unpacker get(Class<?> type) {
+        Method m = JLambda.findInterfaceMethod(type);
+        if (m != null) {
+            return (e, t, v) -> Impl.unpackLambdaObject(e, t, m, v);
+        }
+
         return Impl.unpackers.findFirst(t -> t.first().isAssignableFrom(type)).orElseThrow(
             () -> new LispError("Unrecognized java type: " + type.getName())).second();
     }
 
-    static Either<LispError, Object> unpack(Class<?> type, LispVal value) {
-        return get(type).apply(type, value);
+    static Either<LispError, Object> unpack(Env env, Class<?> type, LispVal value) {
+        return get(type).apply(env, type, value);
     }
 
     final class Impl {
@@ -67,29 +76,29 @@ interface Unpacker {
             Tuple.of(Object.class,       Impl::unpackObject)
         );
 
-        static Either<LispError, Object> unpackVoid(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackVoid(Env env, Class<?> type, LispVal val) {
             return right(null);
         }
     
-        static Either<LispError, Object> unpackBoolean(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackBoolean(Env env, Class<?> type, LispVal val) {
             return val instanceof Bool
                 ? right(((Bool)val).value)
                 : left(new TypeMismatch("boolean", val));
         }
     
-        static Either<LispError, Object> unpackChar(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackChar(Env env, Class<?> type, LispVal val) {
             return val instanceof Char
                 ? right(((Char)val).value)
                 : left(new TypeMismatch("char", val));
         }
     
-        static Either<LispError, Object> unpackString(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackString(Env env, Class<?> type, LispVal val) {
             return val instanceof Text
                 ? right(((Text)val).value())
                 : left(new TypeMismatch("string", val));
         }
     
-        static Either<LispError, Object> unpackByte(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackByte(Env env, Class<?> type, LispVal val) {
             if (val instanceof Num) {
                 Num n = ((Num)val).lower();
                 if (n instanceof Int16) {
@@ -101,7 +110,7 @@ interface Unpacker {
             return left(new TypeMismatch("8 bit integer", val));
         }
     
-        static Either<LispError, Object> unpackShort(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackShort(Env env, Class<?> type, LispVal val) {
             if (val instanceof Num) {
                 Num n = ((Num)val).lower();
                 if (n instanceof Int16) {
@@ -111,7 +120,7 @@ interface Unpacker {
             return left(new TypeMismatch("16 bit integer", val));
         }
     
-        static Either<LispError, Object> unpackInt(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackInt(Env env, Class<?> type, LispVal val) {
             if (val instanceof Int32) {
                 return right(((Int32)val).value);
             }
@@ -126,7 +135,7 @@ interface Unpacker {
             return left(new TypeMismatch("integer", val));
         }
     
-        static Either<LispError, Object> unpackLong(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackLong(Env env, Class<?> type, LispVal val) {
             if (val instanceof Int64) {
                 return right(((Int64)val).value);
             }
@@ -142,7 +151,7 @@ interface Unpacker {
         }
     
         @SuppressWarnings("FloatingPointEquality")
-        static Either<LispError, Object> unpackFloat(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackFloat(Env env, Class<?> type, LispVal val) {
             if (val instanceof Num) {
                 Real n = Field.raise(((Num)val).lower(), Real.TAG);
                 if (n != null) {
@@ -152,7 +161,7 @@ interface Unpacker {
             return left(new TypeMismatch("32 bit real", val));
         }
     
-        static Either<LispError, Object> unpackDouble(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackDouble(Env env, Class<?> type, LispVal val) {
             if (val instanceof Real) {
                 return right(((Real)val).value);
             }
@@ -167,7 +176,7 @@ interface Unpacker {
             return left(new TypeMismatch("real", val));
         }
     
-        static Either<LispError, Object> unpackBigInteger(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackBigInteger(Env env, Class<?> type, LispVal val) {
             if (val instanceof Num) {
                 BigInt n = Field.raise(((Num)val).lower(), BigInt.TAG);
                 if (n != null)
@@ -176,7 +185,7 @@ interface Unpacker {
             return left(new TypeMismatch("integer", val));
         }
     
-        static Either<LispError, Object> unpackLispVal(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackLispVal(Env env, Class<?> type, LispVal val) {
             if (type.isInstance(val)) {
                 return right(val);
             } else {
@@ -184,13 +193,13 @@ interface Unpacker {
             }
         }
     
-        static Either<LispError, Object> unpackClass(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackClass(Env env, Class<?> type, LispVal val) {
             return val instanceof JClass
                 ? right(((JClass)val).value)
                 : left(new TypeMismatch("jclass", val));
         }
     
-        static Either<LispError, Object> unpackObject(Class<?> type, LispVal val) {
+        static Either<LispError, Object> unpackObject(Env env, Class<?> type, LispVal val) {
             if (val == VOID)
                 return right(null);
 
@@ -203,8 +212,27 @@ interface Unpacker {
                     return right(obj);
                 }
             }
-    
+
             return left(new TypeMismatch(type.getName(), val));
+        }
+
+        static Either<LispError, Object>
+        unpackLambdaObject(Env env, Class<?> type, Method method, LispVal val) {
+            if (!val.isProcedure()) {
+                return unpackObject(env, type, val);
+            }
+
+            JLambda lambda = JLambda.make(method, val);
+            return right(Reflection.newProxy(type, new AbstractInvocationHandler() {
+                @Override
+                protected Object handleInvocation(Object proxy, Method m, Object[] args) throws Throwable {
+                    if (m.isDefault()) {
+                        return JLambda.invokeDefault(proxy, m, args);
+                    } else {
+                        return lambda.invoke(env, args);
+                    }
+                }
+            }));
         }
     }
 }

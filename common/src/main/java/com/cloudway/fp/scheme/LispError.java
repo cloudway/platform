@@ -42,7 +42,14 @@ public class LispError extends RuntimeException {
         if (!trace.isEmpty()) {
             buf.append("\n\nCall history:\n");
 
-            trace.reverse().forEach(x -> {
+            Seq<LispVal> xs = trace;
+            int count = 0;
+
+            while (!xs.isEmpty() && count < 1000) {
+                LispVal x = xs.head();
+                xs = xs.tail();
+                count++;
+
                 if (x instanceof Prim) {
                     buf.append("\t#<primitive:");
                     buf.append(((Prim)x).name);
@@ -65,7 +72,11 @@ public class LispError extends RuntimeException {
                     }
                     buf.append(")\n");
                 }
-            });
+            }
+
+            if (!xs.isEmpty()) {
+                buf.append("\t...\n");
+            }
         }
 
         return buf.toString();

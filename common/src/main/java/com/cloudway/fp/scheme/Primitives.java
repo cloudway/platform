@@ -94,7 +94,7 @@ public final class Primitives {
 
     @Name("procedure?")
     public static boolean isProcedure(LispVal val) {
-        return (val instanceof Prim) || (val instanceof Func);
+        return val.isProcedure();
     }
 
     // ---------------------------------------------------------------------
@@ -259,7 +259,7 @@ public final class Primitives {
     }
 
     public static $<Evaluator, LispVal> reverse(Evaluator me, Env env, LispVal lst) {
-        return me.except(Pair.reverse(lst));
+        return me.except(env, Pair.reverse(lst));
     }
 
     @VarArgs
@@ -711,7 +711,7 @@ public final class Primitives {
     }
 
     @Name("list->vector")
-    public static LispVal list2vector(Evaluator me, LispVal lst) {
+    public static LispVal list2vector(LispVal lst) {
         return vector(lst);
     }
 
@@ -1201,19 +1201,19 @@ public final class Primitives {
     }
 
     public static LispVal
-    get_field(Evaluator me, LispVal obj, Symbol name) throws Exception {
+    get_field(LispVal obj, Symbol name) throws Exception {
         if (obj instanceof JClass) {
-            return getField(me, ((JClass)obj).value, null, name.name);
+            return getField(((JClass)obj).value, null, name.name);
         } else if (obj instanceof JObject) {
             Object jobj = ((JObject)obj).value;
-            return getField(me, jobj.getClass(), jobj, name.name);
+            return getField(jobj.getClass(), jobj, name.name);
         } else {
             throw new TypeMismatch("jclass or jobject", obj);
         }
     }
 
     private static LispVal
-    getField(Evaluator me, Class<?> cls, Object obj, String name)
+    getField(Class<?> cls, Object obj, String name)
         throws NoSuchFieldException, IllegalAccessException
     {
         if (obj == null && "class".equals(name))
@@ -1227,121 +1227,46 @@ public final class Primitives {
 
     @Name("set-field!")
     public static void
-    set_field(Evaluator me, LispVal obj, Symbol name, LispVal value) throws Exception {
+    set_field(Env env, LispVal obj, Symbol name, LispVal value) throws Exception {
         if (obj instanceof JClass) {
-            setField(me, ((JClass)obj).value, null, name.name, value);
+            setField(env, ((JClass)obj).value, null, name.name, value);
         } else if (obj instanceof JObject) {
             Object jobj = ((JObject)obj).value;
-            setField(me, jobj.getClass(), jobj, name.name, value);
+            setField(env, jobj.getClass(), jobj, name.name, value);
         } else {
             throw new TypeMismatch("jclass or jobject", obj);
         }
     }
 
     private static void
-    setField(Evaluator me, Class<?> cls, Object obj, String name, LispVal value)
+    setField(Env env, Class<?> cls, Object obj, String name, LispVal value)
         throws NoSuchFieldException, IllegalAccessException
     {
         Field field = cls.getField(name);
         if (Modifier.isStatic(field.getModifiers()) != (obj == null))
             throw new NoSuchFieldException(name);
 
-        field.set(obj, Unpacker.unpack(field.getType(), value.normalize()).getOrThrow(Fn.id()));
+        field.set(obj, Unpacker.unpack(env, field.getType(), value.normalize()).getOrThrow(Fn.id()));
     }
 
-    private static class JLambda {
-        private final Packer[] packers;
-        private final Unpacker unpacker;
-        private final Class<?> ret;
-        private final LispVal  lambda;
-
-        private JLambda(Packer[] packers, Unpacker unpacker, Class<?> ret, LispVal lambda) {
-            this.packers  = packers;
-            this.unpacker = unpacker;
-            this.ret      = ret;
-            this.lambda   = lambda;
-        }
-
-        static JLambda make(Method method, LispVal lambda) {
-            Class<?>[] params = method.getParameterTypes();
-            Packer[] packers = new Packer[params.length];
-            for (int i = 0; i < params.length; i++) {
-                packers[i] = Packer.get(params[i]);
-            }
-
-            Class<?> ret = method.getReturnType();
-            Unpacker unpacker = Unpacker.get(ret);
-
-            return new JLambda(packers, unpacker, ret, lambda);
-        }
-
-        Object invoke(Evaluator me, Env env, Object[] args) {
-            $<Evaluator, Object> result =
-                do_(me.apply(env, lambda, packArguments(me, args, packers)), r ->
-                do_(me.except(unpacker.apply(ret, r.normalize()))));
-            return me.run(result).getOrThrow(Fn.id());
-        }
-
-        private static LispVal packArguments(Evaluator me, Object[] args, Packer[] packers) {
-            assert args.length == packers.length;
-            LispVal res = Nil;
-
-            for (int i = args.length; --i >= 0; ) {
-                LispVal x;
-                if (args[i] == null) {
-                    x = VOID;
-                } else if (args[i] instanceof LispVal) {
-                    x = (LispVal)args[i];
-                } else {
-                    x = packers[i].apply(args[i]);
-                }
-                res = Pair.cons(x, res);
-            }
-            return res;
-        }
-    }
-
-    public static Object make_jlambda(Evaluator me, Env env, Class<?> cls, LispVal lambda) {
-        Method method = findInterfaceMethod(cls);
-        if (method == null) {
-            throw new LispError(cls.getName() + ": not a functional interface");
-        }
-
-        JLambda jlambda = JLambda.make(method, lambda);
-        return Reflection.newProxy(cls, new AbstractInvocationHandler() {
-            @Override
-            protected Object handleInvocation(Object proxy, Method method, Object[] args) throws Throwable {
-                return jlambda.invoke(me, env, args);
-            }
-        });
-    }
-
-    public static Object make_proxy(Evaluator me, Env env, Class<?> cls, LispVal fns) {
+    public static Object make_proxy(Env env, Class<?> cls, LispVal fns) {
         Map<Method, JLambda> dispatch = createProxyDispatch(cls, fns);
 
         return Reflection.newProxy(cls, new AbstractInvocationHandler() {
             @Override
             protected Object handleInvocation(Object proxy, Method method, Object[] args) throws Throwable {
                 JLambda jlambda = dispatch.get(method);
-                if (jlambda == null)
-                    throw new LispError(method.getName() + ": method is not implemented");
-                return jlambda.invoke(me, env, args);
+                if (jlambda != null) {
+                    return jlambda.invoke(env, args);
+                }
+
+                if (method.isDefault()) {
+                    return JLambda.invokeDefault(proxy, method, args);
+                }
+
+                throw new LispError(method.getName() + ": method is not implemented");
             }
         });
-    }
-
-    private static Method findInterfaceMethod(Class<?> cls) {
-        Method interface_method = null;
-        if (cls.isInterface()) {
-            for (Method method : cls.getMethods()) {
-                if (Modifier.isAbstract(method.getModifiers())) {
-                    if (interface_method != null)
-                        return null;
-                    interface_method = method;
-                }
-            }
-        }
-        return interface_method;
     }
 
     private static Map<Method, JLambda> createProxyDispatch(Class<?> cls, LispVal fns) {

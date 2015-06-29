@@ -166,9 +166,6 @@
 (define-macro (new class . args)
   `(,(jclass class) new: ,@args))
 
-(define-macro (jlambda class formals . body)
-  `(make-jlambda ,(jclass class) (lambda ,formals ,@body)))
-
 (define-macro (reify class . dispatch)
   `(make-proxy ,(jclass class)
                (list ,@(map (lambda (method)

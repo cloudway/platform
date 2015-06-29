@@ -18,7 +18,9 @@ import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.function.TriFunction;
-import com.cloudway.fp.scheme.LispVal.Pair;
+
+import static com.cloudway.fp.scheme.LispVal.*;
+import static com.cloudway.fp.scheme.JLambda.isFunctionalInterface;
 
 final class JClassDecl {
     static class Dispatcher {
@@ -182,6 +184,9 @@ final class JClassDecl {
 
     private static boolean typeMatches(Class<?> t, Class<?> v) {
         if (getBoxedType(t).isAssignableFrom(v))
+            return true;
+
+        if (isFunctionalInterface(t) && (v == Func.class || v == Prim.class))
             return true;
 
         int o1 = getNumberOrder(t);

@@ -30,6 +30,7 @@ public final class Env implements LispVal, Cloneable {
         }
     }
 
+    private final Evaluator evaluator;
     private Env outer;
     private LispVal source;
 
@@ -49,7 +50,8 @@ public final class Env implements LispVal, Cloneable {
     /**
      * Construct a top-level environment.
      */
-    public Env() {
+    public Env(Evaluator evaluator) {
+        this.evaluator   = evaluator;
         this.outer       = null;
         this.source      = LispVal.VOID;
         this.system      = new MutablePMap<>(HashPMap.empty());
@@ -82,6 +84,10 @@ public final class Env implements LispVal, Cloneable {
         return c;
     }
 
+    public Evaluator getEvaluator() {
+        return evaluator;
+    }
+
     public Env getOuter() {
         return outer;
     }
@@ -95,13 +101,15 @@ public final class Env implements LispVal, Cloneable {
     }
 
     public Seq<LispVal> getCallTrace() {
-        Seq<LispVal> trace = Seq.nil();
-        for (Env env = this; env != null; env = env.outer) {
-            if (env.source != VOID) {
-                trace = Seq.cons(env.source, trace);
-            }
+        return getCallTrace(this).filter(x -> x != VOID);
+    }
+
+    private static Seq<LispVal> getCallTrace(Env env) {
+        if (env == null) {
+            return Seq.nil();
+        } else {
+            return Seq.cons(env.source, () -> getCallTrace(env.getOuter()));
         }
-        return trace;
     }
 
     @SuppressWarnings("unchecked")
@@ -130,6 +138,10 @@ public final class Env implements LispVal, Cloneable {
 
     public void setSystem(Symbol id, Object value) {
         system.put(id, new AtomicReference<>(value));
+    }
+
+    public PMap<Symbol, LispVal> getMacros() {
+        return macros.snapshot();
     }
 
     public Maybe<LispVal> lookupMacro(Symbol id) {

@@ -64,7 +64,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     public Evaluator() {
         super(ContT.on(Trampoline.tclass));
 
-        reportEnv = new Env();
+        reportEnv = new Env(this);
         loadPrimitives(reportEnv, Primitives.class);
         loadPrimitives(reportEnv, NumberPrimitives.class);
         loadPrimitives(reportEnv, IOPrimitives.class);
@@ -115,7 +115,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     }
 
     public Env getNullEnv() {
-        return new Env();
+        return new Env(this);
     }
 
     public Env getSchemeReportEnv() {
@@ -164,11 +164,13 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     }
 
     public <A> $<Evaluator, A> throwE(Env env, LispError error) {
-        return super.throwE(error.setCallTrace(env.getCallTrace()));
+        if (error.getCallTrace().isEmpty())
+            error.setCallTrace(env.getCallTrace());
+        return super.throwE(error);
     }
 
     public <A> $<Evaluator, A> except(Env env, Either<LispError, A> m) {
-        if (m.isLeft())
+        if (m.isLeft() && m.left().getCallTrace().isEmpty())
             m.left().setCallTrace(env.getCallTrace());
         return super.except(m);
     }
@@ -330,7 +332,12 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     private $<Evaluator, Proc> analyzeVariableDefinition(Env ctx, Symbol var, LispVal exp) {
         return map(analyze(ctx, exp), vproc ->
                env -> do_(vproc.apply(env), value ->
-                      do_action(() -> env.put(var, value.normalize()))));
+                      do_action(() -> {
+                          LispVal val = value.normalize();
+                          if (val instanceof Func && ((Func)val).name.isEmpty())
+                              ((Func)val).name = var.getSymbolName();
+                          env.put(var, val);
+                      })));
     }
 
     private $<Evaluator, Proc> analyzeMacroDefinition(Env ctx, LispVal first, LispVal body) {
@@ -1115,7 +1122,8 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return ret.getRawType() == rawType && Arrays.equals(targs, args);
     }
 
-    private BiFunction<Env, LispVal, $<Evaluator, Object[]>> getArgumentsUnpacker(Executable method) {
+    private BiFunction<Env, LispVal, $<Evaluator, Object[]>>
+    getArgumentsUnpacker(Executable method) {
         Class<?>[] params  = method.getParameterTypes();
         boolean    passMe  = false;
         boolean    passEnv = false;
@@ -1198,7 +1206,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             if (nparams == 0 || params[nparams - 1] != LispVal.class)
                 throw new LispError("The last argument of a VarArgs method must be a LispVal");
 
-            return (type, args) -> Either.right(args);
+            return (env, type, args) -> Either.right(args);
         }
 
         if (method.isVarArgs()) {
@@ -1206,7 +1214,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             Class<?> va_type = params[nparams - 1].getComponentType();
             Unpacker va_unpacker = Unpacker.get(va_type);
 
-            return (type, val) -> {
+            return (env, type, val) -> {
                 int nargs = 0;
                 for (LispVal p = val; p.isPair(); p = ((Pair)p).tail)
                     nargs++;
@@ -1216,7 +1224,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
                 for (int i = 0; i < nargs; i++) {
                     Pair p = (Pair)val;
-                    v = va_unpacker.apply(va_type, p.head);
+                    v = va_unpacker.apply(env, va_type, p.head);
                     if (v.isLeft())
                         return v;
                     Array.set(args, i, v.right());
@@ -1255,7 +1263,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
 
             for (j = 0; j < nreq && args.isPair(); i++, j++) {
                 Pair p = (Pair)args;
-                v = required[j].apply(params[i], p.head);
+                v = required[j].apply(env, params[i], p.head);
                 if (v.isLeft())
                     return throwE(env, v.left());
                 res[i] = v.right();
@@ -1270,7 +1278,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
                     res[i] = Maybe.empty();
                 } else if (args.isPair()) {
                     Pair p = (Pair)args;
-                    v = optional[j].apply(params[i], p.head);
+                    v = optional[j].apply(env, params[i], p.head);
                     if (v.isLeft())
                         return throwE(env, v.left());
                     res[i] = Maybe.of(v.right());
@@ -1281,7 +1289,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
             }
 
             if (varargs != null) {
-                v = varargs.apply(params[i], args);
+                v = varargs.apply(env, params[i], args);
                 if (v.isLeft())
                     return throwE(env, v.left());
                 res[i] = v.right();

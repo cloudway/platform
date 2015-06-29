@@ -20,7 +20,6 @@ import java.util.List;
 
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
-import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Ref;
 import com.cloudway.fp.scheme.LispVal.Symbol;
 import com.cloudway.fp.scheme.LispVal.Printer;
@@ -89,8 +88,7 @@ public class REPL implements Completor{
     public int complete(String buffer, int cursor, List candidates) {
         String prefix = scanSymbol(buffer, cursor, 0);
         if (prefix != null) {
-            if (!prefix.isEmpty())
-                completeKeywords(prefix, candidates);
+            completeMacros(prefix, candidates);
             completeDefinitions(prefix, candidates);
             Collections.sort(candidates);
             return cursor - prefix.length();
@@ -98,26 +96,20 @@ public class REPL implements Completor{
         return cursor;
     }
 
-    private static final String[] KEYWORDS = {
-        "define", "define-macro", "lambda", "set!", "if", "cond", "match",
-        "and", "or", "quote", "quasiquote", "unquote", "unquote-splicing",
-        "begin", "delay", "let", "let*", "letrec", "do"
-    };
-
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static void completeKeywords(String prefix, List candidates) {
-        for (String key : KEYWORDS) {
-            if (key.startsWith(prefix) && !candidates.contains(key)) {
-                candidates.add(key + " ");
+    private void completeMacros(String prefix, List candidates) {
+        for (Symbol key : env.getMacros().keys()) {
+            String name = key.getSymbolName();
+            if (name.startsWith(prefix) && !candidates.contains(key)) {
+                candidates.add(name + " ");
             }
         }
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void completeDefinitions(String prefix, List candidates) {
-        PMap<Symbol, ?> bindings = env.getBindings();
-        for (Symbol var : bindings.keys()) {
-            String name = var.name;
+        for (Symbol var : env.getBindings().keys()) {
+            String name = var.getSymbolName();
             if (!name.startsWith("%") && name.startsWith(prefix) && !candidates.contains(name)) {
                 candidates.add(name + " ");
             }

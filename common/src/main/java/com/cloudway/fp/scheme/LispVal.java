@@ -108,6 +108,13 @@ public interface LispVal {
     }
 
     /**
+     * Returns true if this Lisp value represents a procedure.
+     */
+    default boolean isProcedure() {
+        return false;
+    }
+
+    /**
      * Returns true if this Lisp value evaluating to itself.
      */
     default boolean isSelfEvaluating() {
@@ -1009,6 +1016,11 @@ public interface LispVal {
         }
 
         @Override
+        public boolean isProcedure() {
+            return true;
+        }
+
+        @Override
         public String show() {
             return "#<primitive:" + name + ">";
         }
@@ -1019,7 +1031,7 @@ public interface LispVal {
     }
 
     final class Func implements LispVal {
-        public final String  name;
+        public       String  name;
         public final LispVal params;
         public final Proc    body;
         public final Env     closure;
@@ -1033,6 +1045,11 @@ public interface LispVal {
             this.params  = params;
             this.body    = body;
             this.closure = closure;
+        }
+
+        @Override
+        public boolean isProcedure() {
+            return true;
         }
 
         @Override
