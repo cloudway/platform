@@ -6,10 +6,7 @@
 
 package com.cloudway.fp.scheme;
 
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -22,8 +19,7 @@ import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.function.ExceptionSupplier;
 import com.cloudway.fp.function.TriFunction;
-import com.cloudway.fp.io.IO;
-import com.cloudway.fp.io.IOConsumer;
+import com.cloudway.fp.scheme.LispError.NumArgs;
 import com.cloudway.fp.scheme.LispError.TypeMismatch;
 import com.cloudway.fp.scheme.numsys.Num;
 
@@ -1052,6 +1048,50 @@ public interface LispVal {
             return true;
         }
 
+        public $<Evaluator, LispVal> apply(Evaluator me, Env env, LispVal args) {
+            Env     eenv   = closure.extend(env, this);
+            LispVal params = this.params;
+            int     nvars  = 0;
+
+            while (params.isPair() && args.isPair()) {
+                Pair   pp  = (Pair)params;
+                Pair   pv  = (Pair)args;
+                Symbol var = pp.head.getSymbol();
+
+                eenv.put(var, pv.head);
+                params = pp.tail;
+                args   = pv.tail;
+                nvars++;
+            }
+
+            if (params.isPair()) {
+                // less arguments than parameters
+                do {
+                    nvars++;
+                    params = ((Pair)params).tail;
+                } while (params.isPair());
+                return me.throwE(eenv, new NumArgs(nvars, args));
+            }
+
+            if (params.isNil() && !args.isNil()) {
+                // more arguments than parameters
+                return me.throwE(eenv, new NumArgs(nvars, args));
+            }
+
+            if (params.isSymbol()) {
+                // varargs parameter
+                eenv.put(params.getSymbol(), args);
+            }
+
+            return body.apply(eenv);
+        }
+
+        public Either<LispError, LispVal> apply(LispVal args) {
+            Evaluator me = closure.getEvaluator();
+            Env env = me.getInteractionEnv(closure);
+            return me.run(apply(me, env, args));
+        }
+
         @Override
         public void show(Printer pr) {
             pr.add("#<procedure:");
@@ -1466,82 +1506,5 @@ public interface LispVal {
         return t -> t instanceof JObject
             ? () -> mapper.apply(((JObject)t).value)
             : null;
-    }
-
-    // -----------------------------------------------------------------------
-    // Printer
-
-    class Printer {
-        private static class RefID {
-            int ref, pos;
-            boolean active;
-
-            RefID(int ref, int pos, boolean active) {
-                this.ref = ref;
-                this.pos = pos;
-                this.active = active;
-            }
-        }
-
-        private final IdentityHashMap<LispVal, RefID> references = new IdentityHashMap<>();
-        private final ArrayList<String> buffer = new ArrayList<>();
-        private int nextRefId;
-
-        public void addReference(LispVal ref) {
-            RefID refid = references.get(ref);
-            if (refid == null) {
-                references.put(ref, new RefID(-1, buffer.size(), true));
-            } else {
-                refid.active = true;
-            }
-        }
-
-        public void removeReference(LispVal ref) {
-            RefID refid = references.get(ref);
-            if (refid != null) {
-                refid.active = false;
-            }
-        }
-
-        public boolean isReference(LispVal val) {
-            RefID refid = references.get(val);
-            return refid != null && refid.active;
-        }
-
-        public void add(LispVal val) {
-            RefID refid = references.get(val);
-            if (refid != null && refid.active) {
-                if (refid.ref == -1)
-                    refid.ref = nextRefId++;
-                add("#" + refid.ref + "#");
-            } else {
-                val.show(this);
-            }
-        }
-
-        public void add(String literal) {
-            buffer.add(literal);
-        }
-
-        public void print(IOConsumer<String> out) throws IOException {
-            backfill();
-            IO.forEach(buffer, out);
-        }
-
-        public String toString() {
-            backfill();
-            StringBuilder out = new StringBuilder();
-            buffer.forEach(out::append);
-            return out.toString();
-        }
-
-        private void backfill() {
-            for (RefID refid : references.values()) {
-                if (refid.ref != -1) {
-                    String s = buffer.get(refid.pos);
-                    buffer.set(refid.pos, "#" + refid.ref + "=" + s);
-                }
-            }
-        }
     }
 }

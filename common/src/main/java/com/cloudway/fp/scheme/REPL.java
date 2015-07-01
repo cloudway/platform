@@ -20,9 +20,9 @@ import java.util.List;
 
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
+import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Ref;
 import com.cloudway.fp.scheme.LispVal.Symbol;
-import com.cloudway.fp.scheme.LispVal.Printer;
 
 import jline.Completor;
 import jline.ConsoleReader;
@@ -72,8 +72,14 @@ public class REPL implements Completor{
                     try {
                         Printer pr = new Printer();
                         pr.add(res);
-                        pr.print(System.out::print);
-                        System.out.println();
+
+                        Maybe<LispError> err = pr.checkError();
+                        if (err.isPresent()) {
+                            System.err.println(err.get().getMessage());
+                        } else {
+                            pr.print(System.out::print);
+                            System.out.println();
+                        }
                     } catch (IOException ex) {
                         throw new UncheckedIOException(ex);
                     }

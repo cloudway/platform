@@ -885,7 +885,9 @@ public final class Primitives {
         }
 
         return args.isNil()
-            ? me.throwE(env, new LispError(pr.toString()))
+            ? pr.checkError().either(
+                err -> me.throwE(env, err),
+                ()  -> me.throwE(env, new LispError(pr.toString())))
             : me.throwE(env, new TypeMismatch("pair", args));
     }
 

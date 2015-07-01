@@ -197,7 +197,7 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
     public $<Evaluator, LispVal> apply(Env env, LispVal func, LispVal args) {
         return with(func.normalize()).<$<Evaluator, LispVal>>get()
             .when(Prim    (p -> p.proc.apply(env.extend(env, p), null, args)))
-            .when(Func    (f -> applyFunc(env, f, args)))
+            .when(Func    (f -> f.apply(this, env, args)))
             .when(JClass  (c -> applyJObject(env, c, null, args)))
             .when(JObject (o -> applyJObject(env, o.getClass(), o, args)))
             .orElseGet(() -> throwE(env, new NotFunction("unrecognized function", func.show())));
@@ -388,44 +388,6 @@ public class Evaluator extends ExceptTC<Evaluator, LispError, ContT<Trampoline.Â
         return match(macro.closure.macroExtend(ctx, macro), macro.pattern, operands).<$<Evaluator, Proc>>either(
             err  -> throwE(ctx, err),
             eenv -> do_(macro.body.apply(eenv), mexp -> analyze(ctx, mexp)));
-    }
-
-    private $<Evaluator, LispVal> applyFunc(Env env, Func fn, LispVal args) {
-        Env     eenv   = fn.closure.extend(env, fn);
-        LispVal params = fn.params;
-        int     nvars  = 0;
-
-        while (params.isPair() && args.isPair()) {
-            Pair   pp  = (Pair)params;
-            Pair   pv  = (Pair)args;
-            Symbol var = pp.head.getSymbol();
-
-            eenv.put(var, pv.head);
-            params = pp.tail;
-            args   = pv.tail;
-            nvars++;
-        }
-
-        if (params.isPair()) {
-            // less arguments than parameters
-            do {
-                nvars++;
-                params = ((Pair)params).tail;
-            } while (params.isPair());
-            return throwE(eenv, new NumArgs(nvars, args));
-        }
-
-        if (params.isNil() && !args.isNil()) {
-            // more arguments than parameters
-            return throwE(eenv, new NumArgs(nvars, args));
-        }
-
-        if (params.isSymbol()) {
-            // varargs parameter
-            eenv.put(params.getSymbol(), args);
-        }
-
-        return fn.body.apply(eenv);
     }
 
     public $<Evaluator, Proc> analyzeSequence(Env ctx, LispVal exps) {

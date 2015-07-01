@@ -596,19 +596,21 @@
 ;     (field-tags record-type-field-tags))
 ; As it is, we need to define everything by hand.
 
-(define :record-type (make-record 3))
+(define :record-type (make-record 4))
 (record-set! :record-type 0 :record-type)   ; Its type is itself
 (record-set! :record-type 1 ':record-type)
 (record-set! :record-type 2 '(name field-tags))
+(record-set! :record-type 3 #f)
 
 ; Now that :record-type exists we can define a procedure for making more
 ; record types.
 
 (define (make-record-type name field-tags)
-  (let ((new (make-record 3)))
+  (let ((new (make-record 4)))
     (record-set! new 0 :record-type)
     (record-set! new 1 name)
     (record-set! new 2 field-tags)
+    (record-set! new 3 #f)
     new))
 
 ; Accessors for record types.
@@ -619,10 +621,13 @@
 (define (record-type-field-tags record-type)
   (record-ref record-type 2))
 
+(define (record-type-printer record-type)
+  (record-ref record-type 3))
+
 ;----------------
 ; A utility for getting the offset of a field within a record.
 
-(define (field-index type tag)
+(define (%record-field-index type tag)
   (let loop ((i 1) (tags (record-type-field-tags type)))
     (cond ((null? tags)
            (error "record type has no such field" type tag))
@@ -639,7 +644,7 @@
   (let ((size (length (record-type-field-tags type)))
         (arg-count (length tags))
         (indexes (map (lambda (tag)
-                        (field-index type tag))
+                        (%record-field-index type tag))
                       tags)))
     (lambda args
       (if (= (length args) arg-count)
@@ -659,7 +664,7 @@
               type))))
 
 (define (record-accessor type tag)
-  (let ((index (field-index type tag)))
+  (let ((index (%record-field-index type tag)))
     (lambda (thing)
       (if (and (record? thing)
                (eq? (record-type thing)
@@ -668,7 +673,7 @@
         (error "accessor applied to bad value" type tag thing)))))
 
 (define (record-modifier type tag)
-  (let ((index (field-index type tag)))
+  (let ((index (%record-field-index type tag)))
     (lambda (thing value)
       (if (and (record? thing)
                (eq? (record-type thing)
@@ -693,6 +698,11 @@
                    (define ,accessor (record-accessor ,type ',field-tag))
                    (define ,modifier (record-modifier ,type ',field-tag)))))
             field-specs)))
+
+(define-macro (define-record-printer (type record out) . body)
+  `(if (and (record? ,type) (eq? (record-type ,type) :record-type))
+       (record-set! ,type 3 (lambda (,record ,out) ,@body))
+       (error 'define-record-printer "not a record type" ,type)))
 
 ; SRFI 17: Generalized set!
 (define setter
