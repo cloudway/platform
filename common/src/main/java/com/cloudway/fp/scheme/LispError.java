@@ -38,48 +38,75 @@ public class LispError extends RuntimeException {
         StringBuilder buf = new StringBuilder();
         buf.append("Error: ");
         buf.append(getRawMessage());
+        formatTrace(buf);
+        return buf.toString();
+    }
 
+    private void formatTrace(StringBuilder buf) {
         if (!trace.isEmpty()) {
             buf.append("\n\nCall history:\n");
 
             Seq<LispVal> xs = trace;
-            int count = 0;
+            LispVal previous = xs.head();
+            int repeats = 1;
+            int total = 0;
 
-            while (!xs.isEmpty() && count < 1000) {
+            xs = xs.tail();
+            while (!xs.isEmpty() && total < 1000) {
                 LispVal x = xs.head();
                 xs = xs.tail();
-                count++;
 
-                if (x instanceof Prim) {
-                    buf.append("\t#<primitive:");
-                    buf.append(((Prim)x).name);
-                    buf.append(">\n");
-                } else if (x instanceof Macro) {
-                    buf.append("\t#<syntax:");
-                    buf.append(((Macro)x).name);
-                    buf.append(">\n");
-                } else if (x instanceof PrimMacro) {
-                    buf.append("\t#<syntax:");
-                    buf.append(((PrimMacro)x).name);
-                    buf.append(">\n");
-                } else if (x instanceof Func) {
-                    Func fn = (Func)x;
-                    buf.append("\t(");
-                    buf.append(fn.name.isEmpty() ? "lambda" : fn.name);
-                    if (!fn.params.isNil()) {
-                        buf.append(" ");
-                        buf.append(fn.params.show());
-                    }
-                    buf.append(")\n");
+                if (x == previous) {
+                    repeats++;
+                } else {
+                    formatSource(buf, previous, repeats);
+                    previous = x;
+                    repeats = 1;
+                    total++;
                 }
             }
 
             if (!xs.isEmpty()) {
                 buf.append("\t...\n");
+            } else {
+                formatSource(buf, previous, repeats);
             }
         }
+    }
 
-        return buf.toString();
+    private static void formatSource(StringBuilder buf, LispVal x, int repeats) {
+        if (x instanceof Prim) {
+            buf.append("\t#<primitive:");
+            buf.append(((Prim)x).name);
+            buf.append(">");
+        } else if (x instanceof Macro) {
+            buf.append("\t#<syntax:");
+            buf.append(((Macro)x).name);
+            buf.append(">");
+        } else if (x instanceof PrimMacro) {
+            buf.append("\t#<syntax:");
+            buf.append(((PrimMacro)x).name);
+            buf.append(">");
+        } else if (x instanceof Func) {
+            Func fn = (Func)x;
+            buf.append("\t(");
+            buf.append(fn.name.isEmpty() ? "lambda" : fn.name);
+            if (!fn.params.isNil()) {
+                buf.append(" ");
+                buf.append(fn.params.show());
+            }
+            buf.append(")");
+        } else {
+            return;
+        }
+
+        if (repeats == 1) {
+            buf.append("\n");
+        } else {
+            buf.append("\t(... repeated ");
+            buf.append(repeats);
+            buf.append(" times ...)\n");
+        }
     }
 
     protected String getRawMessage() {

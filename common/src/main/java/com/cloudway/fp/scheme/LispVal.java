@@ -288,7 +288,7 @@ public interface LispVal {
 
         @Override
         public String toString() {
-            return "#Scoped(" + scope.getSource() + " '" + symbol.name + "')";
+            return "#Scoped('" + symbol.name + "')";
         }
     }
 

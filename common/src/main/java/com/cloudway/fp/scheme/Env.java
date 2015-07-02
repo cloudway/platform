@@ -31,8 +31,7 @@ public final class Env implements LispVal, Cloneable {
     }
 
     private final Evaluator evaluator;
-    private Env outer;
-    private LispVal source;
+    private Seq<LispVal> trace;
 
     private final MutablePMap<Symbol, AtomicReference<?>> system;
     private MutablePMap<Symbol, Ref<LispVal>> bindings;
@@ -52,8 +51,7 @@ public final class Env implements LispVal, Cloneable {
      */
     public Env(Evaluator evaluator) {
         this.evaluator   = evaluator;
-        this.outer       = null;
-        this.source      = LispVal.VOID;
+        this.trace       = Seq.nil();
         this.system      = new MutablePMap<>(HashPMap.empty());
         this.bindings    = new MutablePMap<>(HashPMap.empty());
         this.macros      = new MutablePMap<>(HashPMap.empty());
@@ -68,47 +66,25 @@ public final class Env implements LispVal, Cloneable {
     @Override
     protected Env clone() {
         try {
-            Env c = (Env)super.clone();
-            c.outer = this;
-            c.source = VOID;
-            return c;
+            return (Env)super.clone();
         } catch (CloneNotSupportedException e) {
             throw new InternalError();
         }
-    }
-
-    private Env clone(Env outer, LispVal source) {
-        Env c = clone();
-        c.outer = outer;
-        c.source = source;
-        return c;
     }
 
     public Evaluator getEvaluator() {
         return evaluator;
     }
 
-    public Env getOuter() {
-        return outer;
-    }
-
-    public LispVal getSource() {
-        for (Env env = this; env != null; env = env.outer) {
-            if (env.source != VOID)
-                return env.source;
-        }
-        return VOID;
-    }
-
     public Seq<LispVal> getCallTrace() {
-        return getCallTrace(this).filter(x -> x != VOID);
+        return trace;
     }
 
-    private static Seq<LispVal> getCallTrace(Env env) {
-        if (env == null) {
-            return Seq.nil();
+    private void addTrace(Env outer, LispVal source) {
+        if (source == VOID) {
+            trace = outer.trace;
         } else {
-            return Seq.cons(env.source, () -> getCallTrace(env.getOuter()));
+            trace = Seq.cons(source, outer.trace);
         }
     }
 
@@ -177,14 +153,16 @@ public final class Env implements LispVal, Cloneable {
     }
 
     public Env extend(Env outer, LispVal source) {
-        Env ext = clone(outer, source);
+        Env ext = clone();
+        ext.addTrace(outer, source);
         ext.bindings = new MutablePMap<>(bindings.snapshot());
         ext.macros = new MutablePMap<>(macros.snapshot());
         return ext;
     }
 
     public Env extend(Env outer, LispVal source, PMap<Symbol, Ref<LispVal>> bindings) {
-        Env ext = clone(outer, source);
+        Env ext = clone();
+        ext.addTrace(outer, source);
         ext.bindings = new MutablePMap<>(getBindings().putAll(bindings));
         ext.macros = new MutablePMap<>(macros.snapshot());
         return ext;

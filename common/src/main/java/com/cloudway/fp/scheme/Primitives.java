@@ -788,8 +788,8 @@ public final class Primitives {
 
         LispVal last = rest;
         return do_(reverse(me, env, args), rev ->
-               do_(append(me, env, rev, last), app ->
-               me.apply(env, func, app)));
+            do_(append(me, env, rev, last), app ->
+                me.apply(env, func, app)));
     }
 
     @Syntax
@@ -1140,16 +1140,28 @@ public final class Primitives {
             Pair p = (Pair)args;
             if (p.head.isSymbol() && p.tail.isNil()) {
                 Symbol name = p.head.getSymbol();
-                return me.pure(env -> me.except(me.loadLib(env, name)));
+                return me.pure(env -> me.except(env, me.loadLib(env, name)));
             }
         }
         return me.throwE(ctx, new BadSpecialForm("require: bad syntax", args));
     }
 
-    public static $<Evaluator, LispVal> load(Evaluator me, Env env, String name) {
+    @Syntax
+    public static $<Evaluator, Proc> load(Evaluator me, Env ctx, LispVal args) {
+        if (args.isPair()) {
+            Pair p = (Pair)args;
+            if (p.head instanceof Text && p.tail.isNil()) {
+                String name = ((Text)p.head).value();
+                return me.pure(env -> load(me, env, name));
+            }
+        }
+        return me.throwE(ctx, new BadSpecialForm("load: bad syntax", args));
+    }
+
+    private static $<Evaluator, LispVal> load(Evaluator me, Env env, String name) {
         try (InputStream is = Files.newInputStream(Paths.get(name))) {
             Reader input = new InputStreamReader(is, StandardCharsets.UTF_8);
-            return me.except(me.run(env.getOuter(), me.parse(name, input)));
+            return me.except(env, me.run(env, me.parse(name, input)));
         } catch (Exception ex) {
             return me.throwE(env, new LispError(ex));
         }
