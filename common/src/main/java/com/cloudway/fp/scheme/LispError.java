@@ -6,8 +6,13 @@
 
 package com.cloudway.fp.scheme;
 
+import com.cloudway.fp.data.Seq;
+import static com.cloudway.fp.scheme.LispVal.*;
+
 @SuppressWarnings("serial")
 public class LispError extends RuntimeException {
+    private Seq<LispVal> trace = Seq.nil();
+
     public LispError(String message) {
         super(message);
     }
@@ -17,6 +22,95 @@ public class LispError extends RuntimeException {
 
     protected LispError(Throwable cause) {
         super(cause);
+    }
+
+    public Seq<LispVal> getCallTrace() {
+        return trace;
+    }
+
+    public LispError setCallTrace(Seq<LispVal> trace) {
+        this.trace = trace;
+        return this;
+    }
+
+    @Override
+    public String getMessage() {
+        StringBuilder buf = new StringBuilder();
+        buf.append("Error: ");
+        buf.append(getRawMessage());
+        formatTrace(buf);
+        return buf.toString();
+    }
+
+    private void formatTrace(StringBuilder buf) {
+        if (!trace.isEmpty()) {
+            buf.append("\n\nCall history:\n");
+
+            Seq<LispVal> xs = trace;
+            LispVal previous = xs.head();
+            int repeats = 1;
+            int total = 0;
+
+            xs = xs.tail();
+            while (!xs.isEmpty() && total < 1000) {
+                LispVal x = xs.head();
+                xs = xs.tail();
+
+                if (x == previous) {
+                    repeats++;
+                } else {
+                    formatSource(buf, previous, repeats);
+                    previous = x;
+                    repeats = 1;
+                    total++;
+                }
+            }
+
+            if (!xs.isEmpty()) {
+                buf.append("\t...\n");
+            } else {
+                formatSource(buf, previous, repeats);
+            }
+        }
+    }
+
+    private static void formatSource(StringBuilder buf, LispVal x, int repeats) {
+        if (x instanceof Prim) {
+            buf.append("\t#<primitive:");
+            buf.append(((Prim)x).name);
+            buf.append(">");
+        } else if (x instanceof Macro) {
+            buf.append("\t#<syntax:");
+            buf.append(((Macro)x).name);
+            buf.append(">");
+        } else if (x instanceof PrimMacro) {
+            buf.append("\t#<syntax:");
+            buf.append(((PrimMacro)x).name);
+            buf.append(">");
+        } else if (x instanceof Func) {
+            Func fn = (Func)x;
+            buf.append("\t(");
+            buf.append(fn.name.isEmpty() ? "lambda" : fn.name);
+            if (!fn.params.isNil()) {
+                buf.append(" ");
+                buf.append(fn.params.show());
+            }
+            buf.append(")");
+        } else {
+            return;
+        }
+
+        if (repeats == 1) {
+            buf.append("\n");
+        } else {
+            buf.append("\t(... repeated ");
+            buf.append(repeats);
+            buf.append(" times ...)\n");
+        }
+    }
+
+    protected String getRawMessage() {
+        return super.getMessage();
     }
 
     public static class NumArgs extends LispError {
@@ -29,8 +123,8 @@ public class LispError extends RuntimeException {
         }
 
         @Override
-        public String getMessage() {
-            return "Expected " + expected + " args; found values " + found.show();
+        public String getRawMessage() {
+            return "expected " + expected + " args; found values " + found.show();
         }
     }
 
@@ -44,8 +138,8 @@ public class LispError extends RuntimeException {
         }
 
         @Override
-        public String getMessage() {
-            return "Invalid type: expected " + expected + ", found " + found.show();
+        public String getRawMessage() {
+            return "invalid type: expected " + expected + ", found " + found.show();
         }
     }
 
@@ -59,8 +153,8 @@ public class LispError extends RuntimeException {
         }
 
         @Override
-        public String getMessage() {
-            return "Pattern mismatch: pattern " + pattern.show() + ", found " + found.show();
+        public String getRawMessage() {
+            return "pattern mismatch: pattern " + pattern.show() + ", found " + found.show();
         }
     }
 
@@ -76,7 +170,7 @@ public class LispError extends RuntimeException {
         }
 
         @Override
-        public String getMessage() {
+        public String getRawMessage() {
             StringBuilder sb = new StringBuilder();
             if (filename != null && !filename.isEmpty()) {
                 sb.append('"').append(filename).append("\" ");
@@ -87,50 +181,51 @@ public class LispError extends RuntimeException {
                 sb.append(")");
             }
             sb.append("\n");
-            sb.append(super.getMessage());
+            sb.append(super.getRawMessage());
             return sb.toString();
         }
     }
 
     public static class BadSpecialForm extends LispError {
+        public final String message;
         public final LispVal form;
 
         public BadSpecialForm(String message, LispVal form) {
-            super(message);
+            this.message = message;
             this.form = form;
         }
 
         @Override
-        public String getMessage() {
-            return super.getMessage() + ": " + form.show();
+        public String getRawMessage() {
+            return message + ": " + form.show();
         }
     }
 
     public static class NotFunction extends LispError {
+        public final String message;
         public final String func;
 
         public NotFunction(String message, String func) {
-            super(message);
+            this.message = message;
             this.func = func;
         }
 
         @Override
-        public String getMessage() {
-            return super.getMessage() + ": " + func;
+        public String getRawMessage() {
+            return message + ": " + func;
         }
     }
 
     public static class UnboundVar extends LispError {
         public final String varname;
 
-        public UnboundVar(String message, String varname) {
-            super(message);
+        public UnboundVar(String varname) {
             this.varname = varname;
         }
 
         @Override
-        public String getMessage() {
-            return super.getMessage() + ": " + varname;
+        public String getRawMessage() {
+            return "undefined variable: " + varname;
         }
     }
 
@@ -142,7 +237,7 @@ public class LispError extends RuntimeException {
         }
 
         @Override
-        public String getMessage() {
+        public String getRawMessage() {
             return "uncaught exception: " + value.show();
         }
     }

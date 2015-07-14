@@ -1,3 +1,202 @@
+;;; Basic macros
+
+(define-macro (define . form)
+  (match form
+    [((var . formals) . body)
+     (if (pair? var)
+         `(define ,var (sys:lambda ,formals ,@body))
+         `(sys:define ,var (sys:lambda ,formals ,@body)))]
+    [(var exp)
+     `(sys:define ,var ,exp)]
+    [(var)
+     `(sys:define ,var ,(void))]
+    [else (error 'define "bad syntax" form)]))
+
+(define-macro (lambda . form)
+  `(sys:lambda ,@form))
+
+(define-macro (set! . form)
+  (match form
+    [((proc . args) exp)
+     `((setter ,proc) ,@args ,exp)]
+    [(var exp)
+     `(sys:set! ,var ,exp)]
+    [else (error 'set! "bad syntax" form)]))
+
+(define-macro (let . form)
+  (match form
+    [(tag bindings . body) :when (symbol? tag)
+     `((sys:letrec ((,tag (sys:lambda ,(map car bindings) ,@body)))
+         ,tag)
+       ,@(map (lambda (x) (car (cdr x))) bindings))]
+    [(bindings . body)
+     `(sys:let ,bindings ,@body)]
+    [else (error 'let "bad syntax" form)]))
+
+(define-macro (letrec . form)
+  `(sys:letrec ,@form))
+
+(define-macro (let* . form)
+  (match form
+    [(() . body)
+     `(let () ,@body)]
+    [(((name init)) . body)
+     `(let ((,name ,init)) ,@body)]
+    [(((name init) . more) . body)
+     `(let ((,name ,init))
+       (let* ,more ,@body))]))
+
+(define-macro (letrec* bindings . body)
+  `(sys:let ,(map (lambda (x) (list (car x))) bindings)
+     ,@(map (lambda (x) `(sys:set! ,@x)) bindings)
+     (sys:let () ,@body)))
+
+(define-macro (defmacro . form)
+  `(define-macro ,@form))
+
+(define-macro (with-gensyms syms . body)
+  `(let ,(map (lambda (s) `(,s (gensym ',s))) syms) ,@body))
+
+(define-macro (cond . form)
+  (define (cond/maybe-more test consequent more)
+    (if (null? more)
+        `(if ,test ,consequent)
+        `(if ,test ,consequent (cond ,@more))))
+
+  (match form
+    [(('else result . results))
+      `(begin ,result ,@results)]
+    [(('else))
+     (error 'cond "missing expression in 'else' clause" form)]
+    [(('else . _) . _)
+     (error 'cond "bad syntax ('else' clause must be last)" form)]
+
+    [((test '=> receiver) . more)
+     (with-gensyms (t)
+       `(let ((,t ,test))
+         ,(cond/maybe-more t `(,receiver ,t) more)))]
+
+    [((generator guard '=> receiver) . more)
+     (with-gensyms (t)
+       `(call-with-values (lambda () ,generator)
+         (lambda ,t ,(cond/maybe-more `(apply ,guard ,t)
+                                      `(apply ,receiver ,t)
+                                      more))))]
+
+    [((test)) test]
+    [((test) . more)
+     (with-gensyms (t)
+       `(let ((,t ,test))
+         ,(cond/maybe-more t t more)))]
+    [((test . results) . more)
+     (cond/maybe-more test `(begin ,@results) more)]
+
+    [else (error 'cond "bad syntax" form)]))
+
+(define-macro (case key . clauses)
+  (define (expand-clause atoms result rest)
+    (let ((test (if (= 1 (length atoms))
+                    `(eqv? ,key ',(car atoms))
+                    `(memv ,key ',atoms))))
+      (if (null? rest)
+          `(if ,test ,result)
+          `(if ,test ,result (case ,key ,@rest)))))
+
+  (if (not (symbol? key))
+      `(let ((atom-key ,key)) (case atom-key ,@clauses))
+      (match clauses
+        [(('else '=> receiver))
+         `(,receiver ,key)]
+        [(('else result . results))
+          `(begin ,result ,@results)]
+        [(('else))
+          (error 'case "missing expression in 'else' clause" clauses)]
+        [(('else . _) . _)
+          (error 'case "bad syntax ('else' clause must be last" clauses)]
+        [((atoms) . _)
+          (error 'case "missing expression after datum sequence" (list atoms))]
+        [(((atom . atoms) '=> receiver) . rest)
+          (expand-clause (cons atom atoms) `(,receiver ,key) rest)]
+        [(((atom . atoms) . results) . rest)
+          (expand-clause (cons atom atoms) `(begin ,@results) rest)]
+        [((atom . results) . rest)
+          `(case ,key ((,atom) ,@results) ,@rest)]
+        [else (error 'case "bad syntax" clauses)])))
+
+(define-macro (do bindings (test . finish) . body)
+  (define (init b)
+    (match b
+      ((var init . _) :when (symbol? var)
+        (list var init))
+      (else
+        (error 'do "bad syntax" b))))
+
+  (define (step b)
+    (match b
+      ((var _) var)
+      ((_ _ step) step)
+      (else (error 'do "bad syntax" b))))
+
+  `(let loop ,(map init bindings)
+     (if ,test
+         (begin ,@finish)
+         (begin ,@body (loop ,@(map step bindings))))))
+
+(define-macro (assert some-cond)
+  `(if (not ,some-cond)
+     (error 'assert "assertion failure" ',some-cond)))
+
+(define-macro (when pred . actions)
+  `(if ,pred (begin ,@actions)))
+
+(define-macro (unless pred . actions)
+  `(if (not ,pred) (begin ,@actions)))
+
+(define-macro (while some-cond . some-actions)
+  `(do () ((not ,some-cond)) ,@some-actions))
+
+(define-macro (until some-cond . some-actions)
+  `(do () (,some-cond) ,@some-actions))
+
+(define-macro (case-lambda . patterns)
+  `(lambda args (match args ,@patterns)))
+
+; Java interop
+
+(define-macro (new class . args)
+  `(,(jclass class) new: ,@args))
+
+(define-macro (reify class . dispatch)
+  `(make-proxy ,(jclass class)
+               (list ,@(map (lambda (method)
+                              (match method
+                                ((name formals . body) :when (symbol? name)
+                                  `(cons ',name (lambda ,formals ,@body)))))
+                            dispatch))))
+
+(define-macro (do-with obj . actions)
+  (with-gensyms (val)
+    `(let ((,val ,obj))
+      ,@(map (case-lambda
+               (((name . args)) :when (keyword? name)
+                `(,val ,name ,@args)))
+             actions)
+      ,val)))
+
+(define-macro (-> obj . calls)
+  (match calls
+    [() obj]
+    [(name) :when (or (symbol? name) (keyword? name))
+     `(,obj ',name)]
+    [(name . rest) :when (or (symbol? name) (keyword? name))
+     `(-> (,obj ',name) ,@rest)]
+    [((name . args)) :when (keyword? name)
+     `(,obj ,name ,@args)]
+    [((name . args) . rest) :when (keyword? name)
+     `(-> (,obj ,name ,@args) ,@rest)]
+    [else (error '-> "bad syntax" calls)]))
+
+
 ;;; Utilities
 
 (define true  #t)
@@ -38,21 +237,25 @@
 
 (define call/cc call-with-current-continuation)
 
+(define-macro (let/cc k . body)
+  `(call/cc (lambda (,k) ,@body)))
+
+(define (object->string obj . maybe-printer)
+  (let ((printer (if (pair? maybe-printer)
+                     (car maybe-printer)
+                     write)))
+    (with-output-to-string (lambda () (printer obj)))))
+
 ;;; Numerical operations
 
-(define (zero? n)       (= n 0))
-(define (positive? n)   (> n 0))
-(define (negative? n)   (< n 0))
-(define (odd? n)        (= (remainder n 2) 1))
-(define (even? n)       (= (remainder n 2) 0))
-
-(define (abs x) (if (< x 0) (- x) x))
+(define (odd? n)  (= (remainder n 2) 1))
+(define (even? n) (= (remainder n 2) 0))
 
 (define (max first . rest)
-    (fold (lambda (old new) (if (> old new) old new)) first rest))
+  (fold (lambda (old new) (if (> old new) old new)) first rest))
 
 (define (min first . rest)
-    (fold (lambda (old new) (if (< old new) old new)) first rest))
+  (fold (lambda (old new) (if (< old new) old new)) first rest))
 
 (define (gcd . vals)
   (define (g a b)
@@ -61,6 +264,47 @@
 
 (define (lcm . vals)
   (/ (abs (apply * vals)) (apply gcd vals)))
+
+(define (exact-floor x)
+  (inexact->exact (floor x)))
+
+(define (exact-ceiling x)
+  (inexact->exact (ceiling x)))
+
+(define (exact-truncate x)
+  (inexact->exact (truncate x)))
+
+(define (exact-round x)
+  (inexact->exact (round x)))
+
+(define (rationalize x y)
+  (define (check x)
+    (unless (real? x) (error 'rationalize "Invalid type: expected real, found" x)))
+
+  (define (find-between lo hi)
+    (if (integer? lo)
+        lo
+        (let ([lo-int (floor lo)]
+              [hi-int (floor hi)])
+          (if (< lo-int hi-int)
+              (+ 1 lo-int)
+              (+ lo-int
+                 (/ (find-between (/ (- hi lo-int)) (/ (- lo lo-int)))))))))
+
+  (define (do-find-between lo hi)
+    (cond
+      [(negative? lo) (- (find-between (- hi) (- lo)))]
+      [else (find-between lo hi)]))
+
+  (check x) (check y)
+  (let* ([delta (abs y)]
+         [lo (- x delta)]
+         [hi (+ x delta)])
+    (cond
+     [(<= lo 0 hi) (if (exact? x) 0 0.0)]
+     [(or (inexact? lo) (inexact? hi))
+      (exact->inexact (do-find-between (inexact->exact lo) (inexact->exact hi)))]
+     [else (do-find-between lo hi)])))
 
 ;;; Pairs and lists
 
@@ -93,91 +337,26 @@
 (define (cdddar pair) (cdr (cdr (cdr (car pair)))))
 (define (cddddr pair) (cdr (cdr (cdr (cdr pair)))))
 
-;;; Basic Macros
-
-(define-macro (defmacro . form)
-  `(define-macro ,@form))
-
-(define-macro (with-gensyms syms . body)
-  `(let ,(map (lambda (s) `(,s (gensym ',s))) syms) ,@body))
-
-(define-macro (assert some-cond)
-  `(if (not ,some-cond)
-     (error 'assert "assertion failure" ',some-cond)))
-
-(define-macro (when pred . actions)
-  `(if ,pred (begin ,@actions)))
-
-(define-macro (unless pred . actions)
-  `(if (not ,pred) (begin ,@actions)))
-
-(define-macro (while some-cond . some-actions)
-  (let ((mc (gensym)))
-    `(do ((,mc 0 (+ ,mc 1)))
-         ((not ,some-cond) ,mc)
-       ,@some-actions)))
-
-(define-macro (until some-cond . some-actions)
-  (let ((mc (gensym)))
-      `(do ((,mc 0 (+ ,mc 1)))
-           (,some-cond ,mc)
-         ,@some-actions)))
-
-(define-macro (case-lambda . patterns)
-  (let ((args (gensym)))
-    `(lambda ,args (match ,args ,@patterns))))
-
-(define-macro (case key . clauses)
-  (define (expand-clause atoms result rest)
-    (let ((mem (if (= 1 (length atoms))
-                   `(eqv? ,key ',(car atoms))
-                   `(memv ,key ',atoms))))
-      (if (null? rest)
-          `(if ,mem ,result)
-          `(if ,mem ,result (case ,key ,@rest)))))
-
-  (if (not (symbol? key))
-      (let ((atom-key (gensym)))
-        `(let ((,atom-key ,key)) (case ,atom-key ,@clauses)))
-      (match clauses
-        [(('else '=> result))
-         `(,result ,key)]
-        [(('else . result))
-          `(begin ,@result)]
-        [(((atom . atoms) '=> result) . rest)
-          (expand-clause (cons atom atoms) (list result key) rest)]
-        [(((atom . atoms) . result) . rest)
-          (expand-clause (cons atom atoms) (cons 'begin result) rest)]
-        [((atom . result) . rest) :when (not (eqv? atom 'else))
-          `(case ,key ((,atom) ,@result) ,@rest)]
-        [else (error 'case "bad syntax" clauses)])))
-
-(define-macro (do bindings (test . finish) . body)
-  (define (init b)
-    (match b
-      ((var init . _) :when (symbol? var)
-        (list var init))
-      (else
-        (error 'do "bad syntax" b))))
-
-  (define (step b)
-    (match b
-      ((var _) var)
-      ((_ _ step) step)
-      (else (error 'do "bad syntax" b))))
-
-  (let ((loop (gensym)))
-    `(let ,loop ,(map init bindings)
-       (if ,test
-           (begin ,@finish)
-           (begin ,@body (,loop ,@(map step bindings)))))))
-
 ;;; Multiple values
 
 ; SRFI 8: Binding to multiple values
 (define-macro (receive formals expression . body)
   `(call-with-values (lambda () ,expression)
                      (lambda ,formals ,@body)))
+
+(define-macro (define-values vars exp)
+  (if (null? vars)
+      `(call-with-values
+        (lambda () ,exp)
+        (lambda () (void)))
+      (let ((tmps (map (lambda (var) (gensym var)) vars)))
+        `(begin
+          ,@(map (lambda (var) `(define ,var)) vars)
+          (call-with-values
+            (lambda () ,exp)
+            (lambda ,tmps
+              ,@(map (lambda (var tmp) `(set! ,var ,tmp))
+                     vars tmps)))))))
 
 (define-macro (let-values bindings . body)
   (letrec ((append* (lambda (il l)
@@ -199,7 +378,7 @@
                                       ((pair? llist) (append* llist acc))
                                       (else (cons llist acc)))))
                          (loop (cdr llists) new-acc))))]
-           [aliases (map (lambda (v) (cons v (gensym))) vars)]
+           [aliases (map (lambda (v) (cons v (gensym v))) vars)]
            [lookup (lambda (v) (cdr (assq v aliases)))]
            [llists2 (let loop ((llists llists) (acc '()))
                       (if (null? llists)
@@ -225,18 +404,18 @@
                      ,(car llists2)
                      ,(fold (cdr llists) (cdr exps) (cdr llists2))))))))))
 
-(define-macro (let*-values bindings . body)
-  (let fold ([bindings bindings])
-    (if (null? bindings)
-        `(let () ,@body)
-        `(let-values (,(car bindings))
-                     ,(fold (cdr bindings))))))
+(define-macro (let*-values . form)
+  (match form
+    [(() . body)
+     `(let () ,@body)]
+    [((binding . more) . body)
+     `(let-values (,binding)
+       (let*-values ,more ,@body))]))
 
 (define-macro (nth-value n values)
-  (let ((v (gensym)))
-    `(call-with-values
-      (lambda () ,values)
-      (lambda ,v (list-ref ,v ,n)))))
+  `(call-with-values
+    (lambda () ,values)
+    (lambda v (list-ref v ,n))))
 
 ;;; Extended Macros
 
@@ -385,7 +564,7 @@
 
 ; SRFI 9: Defining Record Types
 
-(import-library "com.cloudway.fp.scheme.Record")
+(import-library com.cloudway.fp.scheme.Record)
 
 ; We define the following precedures:
 ;
@@ -417,19 +596,21 @@
 ;     (field-tags record-type-field-tags))
 ; As it is, we need to define everything by hand.
 
-(define :record-type (make-record 3))
+(define :record-type (make-record 4))
 (record-set! :record-type 0 :record-type)   ; Its type is itself
 (record-set! :record-type 1 ':record-type)
 (record-set! :record-type 2 '(name field-tags))
+(record-set! :record-type 3 #f)
 
 ; Now that :record-type exists we can define a procedure for making more
 ; record types.
 
 (define (make-record-type name field-tags)
-  (let ((new (make-record 3)))
+  (let ((new (make-record 4)))
     (record-set! new 0 :record-type)
     (record-set! new 1 name)
     (record-set! new 2 field-tags)
+    (record-set! new 3 #f)
     new))
 
 ; Accessors for record types.
@@ -440,10 +621,13 @@
 (define (record-type-field-tags record-type)
   (record-ref record-type 2))
 
+(define (record-type-printer record-type)
+  (record-ref record-type 3))
+
 ;----------------
 ; A utility for getting the offset of a field within a record.
 
-(define (field-index type tag)
+(define (%record-field-index type tag)
   (let loop ((i 1) (tags (record-type-field-tags type)))
     (cond ((null? tags)
            (error "record type has no such field" type tag))
@@ -460,7 +644,7 @@
   (let ((size (length (record-type-field-tags type)))
         (arg-count (length tags))
         (indexes (map (lambda (tag)
-                        (field-index type tag))
+                        (%record-field-index type tag))
                       tags)))
     (lambda args
       (if (= (length args) arg-count)
@@ -480,7 +664,7 @@
               type))))
 
 (define (record-accessor type tag)
-  (let ((index (field-index type tag)))
+  (let ((index (%record-field-index type tag)))
     (lambda (thing)
       (if (and (record? thing)
                (eq? (record-type thing)
@@ -489,7 +673,7 @@
         (error "accessor applied to bad value" type tag thing)))))
 
 (define (record-modifier type tag)
-  (let ((index (field-index type tag)))
+  (let ((index (%record-field-index type tag)))
     (lambda (thing value)
       (if (and (record? thing)
                (eq? (record-type thing)
@@ -514,6 +698,11 @@
                    (define ,accessor (record-accessor ,type ',field-tag))
                    (define ,modifier (record-modifier ,type ',field-tag)))))
             field-specs)))
+
+(define-macro (define-record-printer (type record out) . body)
+  `(if (and (record? ,type) (eq? (record-type ,type) :record-type))
+       (record-set! ,type 3 (lambda (,record ,out) ,@body))
+       (error 'define-record-printer "not a record type" ,type)))
 
 ; SRFI 17: Generalized set!
 (define setter
@@ -567,6 +756,7 @@
 (set! (setter cddddr) (lambda (x v) (set-cdr! (cdddr x) v)))
 (set! (setter vector-ref) vector-set!)
 (set! (setter string-ref) string-set!)
+(set! (setter get-field) set-field!)
 
 ; SRFI 26: Notation for Specializing Parameters without Currying
 (define-macro (cut . form)
@@ -702,6 +892,15 @@
         (set-car! global-cell parameter)
         parameter))))
 
+(define-macro (define-parameter . form)
+  (match form
+    [(name value guard)
+     `(define ,name (make-parameter ,value ,guard))]
+    [(name value)
+     `(define ,name (make-parameter ,value))]
+    [(name)
+     `(define ,name (make-parameter (void)))]))
+
 (define-macro (parameterize bindings . body)
   `(%%sys%dynamic-env-local 'bind
       (list ,@(map car bindings))
@@ -730,6 +929,157 @@
       (cond ((eq? action 'bind) (apply bind args))
             ((eq? action 'lookup) (apply lookup args))
             (else (error "unknown request " action))))))
+
+; SRFI-69 Basic hash tables
+
+(define *default-bound* (- (expt 2 29) 3))
+
+(define (%string-hash s ch-conv bound)
+  (let ((hash 31)
+        (len (string-length s)))
+    (do ((index 0 (+ index 1)))
+        ((>= index len) (modulo hash bound))
+        (set! hash (modulo (+ (* 37 hash)
+                              (char->integer (ch-conv (string-ref s index))))
+                           *default-bound*)))))
+
+(define (string-hash s . maybe-bound)
+  (%string-hash s (lambda (x) x) (:optional maybe-bound *default-bound*)))
+
+(define (string-ci-hash s . maybe-bound)
+  (%string-hash s char-downcase (:optional maybe-bound *default-bound*)))
+
+(define (symbol-hash s . maybe-bound)
+  (let ((bound (:optional maybe-bound *default-bound*)))
+    (%string-hash (symbol->string s) (lambda (x) x) bound)))
+
+(define (hash obj . maybe-bound)
+  (let ((bound (:optional maybe-bound *default-bound*)))
+    (cond ((integer? obj) (modulo obj bound))
+          ((string? obj) (string-hash obj bound))
+          ((symbol? obj) (symbol-hash obj bound))
+          ((real? obj) (modulo (+ (numerator obj) (denominator obj)) bound))
+          ((number? obj)
+            (modulo (+ (hash (real-part obj)) (* 3 (hash (imag-part obj))))
+                    bound))
+          ((char? obj) (modulo (char->integer obj) bound))
+          ((vector? obj) (vector-hash obj bound))
+          ((pair? obj) (modulo (+ (hash (car obj)) (* 3 (hash (cdr obj))))
+                               bound))
+          ((null? obj) 0)
+          ((not obj) 0)
+          ((procedure? obj) (error "hash: procedures cannot be hashed" obj))
+          ((jobject? obj) (obj hashCode:))
+          (else 1))))
+
+(define hash-by-identity hash)
+
+(define (vector-hash v bound)
+  (let ((hashvalue 571)
+        (len (vector-length v)))
+    (do ((index 0 (+ index 1)))
+        ((>= index len) (modulo hashvalue bound))
+        (set! hashvalue (modulo (+ (* 257 hashvalue) (hash (vector-ref v index)))
+                                *default-bound*)))))
+
+(define (make-hash-table . args)
+  (new java.util.LinkedHashMap))
+
+(define (hash-table? obj)
+  (instance-of? obj #!java.util.Map))
+
+(define (%check-hash-table obj)
+  (if (not (hash-table? obj))
+      (error "type mismatch. required hash-table, found" obj)))
+
+(define (alist->hash-table alist . args)
+  (let ((hash-table (apply make-hash-table args)))
+    (for-each
+      (lambda (elem)
+        (hash-table-update!/default
+          hash-table (car elem) (lambda (x) x) (cdr elem)))
+      alist)
+    hash-table))
+
+(define (hash-table-ref hash-table key . maybe-default)
+  (%check-hash-table hash-table)
+  (cond ((hash-table containsKey: key)
+         (hash-table get: key))
+        ((null? maybe-default)
+         (error 'hash-table-ref "no value associated with" key))
+        (else ((car maybe-default)))))
+
+(define (hash-table-ref/default hash-table key default)
+  (%check-hash-table hash-table)
+  (hash-table getOrDefault: key default))
+
+(define (hash-table-set! hash-table key value)
+  (%check-hash-table hash-table)
+  (hash-table put: key value)
+  (void))
+
+(define (hash-table-delete! hash-table key)
+  (%check-hash-table hash-table)
+  (hash-table remove: key)
+  (void))
+
+(define (hash-table-exists? hash-table key)
+  (%check-hash-table hash-table)
+  (hash-table contains: key))
+
+(define (hash-table-update! hash-table key function . maybe-default)
+  (%check-hash-table hash-table)
+  (cond ((hash-table containsKey: key)
+         (hash-table put: key (function (hash-table get: key))))
+        ((null? maybe-default)
+         (error 'hash-table-update! "no value exists for key" key))
+        (else (hash-table put: key (function ((car maybe-default)))))))
+
+(define (hash-table-update!/default hash-table key function default)
+  (hash-table-update! hash-table key function (lambda () default)))
+
+(define (hash-table-size hash-table)
+  (%check-hash-table hash-table)
+  (hash-table size:))
+
+(define (hash-table-walk hash-table proc)
+  (%check-hash-table hash-table)
+  (let ((it ((hash-table entrySet:) iterator:)))
+    (do () ((not (it hasNext:)))
+      (let ((node (it next:)))
+        (proc (node getKey:) (node getValue:))))))
+
+(define (hash-table-fold hash-table f acc)
+  (hash-table-walk
+    hash-table
+    (lambda (key value) (set! acc (f key value acc))))
+  acc)
+
+(define (hash-table-copy hash-table)
+  (%check-hash-table hash-table)
+  (new java.util.LinkedHashMap hash-table))
+
+(define (hash-table-merge! hash-table1 hash-table2)
+  (hash-table-walk
+    hash-table2
+    (lambda (key value) (hash-table-set! hash-table1 key value)))
+  hash-table1)
+
+(define (hash-table-clear! hash-table)
+  (%check-hash-table hash-table)
+  (hash-table clear:))
+
+(define (hash-table->alist hash-table)
+  (hash-table-fold
+    hash-table
+    (lambda (key val acc) (cons (cons key val) acc)) '()))
+
+(define (hash-table-keys hash-table)
+  (hash-table-fold hash-table (lambda (key val acc) (cons key acc)) '()))
+
+(define (hash-table-values hash-table)
+  (hash-table-fold hash-table (lambda (key val acc) (cons val acc)) '()))
+
 
 ; SRFI 89: Optional positional and named parameters
 
@@ -927,11 +1277,11 @@
                     (,$args
                       ($process-keys
                         ,$args
-                        ',(make-perfect-hash-table
-                            (map (lambda (x i)
-                                   (cons (car x) i))
-                                 named
-                                 (range 0 (length named))))
+                        ,(alist->hash-table
+                          (map (lambda (x i)
+                                 (cons (car x) i))
+                               named
+                               (range 0 (length named))))
                         ,$key-values))
                     ,@(map (lambda (x i)
                              `(,(cadr x)
@@ -965,64 +1315,7 @@
 
     (apply expand (parse-formals formals)))
 
-  (define (make-perfect-hash-table alist)
-
-    ; "alist" is a list of pairs of the form "(keyword . value)"
-
-    ; The result is a perfect hash-table represented as a vector of
-    ; length 2*N, where N is the hash modulus.  If the keyword K is in
-    ; the hash-table it is at index
-    ;
-    ;   X = (* 2 ($hash-keyword K N))
-    ;
-    ; and the associated value is at index X+1.
-
-    (let loop1 ((n (length alist)))
-      (let ((v (make-vector (* 2 n) #f)))
-        (let loop2 ((lst alist))
-          (if (pair? lst)
-            (let* ((key-val (car lst))
-                   (key (car key-val)))
-              (let ((x (* 2 ($hash-keyword key n))))
-                (if (vector-ref v x)
-                    (loop1 (+ n 1))
-                    (begin
-                      (vector-set! v x key)
-                      (vector-set! v (+ x 1) (cdr key-val))
-                      (loop2 (cdr lst))))))
-            v)))))
-
-  (define ($hash-keyword key n)
-    (let ((str (keyword->string key)))
-      (let loop ((h 0) (i 0))
-        (if (< i (string-length str))
-            (loop (modulo (+ (* h 65536) (char->integer (string-ref str i)))
-                          n)
-                  (+ i 1))
-            h))))
-
   (expand-lambda* formals body))
-
-; ---------------------------------------------------------------------------
-
-; Procedures needed at run time (called by the expanded code):
-
-; Perfect hash-tables with keyword keys
-
-(define ($hash-keyword key n)
-  (let ((str (keyword->string key)))
-    (let loop ((h 0) (i 0))
-      (if (< i (string-length str))
-          (loop (modulo (+ (* h 65536) (char->integer (string-ref str i)))
-                        n)
-                (+ i 1))
-          h))))
-
-(define ($perfect-hash-table-lookup table key)
-  (let* ((n (quotient (vector-length table) 2))
-         (x (* 2 ($hash-keyword key n))))
-    (and (eq? (vector-ref table x) key)
-         (vector-ref table (+ x 1)))))
 
 ; Handling of named parameters
 
@@ -1047,7 +1340,7 @@
         (let ((k (car args)))
           (if (not (keyword? k))
               args
-              (let ((i ($perfect-hash-table-lookup key-hash-table k)))
+              (let ((i (hash-table-ref/default key-hash-table k #f)))
                 (if (not i)
                     (error "unknown parameter keyword" k)
                     (if (null? (cdr args))
@@ -1074,3 +1367,23 @@
 
 (define-macro (define-generator name . body)
   `(define ,name (generator ,@body)))
+
+
+; SRFI 98: An interface to access environment variables.
+
+(define (get-environment-variable name)
+  (#!java.lang.System getenv: name))
+
+(define (get-environment-variables)
+  (hash-table->alist (#!java.lang.System getenv:)))
+
+(define getenv get-environment-variable)
+
+; SRFI 112: Environment Inquiry
+
+(define (implementation-name) "Scheva")
+(define (implementation-version) "1.0")
+(define (machine-name) "unknown")
+(define (os-type) (#!java.lang.System getProperty: "os.name"))
+(define (os-version) (#!java.lang.System getProperty: "os.version"))
+(define (cpu-architecture) (#!java.lang.System getProperty: "os.arch"))

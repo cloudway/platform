@@ -20,10 +20,10 @@ import java.util.List;
 
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
-import com.cloudway.fp.data.PMap;
+import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.data.Ref;
 import com.cloudway.fp.scheme.LispVal.Symbol;
-import com.cloudway.fp.scheme.LispVal.Printer;
+
 import jline.Completor;
 import jline.ConsoleReader;
 
@@ -42,8 +42,8 @@ public class REPL implements Completor{
         ConsoleReader console = new ConsoleReader(System.in, new PrintWriter(System.out));
         console.addCompletor(this);
 
-        Symbol lastVar = evaluator.getsym("_");
-        env.put(lastVar, LispVal.Void.VOID);
+        Symbol lastVar = evaluator.getsym("?");
+        env.put(lastVar, LispVal.VOID);
         Ref<LispVal> lastResult = env.lookup(lastVar).get();
 
         String line;
@@ -68,12 +68,18 @@ public class REPL implements Completor{
             },
 
             res -> {
-                if (!(res instanceof LispVal.Void)) {
+                if (res != LispVal.VOID) {
                     try {
                         Printer pr = new Printer();
                         pr.add(res);
-                        pr.print(System.out::print);
-                        System.out.println();
+
+                        Maybe<LispError> err = pr.checkError();
+                        if (err.isPresent()) {
+                            System.err.println(err.get().getMessage());
+                        } else {
+                            pr.print(System.out::print);
+                            System.out.println();
+                        }
                     } catch (IOException ex) {
                         throw new UncheckedIOException(ex);
                     }
@@ -88,8 +94,7 @@ public class REPL implements Completor{
     public int complete(String buffer, int cursor, List candidates) {
         String prefix = scanSymbol(buffer, cursor, 0);
         if (prefix != null) {
-            if (!prefix.isEmpty())
-                completeKeywords(prefix, candidates);
+            completeMacros(prefix, candidates);
             completeDefinitions(prefix, candidates);
             Collections.sort(candidates);
             return cursor - prefix.length();
@@ -97,26 +102,20 @@ public class REPL implements Completor{
         return cursor;
     }
 
-    private static final String[] KEYWORDS = {
-        "define", "define-macro", "lambda", "set!", "if", "cond", "match",
-        "and", "or", "quote", "quasiquote", "unquote", "unquote-splicing",
-        "begin", "delay", "let", "let*", "letrec", "do"
-    };
-
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static void completeKeywords(String prefix, List candidates) {
-        for (String key : KEYWORDS) {
-            if (key.startsWith(prefix) && !candidates.contains(key)) {
-                candidates.add(key + " ");
+    private void completeMacros(String prefix, List candidates) {
+        for (Symbol key : env.getMacros().keys()) {
+            String name = key.getSymbolName();
+            if (name.startsWith(prefix) && !candidates.contains(key)) {
+                candidates.add(name + " ");
             }
         }
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void completeDefinitions(String prefix, List candidates) {
-        PMap<Symbol, ?> bindings = env.getBindings();
-        for (Symbol var : bindings.keys()) {
-            String name = var.name;
+        for (Symbol var : env.getBindings().keys()) {
+            String name = var.getSymbolName();
             if (!name.startsWith("%") && name.startsWith(prefix) && !candidates.contains(name)) {
                 candidates.add(name + " ");
             }

@@ -88,6 +88,10 @@ public class MutablePMap<K, V> extends AbstractMap<K, V> implements java.io.Seri
         return snapshot().values().contains((V)value);
     }
 
+    public Maybe<V> lookup(Object key) {
+        return snapshot().lookup(key);
+    }
+
     @Override
     public V get(Object key) {
         return snapshot().getOrDefault(key, null);

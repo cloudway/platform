@@ -8,12 +8,13 @@ package com.cloudway.fp;
 
 import com.cloudway.fp.scheme.Evaluator;
 import com.cloudway.fp.scheme.LispVal;
-import org.junit.Ignore;
+import com.cloudway.fp.scheme.numsys.Int64;
+import com.cloudway.fp.scheme.numsys.Num;
+import com.cloudway.fp.scheme.numsys.Field;
+import com.cloudway.fp.data.Fn;
+
 import org.junit.Test;
 import static org.junit.Assert.*;
-
-import com.cloudway.fp.data.Fn;
-import static com.cloudway.fp.scheme.LispVal.*;
 
 public class SchemeTest {
     private final Evaluator evaluator = new Evaluator();
@@ -23,7 +24,7 @@ public class SchemeTest {
     }
 
     private static void assertEqualsVal(long val, LispVal expr) {
-        assertTrue((expr instanceof Num) && ((Num)expr).value.longValue() == val);
+        assertTrue((expr instanceof Num) && Field.raise_e((Num)expr, Int64.TAG).value == val);
     }
 
     @Test

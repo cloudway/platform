@@ -7,9 +7,15 @@
 package com.cloudway.fp.scheme;
 
 import java.io.Reader;
+import java.lang.reflect.Array;
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.cloudway.fp.data.Either;
 import com.cloudway.fp.data.Fn;
@@ -19,12 +25,13 @@ import com.cloudway.fp.data.MutablePMap;
 import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Rational;
 import com.cloudway.fp.data.Seq;
-import com.cloudway.fp.data.Vector;
 import com.cloudway.fp.parser.LexBuilder;
 import com.cloudway.fp.parser.Lexer;
 import com.cloudway.fp.parser.Scanner;
 
 import static com.cloudway.fp.scheme.SchemeParser.Token.*;
+import com.cloudway.fp.scheme.numsys.Complex;
+import com.cloudway.fp.scheme.numsys.Num;
 
 // @formatter:off
 
@@ -61,7 +68,9 @@ public class SchemeParser {
 
         DOT("."),
         VECTOR("#("),
+        HASH("#hash("),
         BOX("#&"),
+        CLASS("#!"),
 
         QUOTE("'"),
         QUASIQUOTE("`"),
@@ -91,27 +100,45 @@ public class SchemeParser {
         .macro("symbol",    "[!$%&*+\\-/:.<=>?@^_~]")
         .macro("letter",    "[a-zA-Z]")
         .macro("digit",     "[0-9]")
+
         .macro("c",         "{letter}|{symbol}|{digit}")
         .macro("b",         "[01]")
         .macro("o",         "[0-7]")
         .macro("d",         "[0-9]")
         .macro("x",         "[0-9a-fA-F]")
 
+        .macro("dec",       "{d}+(/{d}+)?")
+        .macro("bin",       "{b}+(/{b}+)?")
+        .macro("oct",       "{o}+(/{o}+)?")
+        .macro("hex",       "{x}+(/{x}+)?")
+        .macro("float",     "({d}+|{d}+\\.{d}*|{d}*\\.{d}+)([eE][-+]?{d}+)?")
+
         .rule("#[tT]",      Fn.pure(Bool.TRUE))
         .rule("#[fF]",      Fn.pure(Bool.FALSE))
 
-        .rule("[-+]?{d}+(/{d}+)?",   s -> new Num(parseNum(s, 10)))
-        .rule("#b[-+]?{b}+(/{b}+)?", s -> new Num(parseNum(s.substring(2), 2)))
-        .rule("#o[-+]?{o}+(/{o}+)?", s -> new Num(parseNum(s.substring(2), 8)))
-        .rule("#d[-+]?{d}+(/{d}+)?", s -> new Num(parseNum(s.substring(2), 10)))
-        .rule("#x[-+]?{x}+(/{x}+)?", s -> new Num(parseNum(s.substring(2), 16)))
+        .rule("([-+]?{dec})?[-+]{dec}?i",   s -> parseComplex(s, 10))
+        .rule("#b([-+]?{bin})?[-+]{bin}?i", s -> parseComplex(s.substring(2), 2))
+        .rule("#o([-+]?{oct})?[-+]{oct}?i", s -> parseComplex(s.substring(2), 8))
+        .rule("#d([-+]?{dec})?[-+]{dec}?i", s -> parseComplex(s.substring(2), 10))
+        .rule("#x([-+]?{hex})?[-+]{hex}?i", s -> parseComplex(s.substring(2), 16))
+
+        .rule("[-+]?{dec}",   s -> parseNum(s, 10))
+        .rule("#b[-+]?{bin}", s -> parseNum(s.substring(2), 2))
+        .rule("#o[-+]?{oct}", s -> parseNum(s.substring(2), 8))
+        .rule("#d[-+]?{dec}", s -> parseNum(s.substring(2), 10))
+        .rule("#x[-+]?{hex}", s -> parseNum(s.substring(2), 16))
 
         .action("#[bodx]{c}*", s -> { s.fail("invalid number format");
                                       return Maybe.empty();
                                     })
 
-        .rule("[-+]?({d}+|{d}+\\.{d}*|{d}*\\.{d}+)([eE][-+]?{d}+)?",
-            s -> new Num(Double.parseDouble(s)))
+        .rule("[-+]?{float}", s -> Num.make(Double.parseDouble(s)))
+        .rule("([-+]?{float})?[-+]{float}?i", SchemeParser::parseFloatComplex)
+
+        .literal("+inf.0", Num.make(Double.POSITIVE_INFINITY))
+        .literal("-inf.0", Num.make(Double.NEGATIVE_INFINITY))
+        .literal("+nan.0", Num.make(Double.NaN))
+        .literal("-nan.0", Num.make(Double.NaN))
 
         .rule("#\\\\.",        s -> new Char(s.charAt(2)))
         .rule("#\\\\x{x}+",    s -> parseCharCode(s.substring(3)))
@@ -135,7 +162,10 @@ public class SchemeParser {
 
         .literal(".",  DOT)
         .literal("#(", VECTOR)
+        .literal("#hash(", HASH)
         .literal("#&", BOX)
+
+        .rule("#![a-zA-Z0-9_$.]+(\\[\\])*(/[a-zA-Z0-9_$]+)*", Fn.pure(CLASS))
 
         .literal("'",  QUOTE)
         .literal("`",  QUASIQUOTE)
@@ -153,9 +183,103 @@ public class SchemeParser {
 
         .build();
 
-    private static Number parseNum(String input, int radix) {
+    private static final Pattern INTEGER_PATTERN
+        = Pattern.compile("[-+]?\\p{Alnum}+(/\\p{Alnum}+)?");
+
+    private static final Pattern COMPLEX_PATTERN
+        = Pattern.compile("([-+]?\\p{Alnum}+(/\\p{Alnum}+)?)?[-+](\\p{Alnum}+(/\\p{Alnum}+)?)?i");
+
+    private static final String FLOAT_PATTERN_STRING =
+        "([-+]?(\\d+|\\d+\\.\\d*|\\d*\\.\\d+)([eE][-+]?\\d+)?)";
+
+    private static final Pattern FLOAT_PATTERN
+        = Pattern.compile(FLOAT_PATTERN_STRING);
+
+    private static final Pattern FLOAT_COMPLEX_PATTERN
+        = Pattern.compile(FLOAT_PATTERN_STRING + "?([-+]" + FLOAT_PATTERN_STRING + "?)i");
+
+    public static Num parseNumber(String input, int radix) {
+        if ("+inf.0".equals(input))
+            return Num.make(Double.POSITIVE_INFINITY);
+        if ("-inf.0".equals(input))
+            return Num.make(Double.NEGATIVE_INFINITY);
+        if ("+nan.0".equals(input) || "-nan.0".equals(input))
+            return Num.make(Double.NaN);
+
+        if (COMPLEX_PATTERN.matcher(input).matches())
+            return parseComplex(input, radix);
+
+        if (FLOAT_COMPLEX_PATTERN.matcher(input).matches())
+            return parseFloatComplex(input);
+
+        if (INTEGER_PATTERN.matcher(input).matches())
+            return parseNum(input, radix);
+
+        if (FLOAT_PATTERN.matcher(input).matches())
+            return Num.make(Double.parseDouble(input));
+
+        throw new NumberFormatException("For input string: " + input);
+    }
+
+    private static Num parseComplex(String input, int radix) {
+        int i = input.lastIndexOf('+');
+        if (i == -1)
+            i = input.lastIndexOf('-');
+
+        String real_part = input.substring(0, i);
+        String imag_part = input.substring(i, input.length()-1);
+
+        Num real, imag;
+
+        if (real_part.isEmpty()) {
+            real = Num.ZERO;
+        } else {
+            real = parseNum(real_part, radix);
+        }
+
+        if ("+".equals(imag_part)) {
+            imag = Num.make(1);
+        } else if ("-".equals(imag_part)) {
+            imag = Num.make(-1);
+        } else {
+            imag = parseNum(imag_part, radix);
+        }
+
+        return new Complex(real, imag).lower();
+    }
+
+    private static Num parseFloatComplex(String input) {
+        Matcher m = FLOAT_COMPLEX_PATTERN.matcher(input);
+        if (!m.matches())
+            throw new NumberFormatException("For input string: " + input);
+
+        // notice the group index
+        String real_part = m.group(1);
+        String imag_part = m.group(4);
+
+        double real, imag;
+
+        if (real_part == null) {
+            real = 0;
+        } else {
+            real = Double.parseDouble(real_part);
+        }
+
+        if ("+".equals(imag_part)) {
+            imag = 1;
+        } else if ("-".equals(imag_part)) {
+            imag = -1;
+        } else {
+            imag = Double.parseDouble(imag_part);
+        }
+
+        // noinspection FloatingPointEquality
+        return imag == 0 ? Num.make(real) : new Complex(real, imag);
+    }
+
+    private static Num parseNum(String input, int radix) {
         if (input.indexOf('/') != -1) {
-            return Rational.valueOf(input, radix);
+            return Num.make(Rational.valueOf(input, radix)).lower();
         }
 
         int     len      = input.length();
@@ -172,15 +296,23 @@ public class SchemeParser {
         }
 
         for (; i < len && !overflow; i++) {
+            int d = digitToInt(input.charAt(i));
+            if (d < 0 || d >= radix)
+                throw new NumberFormatException("For input string: \"" + input + "\"");
             overflow = (value*radix)/radix != value;
-            value = value * radix + digitToInt(input.charAt(i));
+            value = value * radix + d;
             overflow |= (value - 1 < -1);
         }
 
         if (overflow) {
-            return new BigInteger(input, radix);
+            return Num.make(new BigInteger(input, radix));
+        }
+
+        value = sign * value;
+        if ((int)value == value) {
+            return Num.make((int)value);
         } else {
-            return sign * value;
+            return Num.make(value);
         }
     }
 
@@ -194,7 +326,7 @@ public class SchemeParser {
         StringBuilder buf = new StringBuilder();
         int c;
 
-        loop: while ((c = s.input()) != -1 && c != '\n' && c != '"') {
+        loop: while ((c = s.input()) != -1 && c != '"') {
             if (c == '\\') {
                 switch (c = s.input()) {
                 case 'a':   c = '\u0007'; break;
@@ -295,17 +427,6 @@ public class SchemeParser {
         return parser.p_top_level();
     }
 
-    public Either<LispError, LispVal> parseExpr(Reader input) {
-        try {
-            Parser parser = new Parser("", lexer.getScanner(input));
-            return Either.right(parser.p_expression());
-        } catch (LispError ex) {
-            return Either.left(ex);
-        } catch (Exception ex) {
-            return Either.left(new LispError(ex));
-        }
-    }
-
     private final class Parser {
         private final String filename;
         private final Scanner<LispVal> scanner;
@@ -313,7 +434,12 @@ public class SchemeParser {
 
         private boolean foldcase = false;
 
-        public Parser(String filename, Scanner<LispVal> scanner) {
+        // Internal state used to read a single expression from input stream.
+        // If this value is set to 0, and an expression has been read, more
+        // tokens should be kept in stream for next read.
+        private int nested = 0;
+
+        Parser(String filename, Scanner<LispVal> scanner) {
             this.filename = filename;
             this.scanner = scanner;
         }
@@ -340,13 +466,21 @@ public class SchemeParser {
             while (true) {
                 if (token == COMMENT) {
                     advance();
+                    nested++;
                     pexp.get();
+                    nested--;
                 } else if (token == DIRECTIVE) {
                     process_directive(scanner.text().substring(2));
                     advance();
                 } else {
                     return;
                 }
+            }
+        }
+
+        private void more(Supplier<LispVal> pexp) {
+            if (nested > 0) {
+                scan(pexp);
             }
         }
 
@@ -376,16 +510,15 @@ public class SchemeParser {
 
         private void expect(Token t, Supplier<LispVal> pexp) {
             if (token == t) {
-                scan(pexp);
+                more(pexp);
             } else {
                 expect(t.show());
             }
         }
 
-        public Seq<Either<LispError, LispVal>> p_top_level() {
+        Seq<Either<LispError, LispVal>> p_top_level() {
             try {
-                if (token == null)
-                    scan(this::p_expression);
+                scan(this::p_expression);
 
                 if (token == EOI)
                     return Seq.nil();
@@ -398,7 +531,7 @@ public class SchemeParser {
             }
         }
 
-        public LispVal p_expression() {
+        private LispVal p_expression() {
             return p_term(this::p_expression);
         }
 
@@ -407,6 +540,9 @@ public class SchemeParser {
                 switch ((Token)token) {
                 case SYMBOL:
                     return p_symbol(pexp);
+
+                case CLASS:
+                    return p_class(pexp);
 
                 case QUOTE:
                 case QUASIQUOTE:
@@ -417,6 +553,10 @@ public class SchemeParser {
                 case VECTOR:
                     scan(pexp);
                     return p_vector(pexp);
+
+                case HASH:
+                    scan(pexp);
+                    return p_hashtable(pexp);
 
                 case BOX:
                     scan(pexp);
@@ -431,7 +571,7 @@ public class SchemeParser {
                     return p_list(pexp, RB);
 
                 case LC: case SLC:
-                    scan(pexp);
+                    scan(this::p_neoteric);
                     return p_curly_infix_list();
 
                 default:
@@ -439,26 +579,27 @@ public class SchemeParser {
                 }
             } else {
                 LispVal val = token;
-                scan(pexp);
+                more(pexp);
                 return val;
             }
         }
 
         private LispVal p_symbol(Supplier<LispVal> pexp) {
-            String text = scanner.text();
+            String name = scanner.text();
+            more(pexp);
 
-            boolean keyword = text.endsWith(":") && !":".equals(text);
+            boolean keyword = name.endsWith(":") && !":".equals(name);
             if (keyword ) {
-                text = text.substring(0, text.length() - 1);
+                name = name.substring(0, name.length() - 1);
             }
 
-            if (text.indexOf('|') != -1) {
-                int len = text.length();
+            if (name.indexOf('|') != -1) {
+                int len = name.length();
                 StringBuilder buf = new StringBuilder(len);
                 boolean q = false;
 
                 for (int i = 0; i < len; i++) {
-                    char c = text.charAt(i);
+                    char c = name.charAt(i);
                     if (c == '|') {
                         q = !q;
                     } else if (q || !foldcase) {
@@ -467,15 +608,45 @@ public class SchemeParser {
                         buf.append(Character.toLowerCase(c));
                     }
                 }
-                text = buf.toString();
+                name = buf.toString();
             } else {
                 if (foldcase) {
-                    text = text.toLowerCase();
+                    name = name.toLowerCase();
                 }
             }
 
-            scan(pexp);
-            return keyword ? getkeysym(text) : getsym(text);
+            return keyword ? getkeysym(name) : getsym(name);
+        }
+
+        private LispVal p_class(Supplier<LispVal> pexp) {
+            String name = scanner.text().substring(2);
+            more(pexp);
+
+            String fields = null;
+            int sep = name.indexOf('/');
+            if (sep != -1) {
+                fields = name.substring(sep + 1);
+                name = name.substring(0, sep);
+            }
+
+            try {
+                LispVal val = new JClass(loadClass(name));
+                if (fields != null)
+                    val = p_fields(val, fields);
+                return val;
+            } catch (Exception ex) {
+                return error(name + ": class not found");
+            }
+        }
+
+        private LispVal p_fields(LispVal val, String fields) {
+            for (int i = 0, j; i < fields.length(); i = j + 1) {
+                if ((j = fields.indexOf('/', i)) < 0)
+                    j = fields.length();
+                String field = fields.substring(i, j);
+                val = Pair.cons(getsym("get-field"), Pair.list(val, getkeysym(field)));
+            }
+            return val;
         }
 
         private LispVal p_abbreviation(Supplier<LispVal> pexp) {
@@ -503,15 +674,42 @@ public class SchemeParser {
             }
 
             scan(pexp);
-            return Pair.of(getsym(tag), pexp.get());
+            return Pair.list(getsym(tag), pexp.get());
         }
 
         private LispVal p_vector(Supplier<LispVal> pexp) {
-            Vector<LispVal> vec = Vector.empty();
-            while (!scan(RP, pexp)) {
-                vec = vec.snoc(pexp.get());
+            ArrayList<LispVal> vec = new ArrayList<>();
+
+            nested++;
+            while (token != RP) {
+                vec.add(pexp.get());
             }
-            return new Vec(vec);
+
+            nested--;
+            expect(RP, pexp);
+            return new Vec(vec.toArray(new LispVal[vec.size()]));
+        }
+
+        private LispVal p_hashtable(Supplier<LispVal> pexp) {
+            LinkedHashMap<LispVal, LispVal> map = new LinkedHashMap<>();
+
+            nested++;
+            while (token != RP) {
+                if (token == LP || token == SLP)
+                    scan(pexp);
+                else
+                    expect("(");
+
+                LispVal key = pexp.get();
+                expect(DOT, pexp);
+                LispVal val = pexp.get();
+                expect(RP, pexp);
+                map.put(key, val);
+            }
+            nested--;
+
+            expect(RP, pexp);
+            return new JObject(map);
         }
 
         private LispVal p_box(Supplier<LispVal> pexp) {
@@ -522,6 +720,7 @@ public class SchemeParser {
             Seq<LispVal> hd = Seq.nil();
             LispVal tl = LispVal.Nil;
 
+            nested++;
             while (token != delim && token != DOT) {
                 hd = Seq.cons(pexp.get(), hd);
             }
@@ -530,6 +729,7 @@ public class SchemeParser {
                 tl = pexp.get();
             }
 
+            nested--;
             expect(delim, pexp);
             return make_reverse_list(hd, tl);
         }
@@ -537,7 +737,7 @@ public class SchemeParser {
         private LispVal make_reverse_list(Seq<LispVal> hd, LispVal tl) {
             LispVal res = tl;
             while (!hd.isEmpty()) {
-                res = new Pair(hd.head(), res);
+                res = Pair.cons(hd.head(), res);
                 hd = hd.tail();
             }
             return res;
@@ -552,6 +752,7 @@ public class SchemeParser {
             Seq<LispVal> hd = Seq.nil();
             LispVal tl = LispVal.Nil;
 
+            nested++;
             while (token != delim && token != DOT) {
                 hd = Seq.cons(pexp.get(), hd);
             }
@@ -560,6 +761,7 @@ public class SchemeParser {
                 tl = pexp.get();
             }
 
+            nested--;
             expect(delim, pexp);
             return cont.apply(hd, tl);
         }
@@ -579,17 +781,17 @@ public class SchemeParser {
             case LP:
                 scan(pexp);
                 rhs = p_neoteric_list(RP, pexp, this::make_reverse_list);
-                return new Pair(lhs, rhs);
+                return Pair.cons(lhs, rhs);
 
             case LC:
                 scan(pexp);
                 rhs = p_neoteric_list(RC, pexp, this::transform_infix_list);
-                return rhs.isNil() ? Pair.of(lhs) : Pair.of(lhs, rhs);
+                return rhs.isNil() ? Pair.list(lhs) : Pair.list(lhs, rhs);
 
             case LB:
                 scan(pexp);
                 rhs = p_neoteric_list(RB, pexp, this::make_reverse_list);
-                return new Pair(getsym("$bracket-apply$"), new Pair(lhs, rhs));
+                return Pair.cons(getsym("$bracket-apply$"), Pair.cons(lhs, rhs));
 
             default:
                 return lhs;
@@ -612,12 +814,12 @@ public class SchemeParser {
                     return transform_infix(hd);
             }
 
-            return new Pair(getsym("$nfx$"), make_reverse_list(hd, tl));
+            return Pair.cons(getsym("$nfx$"), make_reverse_list(hd, tl));
         }
 
         private LispVal transform_infix(Seq<LispVal> exps) {
             LispVal operator = null;
-            LispVal operands = Pair.of(exps.head());
+            LispVal operands = Pair.list(exps.head());
 
             for (Seq<LispVal> p = exps.tail(); !p.isEmpty(); p = p.tail().tail()) {
                 LispVal op = p.head();
@@ -627,14 +829,51 @@ public class SchemeParser {
                     operator = null;
                     break;
                 }
-                operands = new Pair(p.tail().head(), operands);
+                operands = Pair.cons(p.tail().head(), operands);
             }
 
             if (operator != null) {
-                return new Pair(operator, operands);
+                return Pair.cons(operator, operands);
             }
 
-            return new Pair(getsym("$nfx$"), make_reverse_list(exps, Nil));
+            return Pair.cons(getsym("$nfx$"), make_reverse_list(exps, Nil));
         }
+    }
+
+    static Class<?> loadClass(String name) throws ClassNotFoundException {
+        Class<?> type;
+
+        int dim = 0;
+        while (name.endsWith("[]")) {
+            dim++;
+            name = name.substring(0, name.length()-2);
+        }
+
+        type = getPrimitiveClass(name);
+        if (type == null) {
+            if (name.indexOf('.') == -1)
+                name = "java.lang." + name;
+            type = Class.forName(name);
+        }
+
+        if (dim == 0) {
+            return type;
+        } else {
+            return Array.newInstance(type, new int[dim]).getClass();
+        }
+    }
+
+    private static final String[] PRIMITIVE_NAMES = {
+        "boolean", "byte", "char", "double", "float", "int", "long", "short", "void"
+    };
+
+    private static final Class<?>[] PRIMITIVE_TYPES = {
+        Boolean.TYPE, Byte.TYPE, Character.TYPE, Double.TYPE, Float.TYPE,
+        Integer.TYPE, Long.TYPE, Short.TYPE, Void.TYPE
+    };
+
+    private static Class<?> getPrimitiveClass(String name) {
+        int i = Arrays.binarySearch(PRIMITIVE_NAMES, name);
+        return (i >= 0) ? PRIMITIVE_TYPES[i] : null;
     }
 }
