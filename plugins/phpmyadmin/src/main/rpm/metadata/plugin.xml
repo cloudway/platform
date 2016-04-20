@@ -1,0 +1,20 @@
+<?xml version="1.0" ?>
+
+<plugin>
+  <name>phpmyadmin</name>
+  <display-name>phpMyAdmin 4.0</display-name>
+  <version>4.0</version>
+  <vendor>Red Hat</vendor>
+  <plugin-version>1.0</plugin-version>
+  <plugin-vendor>cloudway</plugin-vendor>
+  <category>Component</category>
+  <endpoint>
+    <private-host-name>HOST</private-host-name>
+    <private-port-name>PORT</private-port-name>
+    <private-port>8080</private-port>
+    <proxy-mapping>
+      <frontend>/phpmyadmin</frontend>
+      <backend>/phpmyadmin</backend>
+    </proxy-mapping>
+  </endpoint>
+</plugin>

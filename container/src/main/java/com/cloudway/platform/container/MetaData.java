@@ -28,20 +28,20 @@ public final class MetaData
     private static JAXBContext jaxb;
     private static Schema schema;
 
-    public static Addon load(Path file) throws JAXBException, SAXException {
-        return (Addon)getUnmarshaller().unmarshal(file.toFile());
+    public static Plugin load(Path file) throws JAXBException, SAXException {
+        return (Plugin)getUnmarshaller().unmarshal(file.toFile());
     }
 
     private static synchronized Unmarshaller getUnmarshaller()
         throws JAXBException, SAXException
     {
         if (jaxb == null) {
-            jaxb = JAXBContext.newInstance(Addon.class, Endpoint.class, ProxyMapping.class);
+            jaxb = JAXBContext.newInstance(Plugin.class, Endpoint.class, ProxyMapping.class);
         }
 
         if (schema == null) {
             SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
-            schema = sf.newSchema(MetaData.class.getResource("addon.xsd"));
+            schema = sf.newSchema(MetaData.class.getResource("plugin.xsd"));
         }
 
         Unmarshaller unmarshaller = jaxb.createUnmarshaller();
@@ -50,7 +50,7 @@ public final class MetaData
     }
 
     @XmlRootElement
-    public static class Addon
+    public static class Plugin
     {
         @XmlElement
         public String name;
@@ -64,14 +64,14 @@ public final class MetaData
         @XmlElement
         public String vendor;
 
-        @XmlElement(name = "addon-version")
-        public String addonVersion;
+        @XmlElement(name = "plugin-version")
+        public String pluginVersion;
 
-        @XmlElement(name = "addon-vendor")
-        public String addonVendor;
+        @XmlElement(name = "plugin-vendor")
+        public String pluginVendor;
 
         @XmlElement(name = "category")
-        public AddonType category;
+        public PluginType category;
 
         @XmlElement(name = "endpoint")
         public List<Endpoint> endpoints = new ArrayList<>();

@@ -1,0 +1,71 @@
+<?xml version="1.0" ?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" version="1.0">
+
+<!-- ====================================================== -->
+<!-- This schema defines the cloudway plugin metadata.      -->
+<!-- ====================================================== -->
+
+  <xs:element name="plugin" type="plugin-type"/>
+
+  <xs:complexType name="plugin-type">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">
+        The plugin element is the root element of all plugin metadata documents.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="name" type="short-name-type" />
+      <xs:element name="display-name" type="xs:string"/>
+      <xs:element name="description" type="xs:string" minOccurs="0" />
+      <xs:element name="version" type="xs:string" />
+      <xs:element name="vendor" type="xs:string"/>
+      <xs:element name="plugin-version" type="xs:string"/>
+      <xs:element name="plugin-vendor" type="xs:string"/>
+      <xs:element name="category" type="category-type" />
+      <xs:element name="endpoint" type="endpoint-type" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="endpoint-type">
+    <xs:sequence>
+      <xs:element name="private-host-name" type="env-name-type" />
+      <xs:element name="private-port-name" type="env-name-type" />
+      <xs:element name="private-port" type="xs:positiveInteger" />
+      <xs:element name="proxy-mapping" type="proxy-mapping-type" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="proxy-mapping-type">
+    <xs:sequence>
+      <xs:element name="frontend" type="xs:string"/>
+      <xs:element name="backend" type="xs:string"/>
+      <xs:element name="protocols" type="protocols-type" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:simpleType name="short-name-type">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-z][a-z0-9]*" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="env-name-type">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[A-Z][A-Z_0-9]*" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="category-type">
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="Framework" />
+      <xs:enumeration value="Service" />
+      <xs:enumeration value="Component" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="protocols-type">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-z][a-z0-9]*(,[a-z][a-z0-9]*)*"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

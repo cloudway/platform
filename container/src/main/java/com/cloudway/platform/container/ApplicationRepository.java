@@ -15,14 +15,14 @@ import com.cloudway.fp.io.IOFunction;
  */
 public interface ApplicationRepository
 {
-    static void setFactory(IOFunction<ApplicationContainer, ApplicationRepository> factory) {
+    static void setFactory(IOFunction<Container, ApplicationRepository> factory) {
         Helper.setApplicationRepositoryFactory(factory);
     }
 
     /**
      * Create a new instance of the application repository.
      */
-    static ApplicationRepository of(ApplicationContainer container) throws IOException {
+    static ApplicationRepository of(Container container) throws IOException {
         return Helper.getApplicationRepository(container);
     }
 

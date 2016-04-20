@@ -32,9 +32,9 @@ public class ApacheProxyUpdaterTest
     public final @Rule JUnitRuleMockery context = new JUnitRuleMockery();
     public final @Rule TemporaryDirectory temporary = new TemporaryDirectory();
 
-    private final ApplicationContainer container = context.mock(ApplicationContainer.class);
+    private final Container container = context.mock(Container.class);
 
-    private static final String APP_ID = ApplicationContainer.makeUUID();
+    private static final String APP_ID = Container.makeUUID();
     private static final String APP_DNS = "mock-demo.example.com";
 
     private Path container_map, mapping_map, alias_map, idle_map;

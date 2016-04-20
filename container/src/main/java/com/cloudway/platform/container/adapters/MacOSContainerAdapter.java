@@ -13,14 +13,14 @@ import java.nio.file.Paths;
 
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.platform.common.os.Exec;
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 import static com.cloudway.platform.common.util.MoreFiles.*;
 
 public class MacOSContainerAdapter extends UnixContainerAdapter
 {
     private static final String dscl = "/usr/bin/dscl";
 
-    public MacOSContainerAdapter(ApplicationContainer container) {
+    public MacOSContainerAdapter(Container container) {
         super(container);
     }
 

@@ -17,7 +17,7 @@ import static com.cloudway.platform.common.util.MoreCollectors.*;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Etc;
 import com.cloudway.platform.common.os.Exec;
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 import com.cloudway.platform.container.ResourceLimits;
 
 public final class TrafficControl
@@ -48,7 +48,7 @@ public final class TrafficControl
         throws IOException
     {
         // classify container's traffic control into started and stopped
-        Multimap<Boolean, Integer> tc = ApplicationContainer.ids().stream()
+        Multimap<Boolean, Integer> tc = Container.ids().stream()
             .map(Etc::getpwnam)
             .filter(Objects::nonNull)
             .mapToInt(pwent -> pwent.pw_uid)

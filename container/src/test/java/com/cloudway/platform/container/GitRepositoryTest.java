@@ -38,7 +38,7 @@ public class GitRepositoryTest
     private static final String APP_NAME = "mock";
 
     private GitRepository newRepository(Path home) throws IOException {
-        ApplicationContainer container = context.mock(ApplicationContainer.class, "ApplicationContainer_" + (++test_id));
+        Container container = context.mock(Container.class, "ApplicationContainer_" + (++test_id));
 
         context.checking(new Expectations() {{
             allowing(container).getName();

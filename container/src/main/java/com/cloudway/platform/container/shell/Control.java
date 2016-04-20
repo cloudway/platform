@@ -19,7 +19,7 @@ import java.util.stream.Stream;
 
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Etc;
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 
 /**
  * Entry point for application control commands.
@@ -95,14 +95,14 @@ public abstract class Control
         System.err.println();
     }
 
-    protected void install(ApplicationContainer container, String source, String repo)
+    protected void install(Container container, String source, String repo)
         throws IOException
     {
         Path source_path;
         if (source.indexOf('/') != -1) {
             source_path = Paths.get(source).toAbsolutePath().normalize();
         } else {
-            source_path = Config.VAR_DIR.resolve(".addons", source);
+            source_path = Config.VAR_DIR.resolve(".plugins", source);
         }
 
         if (Files.exists(source_path)) {

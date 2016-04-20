@@ -1,0 +1,62 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.cloudway.platform</groupId>
+    <artifactId>cloudway-platform</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+  <artifactId>cloudway-plugin-mysql</artifactId>
+  <name>Cloudway MySQL Plugin</name>
+  <packaging>rpm</packaging>
+
+  <properties>
+    <source.dir>src/main/rpm</source.dir>
+    <target.dir>/usr/share/cloudway/plugins/mysql</target.dir>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>rpm-maven-plugin</artifactId>
+        <version>2.0</version>
+        <extensions>true</extensions>
+        <configuration>
+          <group>Development/Languages</group>
+          <requires>
+            <require>cloudway-platform-container</require>
+            <require>mariadb-server</require>
+            <require>mariadb-devel</require>
+          </requires>
+          <autoProvides>false</autoProvides>
+          <autoRequires>false</autoRequires>
+          <defaultFilemode>644</defaultFilemode>
+          <defaultDirmode>755</defaultDirmode>
+          <defaultUsername>root</defaultUsername>
+          <defaultGroupname>root</defaultGroupname>
+          <mappings>
+            <mapping>
+              <directory>${target.dir}</directory>
+              <sources>
+                <source>
+                  <location>${source.dir}</location>
+                </source>
+              </sources>
+            </mapping>
+          </mappings>
+          <postinstallScriptlet>
+            <script>
+chmod 0755 ${target.dir}/bin/*
+mkdir -p /var/lib/cloudway/.plugins
+ln -sf ${target.dir} /var/lib/cloudway/.plugins/
+            </script>
+          </postinstallScriptlet>
+          <postremoveScriptlet>
+            <script>rm -f /var/lib/cloudway/.plugins/mysql</script>
+          </postremoveScriptlet>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

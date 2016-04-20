@@ -21,7 +21,7 @@ import static org.junit.Assert.*;
 import com.cloudway.fp.data.Maybe;
 import com.cloudway.fp.io.IO;
 import com.cloudway.platform.common.util.ExtendedProperties;
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 import com.cloudway.platform.container.ResourceLimits;
 import com.cloudway.platform.container.TemporaryDirectory;
 
@@ -30,7 +30,7 @@ import static com.cloudway.platform.common.util.MoreFiles.*;
 public class CgroupTest {
     public final @Rule TemporaryDirectory temporary = new TemporaryDirectory();
 
-    private static final String APP_USER = ApplicationContainer.makeUUID();
+    private static final String APP_USER = Container.makeUUID();
     private static final int APP_UID = 1234;
 
     private static final String[] TEST_SUBSYSTEMS = { "cpu", "memory", "freezer" };

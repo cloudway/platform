@@ -1,0 +1,20 @@
+<?xml version="1.0" ?>
+
+<plugin>
+  <name>php</name>
+  <display-name>PHP 5.5</display-name>
+  <version>5.5</version>
+  <vendor>php.net</vendor>
+  <plugin-version>1.0</plugin-version>
+  <plugin-vendor>cloudway</plugin-vendor>
+  <category>Framework</category>
+  <endpoint>
+    <private-host-name>HOST</private-host-name>
+    <private-port-name>PORT</private-port-name>
+    <private-port>8080</private-port>
+    <proxy-mapping>
+      <frontend>/</frontend>
+      <backend>/</backend>
+    </proxy-mapping>
+  </endpoint>
+</plugin>

@@ -13,7 +13,7 @@ import java.nio.file.Path;
 import com.cloudway.fp.io.IO;
 import com.cloudway.platform.common.os.Etc;
 import com.cloudway.platform.common.util.MoreFiles;
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 import com.cloudway.platform.container.ApplicationState;
 
 public final class AdminControl
@@ -47,7 +47,7 @@ public final class AdminControl
     }
 
     private static void startall() throws IOException {
-        IO.forEach(ApplicationContainer.all().parallel(), ac -> {
+        IO.forEach(Container.all().parallel(), ac -> {
             try {
                 if (ac.getState() == ApplicationState.STARTED || isShuttingDown(ac)) {
                     ac.start();
@@ -62,7 +62,7 @@ public final class AdminControl
     }
 
     private static void stopall() throws IOException {
-        IO.forEach(ApplicationContainer.all().parallel(), ac -> {
+        IO.forEach(Container.all().parallel(), ac -> {
             if (ac.getState() == ApplicationState.STARTED) {
                 try {
                     ac.stop();
@@ -77,7 +77,7 @@ public final class AdminControl
     }
 
     private static void restartall() throws IOException {
-        IO.forEach(ApplicationContainer.all().parallel(), ac -> {
+        IO.forEach(Container.all().parallel(), ac -> {
             try {
                 if (ac.getState() == ApplicationState.STARTED || isShuttingDown(ac)) {
                     ac.restart();
@@ -91,11 +91,11 @@ public final class AdminControl
         });
     }
 
-    private static boolean isShuttingDown(ApplicationContainer ac) {
+    private static boolean isShuttingDown(Container ac) {
         return Files.exists(getShutdownFile(ac));
     }
 
-    private static void setShutdown(ApplicationContainer ac, boolean shutdown)
+    private static void setShutdown(Container ac, boolean shutdown)
         throws IOException
     {
         if (shutdown) {
@@ -105,7 +105,7 @@ public final class AdminControl
         }
     }
 
-    private static Path getShutdownFile(ApplicationContainer ac) {
+    private static Path getShutdownFile(Container ac) {
         return MoreFiles.join(ac.getHomeDir(), "app", ".shutdown");
     }
 }

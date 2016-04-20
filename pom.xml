@@ -28,10 +28,10 @@
         <os><name>Linux</name></os>
       </activation>
       <modules>
-        <module>addons/cwas</module>
-        <module>addons/mysql</module>
-        <module>addons/php</module>
-        <module>addons/phpmyadmin</module>
+        <module>plugins/cwas</module>
+        <module>plugins/mysql</module>
+        <module>plugins/php</module>
+        <module>plugins/phpmyadmin</module>
         <module>native/pam</module>
       </modules>
     </profile>

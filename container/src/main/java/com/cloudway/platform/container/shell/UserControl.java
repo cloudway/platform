@@ -6,17 +6,17 @@
 
 package com.cloudway.platform.container.shell;
 
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 import com.cloudway.platform.container.NoSuchContainerException;
 import java.io.IOException;
 
 @SuppressWarnings("unused")
 public class UserControl extends Control
 {
-    private static ApplicationContainer getContainer() {
+    private static Container getContainer() {
         try {
             String id = System.getenv("CLOUDWAY_APP_ID");
-            return ApplicationContainer.fromId(id);
+            return Container.fromId(id);
         } catch (NoSuchContainerException ex) {
             System.err.println("This program must run in a cloudway container.");
             System.exit(2);
@@ -26,7 +26,7 @@ public class UserControl extends Control
 
     @Command("Show application information")
     public void info(String[] args) {
-        ApplicationContainer container = getContainer();
+        Container container = getContainer();
         System.out.println("ID:      " + container.getId());
         System.out.println("Name:    " + container.getName());
         System.out.println("DNS:     " + container.getDomainName());
@@ -59,7 +59,7 @@ public class UserControl extends Control
         getContainer().control("status", false);
     }
 
-    @Command("Install add-on into application")
+    @Command("Install plugin into application")
     public void install(String[] args) throws IOException {
         if (args.length < 1 || args.length > 2) {
             System.err.println("usage: cwctl install SOURCE [REPO]");
@@ -72,7 +72,7 @@ public class UserControl extends Control
         install(getContainer(), source, repo);
     }
 
-    @Command("Uninstall add-on from application")
+    @Command("Uninstall plugin from application")
     public void uninstall(String[] args) throws IOException {
         if (args.length != 1) {
             System.err.println("usage: cwctl uninstall NAME");

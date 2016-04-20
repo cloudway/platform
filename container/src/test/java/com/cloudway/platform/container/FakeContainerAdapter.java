@@ -26,7 +26,7 @@ public class FakeContainerAdapter extends UnixContainerAdapter
     private final UserDatabase     userdb;
     private final FilePermissions  files;
 
-    public FakeContainerAdapter(ApplicationContainer container,
+    public FakeContainerAdapter(Container container,
                                 ContainerAdapter delegate,
                                 UserDatabase userdb,
                                 FilePermissions files) {

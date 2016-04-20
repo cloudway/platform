@@ -19,14 +19,14 @@ import com.cloudway.platform.common.os.Exec;
  */
 public interface ContainerAdapter
 {
-    static void setFactory(Function<ApplicationContainer, ContainerAdapter> factory) {
+    static void setFactory(Function<Container, ContainerAdapter> factory) {
         Helper.setContainerAdapterFactory(factory);
     }
 
     /**
      * Create a new instance of container adapter.
      */
-    static ContainerAdapter adapt(ApplicationContainer container) {
+    static ContainerAdapter adapt(Container container) {
         return Helper.createContainerAdapter(container);
     }
 

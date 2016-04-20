@@ -22,7 +22,7 @@ import com.cloudway.fp.function.ExceptionAction;
 import com.cloudway.platform.common.os.AuthorizedKey;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.util.MoreFiles;
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 import com.cloudway.platform.container.ContainerAdapter;
 
 import static java.lang.String.format;
@@ -33,12 +33,12 @@ import static com.cloudway.fp.control.Predicates.*;
 
 public abstract class AbstractContainerAdapter implements ContainerAdapter
 {
-    protected final ApplicationContainer container;
+    protected final Container container;
 
     /**
      * Create a new instance of ContainerAdapter.
      */
-    protected AbstractContainerAdapter(ApplicationContainer container) {
+    protected AbstractContainerAdapter(Container container) {
         this.container = container;
     }
 

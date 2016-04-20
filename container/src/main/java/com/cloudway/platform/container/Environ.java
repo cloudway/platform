@@ -36,7 +36,7 @@ public final class Environ
     /**
      * Load the combined environments for a guest.
      */
-    public static Map<String, String> loadAll(ApplicationContainer container) {
+    public static Map<String, String> loadAll(Container container) {
         Map<String, String> env;
 
         // Load user env vars
@@ -48,9 +48,9 @@ public final class Environ
         // Merge application env vars
         env.putAll(load(container.getEnvDir()));
 
-        // Merge addon env vars
+        // Merge plugin env vars
         try (Stream<Path> stream = Files.list(container.getHomeDir())) {
-            stream.filter(Addon::isAddonDirectory)
+            stream.filter(Plugin::isPluginDirectory)
                   .map(d -> load(d.resolve("env")))
                   .forEach(env::putAll);
         } catch (IOException ex) {

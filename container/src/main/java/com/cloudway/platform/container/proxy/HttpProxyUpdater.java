@@ -9,17 +9,17 @@ package com.cloudway.platform.container.proxy;
 import java.io.IOException;
 import java.util.Collection;
 
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 
 /**
  * The adapter interface for concrete proxy implementation.
  */
 public interface HttpProxyUpdater
 {
-    void addMappings(ApplicationContainer container, Collection<ProxyMapping> mappings)
+    void addMappings(Container container, Collection<ProxyMapping> mappings)
         throws IOException;
 
-    void removeMappings(ApplicationContainer container, Collection<ProxyMapping> mappings)
+    void removeMappings(Container container, Collection<ProxyMapping> mappings)
         throws IOException;
 
     void addAlias(String name, String fqdn)
@@ -28,14 +28,14 @@ public interface HttpProxyUpdater
     void removeAlias(String name)
         throws IOException;
 
-    void idle(ApplicationContainer container)
+    void idle(Container container)
         throws IOException;
 
-    boolean unidle(ApplicationContainer container)
+    boolean unidle(Container container)
         throws IOException;
 
-    boolean isIdle(ApplicationContainer container);
+    boolean isIdle(Container container);
 
-    void purge(ApplicationContainer container)
+    void purge(Container container)
         throws IOException;
 }

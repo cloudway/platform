@@ -19,7 +19,7 @@ import com.cloudway.fp.data.PMap;
 import com.cloudway.fp.data.Seq;
 import com.cloudway.fp.data.BooleanRef;
 import com.cloudway.platform.container.proxy.HttpProxyUpdater;
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 import com.cloudway.platform.container.proxy.ProxyMapping;
 import static com.cloudway.fp.control.Predicates.*;
 
@@ -36,7 +36,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
         ImmutableSet.of("http", "https", "ajp", "fcgi", "scgi", "ws", "wss");
 
     @Override
-    public void addMappings(ApplicationContainer ac, Collection<ProxyMapping> map)
+    public void addMappings(Container ac, Collection<ProxyMapping> map)
         throws IOException
     {
         addContainer(ac);
@@ -47,7 +47,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
     }
 
     @Override
-    public void removeMappings(ApplicationContainer ac, Collection<ProxyMapping> map)
+    public void removeMappings(Container ac, Collection<ProxyMapping> map)
         throws IOException
     {
         mappings.write(d -> Seq.wrap(map)
@@ -56,7 +56,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
             .foldLeft(d, PMap::remove));
     }
 
-    private void removeAllMappings(ApplicationContainer ac)
+    private void removeAllMappings(Container ac)
         throws IOException
     {
         String id = ac.getId();
@@ -68,7 +68,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
         }));
     }
 
-    private void addContainer(ApplicationContainer ac)
+    private void addContainer(Container ac)
         throws IOException
     {
         containers.write(d ->
@@ -77,7 +77,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
             ));
     }
 
-    private void removeContainer(ApplicationContainer ac)
+    private void removeContainer(Container ac)
         throws IOException
     {
         String fqdn = ac.getDomainName();
@@ -117,7 +117,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
     }
 
     @Override
-    public void idle(ApplicationContainer ac)
+    public void idle(Container ac)
         throws IOException
     {
         String time = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
@@ -125,7 +125,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
     }
 
     @Override
-    public boolean unidle(ApplicationContainer ac)
+    public boolean unidle(Container ac)
         throws IOException
     {
         BooleanRef result = new BooleanRef();
@@ -137,7 +137,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
     }
 
     @Override
-    public boolean isIdle(ApplicationContainer ac) {
+    public boolean isIdle(Container ac) {
         try {
             return idles.read(d -> d.containsKey(ac.getId()));
         } catch (IOException ex) {
@@ -146,7 +146,7 @@ public enum ApacheProxyUpdater implements HttpProxyUpdater
     }
 
     @Override
-    public void purge(ApplicationContainer ac) throws IOException {
+    public void purge(Container ac) throws IOException {
         removeContainer(ac);
         removeAllMappings(ac);
         unidle(ac);

@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.function.Supplier;
 
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 import com.cloudway.platform.container.proxy.apache.ApacheProxyUpdater;
 
 /**
@@ -35,7 +35,7 @@ public final class HttpProxy
     /**
      * Add mappings from frontend URI to backend URI.
      */
-    public static void addMappings(ApplicationContainer container, Collection<ProxyMapping> mappings)
+    public static void addMappings(Container container, Collection<ProxyMapping> mappings)
         throws IOException {
         provider().addMappings(container, mappings);
     }
@@ -43,7 +43,7 @@ public final class HttpProxy
     /**
      * Remove mappings from frontend URI to backend URI.
      */
-    public static void removeMappings(ApplicationContainer container, Collection<ProxyMapping> mappings)
+    public static void removeMappings(Container container, Collection<ProxyMapping> mappings)
         throws IOException {
         provider().removeMappings(container, mappings);
     }
@@ -66,28 +66,28 @@ public final class HttpProxy
      * Make the application idle.  Activate the application when it's
      * accessed from outside world.
      */
-    public static void idle(ApplicationContainer container) throws IOException {
+    public static void idle(Container container) throws IOException {
         provider().idle(container);
     }
 
     /**
      * Explicitly unidle an application.
      */
-    public static boolean unidle(ApplicationContainer container) throws IOException {
+    public static boolean unidle(Container container) throws IOException {
         return provider().unidle(container);
     }
 
     /**
      * Check to see if the application is idle.
      */
-    public static boolean isIdle(ApplicationContainer container) {
+    public static boolean isIdle(Container container) {
         return provider().isIdle(container);
     }
 
     /**
      * Remove all proxy information for the container.
      */
-    public static void purge(ApplicationContainer container) throws IOException {
+    public static void purge(Container container) throws IOException {
         provider().purge(container);
     }
 }

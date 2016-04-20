@@ -29,7 +29,7 @@ class GitRepository implements ApplicationRepository
 {
     private static final String GIT_DIR = "git";
 
-    private final ApplicationContainer container;
+    private final Container container;
     private final String repo_name;
     private final Path git_dir, repo_dir;
 
@@ -37,7 +37,7 @@ class GitRepository implements ApplicationRepository
         "template", "template.git", "share/template", "share/template.git"
     };
 
-    public GitRepository(ApplicationContainer container)
+    public GitRepository(Container container)
         throws IOException
     {
         this.container = container;

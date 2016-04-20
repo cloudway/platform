@@ -23,36 +23,36 @@ import static com.cloudway.fp.control.Predicates.*;
 final class Helper {
     private Helper() {}
 
-    private static final IOFunction<ApplicationContainer, ApplicationRepository>
+    private static final IOFunction<Container, ApplicationRepository>
         DEFAULT_REPOSITORY_FACTORY = GitRepository::new;
 
-    private static IOFunction<ApplicationContainer, ApplicationRepository>
+    private static IOFunction<Container, ApplicationRepository>
         repositoryFactory = DEFAULT_REPOSITORY_FACTORY;
 
-    private static Function<ApplicationContainer, ContainerAdapter>
+    private static Function<Container, ContainerAdapter>
         adapterFactory = getDefaultContainerAdapterFactory();
 
-    static void setApplicationRepositoryFactory(IOFunction<ApplicationContainer, ApplicationRepository> factory) {
+    static void setApplicationRepositoryFactory(IOFunction<Container, ApplicationRepository> factory) {
         repositoryFactory = factory != null ? factory : DEFAULT_REPOSITORY_FACTORY;
     }
 
-    static ApplicationRepository getApplicationRepository(ApplicationContainer container)
+    static ApplicationRepository getApplicationRepository(Container container)
         throws IOException {
         return repositoryFactory.evaluate(container);
     }
 
-    static void setContainerAdapterFactory(Function<ApplicationContainer, ContainerAdapter> factory) {
+    static void setContainerAdapterFactory(Function<Container, ContainerAdapter> factory) {
         adapterFactory = factory != null ? factory : getDefaultContainerAdapterFactory();
     }
 
-    static ContainerAdapter createContainerAdapter(ApplicationContainer container) {
+    static ContainerAdapter createContainerAdapter(Container container) {
         return adapterFactory.apply(container);
     }
 
     // @formatter:off
-    private static Function<ApplicationContainer, ContainerAdapter> getDefaultContainerAdapterFactory() {
+    private static Function<Container, ContainerAdapter> getDefaultContainerAdapterFactory() {
         Platform platform = Platform.getNativePlatform();
-        return with().<Function<ApplicationContainer, ContainerAdapter>>get()
+        return with().<Function<Container, ContainerAdapter>>get()
           .when(platform.getOS(), is(LINUX),  () -> LinuxContainerAdapter::new)
           .when(platform.getOS(), is(DARWIN), () -> MacOSContainerAdapter::new)
           .when(platform::isUnix,             () -> UnixContainerAdapter::new)

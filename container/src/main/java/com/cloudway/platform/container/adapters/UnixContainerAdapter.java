@@ -22,7 +22,7 @@ import com.cloudway.fp.data.Maybe;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Etc;
 import com.cloudway.platform.common.os.Exec;
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 
 import static com.cloudway.platform.common.util.MoreFiles.*;
 
@@ -33,7 +33,7 @@ public class UnixContainerAdapter extends AbstractContainerAdapter
 {
     private static final Lock create_lock = new ReentrantLock();
 
-    public UnixContainerAdapter(ApplicationContainer container) {
+    public UnixContainerAdapter(Container container) {
         super(container);
     }
 

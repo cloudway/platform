@@ -29,13 +29,13 @@ import com.cloudway.fp.io.IOBiConsumer;
 import com.cloudway.platform.common.os.Config;
 import com.cloudway.platform.common.os.Etc;
 import com.cloudway.platform.common.os.Exec;
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 import com.cloudway.platform.container.ResourceLimits;
 import jnr.constants.platform.Signal;
 
 public class LinuxContainerAdapter extends UnixContainerAdapter
 {
-    public LinuxContainerAdapter(ApplicationContainer container) {
+    public LinuxContainerAdapter(Container container) {
         super(container);
     }
 

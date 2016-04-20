@@ -24,7 +24,7 @@ import com.cloudway.platform.common.os.Exec;
 import com.cloudway.platform.common.util.MoreFiles;
 import com.cloudway.fp.io.IO;
 import com.cloudway.fp.io.IOConsumer;
-import com.cloudway.platform.container.ApplicationContainer;
+import com.cloudway.platform.container.Container;
 import com.cloudway.platform.container.NoSuchContainerException;
 
 import org.apache.commons.cli.CommandLine;
@@ -37,7 +37,7 @@ import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
 
 import static com.cloudway.fp.control.Predicates.*;
-import static com.cloudway.platform.container.ApplicationContainer.makeUUID;
+import static com.cloudway.platform.container.Container.makeUUID;
 
 @SuppressWarnings("unused")
 public class PrivilegedControl extends Control
@@ -45,7 +45,7 @@ public class PrivilegedControl extends Control
     @Command("Show application information")
     public void info(String[] args) throws IOException {
         if (args.length == 0) {
-            ApplicationContainer.all().forEach(c -> {
+            Container.all().forEach(c -> {
                 System.out.printf("%-32s %-30s %s%n", c.getId(), c.getDomainName(), c.getState());
             });
         } else {
@@ -54,7 +54,7 @@ public class PrivilegedControl extends Control
     }
 
     @SuppressWarnings("MethodMayBeStatic")
-    private void showInfo(ApplicationContainer container) {
+    private void showInfo(Container container) {
         System.out.println("ID:      " + container.getId());
         System.out.println("Name:    " + container.getName());
         System.out.println("DNS:     " + container.getDomainName());
@@ -65,27 +65,27 @@ public class PrivilegedControl extends Control
 
     @Command("Start application container(s)")
     public void start(String[] args) throws IOException {
-        command("start", args, true, ApplicationContainer::start);
+        command("start", args, true, Container::start);
     }
 
     @Command("Stop application container(s)")
     public void stop(String[] args) throws IOException {
-        command("stop", args, true, ApplicationContainer::stop);
+        command("stop", args, true, Container::stop);
     }
 
     @Command("Restart application container(s)")
     public void restart(String[] args) throws IOException {
-        command("restart", args, true, ApplicationContainer::restart);
+        command("restart", args, true, Container::restart);
     }
 
     @Command("Idle application container(s)")
     public void idle(String[] args) throws IOException {
-        command("idle", args, true, ApplicationContainer::idle);
+        command("idle", args, true, Container::idle);
     }
 
     @Command("Unidle application container(s)")
     public void unidle(String[] args) throws IOException {
-        command("unidle", args, true, ApplicationContainer::unidle);
+        command("unidle", args, true, Container::unidle);
     }
 
     @Command("Show current container status")
@@ -99,11 +99,11 @@ public class PrivilegedControl extends Control
 
     @Command("Destroy application container(s)")
     public void destroy(String[] args) throws IOException {
-        command("destroy", args, true, ApplicationContainer::destroy);
+        command("destroy", args, true, Container::destroy);
     }
 
     private static void command(String name, String[] args, boolean parallel,
-                                IOConsumer<ApplicationContainer> action)
+                                IOConsumer<Container> action)
         throws IOException
     {
         if (args.length == 0) {
@@ -112,32 +112,32 @@ public class PrivilegedControl extends Control
         }
 
         if (args.length == 1 && "all".equals(args[0])) {
-            Stream<ApplicationContainer> stream = ApplicationContainer.all();
+            Stream<Container> stream = Container.all();
             IO.forEach(parallel ? stream.parallel() : stream, action);
         } else {
             IO.forEach(Stream.of(args), id -> do_action(id, action));
         }
     }
 
-    private static void do_action(String id, IOConsumer<ApplicationContainer> action)
+    private static void do_action(String id, IOConsumer<Container> action)
         throws IOException
     {
-        List<ApplicationContainer> containers;
+        List<Container> containers;
 
         if (id.indexOf('.') != -1) {
             // assume the key is a FQDN
-            containers = ApplicationContainer.all()
+            containers = Container.all()
                 .filter(having(c -> c.getDomainName(), is(id)))
                 .collect(Collectors.toList());
         } else if (id.indexOf('-') != -1) {
             // assume the key is "name-namespace"
-            containers = ApplicationContainer.all()
+            containers = Container.all()
                 .filter(having(c -> c.getName() + "-" + c.getNamespace(), is(id)))
                 .collect(Collectors.toList());
         } else {
             // assume the key is an application id
             try {
-                containers = Collections.singletonList(ApplicationContainer.fromId(id));
+                containers = Collections.singletonList(Container.fromId(id));
             } catch (NoSuchContainerException ex) {
                 System.err.println(id + ": " + ex.getMessage());
                 System.exit(2);
@@ -168,9 +168,9 @@ public class PrivilegedControl extends Control
                      .hasArg()
                      .create("k"),
         OptionBuilder.withArgName("PATH")
-                     .withDescription("Add-on source location")
+                     .withDescription("Plugin source location")
                      .hasArgs()
-                     .create('a'),
+                     .create('p'),
         OptionBuilder.withArgName("URL")
                      .withDescription("Repository URL")
                      .hasArg()
@@ -216,12 +216,12 @@ public class PrivilegedControl extends Control
         String sources[]   = cmd.getOptionValues("a");
         String repo        = cmd.getOptionValue("r");
 
-        List<ApplicationContainer> containers = new ArrayList<>(scale);
+        List<Container> containers = new ArrayList<>(scale);
 
         try {
             for (int i = 0; i < scale; i++) {
-                ApplicationContainer container =
-                    ApplicationContainer.create(makeUUID(), name, namespace, capacity);
+                Container container =
+                    Container.create(makeUUID(), name, namespace, capacity);
                 containers.add(container);
 
                 if (keyfile != null) {
@@ -234,7 +234,7 @@ public class PrivilegedControl extends Control
                 }
             }
         } catch (IOException | RuntimeException ex) {
-            IO.forEach(containers, ApplicationContainer::destroy);
+            IO.forEach(containers, Container::destroy);
             throw ex;
         }
     }
@@ -259,7 +259,7 @@ public class PrivilegedControl extends Control
         }
 
         String fqdn = name + "-" + namespace + "." + Config.DOMAIN;
-        int n = (int)ApplicationContainer.all().filter(having(c -> c.getDomainName(), is(fqdn))).count();
+        int n = (int)Container.all().filter(having(c -> c.getDomainName(), is(fqdn))).count();
         if (cc <= n) {
             System.err.println("Application containers already reached maximum scaling value. " +
                                "(maximum scaling = " + cc + ", existing containers = " + n + ")");
@@ -290,7 +290,7 @@ public class PrivilegedControl extends Control
         }
     }
 
-    @Command("Install add-on into application")
+    @Command("Install plugin into application")
     public void install(String args[]) throws IOException {
         if (args.length < 2 || args.length > 3) {
             System.err.println("usage: cwctl install ID SOURCE [REPO]");
@@ -305,7 +305,7 @@ public class PrivilegedControl extends Control
         do_action(id, container -> install(container, source, repo));
     }
 
-    @Command("Uninstall add-on from application")
+    @Command("Uninstall plugin from application")
     public void uninstall(String args[]) throws IOException {
         if (args.length != 2) {
             System.err.println("usage: cwctl uninstall ID NAME");
