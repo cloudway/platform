@@ -2,7 +2,7 @@ package container
 
 import "golang.org/x/net/context"
 
-const _WAIT_SECONDS = 1
+const _WAIT_SECONDS = 60
 
 // Start the application container.
 func (c *Container) Start() error {

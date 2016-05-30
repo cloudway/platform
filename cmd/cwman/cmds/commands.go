@@ -3,6 +3,7 @@ package cmds
 import (
     "fmt"
     "os"
+    "errors"
     "strings"
     "github.com/spf13/cobra"
     "icloudway.com/platform/container"
@@ -23,6 +24,13 @@ func check(err error) {
         fmt.Fprintln(os.Stderr, err)
         os.Exit(1)
     }
+}
+
+func checkContainerArg(cmd *cobra.Command, args []string) error {
+    if len(args) == 0 {
+        return errors.New(cmd.Name() + ": you must provide the contaienr ID or name")
+    }
+    return nil
 }
 
 func runContainerAction(id string, action func (*container.Container) error) {
