@@ -5,12 +5,12 @@ import (
     "os"
     "io"
     "errors"
-    "bufio"
     "strings"
     "bytes"
     "io/ioutil"
     "path/filepath"
     "archive/tar"
+    "encoding/json"
 
     "golang.org/x/net/context"
     "github.com/docker/engine-api/types"
@@ -70,25 +70,35 @@ func buildImage(config map[string]string) (image string, err error) {
     return
 }
 
-func readBuildImageId(rd io.Reader) (string, error) {
+func readBuildImageId(in io.Reader) (id string, err error) {
     const SUCCESS = "Successfully built "
 
-    in := bufio.NewReader(rd)
+    var dec = json.NewDecoder(in)
     for {
-        // TODO: analyze response to check errors
-        line, err := in.ReadString('\n')
-        if i := strings.Index(line, SUCCESS); i >= 0 {
-            if j := strings.LastIndex(line, "\\n"); j > i {
-                return line[i + len(SUCCESS) : j], nil
+        var jm JSONMessage
+        if er := dec.Decode(&jm); er != nil {
+            if er != io.EOF {
+                err = er
             }
+            break
         }
-        if err == io.EOF {
-            err = errors.New("create: no image ID read from build response")
+
+        if DEBUG && jm.Stream != "" {
+            fmt.Print(jm.Stream)
         }
-        if err != nil {
-            return "", err
+
+        if jm.Error != nil {
+            err = jm.Error
+        } else if strings.HasPrefix(jm.Stream, SUCCESS) {
+            id = strings.TrimSpace(jm.Stream[len(SUCCESS):])
         }
     }
+
+    if id == "" && err == nil {
+        err = errors.New("create: no image ID read from build response")
+    }
+
+    return id, err
 }
 
 func addFile(tw *tar.Writer, filename string, filemode int64, content []byte) (error) {
@@ -156,12 +166,6 @@ func createDockerfile(config map[string]string) []byte {
     }
     fmt.Fprintln(buf)
 
-    if (DEBUG) {
-        fmt.Println("Dockerfile contents")
-        fmt.Println(string(buf.Bytes()))
-        fmt.Println()
-    }
-
     return buf.Bytes()
 }
 
@@ -185,10 +189,10 @@ func createContainer(imageId string, config map[string]string) (c *Container, er
     }
 
     resp, err := cli.ContainerCreate(context.Background(), options, &container.HostConfig{}, &network.NetworkingConfig{}, "")
-    if err == nil {
-        c, err = FromId(resp.ID)
+    if err != nil {
+        return
     }
-    return c, err
+    return FromId(resp.ID)
 }
 
 func getOrDefault(config map[string]string, key string, deflt string) string {
