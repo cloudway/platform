@@ -11,12 +11,12 @@ import (
 
 // StatusError reports an unsuccessful exit by a command
 type StatusError struct {
-    Code        int
-    Status      string
+    Code    int
+    Message string
 }
 
 func (e StatusError) Error() string {
-    return fmt.Sprintf("%s, Code: %d", e.Status, e.Code)
+    return fmt.Sprintf("%s, Code: %d", e.Message, e.Code)
 }
 
 // Execute command in application container.
@@ -49,11 +49,8 @@ func (c *Container) Exec(user string, stdin io.Reader, stdout, stderr io.Writer,
     }
     defer resp.Close()
 
-    errCh := make(chan error, 1)
-    go func() {
-        errCh <- pumpStreams(ctx, stdin, stdout, stderr, resp)
-    }()
-    if err := <-errCh; err != nil {
+    err = pumpStreams(ctx, stdin, stdout, stderr, resp)
+    if err != nil {
         return err
     }
 
@@ -110,13 +107,21 @@ func pumpStreams(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer,
 
 // Execute the command and accumulate error messages from standard error of
 // the command.
-func (c *Container) ExecE(user string, in io.Reader, cmd ...string) error {
+func (c *Container) ExecE(user string, in io.Reader, out io.Writer, cmd ...string) error {
     var errbuf bytes.Buffer
-    err := c.Exec(user, in, nil, &errbuf, cmd...)
-    if se, ok := err.(StatusError); ok && se.Status == "" {
-        err = StatusError{Status: chomp(&errbuf), Code: se.Code}
+    err := c.Exec(user, in, out, &errbuf, cmd...)
+    if se, ok := err.(StatusError); ok && se.Message == "" {
+        err = StatusError{Message: chomp(&errbuf), Code: se.Code}
     }
     return err
+}
+
+// Silently execute the command and accumulate error messages from standard
+// error of the command.
+//
+// Equivalent to: ExecE(user, nil, nil, cmd...)
+func (c *Container) ExecQ(user string, cmd ...string) error {
+    return c.ExecE(user, nil, nil, cmd...)
 }
 
 // Performs the expansion by executing command and return the contents
@@ -125,8 +130,8 @@ func (c *Container) ExecE(user string, in io.Reader, cmd ...string) error {
 func (c *Container) Subst(user string, in io.Reader, cmd ...string) (string, error) {
     var outbuf, errbuf bytes.Buffer
     err := c.Exec(user, in, &outbuf, &errbuf, cmd...)
-    if se, ok := err.(StatusError); ok && se.Status == "" {
-        err = StatusError{Status: chomp(&errbuf), Code: se.Code}
+    if se, ok := err.(StatusError); ok && se.Message == "" {
+        err = StatusError{Message: chomp(&errbuf), Code: se.Code}
     }
     return chomp(&outbuf), err
 }

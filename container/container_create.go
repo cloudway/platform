@@ -17,15 +17,17 @@ import (
     "github.com/docker/engine-api/types/container"
     "github.com/docker/engine-api/types/network"
     "github.com/docker/engine-api/types/strslice"
+
+    "icloudway.com/platform/container/conf/defaults"
 )
 
 // Create a new application container.
-func Create(config map[string]string) (c *Container, err error) {
+func Create(config map[string]string) (*Container, error) {
     image, err := buildImage(config)
-    if err == nil {
-        c, err = createContainer(image, config)
+    if err != nil {
+        return nil, err
     }
-    return c, err
+    return createContainer(image, config)
 }
 
 func buildImage(config map[string]string) (image string, err error) {
@@ -101,7 +103,7 @@ func readBuildImageId(in io.Reader) (id string, err error) {
     return id, err
 }
 
-func addFile(tw *tar.Writer, filename string, filemode int64, content []byte) (error) {
+func addFile(tw *tar.Writer, filename string, filemode int64, content []byte) error {
     hdr := &tar.Header {
         Name: filename,
         Mode: filemode,
@@ -122,8 +124,8 @@ func createDockerfile(config map[string]string) []byte {
         panic("create: no name and/or namespace provided")
     }
 
-    home := getOrDefault(config, "home", _DEFAULT_HOME)
-    user := getOrDefault(config, "user", _DEFAULT_USER)
+    home := getOrDefault(config, "home", defaults.AppHome())
+    user := getOrDefault(config, "user", defaults.AppUser())
 
     // populating the Dockerfile contents
     buf := new(bytes.Buffer)
@@ -154,12 +156,13 @@ func createDockerfile(config map[string]string) []byte {
     env := map[string]string {
         "CLOUDWAY_APP_NAME":      name,
         "CLOUDWAY_APP_NAMESPACE": namespace,
-        "CLOUDWAY_APP_DNS":       name + "-" + namespace + "." + _DEFAULT_DOMAIN,
+        "CLOUDWAY_APP_DNS":       name + "-" + namespace + "." + defaults.Domain(),
         "CLOUDWAY_HOME_DIR":      home,
         "CLOUDWAY_LOG_DIR":       filepath.Join(home, "/app/logs"),
         "CLOUDWAY_DATA_DIR":      filepath.Join(home, "/app/data"),
         "CLOUDWAY_REPO_DIR":      filepath.Join(home, "/app/repo"),
     }
+
     fmt.Fprint(buf, "ENV")
     for k, v := range env {
         fmt.Fprintf(buf, " %s=%q", k, v)
@@ -180,11 +183,11 @@ func createContainer(imageId string, config map[string]string) (c *Container, er
         Labels: map[string]string {
             _APP_NAME_KEY:      config["name"],
             _APP_NAMESPACE_KEY: config["namespace"],
-            _APP_HOME_KEY:      getOrDefault(config, "home", _DEFAULT_HOME),
-            _APP_CAPACITY_KEY:  getOrDefault(config, "capacity", _DEFAULT_CAPACITY),
+            _APP_HOME_KEY:      getOrDefault(config, "home", defaults.AppHome()),
+            _APP_CAPACITY_KEY:  getOrDefault(config, "capacity", defaults.AppCapacity()),
             _IMAGE_ID_KEY:      imageId,
         },
-        User: getOrDefault(config, "user", _DEFAULT_USER),
+        User: getOrDefault(config, "user", defaults.AppUser()),
         Cmd: strslice.StrSlice{"/bin/sh", "-c", "while :; do sleep 32768; done"}, // FIXME
     }
 

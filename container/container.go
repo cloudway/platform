@@ -3,18 +3,16 @@ package container
 import (
     "fmt"
     "path/filepath"
+
     "github.com/docker/engine-api/client"
     "github.com/docker/engine-api/types"
     "github.com/docker/engine-api/types/filters"
     "golang.org/x/net/context"
+
+    "icloudway.com/platform/container/conf/defaults"
 )
 
 const (
-    _DEFAULT_HOME       = "/cloudway"
-    _DEFAULT_USER       = "cwuser"
-    _DEFAULT_CAPACITY   = "small"
-    _DEFAULT_DOMAIN     = "cloudway.local"
-
     _APP_NAME_KEY       = "com.cloudway.app.name"
     _APP_NAMESPACE_KEY  = "com.cloudway.app.namespace"
     _APP_HOME_KEY       = "com.cloudway.app.home"
@@ -136,7 +134,7 @@ func Find(name, namespace string) (containers []*Container, err error) {
 
 // Returns the fully qualified domain name of the container.
 func (c *Container) FQDN() string {
-    return c.Name + "-" + c.Namespace + "." + _DEFAULT_DOMAIN
+    return c.Name + "-" + c.Namespace + "." + defaults.Domain()
 }
 
 // Get the current application state.
@@ -149,7 +147,7 @@ func (c *Container) Capacity() string {
     if capacity, ok := c.info.Config.Labels[_APP_CAPACITY_KEY]; ok {
         return capacity
     } else {
-        return _DEFAULT_CAPACITY
+        return defaults.AppCapacity()
     }
 }
 
@@ -163,7 +161,7 @@ func (c *Container) Home() string {
     if home, ok := c.info.Config.Labels[_APP_HOME_KEY]; ok {
         return home
     } else {
-        return _DEFAULT_HOME
+        return defaults.AppHome()
     }
 }
 
