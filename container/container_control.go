@@ -6,27 +6,15 @@ const _WAIT_SECONDS = 60
 
 // Start the application container.
 func (c *Container) Start() error {
-    cli, err := docker_client()
-    if err == nil {
-        err = cli.ContainerStart(context.Background(), c.ID, "")
-    }
-    return err
+    return c.ContainerStart(context.Background(), c.ID, "")
 }
 
 // Stop the application container.
 func (c *Container) Stop() error {
-    cli, err := docker_client()
-    if err == nil {
-        err = cli.ContainerStop(context.Background(), c.ID, _WAIT_SECONDS)
-    }
-    return err
+    return c.ContainerStop(context.Background(), c.ID, _WAIT_SECONDS)
 }
 
 // Restart the application container.
 func (c *Container) Restart() error {
-    cli, err := docker_client()
-    if err == nil {
-        err = cli.ContainerRestart(context.Background(), c.ID, _WAIT_SECONDS)
-    }
-    return err
+    return c.ContainerRestart(context.Background(), c.ID, _WAIT_SECONDS)
 }

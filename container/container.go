@@ -22,6 +22,8 @@ const (
 var DEBUG bool
 
 type Container struct {
+    *client.Client
+
     ID          string
     Name        string
     Namespace   string
@@ -46,7 +48,10 @@ func FromId(id string) (*Container, error) {
     if err != nil {
         return nil, err
     }
+    return fromId(cli, id)
+}
 
+func fromId(cli *client.Client, id string) (*Container, error) {
     info, err := cli.ContainerInspect(context.Background(), id)
     if err != nil {
         return nil, err
@@ -62,17 +67,21 @@ func FromId(id string) (*Container, error) {
         ID:         info.ID,
         Name:       name,
         Namespace:  namespace,
+        Client:     cli,
         info:       info,
     }, nil
 }
 
 // Returns a list of ids for every cloudway container in the system.
-func IDs() (ids []string, err error) {
+func IDs() ([]string, error) {
     cli, err := docker_client()
     if err != nil {
         return nil, err
     }
+    return ids(cli)
+}
 
+func ids(cli *client.Client) (ids []string, err error) {
     args := filters.NewArgs()
     args.Add("label", _APP_NAME_KEY)
     args.Add("label", _APP_NAMESPACE_KEY)
@@ -91,11 +100,16 @@ func IDs() (ids []string, err error) {
 // Returns a list of application container objects for every cloudway
 // container in the system.
 func All() (containers []*Container, err error) {
-    ids, err := IDs()
+    cli, err := docker_client()
+    if err != nil {
+        return nil, err
+    }
+
+    ids, err := ids(cli)
     if err == nil {
         containers = make([]*Container, len(ids))
         for i, id := range ids {
-            c, err := FromId(id)
+            c, err := fromId(cli, id)
             if err != nil {
                 break
             }
@@ -121,7 +135,7 @@ func Find(name, namespace string) (containers []*Container, err error) {
     if err == nil {
         containers = make([]*Container, len(list))
         for i, c := range list {
-            cc, err := FromId(c.ID)
+            cc, err := fromId(cli, c.ID)
             if err != nil {
                 break;
             }

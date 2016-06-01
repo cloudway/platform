@@ -21,11 +21,6 @@ func (e StatusError) Error() string {
 
 // Execute command in application container.
 func (c *Container) Exec(user string, stdin io.Reader, stdout, stderr io.Writer, cmd ...string) error {
-    cli, err := docker_client()
-    if err != nil {
-        return err
-    }
-
     execConfig := types.ExecConfig{
         User:           user,
         Tty:            false,
@@ -37,13 +32,13 @@ func (c *Container) Exec(user string, stdin io.Reader, stdout, stderr io.Writer,
 
     ctx := context.Background()
 
-    execResp, err := cli.ContainerExecCreate(ctx, c.ID, execConfig)
+    execResp, err := c.ContainerExecCreate(ctx, c.ID, execConfig)
     if err != nil {
         return err
     }
     execId := execResp.ID
 
-    resp, err := cli.ContainerExecAttach(ctx, execId, execConfig)
+    resp, err := c.ContainerExecAttach(ctx, execId, execConfig)
     if err != nil {
         return err
     }
@@ -54,7 +49,7 @@ func (c *Container) Exec(user string, stdin io.Reader, stdout, stderr io.Writer,
         return err
     }
 
-    inspectResp, err := cli.ContainerExecInspect(ctx, execId)
+    inspectResp, err := c.ContainerExecInspect(ctx, execId)
     if err != nil {
         return err
     } else if inspectResp.ExitCode != 0 {

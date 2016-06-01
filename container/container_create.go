@@ -13,6 +13,7 @@ import (
     "encoding/json"
 
     "golang.org/x/net/context"
+    "github.com/docker/engine-api/client"
     "github.com/docker/engine-api/types"
     "github.com/docker/engine-api/types/container"
     "github.com/docker/engine-api/types/network"
@@ -23,19 +24,19 @@ import (
 
 // Create a new application container.
 func Create(config map[string]string) (*Container, error) {
-    image, err := buildImage(config)
+    cli, err := docker_client()
     if err != nil {
         return nil, err
     }
-    return createContainer(image, config)
+
+    image, err := buildImage(cli, config)
+    if err != nil {
+        return nil, err
+    }
+    return createContainer(cli, image, config)
 }
 
-func buildImage(config map[string]string) (image string, err error) {
-    cli, err := docker_client()
-    if err != nil {
-        return
-    }
-
+func buildImage(cli *client.Client, config map[string]string) (image string, err error) {
     // Create temporary tar archive to create build context
     tarFile, err := ioutil.TempFile("", "docker");
     if err != nil {
@@ -172,12 +173,7 @@ func createDockerfile(config map[string]string) []byte {
     return buf.Bytes()
 }
 
-func createContainer(imageId string, config map[string]string) (c *Container, err error) {
-    cli, err := docker_client()
-    if err != nil {
-        return
-    }
-
+func createContainer(cli *client.Client, imageId string, config map[string]string) (c *Container, err error) {
     options := &container.Config {
         Image: imageId,
         Labels: map[string]string {
@@ -195,7 +191,7 @@ func createContainer(imageId string, config map[string]string) (c *Container, er
     if err != nil {
         return
     }
-    return FromId(resp.ID)
+    return fromId(cli, resp.ID)
 }
 
 func getOrDefault(config map[string]string, key string, deflt string) string {

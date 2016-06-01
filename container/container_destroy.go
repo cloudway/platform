@@ -8,16 +8,11 @@ import (
 
 // Destroy the application container.
 func (c *Container) Destroy() error {
-    cli, err := docker_client()
-    if err != nil {
-        return err
-    }
-
     imageId := c.info.Config.Labels[_IMAGE_ID_KEY]
 
     // remove the container, force kill if it's running
     options := types.ContainerRemoveOptions{Force: true, RemoveVolumes: true}
-    err = cli.ContainerRemove(context.Background(), c.ID, options)
+    err := c.ContainerRemove(context.Background(), c.ID, options)
     if err != nil {
         return err
     }
@@ -26,7 +21,7 @@ func (c *Container) Destroy() error {
     // remove associated image
     if imageId != "" {
         options := types.ImageRemoveOptions{Force: true, PruneChildren: true}
-        cli.ImageRemove(context.Background(), imageId, options)
+        c.ImageRemove(context.Background(), imageId, options)
         if (DEBUG) { fmt.Printf("Removed image %s\n", imageId) }
     }
 
