@@ -1,6 +1,6 @@
 package defaults
 
-import "icloudway.com/platform/container/conf"
+import "github.com/cloudway/platform/container/conf"
 
 func Domain() string {
     return conf.GetOrDefault("CLOUDWAY_DOMAIN", "cloudway.local")

@@ -3,7 +3,7 @@ package cmds
 import (
     "fmt"
     "github.com/spf13/cobra"
-    "icloudway.com/platform/container"
+    "github.com/cloudway/platform/container"
 )
 
 func init() {

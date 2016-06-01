@@ -3,8 +3,8 @@ package main
 import (
     "fmt"
     "os"
-    "icloudway.com/platform/cmd/cwman/cmds"
-    "icloudway.com/platform/container/conf"
+    "github.com/cloudway/platform/cmd/cwman/cmds"
+    "github.com/cloudway/platform/container/conf"
 )
 
 func main() {

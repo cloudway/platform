@@ -6,7 +6,7 @@ import (
     "errors"
     "strings"
     "github.com/spf13/cobra"
-    "icloudway.com/platform/container"
+    "github.com/cloudway/platform/container"
 )
 
 // RootCommand is the root of the command tree.

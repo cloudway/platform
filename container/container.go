@@ -9,7 +9,7 @@ import (
     "github.com/docker/engine-api/types/filters"
     "golang.org/x/net/context"
 
-    "icloudway.com/platform/container/conf/defaults"
+    "github.com/cloudway/platform/container/conf/defaults"
 )
 
 const (

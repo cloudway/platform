@@ -18,7 +18,7 @@ import (
     "github.com/docker/engine-api/types/network"
     "github.com/docker/engine-api/types/strslice"
 
-    "icloudway.com/platform/container/conf/defaults"
+    "github.com/cloudway/platform/container/conf/defaults"
 )
 
 // Create a new application container.
