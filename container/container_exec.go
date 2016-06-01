@@ -7,6 +7,7 @@ import (
     "strings"
     "golang.org/x/net/context"
     "github.com/docker/engine-api/types"
+    "github.com/Sirupsen/logrus"
 )
 
 // StatusError reports an unsuccessful exit by a command
@@ -66,6 +67,7 @@ func pumpStreams(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer,
     if stdout != nil || stderr != nil {
         go func() {
             _, err = stdCopy(stdout, stderr, resp.Reader)
+            logrus.Debugf("[hijack] End of stdout")
             receiveStdout <- err
         }()
     }
@@ -74,14 +76,19 @@ func pumpStreams(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer,
     go func() {
         if stdin != nil {
             io.Copy(resp.Conn, stdin)
+            logrus.Debugf("[hijack] End of stdin")
         }
-        resp.CloseWrite()
+
+        if err := resp.CloseWrite(); err != nil {
+            logrus.WithError(err).Debugf("Couldn't send EOF")
+        }
         close(stdinDone)
     }()
 
     select {
     case err := <-receiveStdout:
         if err != nil {
+            logrus.WithError(err).Debugf("Error receive stdout")
             return err
         }
     case <-stdinDone:
@@ -89,6 +96,7 @@ func pumpStreams(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer,
             select {
             case err := <-receiveStdout:
                 if err != nil {
+                    logrus.WithError(err).Debugf("Error receive stdout")
                     return err
                 }
             case <-ctx.Done():

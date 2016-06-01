@@ -3,7 +3,7 @@ package container
 import (
     "golang.org/x/net/context"
     "github.com/docker/engine-api/types"
-    "fmt"
+    "github.com/Sirupsen/logrus"
 )
 
 // Destroy the application container.
@@ -16,13 +16,13 @@ func (c *Container) Destroy() error {
     if err != nil {
         return err
     }
-    if (DEBUG) { fmt.Printf("Removed container %s\n", c.ID) }
+    logrus.Debugf("Removed container %s", c.ID)
 
     // remove associated image
     if image != "" {
         options := types.ImageRemoveOptions{Force: true, PruneChildren: true}
         c.ImageRemove(context.Background(), image, options)
-        if (DEBUG) { fmt.Printf("Removed image %s\n", image) }
+        logrus.Debugf("Removed image %s", image)
     }
 
     return nil

@@ -19,6 +19,7 @@ import (
     "github.com/docker/engine-api/types/strslice"
 
     "github.com/cloudway/platform/container/conf/defaults"
+    "github.com/Sirupsen/logrus"
 )
 
 // Create a new application container.
@@ -43,10 +44,7 @@ func buildImage(cli *client.Client, config map[string]string) (image string, err
     }
     defer os.Remove(tarFile.Name())
     tw := tar.NewWriter(tarFile)
-
-    if (DEBUG) {
-        fmt.Printf("created temporary build context: %s\n", tarFile.Name())
-    }
+    logrus.Debugf("Created temporary build context: %s", tarFile.Name())
 
     // create and add Dockerfile to archive
     err = addFile(tw, "Dockerfile", 0644, createDockerfile(config))

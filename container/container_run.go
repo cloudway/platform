@@ -5,6 +5,7 @@ import (
     "sync"
     "golang.org/x/net/context"
     "github.com/docker/engine-api/types"
+    "github.com/Sirupsen/logrus"
 )
 
 // Run interactive command in a running container.
@@ -59,13 +60,20 @@ func (c *Container) Run(user string, cmd ...string) error {
 func (t *Tty) pumpStreams(ctx context.Context, tty bool, resp types.HijackedResponse) error {
     var err error
 
+    restore := func() {
+        t.restore()
+        logrus.Debugf("[hijack] Restore TTY")
+    }
+
     var restoreOnce sync.Once
     if tty {
         if err = t.makeRaw(); err != nil {
             return err
         }
+
+        logrus.Debugf("[hijack] Make raw TTY")
         defer func() {
-            restoreOnce.Do(t.restore)
+            restoreOnce.Do(restore)
         }()
     }
 
@@ -77,10 +85,12 @@ func (t *Tty) pumpStreams(ctx context.Context, tty bool, resp types.HijackedResp
             // we should restore the terminal as soon as possible once
             // connection end so any following print messages will be
             // in normal type.
-            restoreOnce.Do(t.restore)
+            restoreOnce.Do(restore)
         } else {
             _, err = stdCopy(t.out, t.err, resp.Reader)
         }
+
+        logrus.Debugf("[hijack] End of stdout")
         receiveStdout <- err
     }()
 
@@ -90,21 +100,27 @@ func (t *Tty) pumpStreams(ctx context.Context, tty bool, resp types.HijackedResp
         // we should restore the terminal as soon as possible once connection
         // end so any following print messages will be in normal type.
         if tty {
-            restoreOnce.Do(t.restore)
+            restoreOnce.Do(restore)
         }
-        resp.CloseWrite()
+        logrus.Debugf("[hijack] End of stdin")
+
+        if err := resp.CloseWrite(); err != nil {
+            logrus.Debugf("Couldn't send EOF: %s", err)
+        }
         close(stdinDone)
     }()
 
     select {
     case err := <-receiveStdout:
         if err != nil {
+            logrus.WithError(err).Debugf("Error receive stdout")
             return err
         }
     case <-stdinDone:
         select {
         case err := <-receiveStdout:
             if err != nil {
+                logrus.WithError(err).Debugf("Error receive stdout")
                 return err
             }
         case <-ctx.Done():

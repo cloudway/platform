@@ -6,6 +6,7 @@ import (
     "errors"
     "strings"
     "github.com/spf13/cobra"
+    "github.com/Sirupsen/logrus"
     "github.com/cloudway/platform/container"
 )
 
@@ -16,12 +17,17 @@ var RootCommand = &cobra.Command{
 }
 
 func init() {
-    RootCommand.PersistentFlags().BoolVarP(&container.DEBUG, "debug", "d", false, "debugging")
+    RootCommand.PersistentFlags().BoolVar(&container.DEBUG, "debug", false, "debugging mode")
+    RootCommand.PersistentPreRun = func (cmd *cobra.Command, args []string) {
+        if container.DEBUG {
+            logrus.SetLevel(logrus.DebugLevel)
+        }
+    }
 }
 
 func check(err error) {
     if err != nil {
-        fmt.Fprintln(os.Stderr, err)
+        logrus.Fatal(err)
         os.Exit(1)
     }
 }
