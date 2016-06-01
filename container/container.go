@@ -2,7 +2,6 @@ package container
 
 import (
     "fmt"
-    "path/filepath"
 
     "github.com/docker/engine-api/client"
     "github.com/docker/engine-api/types"
@@ -167,5 +166,21 @@ func (c *Container) Home() string {
 
 // Returns the env directory of the container.
 func (c *Container) EnvDir() string {
-    return filepath.Join(c.Home(), ".env")
+    return c.Home() + "/.env"
+}
+
+func (c *Container) AppDir() string {
+    return c.Home() + "/app"
+}
+
+func (c *Container) RepoDir() string {
+    return c.AppDir() + "/repo"
+}
+
+func (c *Container) DataDir() string {
+    return c.AppDir() + "/data"
+}
+
+func (c *Container) LogDir() string {
+    return c.AppDir() + "/logs"
 }
