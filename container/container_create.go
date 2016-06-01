@@ -8,7 +8,6 @@ import (
     "strings"
     "bytes"
     "io/ioutil"
-    "path/filepath"
     "archive/tar"
     "encoding/json"
 
@@ -134,7 +133,7 @@ func createDockerfile(config map[string]string) []byte {
     fmt.Fprintf(buf, "FROM %s\n", config["baseImage"])
 
     // mark the container image
-    fmt.Fprintf(buf, "LABEL com.cloudway.image.version=1\n")
+    fmt.Fprintf(buf, "LABEL com.cloudway.version=1\n")
 
     // create operating system user and group
     fmt.Fprintf(buf, "RUN groupadd %[1]s && useradd -g %[1]s -d %[2]s -m %[1]s\n", user, home)
@@ -142,7 +141,7 @@ func createDockerfile(config map[string]string) []byte {
     // create home directory
     fmt.Fprint(buf, "RUN mkdir -p")
     for _, d := range []string{".env", "app/logs", "app/data", "app/repo"} {
-        fmt.Fprintf(buf, " %s", filepath.Join(home, d))
+        fmt.Fprintf(buf, " %s/%s", home, d)
     }
     fmt.Fprintln(buf)
     fmt.Fprintf(buf, "WORKDIR %s\n", home)
@@ -159,9 +158,9 @@ func createDockerfile(config map[string]string) []byte {
         "CLOUDWAY_APP_NAMESPACE": namespace,
         "CLOUDWAY_APP_DNS":       name + "-" + namespace + "." + defaults.Domain(),
         "CLOUDWAY_HOME_DIR":      home,
-        "CLOUDWAY_LOG_DIR":       filepath.Join(home, "/app/logs"),
-        "CLOUDWAY_DATA_DIR":      filepath.Join(home, "/app/data"),
-        "CLOUDWAY_REPO_DIR":      filepath.Join(home, "/app/repo"),
+        "CLOUDWAY_LOG_DIR":       home + "/app/logs",
+        "CLOUDWAY_DATA_DIR":      home + "/app/data",
+        "CLOUDWAY_REPO_DIR":      home + "/app/repo",
     }
 
     fmt.Fprint(buf, "ENV")
@@ -181,7 +180,6 @@ func createContainer(cli *client.Client, imageId string, config map[string]strin
             _APP_NAMESPACE_KEY: config["namespace"],
             _APP_HOME_KEY:      getOrDefault(config, "home", defaults.AppHome()),
             _APP_CAPACITY_KEY:  getOrDefault(config, "capacity", defaults.AppCapacity()),
-            _IMAGE_ID_KEY:      imageId,
         },
         User: getOrDefault(config, "user", defaults.AppUser()),
         Cmd: strslice.StrSlice{"/bin/sh", "-c", "while :; do sleep 32768; done"}, // FIXME

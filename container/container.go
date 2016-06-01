@@ -16,7 +16,6 @@ const (
     _APP_NAMESPACE_KEY  = "com.cloudway.app.namespace"
     _APP_HOME_KEY       = "com.cloudway.app.home"
     _APP_CAPACITY_KEY   = "com.cloudway.app.capacity"
-    _IMAGE_ID_KEY       = "com.cloudway.container.image"
 )
 
 var DEBUG bool

@@ -8,7 +8,7 @@ import (
 
 // Destroy the application container.
 func (c *Container) Destroy() error {
-    imageId := c.info.Config.Labels[_IMAGE_ID_KEY]
+    image := c.info.Config.Image
 
     // remove the container, force kill if it's running
     options := types.ContainerRemoveOptions{Force: true, RemoveVolumes: true}
@@ -19,10 +19,10 @@ func (c *Container) Destroy() error {
     if (DEBUG) { fmt.Printf("Removed container %s\n", c.ID) }
 
     // remove associated image
-    if imageId != "" {
+    if image != "" {
         options := types.ImageRemoveOptions{Force: true, PruneChildren: true}
-        c.ImageRemove(context.Background(), imageId, options)
-        if (DEBUG) { fmt.Printf("Removed image %s\n", imageId) }
+        c.ImageRemove(context.Background(), image, options)
+        if (DEBUG) { fmt.Printf("Removed image %s\n", image) }
     }
 
     return nil
