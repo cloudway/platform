@@ -8,6 +8,7 @@ import (
     "archive/zip"
     "compress/gzip"
     "archive/tar"
+    "path/filepath"
     "github.com/cloudway/platform/plugin"
 )
 
@@ -117,4 +118,63 @@ func readTar(path string, r io.Reader) (*plugin.Plugin, error) {
         }
     }
     return nil, InvalidArchiveError{file: path}
+}
+
+func addFile(tw *tar.Writer, filename string, filemode int64, content []byte) error {
+    hdr := &tar.Header {
+        Name: filename,
+        Mode: filemode,
+        Size: int64(len(content)),
+    }
+
+    err := tw.WriteHeader(hdr)
+    if err == nil {
+        _, err = tw.Write(content)
+    }
+    return err
+}
+
+func copyFile(tw* tar.Writer, filename string, filemode, filesize int64, r io.Reader) error {
+    hdr := &tar.Header{
+        Name: filename,
+        Mode: filemode,
+        Size: filesize,
+    }
+
+    err := tw.WriteHeader(hdr)
+    if err == nil {
+        _, err = io.Copy(tw, r)
+    }
+    return err
+}
+
+func copyFileTree(tw* tar.Writer, src, dst string) error {
+    return filepath.Walk(src, func (path string, info os.FileInfo, err error) error {
+        if err != nil || info.IsDir() {
+            return err
+        }
+
+        relpath := path[len(src):]
+        if len(relpath) == 0 {
+            return nil
+        }
+        relpath = dst + "/" + relpath
+        fr, err := os.Open(path)
+        if err != nil {
+            return err
+        }
+        defer fr.Close()
+
+        if hdr, err := tar.FileInfoHeader(info, relpath); err != nil {
+            return err
+        } else {
+            hdr.Name = relpath
+            if err = tw.WriteHeader(hdr); err != nil {
+                return err
+            }
+        }
+
+        _, err = io.Copy(tw, fr)
+        return err
+    })
 }

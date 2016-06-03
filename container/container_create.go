@@ -7,6 +7,7 @@ import (
     "errors"
     "strings"
     "bytes"
+    "path/filepath"
     "io/ioutil"
     "archive/tar"
     "encoding/json"
@@ -49,27 +50,33 @@ func buildImage(cli *client.Client, plugin *plugin.Plugin, config map[string]str
     if err != nil {
         return
     }
-    defer os.Remove(tarFile.Name())
+    defer func() {
+        tarFile.Close()
+        os.Remove(tarFile.Name())
+    }()
+
     tw := tar.NewWriter(tarFile)
     logrus.Debugf("Created temporary build context: %s", tarFile.Name())
 
     // create and add Dockerfile to archive
-    err = addFile(tw, "Dockerfile", 0644, createDockerfile(plugin, config))
-    if err != nil {
+    if err = addFile(tw, "Dockerfile", 0644, createDockerfile(plugin, config)); err != nil {
         return
     }
 
-    // close the archive file for reading
-    tw.Close()
-    ctx, err := os.Open(tarFile.Name())
-    if err != nil {
+    // add plugin files
+    if err = addPluginFiles(tw, plugin.Path, plugin.Name); err != nil {
         return
     }
-    defer ctx.Close()
+
+    // rewind the archive file for reading
+    tw.Close()
+    if _, err = tarFile.Seek(0, 0); err != nil {
+        return
+    }
 
     // build the image from context
     options := types.ImageBuildOptions{Dockerfile: "Dockerfile", Remove: true, ForceRemove: true}
-    response, err := cli.ImageBuild(context.Background(), ctx, options);
+    response, err := cli.ImageBuild(context.Background(), tarFile, options);
     if err == nil {
         defer response.Body.Close()
         image, err = readBuildImageId(response.Body)
@@ -108,23 +115,8 @@ func readBuildImageId(in io.Reader) (id string, err error) {
     return id, err
 }
 
-func addFile(tw *tar.Writer, filename string, filemode int64, content []byte) error {
-    hdr := &tar.Header {
-        Name: filename,
-        Mode: filemode,
-        Size: int64(len(content)),
-    }
-
-    err := tw.WriteHeader(hdr)
-    if err == nil {
-        _, err = tw.Write(content)
-    }
-    return err
-}
-
 func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
-    name := config["name"]
-    namespace := config["namespace"]
+    name, namespace := config["name"], config["namespace"]
     if name == "" || namespace == "" {
         panic("create: no name and/or namespace provided")
     }
@@ -137,25 +129,26 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
 
     fmt.Fprintf(buf, "FROM %s\n", plugin.BaseImage)
 
-    // mark the container image
-    fmt.Fprintf(buf, "LABEL com.cloudway.version=1\n")
+    // Begin of RUN commands, make sure RUN commands contiguous
+    fmt.Fprintf(buf, "RUN ")
 
     // create operating system user and group
-    fmt.Fprintf(buf, "RUN groupadd %[1]s && useradd -g %[1]s -d %[2]s -m %[1]s\n", user, home)
+    fmt.Fprintf(buf, "groupadd %[1]s && useradd -g %[1]s -d %[2]s -m %[1]s", user, home)
 
     // create home directory
-    fmt.Fprint(buf, "RUN mkdir -p")
+    fmt.Fprint(buf, " && mkdir -p")
     for _, d := range []string{".env", "app/logs", "app/data", "app/repo"} {
         fmt.Fprintf(buf, " %s/%s", home, d)
     }
-    fmt.Fprintln(buf)
-    fmt.Fprintf(buf, "WORKDIR %s\n", home)
 
     // set directory permissions
-    fmt.Fprintf(buf, "RUN chown root:root %[2]s/.env && " +
+    fmt.Fprintf(buf, " && chown root:root %[2]s/.env && " +
                 "chown -R %[1]s:%[1]s %[2]s/app && " +
                 "chown root:%[1]s %[2]s/app\n",
                 user, home)
+    // End of RUN commands
+
+    fmt.Fprintf(buf, "WORKDIR %s\n", home)
 
     // add environment variables
     env := map[string]string {
@@ -174,7 +167,30 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     }
     fmt.Fprintln(buf)
 
+    // add plugin files
+    fmt.Fprintf(buf, "ADD %s %s/%s\n", filepath.Base(plugin.Path), home, plugin.Name)
+    fmt.Fprintf(buf, "RUN chown -R root:%s %s/%s\n", user, home, plugin.Name)
+
     return buf.Bytes()
+}
+
+func addPluginFiles(tw *tar.Writer, src, dst string) error {
+    pf, err := os.Open(src)
+    if err != nil {
+        return err
+    }
+    defer pf.Close()
+
+    stat, err := pf.Stat()
+    if err != nil {
+        return err
+    }
+
+    if stat.IsDir() {
+        return copyFileTree(tw, src, dst)
+    } else {
+        return copyFile(tw, filepath.Base(src), int64(stat.Mode()), stat.Size(), pf)
+    }
 }
 
 func createContainer(cli *client.Client, imageId string, config map[string]string) (c *Container, err error) {

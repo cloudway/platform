@@ -20,6 +20,11 @@ func init() {
 func runRunCmd(cmd *cobra.Command, args []string) {
     runContainerAction(args[0], func (c *container.Container) error {
         user, _ := cmd.Flags().GetString("user")
-        return c.Run(user, args[1:]...)
+        err := c.Run(user, args[1:]...)
+        if _, ok := err.(container.StatusError); !ok {
+            return err
+        } else {
+            return nil
+        }
     })
 }
