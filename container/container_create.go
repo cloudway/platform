@@ -64,7 +64,7 @@ func buildImage(cli *client.Client, plugin *plugin.Plugin, config map[string]str
     }
 
     // add plugin files
-    if err = addPluginFiles(tw, plugin.Path, plugin.Name); err != nil {
+    if err = addPluginFiles(tw, plugin.Path); err != nil {
         return
     }
 
@@ -97,7 +97,7 @@ func readBuildImageId(in io.Reader) (id string, err error) {
             break
         }
 
-        if DEBUG && jm.Stream != "" {
+        if jm.Stream != "" {
             fmt.Print(jm.Stream)
         }
 
@@ -124,7 +124,7 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     home := getOrDefault(config, "home", defaults.AppHome())
     user := getOrDefault(config, "user", defaults.AppUser())
 
-    // populating the Dockerfile contents
+    // Populating the Dockerfile contents
     buf := new(bytes.Buffer)
 
     fmt.Fprintf(buf, "FROM %s\n", plugin.BaseImage)
@@ -132,34 +132,54 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     // Begin of RUN commands, make sure RUN commands contiguous
     fmt.Fprintf(buf, "RUN ")
 
-    // create operating system user and group
+    // Create operating system user and group
     fmt.Fprintf(buf, "groupadd %[1]s && useradd -g %[1]s -d %[2]s -m %[1]s", user, home)
 
-    // create home directory
+    // Create home directory
     fmt.Fprint(buf, " && mkdir -p")
     for _, d := range []string{".env", "app/logs", "app/data", "app/repo"} {
         fmt.Fprintf(buf, " %s/%s", home, d)
     }
 
-    // set directory permissions
+    // Set directory permissions
     fmt.Fprintf(buf, " && chown root:root %[2]s/.env && " +
                 "chown -R %[1]s:%[1]s %[2]s/app && " +
-                "chown root:%[1]s %[2]s/app\n",
+                "chown root:%[1]s %[2]s/app",
                 user, home)
-    // End of RUN commands
 
+    // Run plugin pre-install script
+    b, err := readFile(plugin.Path, "bin/pre-install")
+    if err == nil {
+        script := strings.Replace(string(b), "\n", "\\n\\\n", -1)
+        script  = strings.Replace(script, "\"", "\\\"", -1)
+        fmt.Fprintf(buf, " && echo \"%s\" | /bin/bash", script)
+    }
+
+    // End of RUN commands. From then on, the image cache is invalidated.
+    fmt.Fprintln(buf)
     fmt.Fprintf(buf, "WORKDIR %s\n", home)
 
-    // add environment variables
+    // Add plugin files
+    pluginDir := home + "/" + plugin.Name
+    fmt.Fprintf(buf, "ADD %s %s\n", filepath.Base(plugin.Path), pluginDir)
+
+    // Add application environment variables
     env := map[string]string {
         "CLOUDWAY_APP_NAME":      name,
         "CLOUDWAY_APP_NAMESPACE": namespace,
         "CLOUDWAY_APP_DNS":       name + "-" + namespace + "." + defaults.Domain(),
+        "CLOUDWAY_APP_USER":      user,
         "CLOUDWAY_HOME_DIR":      home,
         "CLOUDWAY_LOG_DIR":       home + "/app/logs",
         "CLOUDWAY_DATA_DIR":      home + "/app/data",
         "CLOUDWAY_REPO_DIR":      home + "/app/repo",
     }
+
+    // Add framework environment variables
+    env["CLOUDWAY_" + strings.ToUpper(plugin.Name) + "_DIR"] = pluginDir
+    env["CLOUDWAY_" + strings.ToUpper(plugin.Name) + "_VERSION"] = plugin.Version
+    env["CLOUDWAY_FRAMEWORK"] = plugin.Name
+    env["CLOUDWAY_FRAMEWORK_DIR"] = pluginDir
 
     fmt.Fprint(buf, "ENV")
     for k, v := range env {
@@ -167,15 +187,17 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     }
     fmt.Fprintln(buf)
 
-    // add plugin files
-    fmt.Fprintf(buf, "ADD %s %s/%s\n", filepath.Base(plugin.Path), home, plugin.Name)
-    fmt.Fprintf(buf, "RUN chown -R root:%s %s/%s\n", user, home, plugin.Name)
+    // Run plugin setup script
+    fmt.Fprintf(buf, "RUN %s/bin/install\n", pluginDir)
 
+    if (DEBUG) {
+        fmt.Println(buf.String())
+    }
     return buf.Bytes()
 }
 
-func addPluginFiles(tw *tar.Writer, src, dst string) error {
-    pf, err := os.Open(src)
+func addPluginFiles(tw *tar.Writer, path string) error {
+    pf, err := os.Open(path)
     if err != nil {
         return err
     }
@@ -187,9 +209,9 @@ func addPluginFiles(tw *tar.Writer, src, dst string) error {
     }
 
     if stat.IsDir() {
-        return copyFileTree(tw, src, dst)
+        return copyFileTree(tw, path, filepath.Base(path))
     } else {
-        return copyFile(tw, filepath.Base(src), int64(stat.Mode()), stat.Size(), pf)
+        return copyFile(tw, filepath.Base(path), int64(stat.Mode()), stat.Size(), pf)
     }
 }
 

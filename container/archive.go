@@ -4,6 +4,7 @@ import (
     "fmt"
     "os"
     "io"
+    "io/ioutil"
     "strings"
     "archive/zip"
     "compress/gzip"
@@ -28,6 +29,29 @@ func (e InvalidArchiveError) Error() string {
     return fmt.Sprintf("Invalid plugin archive file: %s", e.file)
 }
 
+func readFile(path, name string) ([]byte, error) {
+    stat, err := os.Stat(path)
+    if err != nil {
+        return nil, err
+    }
+
+    if stat.IsDir() {
+        return ioutil.ReadFile(filepath.Join(path, filepath.FromSlash(name)))
+    } else {
+        f, err := os.Open(path)
+        if err != nil {
+            return nil, err
+        }
+        defer f.Close()
+
+        r, err := openArchiveFile(f, name)
+        if err != nil {
+            return nil, err
+        }
+        return ioutil.ReadAll(r)
+    }
+}
+
 func readManifest(path string) (*plugin.Plugin, error) {
     stat, err := os.Stat(path)
     if err != nil {
@@ -38,7 +62,17 @@ func readManifest(path string) (*plugin.Plugin, error) {
     if stat.IsDir() {
         p, err = plugin.Load(path, nil)
     } else {
-        p, err = readManifestFromArchive(path)
+        f, err := os.Open(path)
+        if err != nil {
+            return nil, err
+        }
+        defer f.Close()
+
+        r, err := openArchiveFile(f, plugin.ManifestEntry)
+        if err != nil {
+            return nil, err
+        }
+        p, err = plugin.ReadManifest(r)
     }
 
     if err == nil && (!p.IsFramework() || p.BaseImage == "") {
@@ -49,61 +83,46 @@ func readManifest(path string) (*plugin.Plugin, error) {
     }
 }
 
-func readManifestFromArchive(path string) (*plugin.Plugin, error) {
-    f, err := os.Open(path)
-    if err != nil {
-        return nil, err
-    }
-    defer f.Close()
-
+func openArchiveFile(f *os.File, name string) (io.Reader, error) {
+    path := f.Name()
     switch {
     case strings.HasSuffix(path, ".zip"):
-        return readZipFile(f)
-    case strings.HasSuffix(path, ".tar.gz"), strings.HasSuffix(path, ".tgz"):
-        return readTarGzFile(f)
+        return openZipFile(f, name)
+    case strings.HasSuffix(path, ".tar.gz") || strings.HasSuffix(path, ".tgz"):
+        return openTarGzFile(f, name)
     case strings.HasSuffix(path, ".tar"):
-        return readTarFile(f)
+        return openTarFile(path, f, name)
     default:
         return nil, UnsupportedArchiveError{file: path}
     }
 }
 
-func readZipFile(source *os.File) (*plugin.Plugin, error) {
-    fi, err := source.Stat()
+func openZipFile(ar *os.File, name string) (io.Reader, error) {
+    fi, err := ar.Stat()
     if err != nil {
         return nil, err
     }
-    r, err := zip.NewReader(source, fi.Size())
+    r, err := zip.NewReader(ar, fi.Size())
     if err != nil {
         return nil, err
     }
-
     for _, f := range r.File {
-        if f.Name == plugin.ManifestEntry {
-            rc, err := f.Open()
-            if err != nil {
-                return nil, err
-            }
-            return plugin.ReadManifest(rc)
+        if f.Name == name {
+            return f.Open()
         }
     }
-
-    return nil, InvalidArchiveError{file: source.Name()}
+    return nil, InvalidArchiveError{file: ar.Name()}
 }
 
-func readTarGzFile(source *os.File) (*plugin.Plugin, error) {
-    r, err := gzip.NewReader(source)
+func openTarGzFile(ar *os.File, name string) (io.Reader, error) {
+    r, err := gzip.NewReader(ar)
     if err != nil {
         return nil, err
     }
-    return readTar(source.Name(), r)
+    return openTarFile(ar.Name(), r, name)
 }
 
-func readTarFile(source *os.File) (*plugin.Plugin, error) {
-    return readTar(source.Name(), source)
-}
-
-func readTar(path string, r io.Reader) (*plugin.Plugin, error) {
+func openTarFile(path string, r io.Reader, name string) (io.Reader, error) {
     tr := tar.NewReader(r)
     for {
         hdr, err := tr.Next()
@@ -113,8 +132,8 @@ func readTar(path string, r io.Reader) (*plugin.Plugin, error) {
         if err != nil {
             return nil, err
         }
-        if hdr.Name == plugin.ManifestEntry {
-            return plugin.ReadManifest(tr)
+        if hdr.Name == name {
+            return tr, nil
         }
     }
     return nil, InvalidArchiveError{file: path}
