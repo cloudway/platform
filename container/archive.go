@@ -6,7 +6,6 @@ import (
     "io"
     "io/ioutil"
     "strings"
-    "archive/zip"
     "compress/gzip"
     "archive/tar"
     "path/filepath"
@@ -84,10 +83,9 @@ func readManifest(path string) (*plugin.Plugin, error) {
 }
 
 func openArchiveFile(f *os.File, name string) (io.Reader, error) {
-    path := f.Name()
+    var path = f.Name()
+
     switch {
-    case strings.HasSuffix(path, ".zip"):
-        return openZipFile(f, name)
     case strings.HasSuffix(path, ".tar.gz") || strings.HasSuffix(path, ".tgz"):
         return openTarGzFile(f, name)
     case strings.HasSuffix(path, ".tar"):
@@ -95,23 +93,6 @@ func openArchiveFile(f *os.File, name string) (io.Reader, error) {
     default:
         return nil, UnsupportedArchiveError{file: path}
     }
-}
-
-func openZipFile(ar *os.File, name string) (io.Reader, error) {
-    fi, err := ar.Stat()
-    if err != nil {
-        return nil, err
-    }
-    r, err := zip.NewReader(ar, fi.Size())
-    if err != nil {
-        return nil, err
-    }
-    for _, f := range r.File {
-        if f.Name == name {
-            return f.Open()
-        }
-    }
-    return nil, InvalidArchiveError{file: ar.Name()}
 }
 
 func openTarGzFile(ar *os.File, name string) (io.Reader, error) {
