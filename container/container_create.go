@@ -20,6 +20,7 @@ import (
 
     "github.com/cloudway/platform/container/conf/defaults"
     "github.com/Sirupsen/logrus"
+    "github.com/cloudway/platform/plugin"
 )
 
 // Create a new application container.
@@ -29,14 +30,20 @@ func Create(config map[string]string) (*Container, error) {
         return nil, err
     }
 
-    image, err := buildImage(cli, config)
+    plugin, err := readManifest(config["source"])
     if err != nil {
         return nil, err
     }
+
+    image, err := buildImage(cli, plugin, config)
+    if err != nil {
+        return nil, err
+    }
+
     return createContainer(cli, image, config)
 }
 
-func buildImage(cli *client.Client, config map[string]string) (image string, err error) {
+func buildImage(cli *client.Client, plugin *plugin.Plugin, config map[string]string) (image string, err error) {
     // Create temporary tar archive to create build context
     tarFile, err := ioutil.TempFile("", "docker");
     if err != nil {
@@ -47,7 +54,7 @@ func buildImage(cli *client.Client, config map[string]string) (image string, err
     logrus.Debugf("Created temporary build context: %s", tarFile.Name())
 
     // create and add Dockerfile to archive
-    err = addFile(tw, "Dockerfile", 0644, createDockerfile(config))
+    err = addFile(tw, "Dockerfile", 0644, createDockerfile(plugin, config))
     if err != nil {
         return
     }
@@ -115,7 +122,7 @@ func addFile(tw *tar.Writer, filename string, filemode int64, content []byte) er
     return err
 }
 
-func createDockerfile(config map[string]string) []byte {
+func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     name := config["name"]
     namespace := config["namespace"]
     if name == "" || namespace == "" {
@@ -128,7 +135,7 @@ func createDockerfile(config map[string]string) []byte {
     // populating the Dockerfile contents
     buf := new(bytes.Buffer)
 
-    fmt.Fprintf(buf, "FROM %s\n", config["baseImage"])
+    fmt.Fprintf(buf, "FROM %s\n", plugin.BaseImage)
 
     // mark the container image
     fmt.Fprintf(buf, "LABEL com.cloudway.version=1\n")
