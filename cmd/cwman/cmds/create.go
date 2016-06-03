@@ -4,7 +4,7 @@ import (
     "errors"
     "strings"
     "regexp"
-    "strconv"
+    "fmt"
     "github.com/spf13/cobra"
     "github.com/cloudway/platform/container"
 )
@@ -41,21 +41,44 @@ func checkCreateArgs(cmd *cobra.Command, args []string) error {
 }
 
 func runCreate(cmd* cobra.Command, args []string) {
-    name_namespace := strings.SplitN(args[0], "-", 2)
+    name_namespace  := strings.SplitN(args[0], "-", 2)
+    name, namespace := name_namespace[0], name_namespace[1]
+
     config := map[string]string{
-        "name":         name_namespace[0],
-        "namespace":    name_namespace[1],
+        "name":         name,
+        "namespace":    namespace,
         "source":       args[1],
     }
 
     if cmd.Flags().Changed("capacity") {
         config["capacity"], _ = cmd.Flags().GetString("capacity")
     }
-    if cmd.Flags().Changed("scale") {
-        scale, _ := cmd.Flags().GetInt("scale")
-        config["scale"] = strconv.Itoa(scale)
+
+    scale, _ := cmd.Flags().GetInt("scale")
+    scale, err := getScaling(name, namespace, scale)
+    check(err)
+
+    for i := 0; i < scale; i++ {
+        _, err := container.Create(config)
+        check(err)
+    }
+}
+
+func getScaling(name, namespace string, scale int) (int, error) {
+    if scale <= 0 {
+        return 0, fmt.Errorf("Invalid scaling value, it must be greater than 0")
     }
 
-    _, err := container.Create(config)
-    check(err)
+    containers, err := container.Find(name, namespace)
+    if err != nil {
+        return 0, err
+    }
+
+    n := len(containers)
+    if (scale <= n) {
+        return 0, fmt.Errorf("Application containers already reached maximum scaling value. " +
+                             "(maximum scaling = %d, existing containers = %d", scale, n)
+    }
+
+    return scale - n, nil
 }
