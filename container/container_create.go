@@ -151,10 +151,10 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     }
 
     // Set directory permissions
-    fmt.Fprintf(buf, " && chown root:root %[2]s/.env && " +
-                "chown -R %[1]s:%[1]s %[2]s/app && " +
-                "chown root:%[1]s %[2]s/app",
-                user, home)
+    fmt.Fprintf(buf, " && chown root:root %[2]s/.env" +
+                     " && chown -R %[1]s:%[1]s %[2]s/app" +
+                     " && chown root:%[1]s %[2]s/app",
+                     user, home)
 
     // Run plugin pre-install script
     b, err := archive.ReadFile(plugin.Path, "bin/pre-install")
@@ -165,15 +165,14 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     }
 
     // End of RUN commands. From then on, the image cache is invalidated.
-    fmt.Fprintln(buf)
-    fmt.Fprintf(buf, "WORKDIR %s\n", home)
+    fmt.Fprintf(buf, "\nWORKDIR %s\n", home)
 
     // Copy application controller program
     fmt.Fprintln(buf, "COPY usr/bin/cwctl /usr/bin/cwctl")
 
     // Add plugin files
-    pluginDir := home + "/" + plugin.Name
-    fmt.Fprintf(buf, "ADD %s %s\n", filepath.Base(plugin.Path), pluginDir)
+    installDir := home + "/.install_" + plugin.Name
+    fmt.Fprintf(buf, "ADD %s %s\n", filepath.Base(plugin.Path), installDir)
 
     // Add application environment variables
     env := map[string]string {
@@ -187,25 +186,16 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
         "CLOUDWAY_REPO_DIR":      home + "/app/repo",
     }
 
-    // Add framework environment variables
-    env["CLOUDWAY_" + strings.ToUpper(plugin.Name) + "_DIR"] = pluginDir
-    env["CLOUDWAY_" + strings.ToUpper(plugin.Name) + "_VERSION"] = plugin.Version
-    env["CLOUDWAY_FRAMEWORK"] = plugin.Name
-    env["CLOUDWAY_FRAMEWORK_DIR"] = pluginDir
-
     fmt.Fprint(buf, "ENV")
     for k, v := range env {
         fmt.Fprintf(buf, " %s=%q", k, v)
     }
     fmt.Fprintln(buf)
 
-    // Run plugin setup script
-    fmt.Fprintf(buf, "RUN %s/bin/install", pluginDir)
-    if DEBUG {
-        fmt.Fprintf(buf, " && cwctl --debug hello\n")
-    } else {
-        fmt.Fprintf(buf, " && cwctl hello\n")
-    }
+    // Run plugin install script
+    debug := ""
+    if DEBUG { debug = "--debug "}
+    fmt.Fprintf(buf, "RUN /usr/bin/cwctl %sinstall %s\n", debug, installDir)
 
     if (DEBUG) {
         fmt.Println(buf.String())
@@ -235,7 +225,7 @@ func createContainer(cli *client.Client, imageId string, config map[string]strin
             _APP_CAPACITY_KEY:  getOrDefault(config, "capacity", defaults.AppCapacity()),
         },
         User: getOrDefault(config, "user", defaults.AppUser()),
-        Cmd: strslice.StrSlice{"/bin/sh", "-c", "while :; do sleep 32768; done"}, // FIXME
+        Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "start"},
     }
 
     resp, err := cli.ContainerCreate(context.Background(), options, &container.HostConfig{}, &network.NetworkingConfig{}, "")

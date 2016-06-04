@@ -14,20 +14,16 @@ import (
 var validEnvKey = regexp.MustCompile("^[A-Z_0-9]+$")
 
 func (a *Application) Environ() map[string]string {
-    return a.loadEnv()
-}
-
-func (a *Application) loadEnv() map[string]string {
     var env = make(map[string]string)
 
     // load user environment variables
-    loadFrom(env, filepath.Join(a.RepoDir(), ".cloudway", "env"))
+    loadEnv(env, filepath.Join(a.RepoDir(), ".cloudway", "env"))
 
     // merge application environment variables
-    loadFrom(env, a.EnvDir())
+    loadEnv(env, a.EnvDir())
 
     // Merge plugin environemnt variables
-    loadFromPlugins(env, a.HomeDir());
+    loadPluginsEnv(env, a.HomeDir());
 
     // Merge system environemnt variables
     for _, e := range os.Environ() {
@@ -42,7 +38,7 @@ func (a *Application) loadEnv() map[string]string {
     return env
 }
 
-func loadFrom(env map[string]string, path string) {
+func loadEnv(env map[string]string, path string) {
     logrus.Debugf("Loading environemnts from %s", path)
     f, err := os.Open(path)
     if err != nil {
@@ -72,7 +68,7 @@ func loadFrom(env map[string]string, path string) {
     }
 }
 
-func loadFromPlugins(env map[string]string, home string) {
+func loadPluginsEnv(env map[string]string, home string) {
     f, err := os.Open(home)
     if err != nil {
         logrus.Debug(err)
@@ -88,7 +84,7 @@ func loadFromPlugins(env map[string]string, home string) {
     for _, subdir := range files {
         path := filepath.Join(home, subdir.Name())
         if subdir.IsDir() && plugin.IsPluginDir(path) {
-            loadFrom(env, filepath.Join(path, "env"))
+            loadEnv(env, filepath.Join(path, "env"))
         }
     }
 }

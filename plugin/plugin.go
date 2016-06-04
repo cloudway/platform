@@ -49,8 +49,12 @@ func manifestFile(dir string) string {
 }
 
 func IsPluginDir(dir string) bool {
-    _, err := os.Stat(manifestFile(dir))
-    return err == nil
+    if strings.HasPrefix(filepath.Base(dir), ".") {
+        return false
+    } else {
+        _, err := os.Stat(manifestFile(dir))
+        return err == nil
+    }
 }
 
 func Load(path string, env map[string]string) (*Plugin, error) {
