@@ -6,26 +6,26 @@ import (
     "github.com/spf13/viper"
 )
 
-// The home directory of cloudway installation.
-var HomeDir string
+// The root directory of cloudway installation.
+var RootDir string
 
 const defaultConfigType = "toml"
 
 // Initializes the global configuration file.
 func Initialize() (err error) {
-    // Determine the home installation directory
-    home := os.Getenv("CLOUDWAY_HOME")
-    if home == "" {
-        home = "/usr/local/cloudway" // the default home
+    // Determine the root installation directory
+    root := os.Getenv("CLOUDWAY_ROOT")
+    if root == "" {
+        root = "/usr/local/cloudway" // the default root
     }
-    home, err = filepath.Abs(home)
+    root, err = filepath.Abs(root)
     if err != nil {
         return err
     }
-    HomeDir = home
+    RootDir = root
 
     // Load configuration file
-    cfgFile := filepath.Join(HomeDir, "conf/cloudway.conf")
+    cfgFile := filepath.Join(RootDir, "conf", "cloudway.conf")
     viper.AutomaticEnv()
     viper.SetConfigFile(cfgFile)
     viper.SetConfigType(defaultConfigType)
@@ -51,7 +51,7 @@ func Load(name string) (*viper.Viper, error) {
         cfgType = cfgType[1:]
     }
 
-    cfgFile := filepath.Join(HomeDir, "conf", name)
+    cfgFile := filepath.Join(RootDir, "conf", name)
 
     conf := viper.New()
     conf.SetConfigFile(cfgFile)

@@ -13,15 +13,17 @@ import (
     "encoding/json"
 
     "golang.org/x/net/context"
+    "github.com/Sirupsen/logrus"
     "github.com/docker/engine-api/client"
     "github.com/docker/engine-api/types"
     "github.com/docker/engine-api/types/container"
     "github.com/docker/engine-api/types/network"
     "github.com/docker/engine-api/types/strslice"
 
-    "github.com/cloudway/platform/container/conf/defaults"
-    "github.com/Sirupsen/logrus"
     "github.com/cloudway/platform/plugin"
+    "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/container/conf/defaults"
+    "github.com/cloudway/platform/container/archive"
 )
 
 // Create a new application container.
@@ -31,7 +33,7 @@ func Create(config map[string]string) (*Container, error) {
         return nil, err
     }
 
-    plugin, err := readManifest(config["source"])
+    plugin, err := archive.ReadManifest(config["source"])
     if err != nil {
         return nil, err
     }
@@ -59,7 +61,14 @@ func buildImage(cli *client.Client, plugin *plugin.Plugin, config map[string]str
     logrus.Debugf("Created temporary build context: %s", tarFile.Name())
 
     // create and add Dockerfile to archive
-    if err = addFile(tw, "Dockerfile", 0644, createDockerfile(plugin, config)); err != nil {
+    if err = archive.AddFile(tw, "Dockerfile", 0644, createDockerfile(plugin, config)); err != nil {
+        return
+    }
+
+    // copy application controller program
+    cwctl := filepath.Join(conf.RootDir, "libexec", "cwctl")
+    err = archive.CopyFile(tw, cwctl, "usr/bin/cwctl", 0750)
+    if err != nil {
         return
     }
 
@@ -148,7 +157,7 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
                 user, home)
 
     // Run plugin pre-install script
-    b, err := readFile(plugin.Path, "bin/pre-install")
+    b, err := archive.ReadFile(plugin.Path, "bin/pre-install")
     if err == nil {
         script := strings.Replace(string(b), "\n", "\\n\\\n", -1)
         script  = strings.Replace(script, "\"", "\\\"", -1)
@@ -158,6 +167,9 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     // End of RUN commands. From then on, the image cache is invalidated.
     fmt.Fprintln(buf)
     fmt.Fprintf(buf, "WORKDIR %s\n", home)
+
+    // Copy application controller program
+    fmt.Fprintln(buf, "COPY usr/bin/cwctl /usr/bin/cwctl")
 
     // Add plugin files
     pluginDir := home + "/" + plugin.Name
@@ -188,7 +200,7 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     fmt.Fprintln(buf)
 
     // Run plugin setup script
-    fmt.Fprintf(buf, "RUN %s/bin/install\n", pluginDir)
+    fmt.Fprintf(buf, "RUN %s/bin/install && cwctl hello\n", pluginDir)
 
     if (DEBUG) {
         fmt.Println(buf.String())
@@ -197,21 +209,14 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
 }
 
 func addPluginFiles(tw *tar.Writer, path string) error {
-    pf, err := os.Open(path)
+    stat, err := os.Stat(path)
     if err != nil {
         return err
     }
-    defer pf.Close()
-
-    stat, err := pf.Stat()
-    if err != nil {
-        return err
-    }
-
     if stat.IsDir() {
-        return copyFileTree(tw, path, filepath.Base(path))
+        return archive.CopyFileTree(tw, path, filepath.Base(path))
     } else {
-        return copyFile(tw, filepath.Base(path), int64(stat.Mode()), stat.Size(), pf)
+        return archive.CopyFile(tw, path, filepath.Base(path), 0)
     }
 }
 

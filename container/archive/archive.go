@@ -1,4 +1,4 @@
-package container
+package archive
 
 import (
     "fmt"
@@ -28,7 +28,7 @@ func (e InvalidArchiveError) Error() string {
     return fmt.Sprintf("Invalid plugin archive file: %s", e.file)
 }
 
-func readFile(path, name string) ([]byte, error) {
+func ReadFile(path, name string) ([]byte, error) {
     stat, err := os.Stat(path)
     if err != nil {
         return nil, err
@@ -51,7 +51,7 @@ func readFile(path, name string) ([]byte, error) {
     }
 }
 
-func readManifest(path string) (*plugin.Plugin, error) {
+func ReadManifest(path string) (*plugin.Plugin, error) {
     stat, err := os.Stat(path)
     if err != nil {
         return nil, err
@@ -120,7 +120,7 @@ func openTarFile(path string, r io.Reader, name string) (io.Reader, error) {
     return nil, InvalidArchiveError{file: path}
 }
 
-func addFile(tw *tar.Writer, filename string, filemode int64, content []byte) error {
+func AddFile(tw *tar.Writer, filename string, filemode int64, content []byte) error {
     hdr := &tar.Header {
         Name: filename,
         Mode: filemode,
@@ -134,21 +134,35 @@ func addFile(tw *tar.Writer, filename string, filemode int64, content []byte) er
     return err
 }
 
-func copyFile(tw* tar.Writer, filename string, filemode, filesize int64, r io.Reader) error {
+func CopyFile(tw *tar.Writer, path, filename string, filemode int64) error {
+    f, err := os.Open(path)
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+
+    stat, err := f.Stat()
+    if err != nil {
+        return err
+    }
+
+    if filemode == 0 {
+        filemode = int64(stat.Mode())
+    }
+
     hdr := &tar.Header{
         Name: filename,
         Mode: filemode,
-        Size: filesize,
+        Size: stat.Size(),
     }
 
-    err := tw.WriteHeader(hdr)
-    if err == nil {
-        _, err = io.Copy(tw, r)
+    if err = tw.WriteHeader(hdr); err == nil {
+        _, err = io.Copy(tw, f)
     }
     return err
 }
 
-func copyFileTree(tw* tar.Writer, src, dst string) error {
+func CopyFileTree(tw* tar.Writer, src, dst string) error {
     return filepath.Walk(src, func (path string, info os.FileInfo, err error) error {
         if err != nil || info.IsDir() {
             return err
