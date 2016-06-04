@@ -2,6 +2,7 @@ package cmds
 
 import (
     "os"
+    "errors"
     "github.com/spf13/cobra"
     "github.com/cloudway/platform/sandbox"
 )
@@ -19,5 +20,11 @@ func init() {
 
 func runInstall(cmd *cobra.Command, args []string) {
     app := sandbox.NewApplication()
-    check(app.Install(args[0]))
+    if len(args) == 1 {
+        check(app.Install(args[0], "", os.Stdin))
+    } else if len(args) == 2 {
+        check(app.Install(args[0], args[1], nil))
+    } else {
+        check(errors.New("Invalid number of arguments"))
+    }
 }

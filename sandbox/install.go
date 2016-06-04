@@ -5,6 +5,7 @@ import (
     "io"
     "os"
     "os/exec"
+    "archive/tar"
     "strings"
     "regexp"
     "path/filepath"
@@ -15,34 +16,46 @@ import (
 
 // Install plugin in the application. The plugin directory should already
 // been populated from broker.
-func (app *Application) Install(source string) error {
+func (app *Application) Install(name string, source string, input io.Reader) error {
     if os.Getuid() != 0 {
         return os.ErrPermission
     }
 
-    // remove source directory when install finished
-    defer os.RemoveAll(source)
+    var err error
 
-    // load plugin manifest from source directory
-    meta, err := plugin.Load(source, nil)
-    if err != nil {
+    // create plugin directory
+    target := filepath.Join(app.HomeDir(), name)
+    if _, err = os.Stat(target); err == nil {
+        return fmt.Errorf("Plugin already installed: %s", name)
+    }
+    if err = os.Mkdir(target, 0755); err != nil {
         return err
     }
 
-    name   := meta.Name
-    target := filepath.Join(app.HomeDir(), name)
-    meta.Path = target
-
-    if _, err := os.Stat(target); err == nil {
-        return fmt.Errorf("Plugin already installed: %s", name)
+    if input != nil {
+        err = app.extractPluginFiles(target, input)
+    } else {
+        err = app.copyPluginFiles(target, source)
     }
 
-    // move files from source to target
-    if err = os.Rename(source, target); err != nil {
-        if err = copyDir(source, target); err != nil {
-            return err
-        }
+    if err == nil {
+        err = app.installPlugin(target)
     }
+
+    if err != nil {
+        // remove plugin directory if error occurred
+        os.RemoveAll(target)
+    }
+    return err
+}
+
+func (app *Application) installPlugin(target string) error {
+    // load plugin manifest from target directory
+    meta, err := plugin.Load(target, nil)
+    if err != nil {
+        return err
+    }
+    name := meta.Name
 
     // add environemnt variables
     app.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_DIR", target)
@@ -55,7 +68,18 @@ func (app *Application) Install(source string) error {
     if err = processTemplates(target, app.Environ()); err != nil {
         return err
     }
-    if err = runPluginAction(target, app.Environ(), "install"); err != nil {
+
+    // run install script for non-framework plugin
+    if !meta.IsFramework() {
+        if err = runPluginAction(target, nil, "install"); err != nil {
+            logrus.WithError(err).Error("run install script failed")
+            return err
+        }
+    }
+
+    // run setup script to setup the plugin
+    if err = runPluginAction(target, app.Environ(), "setup"); err != nil {
+        logrus.WithError(err).Error("run setup script failed")
         return err
     }
 
@@ -68,13 +92,65 @@ func (app *Application) Install(source string) error {
     })
 }
 
-func copyDir(src, dst string) error {
+func (app *Application) extractPluginFiles(target string, source io.Reader) error {
+    tr := tar.NewReader(source)
+
+    for {
+        hdr, err := tr.Next()
+        if err != nil {
+            if err == io.EOF {
+                return nil
+            }
+            return err
+        }
+
+        dst := filepath.Join(target, hdr.Name)
+        switch hdr.Typeflag {
+        case tar.TypeDir:
+            logrus.Debugf("Creating directory: %s", dst)
+            err = os.MkdirAll(dst, os.FileMode(hdr.Mode))
+            if err != nil {
+                return err
+            }
+
+        case tar.TypeReg:
+            logrus.Debugf("Extracting %s", dst)
+            os.MkdirAll(filepath.Dir(dst), 0755)
+            w, err := os.Create(dst)
+            if err != nil {
+                return err
+            }
+            _, err = io.Copy(w, tr);
+            w.Close()
+            if err != nil {
+                return err
+            }
+            if err = os.Chmod(dst, os.FileMode(hdr.Mode)); err != nil {
+                return err
+            }
+
+        default:
+            return fmt.Errorf("Unable to extract file %s", hdr.Name) // FIXME
+        }
+    }
+}
+
+func (app *Application) copyPluginFiles(dst, src string) error {
+    defer os.RemoveAll(src)
+
     return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
         if err != nil {
             return err
         }
 
-        target := dst + path[len(src):]
+        target, err := filepath.Rel(src, path)
+        if err != nil {
+            logrus.WithError(err).Debug("Failed to get relative path")
+            return nil
+        }
+        target = filepath.Join(dst, target)
+        logrus.Debugf("Copying %s to %s", path, target)
+
         if info.IsDir() {
             os.MkdirAll(target, info.Mode())
             return nil
@@ -141,17 +217,21 @@ func processTemplates(root string, env map[string]string) error {
 func runPluginAction(path string, env map[string]string, action string, args ...string) error {
     executable := filepath.Join(path, "bin", action)
     cmd := exec.Command(executable, args...)
-    cmd.Env    = makeExecEnv(env)
     cmd.Stdin  = os.Stdin
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
+    cmd.Env    = makeExecEnv(env)
     return cmd.Run()
 }
 
 func makeExecEnv(env map[string]string) []string {
-    eenv := make([]string, 0, len(env))
-    for k, v := range env {
-        eenv = append(eenv, k+"="+v)
+    if env != nil {
+        eenv := make([]string, 0, len(env))
+        for k, v := range env {
+            eenv = append(eenv, k+"="+v)
+        }
+        return eenv
+    } else {
+        return nil
     }
-    return eenv
 }

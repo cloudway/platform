@@ -35,7 +35,7 @@ func (c *Container) Run(user string, cmd ...string) error {
     }
     defer resp.Close()
 
-    if execConfig.Tty && tty.isTerminalIn {
+    if execConfig.Tty && tty.isTerminalOut {
         tty.monitorResize(func (w, h int) error {
             options := types.ResizeOptions{Width: w, Height: h}
             return c.ContainerExecResize(ctx, execId, options)

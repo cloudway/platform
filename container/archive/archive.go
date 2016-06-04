@@ -9,6 +9,7 @@ import (
     "compress/gzip"
     "archive/tar"
     "path/filepath"
+    "github.com/Sirupsen/logrus"
     "github.com/cloudway/platform/plugin"
 )
 
@@ -74,12 +75,8 @@ func ReadManifest(path string) (*plugin.Plugin, error) {
         p, err = plugin.ReadManifest(r)
     }
 
-    if err == nil && (!p.IsFramework() || p.BaseImage == "") {
-        return nil, fmt.Errorf("%s is not a valid framework plugin", path)
-    } else {
-        p.Path = path
-        return p, err
-    }
+    p.Path = path
+    return p, err
 }
 
 func openArchiveFile(f *os.File, name string) (io.Reader, error) {
@@ -162,17 +159,25 @@ func CopyFile(tw *tar.Writer, path, filename string, filemode int64) error {
     return err
 }
 
-func CopyFileTree(tw* tar.Writer, src, dst string) error {
+func CopyFileTree(tw* tar.Writer, dst, src string) error {
     return filepath.Walk(src, func (path string, info os.FileInfo, err error) error {
         if err != nil || info.IsDir() {
             return err
         }
 
-        relpath := path[len(src):]
+        relpath, err := filepath.Rel(src, path)
+        if err != nil {
+            logrus.WithError(err).Debug("Failed to get relative path")
+            return nil
+        }
         if len(relpath) == 0 {
             return nil
         }
-        relpath = dst + "/" + relpath
+        if len(dst) != 0 {
+            relpath = filepath.ToSlash(filepath.Join(dst, relpath))
+        }
+        logrus.Debugf("Copying %s to %s", path, relpath)
+
         fr, err := os.Open(path)
         if err != nil {
             return err

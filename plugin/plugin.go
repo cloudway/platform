@@ -42,7 +42,7 @@ type ProxyMapping struct {
     Protocol        string `yaml:"-"`
 }
 
-const ManifestEntry = "metadata/plugin.yml"
+const ManifestEntry = "manifest/plugin.yml"
 
 func manifestFile(dir string) string {
     return filepath.Join(dir, filepath.FromSlash(ManifestEntry))

@@ -37,6 +37,9 @@ func Create(config map[string]string) (*Container, error) {
     if err != nil {
         return nil, err
     }
+    if !plugin.IsFramework() || plugin.BaseImage == "" {
+        return nil, fmt.Errorf("%s is not a valid framework plugin", plugin.Path)
+    }
 
     image, err := buildImage(cli, plugin, config)
     if err != nil {
@@ -155,8 +158,8 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
                      " && chown root:root %[2]s/.env",
                      user, home)
 
-    // Run plugin pre-install script
-    b, err := archive.ReadFile(plugin.Path, "bin/pre-install")
+    // Run plugin install script
+    b, err := archive.ReadFile(plugin.Path, "bin/install")
     if err == nil {
         script := strings.Replace(string(b), "\n", "\\n\\\n", -1)
         script  = strings.Replace(script, "\"", "\\\"", -1)
@@ -191,10 +194,10 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     }
     fmt.Fprintln(buf)
 
-    // Run plugin install script
+    // Run plugin setup script
     debug := ""
     if DEBUG { debug = "--debug "}
-    fmt.Fprintf(buf, "RUN /usr/bin/cwctl %sinstall %s\n", debug, installDir)
+    fmt.Fprintf(buf, "RUN /usr/bin/cwctl %sinstall %s %s\n", debug, plugin.Name, installDir)
 
     if (DEBUG) {
         fmt.Println(buf.String())
@@ -208,7 +211,7 @@ func addPluginFiles(tw *tar.Writer, path string) error {
         return err
     }
     if stat.IsDir() {
-        return archive.CopyFileTree(tw, path, filepath.Base(path))
+        return archive.CopyFileTree(tw, filepath.Base(path), path)
     } else {
         return archive.CopyFile(tw, path, filepath.Base(path), 0)
     }
