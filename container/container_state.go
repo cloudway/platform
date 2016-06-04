@@ -14,11 +14,9 @@ func (s ContainerState) String() string {
         return "PAUSED"
     case s.Running:
         return "STARTED"
+    case s.StartedAt == notStarted:
+        return "NEW"
     default:
-        if s.StartedAt == notStarted {
-            return "NEW"
-        } else {
-            return "STOPPED"
-        }
+        return "STOPPED"
     }
 }

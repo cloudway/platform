@@ -182,18 +182,14 @@ func (c *Container) EnvDir() string {
     return c.Home() + "/.env"
 }
 
-func (c *Container) AppDir() string {
-    return c.Home() + "/app"
-}
-
 func (c *Container) RepoDir() string {
-    return c.AppDir() + "/repo"
+    return c.Home() + "/repo"
 }
 
 func (c *Container) DataDir() string {
-    return c.AppDir() + "/data"
+    return c.Home() + "/data"
 }
 
 func (c *Container) LogDir() string {
-    return c.AppDir() + "/logs"
+    return c.Home() + "/logs"
 }

@@ -7,7 +7,7 @@ func Domain() string {
 }
 
 func AppHome() string {
-    return conf.GetOrDefault("CLOUDWAY_APP_HOME", "/cloudway")
+    return conf.GetOrDefault("CLOUDWAY_APP_HOME", "/app")
 }
 
 func AppUser() string {

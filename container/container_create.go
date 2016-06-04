@@ -146,14 +146,13 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
 
     // Create home directory
     fmt.Fprint(buf, " && mkdir -p")
-    for _, d := range []string{".env", "app/logs", "app/data", "app/repo"} {
+    for _, d := range []string{".env", "repo", "data", "logs"} {
         fmt.Fprintf(buf, " %s/%s", home, d)
     }
 
     // Set directory permissions
-    fmt.Fprintf(buf, " && chown root:root %[2]s/.env" +
-                     " && chown -R %[1]s:%[1]s %[2]s/app" +
-                     " && chown root:%[1]s %[2]s/app",
+    fmt.Fprintf(buf, " && chown -R %[1]s:%[1]s %[2]s" +
+                     " && chown root:root %[2]s/.env",
                      user, home)
 
     // Run plugin pre-install script
@@ -171,7 +170,7 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     fmt.Fprintln(buf, "COPY usr/bin/cwctl /usr/bin/cwctl")
 
     // Add plugin files
-    installDir := home + "/.install_" + plugin.Name
+    installDir := "/tmp/install_" + plugin.Name
     fmt.Fprintf(buf, "ADD %s %s\n", filepath.Base(plugin.Path), installDir)
 
     // Add application environment variables

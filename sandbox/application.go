@@ -57,16 +57,12 @@ func (app *Application) EnvDir() string {
     return filepath.Join(app.home, ".env")
 }
 
-func (app *Application) AppDir() string {
-    return filepath.Join(app.home, "app")
-}
-
 func (app *Application) RepoDir() string {
-    return filepath.Join(app.AppDir(), "repo")
+    return filepath.Join(app.HomeDir(), "repo")
 }
 
 func (app *Application) DataDir() string {
-    return filepath.Join(app.AppDir(), "data")
+    return filepath.Join(app.HomeDir(), "data")
 }
 
 func (app *Application) Name() string {
