@@ -11,6 +11,15 @@ var RootCommand = &cobra.Command{
     Short:  "Cloudway application management tool",
 }
 
+func init() {
+    RootCommand.PersistentFlags().Bool("debug", false, "debugging mode")
+    RootCommand.PersistentPreRun = func (cmd *cobra.Command, args []string) {
+        if b, _ := RootCommand.Flags().GetBool("debug"); b {
+            logrus.SetLevel(logrus.DebugLevel)
+        }
+    }
+}
+
 func check(err error) {
     if err != nil {
         logrus.Fatal(err)

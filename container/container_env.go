@@ -4,6 +4,7 @@ import (
     "fmt"
     "bytes"
     "io"
+    "io/ioutil"
     "strings"
     "archive/tar"
     "golang.org/x/net/context"
@@ -108,10 +109,10 @@ func (c *Container) readenv(env map[string]string, path string) error {
         }
 
         // read in environment value
-        b := make([]byte, hdr.Size)
-        if _, err = tr.Read(b); err != nil {
+        if b, err := ioutil.ReadAll(tr); err != nil {
             return err
+        } else {
+            env[name] = strings.TrimRight(string(b), "\r\n")
         }
-        env[name] = string(b)
     }
 }

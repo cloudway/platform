@@ -67,7 +67,7 @@ func buildImage(cli *client.Client, plugin *plugin.Plugin, config map[string]str
 
     // copy application controller program
     cwctl := filepath.Join(conf.RootDir, "libexec", "cwctl")
-    err = archive.CopyFile(tw, cwctl, "usr/bin/cwctl", 0750)
+    err = archive.CopyFile(tw, cwctl, "usr/bin/cwctl", 0755)
     if err != nil {
         return
     }
@@ -200,7 +200,12 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     fmt.Fprintln(buf)
 
     // Run plugin setup script
-    fmt.Fprintf(buf, "RUN %s/bin/install && cwctl hello\n", pluginDir)
+    fmt.Fprintf(buf, "RUN %s/bin/install", pluginDir)
+    if DEBUG {
+        fmt.Fprintf(buf, " && cwctl --debug hello\n")
+    } else {
+        fmt.Fprintf(buf, " && cwctl hello\n")
+    }
 
     if (DEBUG) {
         fmt.Println(buf.String())
