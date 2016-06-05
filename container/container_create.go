@@ -68,10 +68,9 @@ func buildImage(cli *client.Client, plugin *plugin.Plugin, config map[string]str
         return
     }
 
-    // copy application controller program
-    cwctl := filepath.Join(conf.RootDir, "libexec", "cwctl")
-    err = archive.CopyFile(tw, cwctl, "usr/bin/cwctl", 0755)
-    if err != nil {
+    // copy application support files
+    support := filepath.Join(conf.RootDir, "libexec")
+    if err = archive.CopyFileTree(tw, "support", support, true); err != nil {
         return
     }
 
@@ -145,7 +144,7 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     fmt.Fprintf(buf, "RUN ")
 
     // Create operating system user and group
-    fmt.Fprintf(buf, "groupadd %[1]s && useradd -g %[1]s -d %[2]s -m %[1]s", user, home)
+    fmt.Fprintf(buf, "groupadd %[1]s && useradd -g %[1]s -d %[2]s -m %[1]s -s /usr/bin/cwsh", user, home)
 
     // Create home directory
     fmt.Fprint(buf, " && mkdir -p")
@@ -169,8 +168,8 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
     // End of RUN commands. From then on, the image cache is invalidated.
     fmt.Fprintf(buf, "\nWORKDIR %s\n", home)
 
-    // Copy application controller program
-    fmt.Fprintln(buf, "COPY usr/bin/cwctl /usr/bin/cwctl")
+    // Copy application support files
+    fmt.Fprintln(buf, "COPY support /")
 
     // Add plugin files
     installDir := "/tmp/install_" + plugin.Name
@@ -183,9 +182,9 @@ func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
         "CLOUDWAY_APP_DNS":       name + "-" + namespace + "." + defaults.Domain(),
         "CLOUDWAY_APP_USER":      user,
         "CLOUDWAY_HOME_DIR":      home,
-        "CLOUDWAY_LOG_DIR":       home + "/app/logs",
-        "CLOUDWAY_DATA_DIR":      home + "/app/data",
-        "CLOUDWAY_REPO_DIR":      home + "/app/repo",
+        "CLOUDWAY_LOG_DIR":       home + "/logs",
+        "CLOUDWAY_DATA_DIR":      home + "/data",
+        "CLOUDWAY_REPO_DIR":      home + "/repo",
     }
 
     fmt.Fprint(buf, "ENV")
@@ -211,7 +210,7 @@ func addPluginFiles(tw *tar.Writer, path string) error {
         return err
     }
     if stat.IsDir() {
-        return archive.CopyFileTree(tw, filepath.Base(path), path)
+        return archive.CopyFileTree(tw, filepath.Base(path), path, false)
     } else {
         return archive.CopyFile(tw, path, filepath.Base(path), 0)
     }
@@ -227,7 +226,7 @@ func createContainer(cli *client.Client, imageId string, config map[string]strin
             _APP_CAPACITY_KEY:  getOrDefault(config, "capacity", defaults.AppCapacity()),
         },
         User: getOrDefault(config, "user", defaults.AppUser()),
-        Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "start"},
+        Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "run"},
     }
 
     resp, err := cli.ContainerCreate(context.Background(), options, &container.HostConfig{}, &network.NetworkingConfig{}, "")

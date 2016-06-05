@@ -1,0 +1,13 @@
+[ -f /etc/bashrc ] && source /etc/bashrc
+[ -f ~/data/.bash_profile ] && source ~/data/.bash_profile
+
+# are we an interactive shell?
+if [ "$PS1" ]; then
+  for d in ~/*; do
+    [ -f $d/bin/bash_profile ] && source $d/bin/bash_profile
+  done
+
+  export PS1="[$CLOUDWAY_APP_DNS \W] "
+  export TMOUT=300
+  export SHELL=/bin/bash
+fi

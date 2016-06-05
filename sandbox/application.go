@@ -3,6 +3,7 @@ package sandbox
 import (
     "os"
     "os/user"
+    "io/ioutil"
     "strconv"
     "path/filepath"
     "github.com/Sirupsen/logrus"
@@ -79,23 +80,17 @@ func (app *Application) FQDN() string {
 }
 
 func (app *Application) GetPlugins() (map[string]*plugin.Plugin, error) {
-    d, err := os.Open(app.HomeDir())
-    if err != nil {
-        return nil, err
-    }
-
-    names, err := d.Readdirnames(-1)
+    files, err := ioutil.ReadDir(app.HomeDir())
     if err != nil {
         return nil, err
     }
 
     plugins := make(map[string]*plugin.Plugin)
-    for _, filename := range names {
-        subdir := filepath.Join(app.HomeDir(), filename)
+    for _, file := range files {
+        subdir := filepath.Join(app.HomeDir(), file.Name())
         if plugin.IsPluginDir(subdir) {
-            p, err := plugin.Load(subdir)
-            if err != nil {
-                logrus.WithError(err).Errorf("Faield to load plugin %s", filename)
+            if p, err := plugin.Load(subdir); err != nil {
+                logrus.WithError(err).Errorf("Faield to load plugin %s", file.Name())
             } else {
                 plugins[p.Name] = p
             }

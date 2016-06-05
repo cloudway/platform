@@ -75,7 +75,9 @@ func ReadManifest(path string) (*plugin.Plugin, error) {
         p, err = plugin.ReadManifest(r)
     }
 
-    p.Path = path
+    if err == nil {
+        p.Path = path
+    }
     return p, err
 }
 
@@ -159,7 +161,7 @@ func CopyFile(tw *tar.Writer, path, filename string, filemode int64) error {
     return err
 }
 
-func CopyFileTree(tw* tar.Writer, dst, src string) error {
+func CopyFileTree(tw* tar.Writer, dst, src string, followLinks bool) error {
     return filepath.Walk(src, func (path string, info os.FileInfo, err error) error {
         if err != nil || info.IsDir() {
             return err
@@ -183,6 +185,12 @@ func CopyFileTree(tw* tar.Writer, dst, src string) error {
             return err
         }
         defer fr.Close()
+
+        if followLinks && (info.Mode() & os.ModeSymlink) != 0 {
+            if info, err = os.Stat(path); err != nil {
+                return err
+            }
+        }
 
         if hdr, err := tar.FileInfoHeader(info, relpath); err != nil {
             return err

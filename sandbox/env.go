@@ -40,13 +40,7 @@ func (a *Application) Environ() map[string]string {
 
 func loadEnv(env map[string]string, path string) {
     logrus.Debugf("Loading environemnts from %s", path)
-    f, err := os.Open(path)
-    if err != nil {
-        logrus.Debug(err)
-        return
-    }
-
-    files, err := f.Readdir(0)
+    files, err := ioutil.ReadDir(path)
     if err != nil {
         logrus.Debug(err)
         return
@@ -69,13 +63,7 @@ func loadEnv(env map[string]string, path string) {
 }
 
 func loadPluginsEnv(env map[string]string, home string) {
-    f, err := os.Open(home)
-    if err != nil {
-        logrus.Debug(err)
-        return
-    }
-
-    files, err := f.Readdir(0)
+    files, err := ioutil.ReadDir(home)
     if err != nil {
         logrus.Debug(err)
         return

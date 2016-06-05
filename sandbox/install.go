@@ -4,11 +4,11 @@ import (
     "fmt"
     "io"
     "os"
-    "os/exec"
     "archive/tar"
     "strings"
     "strconv"
     "regexp"
+    "errors"
     "path/filepath"
     "text/template"
     "github.com/Sirupsen/logrus"
@@ -83,18 +83,21 @@ func (app *Application) installPlugin(target string) error {
     }
 
     // run setup script to setup the plugin
-    if err = runPluginAction(target, app.Environ(), "setup"); err != nil {
+    if err = runPluginAction(target, makeExecEnv(app.Environ()), "setup"); err != nil {
         logrus.WithError(err).Error("run setup script failed")
         return err
     }
 
-    // change owner of plugin directory
-    return filepath.Walk(target, func(path string, info os.FileInfo, err error) error {
-        if err == nil {
-            err = os.Lchown(path, app.uid, app.gid)
+    // populate repository for framework plugin
+    if meta.IsFramework() {
+        if err = app.populateRepository(target, ""); err != nil {
+            logrus.WithError(err).Error("Failed to populate repository")
+            return err
         }
-        return err
-    })
+    }
+
+    // change owner of plugin directory
+    return chownR(target, app.uid, app.gid)
 }
 
 func (app *Application) extractPluginFiles(target string, source io.Reader) error {
@@ -113,10 +116,10 @@ func (app *Application) extractPluginFiles(target string, source io.Reader) erro
         switch hdr.Typeflag {
         case tar.TypeDir:
             logrus.Debugf("Creating directory: %s", dst)
-            err = os.MkdirAll(dst, os.FileMode(hdr.Mode))
-            if err != nil {
+            if err = os.MkdirAll(dst, os.FileMode(hdr.Mode)); err != nil {
                 return err
             }
+            os.Chtimes(dst, hdr.AccessTime, hdr.ChangeTime)
 
         case tar.TypeReg:
             logrus.Debugf("Extracting %s", dst)
@@ -130,9 +133,8 @@ func (app *Application) extractPluginFiles(target string, source io.Reader) erro
             if err != nil {
                 return err
             }
-            if err = os.Chmod(dst, os.FileMode(hdr.Mode)); err != nil {
-                return err
-            }
+            os.Chmod(dst, os.FileMode(hdr.Mode));
+            os.Chtimes(dst, hdr.AccessTime, hdr.ChangeTime)
 
         default:
             return fmt.Errorf("Unable to extract file %s", hdr.Name) // FIXME
@@ -179,6 +181,7 @@ func (app *Application) copyPluginFiles(dst, src string) error {
         }
 
         os.Chmod(target, info.Mode())
+        os.Chtimes(target, info.ModTime(), info.ModTime())
         return nil
     })
 }
@@ -247,24 +250,35 @@ func processTemplates(root string, env map[string]string) error {
     })
 }
 
-func runPluginAction(path string, env map[string]string, action string, args ...string) error {
-    executable := filepath.Join(path, "bin", action)
-    cmd := exec.Command(executable, args...)
-    cmd.Stdin  = os.Stdin
-    cmd.Stdout = os.Stdout
-    cmd.Stderr = os.Stderr
-    cmd.Env    = makeExecEnv(env)
-    return cmd.Run()
+func (app *Application) populateRepository(path, url string) error {
+    if url == "" {
+        return app.populateFromTemplate(path)
+    } else {
+        return app.populateFromURL(url)
+    }
 }
 
-func makeExecEnv(env map[string]string) []string {
-    if env != nil {
-        eenv := make([]string, 0, len(env))
-        for k, v := range env {
-            eenv = append(eenv, k+"="+v)
-        }
-        return eenv
-    } else {
+func (app *Application) populateFromTemplate(basedir string) error {
+    t := filepath.Join(basedir, "template")
+    if fi, err := os.Stat(t); err != nil || !fi.IsDir() {
         return nil
+    } else {
+        if err := app.copyPluginFiles(app.RepoDir(), t); err == nil {
+            err = chownR(app.RepoDir(), app.uid, app.gid)
+        }
+        return err
     }
+}
+
+func (app *Application) populateFromURL(url string) error {
+    return errors.New("NYI")
+}
+
+func chownR(root string, uid, gid int) error {
+    return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+        if err == nil {
+            err = os.Lchown(path, uid, gid)
+        }
+        return err
+    })
 }
