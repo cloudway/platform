@@ -7,6 +7,7 @@ import (
     "os/exec"
     "archive/tar"
     "strings"
+    "strconv"
     "regexp"
     "path/filepath"
     "text/template"
@@ -51,7 +52,7 @@ func (app *Application) Install(name string, source string, input io.Reader) err
 
 func (app *Application) installPlugin(target string) error {
     // load plugin manifest from target directory
-    meta, err := plugin.Load(target, nil)
+    meta, err := plugin.Load(target)
     if err != nil {
         return err
     }
@@ -65,6 +66,10 @@ func (app *Application) installPlugin(target string) error {
         app.Setenv("CLOUDWAY_FRAMEWORK_DIR", target)
     }
 
+    // assigns private host/port
+    app.createPrivateEndpoints(meta)
+
+    // process templates by substitution with environment variables
     if err = processTemplates(target, app.Environ()); err != nil {
         return err
     }
@@ -176,6 +181,34 @@ func (app *Application) copyPluginFiles(dst, src string) error {
         os.Chmod(target, info.Mode())
         return nil
     })
+}
+
+func (app *Application) createPrivateEndpoints(meta *plugin.Plugin) {
+    if len(meta.Endpoints) == 0 {
+        return
+    }
+
+    host, err := os.Hostname()
+    if err != nil {
+        logrus.WithError(err).Error("Cannot retrieve host name")
+        return
+    }
+
+    env := app.Environ()
+    for _, ep := range meta.GetEndpoints(env) {
+        var host_name, port_name = ep.PrivateHostName, ep.PrivatePortName
+
+        if env[host_name] == "" {
+            app.Setenv(host_name, host)
+            env[host_name] = host
+        }
+
+        port := strconv.Itoa(int(ep.PrivatePort))
+        if env[port_name] == "" {
+            app.Setenv(port_name, port)
+            env[port_name] = port
+        }
+    }
 }
 
 var _TEMPLATE_RE = regexp.MustCompile(`^\.?(.*)\.cwt$`)

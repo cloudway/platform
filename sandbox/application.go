@@ -6,6 +6,7 @@ import (
     "strconv"
     "path/filepath"
     "github.com/Sirupsen/logrus"
+    "github.com/cloudway/platform/plugin"
 )
 
 type Application struct {
@@ -75,4 +76,51 @@ func (app *Application) Namespace() string {
 
 func (app *Application) FQDN() string {
     return os.Getenv("CLOUDWAY_APP_DNS")
+}
+
+func (app *Application) GetPlugins() (map[string]*plugin.Plugin, error) {
+    d, err := os.Open(app.HomeDir())
+    if err != nil {
+        return nil, err
+    }
+
+    names, err := d.Readdirnames(-1)
+    if err != nil {
+        return nil, err
+    }
+
+    plugins := make(map[string]*plugin.Plugin)
+    for _, filename := range names {
+        subdir := filepath.Join(app.HomeDir(), filename)
+        if plugin.IsPluginDir(subdir) {
+            p, err := plugin.Load(subdir)
+            if err != nil {
+                logrus.WithError(err).Errorf("Faield to load plugin %s", filename)
+            } else {
+                plugins[p.Name] = p
+            }
+        }
+    }
+    return plugins, nil
+}
+
+func (app *Application) GetPlugin(name string) *plugin.Plugin {
+    plugins, err := app.GetPlugins()
+    if err == nil {
+        return plugins[name]
+    } else {
+        return nil
+    }
+}
+
+func (app *Application) GetFrameworkPlugin() *plugin.Plugin {
+    plugins, err := app.GetPlugins()
+    if err == nil {
+        for _, p := range plugins {
+            if p.IsFramework() {
+                return p
+            }
+        }
+    }
+    return nil
 }

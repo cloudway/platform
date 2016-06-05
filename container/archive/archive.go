@@ -60,7 +60,7 @@ func ReadManifest(path string) (*plugin.Plugin, error) {
 
     var p *plugin.Plugin
     if stat.IsDir() {
-        p, err = plugin.Load(path, nil)
+        p, err = plugin.Load(path)
     } else {
         f, err := os.Open(path)
         if err != nil {

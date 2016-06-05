@@ -57,7 +57,7 @@ func IsPluginDir(dir string) bool {
     }
 }
 
-func Load(path string, env map[string]string) (*Plugin, error) {
+func Load(path string) (*Plugin, error) {
     f, err := os.Open(manifestFile(path))
     if err != nil {
         return nil, err
@@ -70,9 +70,6 @@ func Load(path string, env map[string]string) (*Plugin, error) {
     }
 
     plugin.Path = path
-    if env != nil {
-        initEndpoints(plugin, env)
-    }
     return plugin, nil
 }
 
@@ -87,30 +84,43 @@ func ReadManifest(f io.Reader) (*Plugin, error) {
     return plugin, err
 }
 
-func initEndpoints(p *Plugin, env map[string]string) {
-    for _, ep := range p.Endpoints {
-        envPrefix := "CLOUDWAY_" + p.Name + "_"
-        ep.PrivateHostName = strings.ToUpper(envPrefix + ep.PrivateHostName)
-        ep.PrivatePortName = strings.ToUpper(envPrefix + ep.PrivatePortName)
-        ep.PrivateHost     = env[ep.PrivateHostName]
-
-        for _, pm := range ep.ProxyMappings {
-            if len(pm.Protocols) == 0 {
-                pm.Protocols = []string{"http"}
-            }
-        }
-    }
-}
-
 func (p *Plugin) CopyOf(path string) *Plugin {
     var copy Plugin = *p
     copy.Path = path
     return &copy
 }
 
-func (p *Plugin) GetProxyMappings() ([]ProxyMapping) {
-    var res = make([]ProxyMapping, 0, 4)
+func (p *Plugin) GetEndpoints(env map[string]string) []*Endpoint {
+    endpoints := make([]*Endpoint, 0, len(p.Endpoints))
+
     for _, ep := range p.Endpoints {
+        envPrefix := "CLOUDWAY_" + p.Name + "_"
+        host_name := strings.ToUpper(envPrefix + ep.PrivateHostName)
+        port_name := strings.ToUpper(envPrefix + ep.PrivatePortName)
+
+        ep2 := &Endpoint{
+            PrivateHostName: host_name,
+            PrivatePortName: port_name,
+            PrivateHost:     env[host_name],
+            PrivatePort:     ep.PrivatePort,
+            ProxyMappings:   ep.ProxyMappings,
+        }
+
+        for _, pm := range ep2.ProxyMappings {
+            if len(pm.Protocols) == 0 {
+                pm.Protocols = []string{"http"}
+            }
+        }
+
+        endpoints = append(endpoints, ep2)
+    }
+
+    return endpoints
+}
+
+func (p *Plugin) GetProxyMappings(env map[string]string) ([]ProxyMapping) {
+    var res = make([]ProxyMapping, 0, 4)
+    for _, ep := range p.GetEndpoints(env) {
         for _, m := range ep.ProxyMappings {
             for _, prot := range m.Protocols {
                 m2 := ProxyMapping{
