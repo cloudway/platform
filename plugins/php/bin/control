@@ -1,0 +1,78 @@
+#!/bin/bash -eu
+
+export PHPRC="${CLOUDWAY_PHP_DIR}/etc/php.ini"
+
+HTTPD_CFG_DIR=$CLOUDWAY_PHP_DIR/etc/apache2
+HTTPD_CFG_FILE=$HTTPD_CFG_DIR/apache2.conf
+HTTPD_PASSENV_FILE=$HTTPD_CFG_DIR/conf-enabled/passenv.conf
+HTTPD_PID_FILE=$CLOUDWAY_PHP_DIR/run/apache2.pid
+
+function apache {
+    /usr/sbin/apache2 -f $HTTPD_CFG_FILE -k $1
+}
+
+function start {
+    write_httpd_passenv
+    apache start
+    ret=$?
+    [ "$ret" == "0" ] && wait_for_start
+    return $ret
+}
+
+function restart {
+    write_httpd_passenv
+    apache restart
+    return $?
+}
+
+function reload {
+    write_httpd_passenv
+    apache graceful
+    return $?
+}
+
+function stop {
+    apache stop
+    return $?
+}
+
+function tidy {
+    rm -rf $CLOUDWAY_PHP_LOG_DIR/*
+    return 0
+}
+
+function status {
+    if curl "http://127.0.0.1:$CLOUDWAY_PHP_PORT/server-status?auto" >/dev/null 2>&1; then
+        echo "PHP application is running"
+    else
+        echo "PHP application is either stopped or inaccessible"
+    fi
+}
+
+function write_httpd_passenv {
+    ( for key in $(env | cut -d= -f1); do
+        if [[ $key =~ ^[A-Z].* ]]; then
+            echo PassEnv $key
+        fi
+      done ) > $HTTPD_PASSENV_FILE
+}
+
+function wait_for_start {
+    [ -f "$HTTPD_PID_FILE" ] && return 0
+    for i in {1..20}; do
+        sleep .5
+        [ -f "$HTTPD_PID_FILE" ] && break
+    done
+}
+
+case "$1" in
+    start)      echo "Starting PHP";    start ;;
+    stop)       echo "Stopping PHP";    stop ;;
+    restart)    echo "Restarting PHP";  restart ;;
+    reload)     echo "Reloading PHP";   reload ;;
+    status)     status ;;
+    tidy)       tidy ;;
+    *)          exit 0
+esac
+
+exit $?

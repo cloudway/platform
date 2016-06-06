@@ -1,0 +1,2 @@
+upload_tmp_dir = "{{.CLOUDWAY_PHP_DIR}}/tmp/"
+session.save_path = "{{.CLOUDWAY_PHP_DIR}}/sessions"
