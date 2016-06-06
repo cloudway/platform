@@ -198,7 +198,7 @@ func (app *Application) createPrivateEndpoints(meta *plugin.Plugin) {
     }
 
     env := app.Environ()
-    for _, ep := range meta.GetEndpoints(env) {
+    for _, ep := range meta.GetEndpoints(host) {
         var host_name, port_name = ep.PrivateHostName, ep.PrivatePortName
 
         if env[host_name] == "" {

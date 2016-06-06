@@ -13,7 +13,7 @@ import (
 )
 
 func (c *Container) Install(source string) error {
-    if !c.info.State.Running || c.info.State.Paused {
+    if !c.State.Running || c.State.Paused {
         return errors.New("Container is not running")
     }
 

@@ -8,7 +8,7 @@ import (
 
 // Destroy the application container.
 func (c *Container) Destroy() error {
-    image := c.info.Config.Image
+    image := c.Config.Image
 
     // remove the container, force kill if it's running
     options := types.ContainerRemoveOptions{Force: true, RemoveVolumes: true}

@@ -66,7 +66,7 @@ func (c *Container) Environ() (map[string]string, error) {
     }
 
     // Merge container environment variables
-    for _, ce := range c.info.Config.Env {
+    for _, ce := range c.Config.Env {
         kv := strings.SplitN(ce, "=", 2)
         env[kv[0]] = kv[1]
     }

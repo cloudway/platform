@@ -36,10 +36,10 @@ type Endpoint struct {
 }
 
 type ProxyMapping struct {
-    Frontend        string `yaml:"Frontend"`
-    Backend         string `yaml:"Backend"`
-    Protocols       []string `yaml:"Protocols,omitempty"`
-    Protocol        string `yaml:"-"`
+    Frontend        string   `yaml:"Frontend"`
+    Backend         string   `yaml:"Backend"`
+    Protocols       []string `yaml:"Protocols,omitempty" json:"-"`
+    Protocol        string   `yaml:"-" json:"Protocol,omitempty"`
 }
 
 const ManifestEntry = "manifest/plugin.yml"
@@ -90,7 +90,7 @@ func (p *Plugin) CopyOf(path string) *Plugin {
     return &copy
 }
 
-func (p *Plugin) GetEndpoints(env map[string]string) []*Endpoint {
+func (p *Plugin) GetEndpoints(host string) []*Endpoint {
     endpoints := make([]*Endpoint, 0, len(p.Endpoints))
 
     for _, ep := range p.Endpoints {
@@ -101,35 +101,30 @@ func (p *Plugin) GetEndpoints(env map[string]string) []*Endpoint {
         ep2 := &Endpoint{
             PrivateHostName: host_name,
             PrivatePortName: port_name,
-            PrivateHost:     env[host_name],
+            PrivateHost:     host,
             PrivatePort:     ep.PrivatePort,
-            ProxyMappings:   ep.ProxyMappings,
         }
-
-        for _, pm := range ep2.ProxyMappings {
-            if len(pm.Protocols) == 0 {
-                pm.Protocols = []string{"http"}
-            }
-        }
-
+        ep2.ProxyMappings = proxyMappings(ep2, ep.ProxyMappings)
         endpoints = append(endpoints, ep2)
     }
 
     return endpoints
 }
 
-func (p *Plugin) GetProxyMappings(env map[string]string) ([]ProxyMapping) {
-    var res = make([]ProxyMapping, 0, 4)
-    for _, ep := range p.GetEndpoints(env) {
-        for _, m := range ep.ProxyMappings {
-            for _, prot := range m.Protocols {
-                m2 := ProxyMapping{
-                    Frontend:  getFrontendUri(m.Frontend),
-                    Backend:   getBackendUri(ep, m.Backend, prot),
-                    Protocol:  prot,
-                }
-                res = append(res, m2)
+func proxyMappings(ep *Endpoint, mappings []*ProxyMapping) []*ProxyMapping {
+    var res = make([]*ProxyMapping, 0, len(mappings))
+    for _, m := range mappings {
+        protocols := m.Protocols
+        if len(protocols) == 0 {
+            protocols = []string{"http"}
+        }
+        for _, prot := range protocols {
+            m2 := ProxyMapping{
+                Frontend: getFrontendUri(m.Frontend),
+                Backend:  getBackendUri(ep, m.Backend, prot),
+                Protocol: prot,
             }
+            res = append(res, &m2)
         }
     }
     return res

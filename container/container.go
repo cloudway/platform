@@ -21,13 +21,12 @@ const (
 var DEBUG bool
 
 type Container struct {
-    *client.Client
-
-    ID          string
     Name        string
     Namespace   string
+    State       ContainerState
 
-    info        types.ContainerJSON
+    *client.Client
+    *types.ContainerJSON
 }
 
 var docker *client.Client
@@ -63,11 +62,11 @@ func fromId(cli *client.Client, id string) (*Container, error) {
     }
 
     return &Container{
-        ID:         info.ID,
-        Name:       name,
-        Namespace:  namespace,
-        Client:     cli,
-        info:       info,
+        Name:           name,
+        Namespace:      namespace,
+        State:          ContainerState{info.State},
+        Client:         cli,
+        ContainerJSON:  &info,
     }, nil
 }
 
@@ -149,14 +148,9 @@ func (c *Container) FQDN() string {
     return c.Name + "-" + c.Namespace + "." + defaults.Domain()
 }
 
-// Get the current application state.
-func (c *Container) State() ContainerState {
-    return ContainerState{c.info.State}
-}
-
 // Get the container capacity.
 func (c *Container) Capacity() string {
-    if capacity, ok := c.info.Config.Labels[_APP_CAPACITY_KEY]; ok {
+    if capacity, ok := c.Config.Labels[_APP_CAPACITY_KEY]; ok {
         return capacity
     } else {
         return defaults.AppCapacity()
@@ -165,12 +159,12 @@ func (c *Container) Capacity() string {
 
 // Returns the container's operating system user that running the application.
 func (c *Container) User() string {
-    return c.info.Config.User
+    return c.Config.User
 }
 
 // Returns the application home directory within the container.
 func (c *Container) Home() string {
-    if home, ok := c.info.Config.Labels[_APP_HOME_KEY]; ok {
+    if home, ok := c.Config.Labels[_APP_HOME_KEY]; ok {
         return home
     } else {
         return defaults.AppHome()
@@ -192,4 +186,8 @@ func (c *Container) DataDir() string {
 
 func (c *Container) LogDir() string {
     return c.Home() + "/logs"
+}
+
+func (c *Container) IP() string {
+    return c.NetworkSettings.IPAddress
 }

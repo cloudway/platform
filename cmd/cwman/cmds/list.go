@@ -22,6 +22,6 @@ func runList(cmd *cobra.Command, args []string) {
 
     fmt.Printf("%-12s    %-8s    %s\n", "CONTAINER ID", "STATUS", "DOMAIN NAME")
     for _, c := range containers {
-        fmt.Printf("%-12s    %-8s    %s\n", c.ID[:12], c.State(), c.FQDN())
+        fmt.Printf("%-12s    %-8s    %s\n", c.ID[:12], c.State, c.FQDN())
     }
 }
