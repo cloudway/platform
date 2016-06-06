@@ -12,10 +12,10 @@ import (
 )
 
 const (
-    _APP_NAME_KEY       = "com.cloudway.app.name"
-    _APP_NAMESPACE_KEY  = "com.cloudway.app.namespace"
-    _APP_HOME_KEY       = "com.cloudway.app.home"
-    _APP_CAPACITY_KEY   = "com.cloudway.app.capacity"
+    APP_NAME_KEY        = "com.cloudway.app.name"
+    APP_NAMESPACE_KEY   = "com.cloudway.app.namespace"
+    APP_HOME_KEY        = "com.cloudway.app.home"
+    APP_CAPACITY_KEY    = "com.cloudway.app.capacity"
 )
 
 var DEBUG bool
@@ -46,17 +46,17 @@ func FromId(id string) (*Container, error) {
     if err != nil {
         return nil, err
     }
-    return fromId(cli, id)
+    return Inspect(cli, id)
 }
 
-func fromId(cli *client.Client, id string) (*Container, error) {
+func Inspect(cli *client.Client, id string) (*Container, error) {
     info, err := cli.ContainerInspect(context.Background(), id)
     if err != nil {
         return nil, err
     }
 
-    name := info.Config.Labels[_APP_NAME_KEY]
-    namespace := info.Config.Labels[_APP_NAMESPACE_KEY]
+    name := info.Config.Labels[APP_NAME_KEY]
+    namespace := info.Config.Labels[APP_NAMESPACE_KEY]
     if name == "" || namespace == "" {
         return nil, fmt.Errorf("%s: Not a cloudway application container", id)
     }
@@ -81,8 +81,8 @@ func IDs() ([]string, error) {
 
 func ids(cli *client.Client) (ids []string, err error) {
     args := filters.NewArgs()
-    args.Add("label", _APP_NAME_KEY)
-    args.Add("label", _APP_NAMESPACE_KEY)
+    args.Add("label", APP_NAME_KEY)
+    args.Add("label", APP_NAMESPACE_KEY)
     options := types.ContainerListOptions{All: true, Filter: args}
 
     containers, err := cli.ContainerList(context.Background(), options);
@@ -107,7 +107,7 @@ func All() (containers []*Container, err error) {
     if err == nil {
         containers = make([]*Container, len(ids))
         for i, id := range ids {
-            c, err := fromId(cli, id)
+            c, err := Inspect(cli, id)
             if err != nil {
                 break
             }
@@ -125,15 +125,15 @@ func Find(name, namespace string) (containers []*Container, err error) {
     }
 
     args := filters.NewArgs()
-    args.Add("label", _APP_NAME_KEY + "=" + name)
-    args.Add("label", _APP_NAMESPACE_KEY + "=" + namespace)
+    args.Add("label", APP_NAME_KEY + "=" + name)
+    args.Add("label", APP_NAMESPACE_KEY + "=" + namespace)
     options := types.ContainerListOptions{All: true, Filter: args}
 
     list, err := cli.ContainerList(context.Background(), options);
     if err == nil {
         containers = make([]*Container, len(list))
         for i, c := range list {
-            cc, err := fromId(cli, c.ID)
+            cc, err := Inspect(cli, c.ID)
             if err != nil {
                 break;
             }
@@ -148,9 +148,14 @@ func (c *Container) FQDN() string {
     return c.Name + "-" + c.Namespace + "." + defaults.Domain()
 }
 
+// Returns the IP address of the container
+func (c *Container) IP() string {
+    return c.NetworkSettings.IPAddress
+}
+
 // Get the container capacity.
 func (c *Container) Capacity() string {
-    if capacity, ok := c.Config.Labels[_APP_CAPACITY_KEY]; ok {
+    if capacity, ok := c.Config.Labels[APP_CAPACITY_KEY]; ok {
         return capacity
     } else {
         return defaults.AppCapacity()
@@ -164,7 +169,7 @@ func (c *Container) User() string {
 
 // Returns the application home directory within the container.
 func (c *Container) Home() string {
-    if home, ok := c.Config.Labels[_APP_HOME_KEY]; ok {
+    if home, ok := c.Config.Labels[APP_HOME_KEY]; ok {
         return home
     } else {
         return defaults.AppHome()
@@ -186,8 +191,4 @@ func (c *Container) DataDir() string {
 
 func (c *Container) LogDir() string {
     return c.Home() + "/logs"
-}
-
-func (c *Container) IP() string {
-    return c.NetworkSettings.IPAddress
 }

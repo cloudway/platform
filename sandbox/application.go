@@ -4,6 +4,8 @@ import (
     "os"
     "os/user"
     "io/ioutil"
+    "net"
+    "errors"
     "strconv"
     "path/filepath"
     "github.com/Sirupsen/logrus"
@@ -79,6 +81,24 @@ func (app *Application) FQDN() string {
     return os.Getenv("CLOUDWAY_APP_DNS")
 }
 
+func (app *Application) GetLocalIP() (string, error) {
+    addrs, err := net.InterfaceAddrs()
+    if err != nil {
+        return "", err
+    }
+
+    for _, address := range addrs {
+        // check the address type and if it is not a loopback
+        if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+            if ipnet.IP.To4() != nil {
+                return ipnet.IP.String(), nil
+            }
+        }
+    }
+
+    return "", errors.New("No local IP address found")
+}
+
 func (app *Application) GetPlugins() (map[string]*plugin.Plugin, error) {
     files, err := ioutil.ReadDir(app.HomeDir())
     if err != nil {
@@ -118,4 +138,33 @@ func (app *Application) GetFrameworkPlugin() *plugin.Plugin {
         }
     }
     return nil
+}
+
+func (app *Application) GetEndpoints(ip string) ([]*plugin.Endpoint, error) {
+    plugins, err := app.GetPlugins()
+    if err != nil {
+        return nil, err
+    }
+
+    if ip == "" {
+        ip, err = app.GetLocalIP()
+        if err != nil {
+            return nil, err
+        }
+    }
+
+    fqdn := app.FQDN()
+    endpoints := make([]*plugin.Endpoint, 0)
+
+    for _, p := range plugins {
+        eps := p.GetEndpoints(ip)
+        for _, ep := range eps {
+            for _, m := range ep.ProxyMappings {
+                m.Frontend = fqdn + m.Frontend
+            }
+        }
+        endpoints = append(endpoints, eps...)
+    }
+
+    return endpoints, nil
 }

@@ -30,7 +30,7 @@ type JSONMessage struct {
     Stream          string          `json:"stream,omitempty"`
     Status          string          `json:"status,omitempty"`
     Progress        *JSONProgress   `json:"progressDtail,omitempty"`
-    ProgressMessage string          `json:"id,omitempty"`
+    ProgressMessage string          `json:"progress,omitempty"`
     ID              string          `json:"id,omitempty"`
     From            string          `json:"from,omitempty"`
     Time            int64           `json:"time,omitempty"`

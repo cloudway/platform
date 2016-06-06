@@ -220,10 +220,10 @@ func createContainer(cli *client.Client, imageId string, config map[string]strin
     options := &container.Config {
         Image: imageId,
         Labels: map[string]string {
-            _APP_NAME_KEY:      config["name"],
-            _APP_NAMESPACE_KEY: config["namespace"],
-            _APP_HOME_KEY:      getOrDefault(config, "home", defaults.AppHome()),
-            _APP_CAPACITY_KEY:  getOrDefault(config, "capacity", defaults.AppCapacity()),
+            APP_NAME_KEY:      config["name"],
+            APP_NAMESPACE_KEY: config["namespace"],
+            APP_HOME_KEY:      getOrDefault(config, "home", defaults.AppHome()),
+            APP_CAPACITY_KEY:  getOrDefault(config, "capacity", defaults.AppCapacity()),
         },
         User: getOrDefault(config, "user", defaults.AppUser()),
         Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "run"},
@@ -233,7 +233,7 @@ func createContainer(cli *client.Client, imageId string, config map[string]strin
     if err != nil {
         return
     }
-    return fromId(cli, resp.ID)
+    return Inspect(cli, resp.ID)
 }
 
 func getOrDefault(config map[string]string, key string, deflt string) string {
