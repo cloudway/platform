@@ -1,0 +1,13 @@
+---
+Name: mysql
+Display-Name: MySQL 5.5
+Version: '5.5'
+Vendor: Oracle
+Plugin-Version: '1.0'
+Plugin-Vendor: cloudway
+Category: Service
+Base-Image: mysql:5.5
+Endpoints:
+- Private-Host-Name: DB_HOST
+  Private-Port-Name: DB_PORT
+  Private-Port: 3306

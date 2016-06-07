@@ -1,0 +1,10 @@
+!include /etc/mysql/my.cnf
+
+[mysqld]
+datadir={{.CLOUDWAY_MYSQL_DIR}}/data
+socket={{.CLOUDWAY_MYSQL_DIR}}/run/mysql.sock
+bind-address=127.0.0.1
+port={{.CLOUDWAY_MYSQL_DB_PORT}}
+
+[mysqld_safe]
+pid-file={{.CLOUDWAY_MYSQL_DIR}}/run/mysql.pid
