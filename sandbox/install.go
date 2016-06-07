@@ -6,7 +6,6 @@ import (
     "os"
     "archive/tar"
     "strings"
-    "strconv"
     "regexp"
     "errors"
     "path/filepath"
@@ -65,9 +64,6 @@ func (app *Application) installPlugin(target string) error {
         app.Setenv("CLOUDWAY_FRAMEWORK", name)
         app.Setenv("CLOUDWAY_FRAMEWORK_DIR", target)
     }
-
-    // assigns private host/port
-    app.createPrivateEndpoints(meta)
 
     // process templates by substitution with environment variables
     if err = processTemplates(target, app.Environ()); err != nil {
@@ -184,34 +180,6 @@ func (app *Application) copyPluginFiles(dst, src string) error {
         os.Chtimes(target, info.ModTime(), info.ModTime())
         return nil
     })
-}
-
-func (app *Application) createPrivateEndpoints(meta *plugin.Plugin) {
-    if len(meta.Endpoints) == 0 {
-        return
-    }
-
-    host, err := os.Hostname()
-    if err != nil {
-        logrus.WithError(err).Error("Cannot retrieve host name")
-        return
-    }
-
-    env := app.Environ()
-    for _, ep := range meta.GetEndpoints(host) {
-        var host_name, port_name = ep.PrivateHostName, ep.PrivatePortName
-
-        if env[host_name] == "" {
-            app.Setenv(host_name, host)
-            env[host_name] = host
-        }
-
-        port := strconv.Itoa(int(ep.PrivatePort))
-        if env[port_name] == "" {
-            app.Setenv(port_name, port)
-            env[port_name] = port
-        }
-    }
 }
 
 var _TEMPLATE_RE = regexp.MustCompile(`^\.?(.*)\.cwt$`)

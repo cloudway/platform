@@ -1,5 +1,5 @@
 function mysql {
-  hostopt="-h 127.0.0.1"
+  hostopt="-h $CLOUDWAY_MYSQL_DB_HOST"
   portopt="-P $CLOUDWAY_MYSQL_DB_PORT"
   useropt="-u $CLOUDWAY_MYSQL_DB_USERNAME"
   passopt="--password=$CLOUDWAY_MYSQL_DB_PASSWORD"

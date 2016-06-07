@@ -55,7 +55,6 @@ password=$(generate_password)
 cwctl setenv CLOUDWAY_MYSQL_DB_USERNAME "$username"
 cwctl setenv CLOUDWAY_MYSQL_DB_PASSWORD "$password"
 cwctl setenv CLOUDWAY_MYSQL_DB_SOCKET   "$socket"
-cwctl setenv CLOUDWAY_MYSQL_DB_URL      "mysql://$username:$password@$CLOUDWAY_MYSQL_DB_HOST:$CLOUDWAY_MYSQL_DB_PORT/"
 
 echo ""
 echo "MySQL database added. Please make note of these credentials:"
@@ -63,5 +62,4 @@ echo ""
 echo "        User Name: $username"
 echo "         Password: $password"
 echo "    Database Name: $CLOUDWAY_APP_NAME"
-echo "   Connection URL: mysql://$CLOUDWAY_MYSQL_DB_HOST:$CLOUDWAY_MYSQL_DB_PORT/"
 echo ""

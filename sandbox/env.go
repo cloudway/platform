@@ -144,3 +144,16 @@ func (a *Application) Setenv(name, value string) error {
 func (a *Application) Unsetenv(name string) error {
     return os.Remove(a.envfile(name))
 }
+
+func (a *Application) SetPluginEnv(p *plugin.Plugin, name, value string) error {
+    envdir := filepath.Join(p.Path, "env")
+    if err := os.MkdirAll(envdir, 0755); err != nil {
+        return err
+    }
+    return writeEnvFile(filepath.Join(envdir, name), value)
+}
+
+func (a *Application) UnsetPluginEnv(p *plugin.Plugin, name string) error {
+    filename := filepath.Join(p.Path, "env", name)
+    return os.Remove(filename)
+}

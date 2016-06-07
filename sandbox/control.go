@@ -7,6 +7,7 @@ import (
 )
 
 func (app *Application) Start() error {
+    app.CreatePrivateEndpoints("")
     return app.Control("start", true, true)
 }
 
@@ -15,6 +16,7 @@ func (app *Application) Stop() error {
 }
 
 func (app *Application) Restart() error {
+    app.CreatePrivateEndpoints("")
     return app.Control("restart", true, true)
 }
 

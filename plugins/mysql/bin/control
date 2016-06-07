@@ -38,6 +38,7 @@ function wait_for_start {
 }
 
 function initdb {
+  local hostname=$CLOUDWAY_MYSQL_DB_HOST
   local username=$CLOUDWAY_MYSQL_DB_USERNAME
   local password=$CLOUDWAY_MYSQL_DB_PASSWORD
   local socket=$CLOUDWAY_MYSQL_DB_SOCKET
@@ -56,6 +57,7 @@ delete from user where user='$username' or user='root' or user='';
 grant all on *.* to '$username'@'127.0.0.1' identified by '$password' with grant option;
 grant all on *.* to '$username'@'::1' identified by '$password' with grant option;
 grant all on *.* to '$username'@'localhost' identified by '$password' with grant option;
+grant all on *.* to '$username'@'$hostname' identified by '$password' with grant option;
 EOF
 
     echo "flush privileges;"

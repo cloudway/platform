@@ -168,3 +168,26 @@ func (app *Application) GetEndpoints(ip string) ([]*plugin.Endpoint, error) {
 
     return endpoints, nil
 }
+
+func (app *Application) CreatePrivateEndpoints(ip string) error {
+    plugins, err := app.GetPlugins()
+    if err != nil {
+        return err
+    }
+
+    if ip == "" {
+        ip, err = app.GetLocalIP()
+        if err != nil {
+            return err
+        }
+    }
+
+    for _, p := range plugins {
+        for _, ep := range p.GetEndpoints(ip) {
+            app.SetPluginEnv(p, ep.PrivateHostName, ip)
+            app.SetPluginEnv(p, ep.PrivatePortName, strconv.Itoa(int(ep.PrivatePort)))
+        }
+    }
+
+    return nil
+}
