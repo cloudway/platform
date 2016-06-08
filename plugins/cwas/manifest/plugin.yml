@@ -1,0 +1,18 @@
+---
+Name: cwas
+Display-Name: Cloudway Web Application Server 1.1
+Version: '1.1'
+Vendor: cloudway
+Category: Framework
+Base-Image: registry.aliyuncs.com/cloudway/cwas:1.1
+Endpoints:
+- Private-Host-Name: HOST
+  Private-Port-Name: PORT
+  Private-Port: 8080
+  Proxy-Mappings:
+    - Frontend: /
+      Backend: /
+      Protocols: [ajp, http]
+    - Frontend: /cloudway/mux
+      Backend: /cloudway/mux
+      Protocols: [ws]

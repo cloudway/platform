@@ -1,0 +1,136 @@
+VERSION = 1.1-SNAPSHOT
+
+# OSGi core services
+org.osgi.compendium-4.3.1.jar
+org.osgi.enterprise-4.2.0.jar
+org.apache.felix.scr-1.6.2.jar
+org.apache.felix.configadmin-1.6.0.jar
+org.apache.felix.metatype-1.0.6.jar
+org.apache.felix.log-1.0.1.jar
+
+# Felix shell and console
+org.apache.felix.gogo.command-0.8.0.jar
+org.apache.felix.gogo.runtime-0.8.0.jar
+org.apache.felix.webconsole-4.0.0.jar
+org.apache.felix.webconsole.plugins.memoryusage-1.0.4.jar
+wrap:file:${cloudway.server.root}/lib/json-20090211.jar$Bundle-SymbolicName=org.json&Bundle-Version=20090211
+cloudway-felix-shell-${VERSION}.jar
+cloudway-felix-console-${VERSION}.jar
+cloudway-felix-console-resource-${VERSION}.jar
+
+# Third party utility libraries
+commons-beanutils-1.8.3.jar
+commons-codec-1.10.jar
+commons-collections-3.2.1.jar
+commons-digester-1.8.1.jar
+commons-fileupload-1.2.2.jar
+commons-logging-1.1.3.jar
+commons-io-2.4.jar
+guava-18.0.jar
+
+# Utilities and common services
+javaee-6.0.1.jar
+asm-all-5.0.3.jar
+cloudway-util-${VERSION}.jar
+cloudway-service-${VERSION}.jar
+cloudway-common-${VERSION}.jar
+cloudway-store-je-${VERSION}.jar
+cloudway-cache-${VERSION}.jar
+
+# Network connectivity
+cloudway-net-${VERSION}.jar
+cloudway-net-config-${VERSION}.jar
+
+# HTTP service
+cloudway-http-${VERSION}.jar
+cloudway-http-config-${VERSION}.jar
+
+{{ if eq .JAVAEE_PROFILE "minimal" }}
+# Enterprise services
+cloudway-naming-core-${VERSION}.jar
+cloudway-naming-local-${VERSION}.jar
+cloudway-transaction-core-${VERSION}.jar
+cloudway-transaction-local-${VERSION}.jar
+cloudway-security-useradmin-${VERSION}.jar
+cloudway-security-core-${VERSION}.jar
+cloudway-security-local-${VERSION}.jar
+cloudway-concurrency-${VERSION}.jar
+{{ else }}
+# Eenterprise services
+cloudway-corba-${VERSION}.jar
+cloudway-corba-rmi-${VERSION}.jar
+cloudway-naming-core-${VERSION}.jar
+cloudway-naming-full-${VERSION}.jar
+cloudway-transaction-core-${VERSION}.jar
+cloudway-transaction-ots-${VERSION}.jar
+cloudway-security-useradmin-${VERSION}.jar
+cloudway-security-core-${VERSION}.jar
+cloudway-security-full-${VERSION}.jar
+cloudway-resource-${VERSION}.jar
+cloudway-concurrency-${VERSION}.jar
+
+# JDBC services
+cloudway-jdbc-${VERSION}.jar
+cloudway-jdbc-remote-${VERSION}.jar
+cloudway-jdbc-derby-${VERSION}.jar
+cloudway-jdbc-mysql-${VERSION}.jar
+cloudway-jdbc-postgresql-${VERSION}.jar
+
+# Persistence service
+cloudway-persist-${VERSION}.jar
+cloudway-persist-eclipselink-${VERSION}.jar
+org.eclipse.persistence.core-2.5.0.jar
+org.eclipse.persistence.jpa-2.5.0.jar
+org.eclipse.persistence.jpa.jpql-2.5.0.jar
+org.eclipse.persistence.asm-2.5.0.jar
+org.eclipse.persistence.antlr-2.5.0.jar
+
+# Messaging service
+cloudway-mq-server-${VERSION}.jar
+cloudway-mq-client-${VERSION}.jar
+
+# Application containers
+cloudway-cdi-${VERSION}.jar
+cloudway-ejb-${VERSION}.jar
+cloudway-jca-${VERSION}.jar
+{{ end }}
+
+# Web container
+cloudway-web-${VERSION}.jar
+jstl-1.2.jar
+
+# Script engines
+cloudway-script-registry-${VERSION}.jar
+cloudway-script-elite-${VERSION}.jar
+groovy-all-2.3.3.jar
+
+# Bean validation
+cloudway-validation-${VERSION}.jar
+
+# JSF implementation
+cloudway-faces-api-${VERSION}.jar
+cloudway-faces-binding-${VERSION}.jar
+cloudway-faces-connector-${VERSION}.jar
+mojarra-2.2.8.jar
+
+# Jersey JAX-RS implementation
+cloudway-jersey-core-${VERSION}.jar
+cloudway-jersey-media-${VERSION}.jar
+cloudway-jersey-ext-${VERSION}.jar
+cloudway-jersey-bean-validation-${VERSION}.jar
+
+org.eclipse.persistence.moxy-2.5.0.jar
+org.eclipse.persistence.core-2.5.0.jar
+org.eclipse.persistence.asm-2.5.0.jar
+org.eclipse.persistence.antlr-2.5.0.jar
+
+# Tyrus WebSocket implementation
+tyrus-spi-1.8.3.jar
+tyrus-core-1.8.3.jar
+tyrus-server-1.8.3.jar
+tyrus-client-1.8.3.jar
+tyrus-container-servlet-1.8.3.jar
+tyrus-container-jdk-client-1.8.3.jar
+
+# Application deployment
+cloudway-deploy-${VERSION}.jar
