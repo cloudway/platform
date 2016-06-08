@@ -2,9 +2,6 @@ package cmds
 
 import (
     "os"
-    "bytes"
-    "io/ioutil"
-    "path/filepath"
     "encoding/json"
     "github.com/spf13/cobra"
     "github.com/cloudway/platform/sandbox"
@@ -31,13 +28,6 @@ func runEndpointsCmd(cmd *cobra.Command, args []string) {
     endpoints, err := app.GetEndpoints(ip)
     check(err)
 
-    var buf bytes.Buffer
-    enc := json.NewEncoder(&buf)
+    enc := json.NewEncoder(os.Stdout)
     enc.Encode(endpoints)
-
-    // Write the endpoint info to a file so it can be read
-    // even if the container is stopped
-    filename := filepath.Join(app.EnvDir(), ".endpoint")
-    check(ioutil.WriteFile(filename, buf.Bytes(), 0600))
-    buf.WriteTo(os.Stdout)
 }

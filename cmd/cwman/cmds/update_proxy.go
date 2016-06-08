@@ -3,8 +3,8 @@ package cmds
 import (
     "io"
     "os"
+    "bytes"
     "encoding/json"
-    "archive/tar"
     "github.com/spf13/cobra"
     "github.com/Sirupsen/logrus"
     "github.com/docker/engine-api/client"
@@ -15,7 +15,6 @@ import (
     "github.com/cloudway/platform/proxy"
     "github.com/cloudway/platform/plugin"
     "golang.org/x/net/context"
-    "bytes"
 )
 
 func init() {
@@ -36,6 +35,7 @@ func runUpdateProxyCmd(cmd *cobra.Command, args []string) {
     filters.Add("type", "container")
     filters.Add("event", "start")
     filters.Add("event", "die")
+    filters.Add("event", "destroy")
     filters.Add("label", container.APP_NAME_KEY)
     filters.Add("label", container.APP_NAMESPACE_KEY)
 
@@ -69,12 +69,8 @@ func runUpdateProxyCmd(cmd *cobra.Command, args []string) {
                 err = handleStart(proxy, c)
             }
 
-        case "die":
-            logrus.Debugf("container die: %s", event.Actor.ID)
-            c, err := container.Inspect(cli, event.Actor.ID)
-            if err == nil {
-                err = handleStop(proxy, c)
-            }
+        case "die", "destroy":
+            err = handleStop(proxy, event.Actor.ID)
         }
 
         if err != nil {
@@ -91,26 +87,13 @@ func handleStart(proxy proxy.Proxy, c *container.Container) error {
         return err
     }
 
-    endpoints, err := decodeEndpointInfo(&buf)
-    if err != nil {
+    var endpoints []*plugin.Endpoint
+    dec := json.NewDecoder(&buf)
+    if err = dec.Decode(&endpoints); err != nil {
         return err
     }
 
-    err = proxy.AddEndpoints(endpoints)
-    if err != nil {
-        return err
-    }
-
-    return nil
-}
-
-func handleStop(proxy proxy.Proxy, c *container.Container) error {
-    endpoints, err := readEndpointInfo(c)
-    if err != nil {
-        return err
-    }
-
-    err = proxy.RemoveEndpoints(endpoints)
+    err = proxy.AddEndpoints(c.ID, endpoints)
     if err != nil {
         return err
     }
@@ -118,25 +101,10 @@ func handleStop(proxy proxy.Proxy, c *container.Container) error {
     return nil
 }
 
-func readEndpointInfo(c *container.Container) ([]*plugin.Endpoint, error) {
-    filename := c.EnvDir() + "/.endpoint"
-    r, _, err := c.CopyFromContainer(context.Background(), c.ID, filename)
+func handleStop(proxy proxy.Proxy, id string) error {
+    err := proxy.RemoveEndpoints(id)
     if err != nil {
-        return nil, err
+        return err
     }
-    defer r.Close()
-
-    tr := tar.NewReader(r)
-    _, err = tr.Next()
-    if err != nil {
-        return nil, err
-    }
-    return decodeEndpointInfo(tr)
-}
-
-func decodeEndpointInfo(r io.Reader) ([]*plugin.Endpoint, error) {
-    endpoints := make([]*plugin.Endpoint, 0)
-    dec := json.NewDecoder(r)
-    err := dec.Decode(&endpoints)
-    return endpoints, err
+    return nil
 }

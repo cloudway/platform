@@ -2,10 +2,10 @@ package proxy
 
 import (
     "net/url"
+    "strings"
     "github.com/cloudway/platform/plugin"
     "github.com/garyburd/redigo/redis"
     "github.com/Sirupsen/logrus"
-    "strings"
 )
 
 type hipacheProxy struct {
@@ -26,31 +26,29 @@ func (px *hipacheProxy) Close() error {
     return px.conn.Close()
 }
 
-func (px *hipacheProxy) AddEndpoints(endpoints []*plugin.Endpoint) error {
-    return px.forEndpoints(endpoints, addEndpoint)
-}
+func (px *hipacheProxy) AddEndpoints(id string, endpoints []*plugin.Endpoint) error {
+    // remove previously configured endpoints
+    if err := px.RemoveEndpoints(id); err != nil {
+        return err
+    }
 
-func (px *hipacheProxy) RemoveEndpoints(endpoints []*plugin.Endpoint) error {
-    return px.forEndpoints(endpoints, removeEndpoint)
-}
-
-type hipacheProxyFunc func(redis.Conn, string, string) error
-
-func (px *hipacheProxy) forEndpoints(endpoints []*plugin.Endpoint, fn hipacheProxyFunc) error {
+    // add new endpoints
     for _, ep := range endpoints {
         for _, m := range ep.ProxyMappings {
             if m.Protocol == "http" && !strings.ContainsRune(m.Frontend, '/') { // FIXME
-                if err := fn(px.conn, m.Frontend, m.Backend); err != nil {
+                if err := addEndpoint(px.conn, id, m.Frontend, m.Backend); err != nil {
                     return err
                 }
             }
         }
     }
+
     return nil
 }
 
-func addEndpoint(conn redis.Conn, frontend, backend string) error {
-    key := prefixKey(frontend)
+func addEndpoint(conn redis.Conn, id, frontend, backend string) error {
+    key  := "frontend:" + frontend
+    ckey := "container:" + id
 
     exists, err := redis.Bool(conn.Do("EXISTS", key))
     if err != nil {
@@ -65,35 +63,64 @@ func addEndpoint(conn redis.Conn, frontend, backend string) error {
         logrus.Infof("add %s", frontend)
     }
 
+    // add endpoint record
     _, err = conn.Do("RPUSH", key, backend)
-    if err == nil {
-        logrus.Infof("add %s -> %s", frontend, backend)
+    if err != nil {
+        return err
+    } else {
+        logrus.Infof("add %s -> %s", key, backend)
     }
-    return err
+
+    // add container record
+    _, err = conn.Do("RPUSH", ckey, key+" "+backend)
+    if err != nil {
+        return err
+    } else {
+        logrus.Infof("add %s", ckey)
+    }
+
+    return nil
 }
 
-func removeEndpoint(conn redis.Conn, frontend, backend string) error {
-    key := prefixKey(frontend)
+func (px *hipacheProxy) RemoveEndpoints(id string) error {
+    key := "container:" + id
 
-    _, err := conn.Do("LREM", key, 0, backend)
-    if err == nil {
-        logrus.Infof("remove %s -> %s", frontend, backend)
-    } else {
+    // query endpoints by container id
+    r, err := redis.Values(px.conn.Do("LRANGE", key, 0, -1))
+    if err != nil {
         return err
     }
 
-    n, err := redis.Int(conn.Do("LLEN", key))
-    if err == nil && n <= 1 {
-        // remove the whole frontend
-        _, err := conn.Do("DEL", key)
-        if err == nil {
-            logrus.Infof("remove %s", frontend)
+    var vs []string
+    if err = redis.ScanSlice(r, &vs); err != nil {
+        return err
+    }
+    if len(vs) == 0 {
+        return nil
+    }
+
+    // remove endpoints associated to the given container
+    for _, rec := range vs {
+        kv := strings.SplitN(rec, " ", 2)
+        frontend, backend := kv[0], kv[1]
+        if _, err = px.conn.Do("LREM", frontend, 0, backend); err != nil {
+            logrus.Infof("remove %s -> %s", frontend, backend)
+        }
+
+        n, err := redis.Int(px.conn.Do("LLEN", frontend))
+        if err == nil && n <= 1 {
+            // remove the whole frontend
+            _, err := px.conn.Do("DEL", frontend)
+            if err == nil {
+                logrus.Infof("remove %s", frontend)
+            }
         }
     }
 
-    return err
-}
+    // remove container record
+    if _, err = px.conn.Do("DEL", key); err == nil {
+        logrus.Infof("remove %s", key)
+    }
 
-func prefixKey(h string) string {
-    return "frontend:" + h
+    return err
 }

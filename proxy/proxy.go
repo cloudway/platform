@@ -8,8 +8,8 @@ import (
 )
 
 type Proxy interface {
-    AddEndpoints(endpoints []*plugin.Endpoint) error
-    RemoveEndpoints(endpoints []*plugin.Endpoint) error
+    AddEndpoints(id string, endpoints []*plugin.Endpoint) error
+    RemoveEndpoints(id string) error
     Close() error
 }
 
