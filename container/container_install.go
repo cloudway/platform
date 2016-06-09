@@ -1,15 +1,16 @@
 package container
 
 import (
+    "fmt"
     "errors"
     "os"
+    "io"
     "io/ioutil"
     "archive/tar"
-    "github.com/cloudway/platform/container/archive"
     "strings"
     "compress/gzip"
-    "io"
     "github.com/Sirupsen/logrus"
+    "github.com/cloudway/platform/container/archive"
 )
 
 func (c *Container) Install(source string) error {
@@ -22,8 +23,8 @@ func (c *Container) Install(source string) error {
     if err != nil {
         return err
     }
-    if meta.IsFramework() {
-        return errors.New(meta.Name+": Cannnot be a framework plugin")
+    if !meta.IsLibrary() {
+        return fmt.Errorf("%s: Must be a library plugin", meta.Name)
     }
 
     // create plugin archive file

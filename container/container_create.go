@@ -11,6 +11,7 @@ import (
     "io/ioutil"
     "archive/tar"
     "encoding/json"
+    "text/template"
 
     "golang.org/x/net/context"
     "github.com/Sirupsen/logrus"
@@ -26,30 +27,140 @@ import (
     "github.com/cloudway/platform/container/archive"
 )
 
-// Create a new application container.
-func Create(config map[string]string) (*Container, error) {
+type CreateOptions struct {
+    Name            string
+    Namespace       string
+    Category        plugin.Category
+    ServiceName     string
+    Home            string
+    User            string
+    Hostname        string
+    FQDN            string
+    Capacity        string
+    Scaling         int
+    PluginSource    string
+    PluginName      string
+    PluginPath      string
+    BaseImage       string
+    InstallScript   string
+    Debug           bool
+}
+
+// Create new application containers.
+func Create(config CreateOptions) ([]*Container, error) {
     cli, err := docker_client()
     if err != nil {
         return nil, err
     }
 
-    plugin, err := archive.ReadManifest(config["source"])
-    if err != nil {
-        return nil, err
-    }
-    if !plugin.IsFramework() || plugin.BaseImage == "" {
-        return nil, fmt.Errorf("%s is not a valid framework plugin", plugin.Path)
-    }
-
-    image, err := buildImage(cli, plugin, config)
+    meta, err := archive.ReadManifest(config.PluginSource)
     if err != nil {
         return nil, err
     }
 
-    return createContainer(cli, image, config)
+    if config.Home == "" {
+        config.Home = defaults.AppHome()
+    }
+    if config.User == "" {
+        config.User = defaults.AppUser()
+    }
+
+    config.Category   = meta.Category
+    config.PluginName = meta.Name
+    config.PluginPath = filepath.Base(meta.Path)
+    config.BaseImage  = meta.BaseImage
+    config.Debug      = DEBUG
+
+    switch config.Category {
+    case plugin.Framework:
+        return createApplicationContainer(cli, meta, config)
+    case plugin.Service:
+        return createServiceContainer(cli, meta, config)
+    default:
+        return nil, fmt.Errorf("%s is not a valid plugin", meta.Path)
+    }
 }
 
-func buildImage(cli *client.Client, plugin *plugin.Plugin, config map[string]string) (image string, err error) {
+func createApplicationContainer(cli *client.Client, plugin *plugin.Plugin, config CreateOptions) ([]*Container, error) {
+    if config.ServiceName != "" {
+        return nil, fmt.Errorf("The application name cannot contains a serivce name: %s", config.ServiceName)
+    }
+
+    config.Hostname = config.Name + "-" + config.Namespace
+    config.FQDN = config.Hostname + "." + defaults.Domain()
+
+    scale, err := getScaling(config.Name, config.Namespace, config.Scaling)
+    if err != nil {
+        return nil, err
+    }
+
+    image, err := buildImage(cli, dockerfileTemplate, plugin, config)
+    if err != nil {
+        return nil, err
+    }
+
+    var containers []*Container
+    for i := 0; i < scale; i++ {
+        if c, err := createContainer(cli, image, config); err != nil {
+            return nil, err
+        } else {
+            containers = append(containers, c)
+        }
+    }
+
+    return containers, nil
+}
+
+func getScaling(name, namespace string, scale int) (int, error) {
+    if scale <= 0 {
+        return 0, fmt.Errorf("Invalid scaling value, it must be greater than 0")
+    }
+
+    cs, err := FindApplications(name, namespace)
+    if err != nil {
+        return 0, err
+    }
+
+    n := len(cs)
+    if scale <= n {
+        return 0, fmt.Errorf("Application containers already reached maximum scaling value. " +
+                             "(maximum scaling = %d, existing containers = %d", scale, n)
+    }
+
+    return scale - n, nil
+}
+
+func createServiceContainer(cli *client.Client, plugin *plugin.Plugin, config CreateOptions) ([]*Container, error) {
+    if config.ServiceName == "" {
+        config.ServiceName = plugin.Name
+    }
+
+    name, namespace, service := config.Name, config.Namespace, config.ServiceName
+    config.Hostname = service + "." + name + "-" + namespace
+    config.FQDN = config.Hostname + "." + defaults.Domain()
+
+    cs, err := FindService(name, namespace, service)
+    if err != nil {
+        return nil, err
+    }
+    if len(cs) != 0 {
+        return nil, fmt.Errorf("Service already installed: %s", service)
+    }
+
+    image, err := buildImage(cli, dockerfileTemplate, plugin, config)
+    if err != nil {
+        return nil, err
+    }
+
+    c, err := createContainer(cli, image, config)
+    if err != nil {
+        return nil, err
+    } else {
+        return []*Container{c}, nil
+    }
+}
+
+func buildImage(cli *client.Client, t *template.Template, plugin *plugin.Plugin, config CreateOptions) (image string, err error) {
     // Create temporary tar archive to create build context
     tarFile, err := ioutil.TempFile("", "docker");
     if err != nil {
@@ -64,7 +175,8 @@ func buildImage(cli *client.Client, plugin *plugin.Plugin, config map[string]str
     logrus.Debugf("Created temporary build context: %s", tarFile.Name())
 
     // create and add Dockerfile to archive
-    if err = archive.AddFile(tw, "Dockerfile", 0644, createDockerfile(plugin, config)); err != nil {
+    dockerfile := createDockerfile(t, plugin, config)
+    if err = archive.AddFile(tw, "Dockerfile", 0644, dockerfile); err != nil {
         return
     }
 
@@ -126,79 +238,21 @@ func readBuildImageId(in io.Reader) (id string, err error) {
     return id, err
 }
 
-func createDockerfile(plugin *plugin.Plugin, config map[string]string) []byte {
-    name, namespace := config["name"], config["namespace"]
-    if name == "" || namespace == "" {
-        panic("create: no name and/or namespace provided")
-    }
-
-    home := getOrDefault(config, "home", defaults.AppHome())
-    user := getOrDefault(config, "user", defaults.AppUser())
-
-    // Populating the Dockerfile contents
-    buf := new(bytes.Buffer)
-
-    fmt.Fprintf(buf, "FROM %s\n", plugin.BaseImage)
-
-    // Begin of RUN commands, make sure RUN commands contiguous
-    fmt.Fprintf(buf, "RUN ")
-
-    // Create operating system user and group
-    fmt.Fprintf(buf, "groupadd %[1]s && useradd -g %[1]s -d %[2]s -m %[1]s -s /usr/bin/cwsh", user, home)
-
-    // Create home directory
-    fmt.Fprint(buf, " && mkdir -p")
-    for _, d := range []string{".env", "repo", "data", "logs"} {
-        fmt.Fprintf(buf, " %s/%s", home, d)
-    }
-
-    // Set directory permissions
-    fmt.Fprintf(buf, " && chown -R %[1]s:%[1]s %[2]s" +
-                     " && chown root:root %[2]s/.env",
-                     user, home)
-
-    // Run plugin install script
+func createDockerfile(t *template.Template, plugin *plugin.Plugin, config CreateOptions) []byte{
     b, err := archive.ReadFile(plugin.Path, "bin/install")
     if err == nil {
         script := strings.Replace(string(b), "\n", "\\n\\\n", -1)
         script  = strings.Replace(script, "\"", "\\\"", -1)
-        fmt.Fprintf(buf, " && echo \"%s\" | /bin/bash", script)
+        config.InstallScript = script
+    } else {
+        config.InstallScript = ""
     }
 
-    // End of RUN commands. From then on, the image cache is invalidated.
-    fmt.Fprintf(buf, "\nWORKDIR %s\n", home)
-
-    // Copy application support files
-    fmt.Fprintln(buf, "COPY support /")
-
-    // Add plugin files
-    installDir := "/tmp/install_" + plugin.Name
-    fmt.Fprintf(buf, "ADD %s %s\n", filepath.Base(plugin.Path), installDir)
-
-    // Add application environment variables
-    env := map[string]string {
-        "CLOUDWAY_APP_NAME":      name,
-        "CLOUDWAY_APP_NAMESPACE": namespace,
-        "CLOUDWAY_APP_DNS":       name + "-" + namespace + "." + defaults.Domain(),
-        "CLOUDWAY_APP_USER":      user,
-        "CLOUDWAY_HOME_DIR":      home,
-        "CLOUDWAY_LOG_DIR":       home + "/logs",
-        "CLOUDWAY_DATA_DIR":      home + "/data",
-        "CLOUDWAY_REPO_DIR":      home + "/repo",
+    var buf bytes.Buffer
+    if err = t.Execute(&buf, config); err != nil {
+        panic(err)
     }
-
-    fmt.Fprint(buf, "ENV")
-    for k, v := range env {
-        fmt.Fprintf(buf, " %s=%q", k, v)
-    }
-    fmt.Fprintln(buf)
-
-    // Run plugin setup script
-    debug := ""
-    if DEBUG { debug = "--debug "}
-    fmt.Fprintf(buf, "RUN /usr/bin/cwctl %sinstall %s %s\n", debug, plugin.Name, installDir)
-
-    if (DEBUG) {
+    if DEBUG {
         fmt.Println(buf.String())
     }
     return buf.Bytes()
@@ -216,30 +270,30 @@ func addPluginFiles(tw *tar.Writer, path string) error {
     }
 }
 
-func createContainer(cli *client.Client, imageId string, config map[string]string) (c *Container, err error) {
-    options := &container.Config {
+func createContainer(cli *client.Client, imageId string, options CreateOptions) (*Container, error) {
+    config := &container.Config {
         Image: imageId,
         Labels: map[string]string {
-            APP_NAME_KEY:      config["name"],
-            APP_NAMESPACE_KEY: config["namespace"],
-            APP_HOME_KEY:      getOrDefault(config, "home", defaults.AppHome()),
-            APP_CAPACITY_KEY:  getOrDefault(config, "capacity", defaults.AppCapacity()),
+            CATEGORY_KEY:      string(options.Category),
+            APP_NAME_KEY:      options.Name,
+            APP_NAMESPACE_KEY: options.Namespace,
+            APP_HOME_KEY:      options.Home,
         },
-        User: getOrDefault(config, "user", defaults.AppUser()),
+        User: options.User,
         Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "run"},
     }
 
-    resp, err := cli.ContainerCreate(context.Background(), options, &container.HostConfig{}, &network.NetworkingConfig{}, "")
+    if options.Category == plugin.Service {
+        config.Hostname = options.Hostname
+        config.Labels[SERVICE_NAME_KEY] = options.ServiceName
+    }
+
+    hostConfig := &container.HostConfig{}
+    netConfig := &network.NetworkingConfig{}
+
+    resp, err := cli.ContainerCreate(context.Background(), config, hostConfig, netConfig, "")
     if err != nil {
-        return
+        return nil, err
     }
     return Inspect(cli, resp.ID)
-}
-
-func getOrDefault(config map[string]string, key string, deflt string) string {
-    if value, ok := config[key]; ok {
-        return value
-    } else {
-        return deflt
-    }
 }

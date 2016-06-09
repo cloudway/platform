@@ -57,7 +57,7 @@ delete from user where user='$username' or user='root' or user='';
 grant all on *.* to '$username'@'127.0.0.1' identified by '$password' with grant option;
 grant all on *.* to '$username'@'::1' identified by '$password' with grant option;
 grant all on *.* to '$username'@'localhost' identified by '$password' with grant option;
-grant all on *.* to '$username'@'$hostname' identified by '$password' with grant option;
+grant all on *.* to '$username'@'%' identified by '$password' with grant option;
 EOF
 
     echo "flush privileges;"

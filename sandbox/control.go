@@ -47,12 +47,6 @@ func (app *Application) Control(action string, enable_action_hooks, process_temp
         }
     }
 
-    if process_templates {
-        if err := processTemplates(app.RepoDir(), env); err != nil {
-            return err
-        }
-    }
-
     if enable_action_hooks {
         if err := app.runActionHook("post_" + action, eenv); err != nil {
             return err

@@ -70,7 +70,7 @@ func (app *Application) installPlugin(target string) error {
     }
 
     // run install script for non-framework plugin
-    if !meta.IsFramework() {
+    if meta.IsLibrary() {
         if err = runPluginAction(target, nil, "install"); err != nil {
             logrus.WithError(err).Error("run install script failed")
             return err

@@ -9,13 +9,15 @@ import (
     "golang.org/x/net/context"
 
     "github.com/cloudway/platform/container/conf/defaults"
+    "github.com/cloudway/platform/plugin"
 )
 
 const (
     APP_NAME_KEY        = "com.cloudway.app.name"
     APP_NAMESPACE_KEY   = "com.cloudway.app.namespace"
     APP_HOME_KEY        = "com.cloudway.app.home"
-    APP_CAPACITY_KEY    = "com.cloudway.app.capacity"
+    CATEGORY_KEY        = "com.cloudway.container.category"
+    SERVICE_NAME_KEY    = "com.cloudway.service.name"
 )
 
 var DEBUG bool
@@ -117,49 +119,86 @@ func All() (containers []*Container, err error) {
     return containers, err
 }
 
+// Find all containers with the given name and namespace.
+func FindAll(name, namespace string) (container []*Container, err error) {
+    return find(name, namespace, filters.NewArgs())
+}
+
 // Find all application containers with the given name and namespace.
-func Find(name, namespace string) (containers []*Container, err error) {
+func FindApplications(name, namespace string) (containers []*Container, err error) {
+    args := filters.NewArgs()
+    args.Add("label", CATEGORY_KEY + "=Framework")
+    return find(name, namespace, args)
+}
+
+// Find all service containers associated with the given name and namespace.
+func FindServices(name, namespace string) (containers []*Container, err error) {
+    args := filters.NewArgs()
+    args.Add("label", CATEGORY_KEY + "=Service")
+    return find(name, namespace, args)
+}
+
+// Find service container with the give name, namespace and service name.
+func FindService(name, namespace, service string) (Container []*Container, err error) {
+    args := filters.NewArgs()
+    args.Add("label", CATEGORY_KEY + "=Service")
+    args.Add("label", SERVICE_NAME_KEY + "=" + service)
+    return find(name, namespace, args)
+}
+
+func find(name, namespace string, args filters.Args) (containers []*Container, err error) {
     cli, err := docker_client()
     if err != nil {
         return nil, err
     }
 
-    args := filters.NewArgs()
     args.Add("label", APP_NAME_KEY + "=" + name)
     args.Add("label", APP_NAMESPACE_KEY + "=" + namespace)
     options := types.ContainerListOptions{All: true, Filter: args}
 
     list, err := cli.ContainerList(context.Background(), options);
     if err == nil {
-        containers = make([]*Container, len(list))
-        for i, c := range list {
+        containers = make([]*Container, 0, len(list))
+        for _, c := range list {
             cc, err := Inspect(cli, c.ID)
             if err != nil {
-                break;
+                return nil, err
             }
-            containers[i] = cc
+            containers = append(containers, cc)
         }
     }
     return containers, err
 }
 
+func (c *Container) Category() plugin.Category {
+     return plugin.Category(c.Config.Labels[CATEGORY_KEY])
+}
+
+func (c *Container) ServiceName() string {
+    return c.Config.Labels[SERVICE_NAME_KEY]
+}
+
+func (c *Container) GetServices() ([]*Container, error) {
+    return FindServices(c.Name, c.Namespace)
+}
+
+// Returns the host name of the container.
+func (c *Container) Hostname() string {
+    if c.Category() == plugin.Service {
+        return c.ServiceName() + "." + c.Name + "-" + c.Namespace
+    } else {
+        return c.Name + "-" + c.Namespace
+    }
+}
+
 // Returns the fully qualified domain name of the container.
 func (c *Container) FQDN() string {
-    return c.Name + "-" + c.Namespace + "." + defaults.Domain()
+    return c.Hostname() + "." + defaults.Domain()
 }
 
 // Returns the IP address of the container
 func (c *Container) IP() string {
     return c.NetworkSettings.IPAddress
-}
-
-// Get the container capacity.
-func (c *Container) Capacity() string {
-    if capacity, ok := c.Config.Labels[APP_CAPACITY_KEY]; ok {
-        return capacity
-    } else {
-        return defaults.AppCapacity()
-    }
 }
 
 // Returns the container's operating system user that running the application.

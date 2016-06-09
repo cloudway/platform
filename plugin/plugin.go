@@ -13,6 +13,14 @@ import (
     "gopkg.in/yaml.v2"
 )
 
+type Category string
+
+const (
+    Framework Category = "Framework"
+    Service   Category = "Service"
+    Library   Category = "Library"
+)
+
 type Plugin struct {
     Path            string `yaml:"-"`
     Name            string `yaml:"Name"`
@@ -22,7 +30,7 @@ type Plugin struct {
     Vendor          string `yaml:"Vendor"`
     PluginVersion   string `yaml:"Plugin-Version"`
     PluginVendor    string `yaml:"Plugin-Vendor"`
-    Category        string `yaml:"Category"`
+    Category        Category `yaml:"Category"`
     BaseImage       string `yaml:"Base-Image"`
     Endpoints       []*Endpoint `yaml:"Endpoints,omitempty"`
 }
@@ -82,12 +90,6 @@ func ReadManifest(f io.Reader) (*Plugin, error) {
     plugin := &Plugin{}
     err = yaml.Unmarshal(data, plugin)
     return plugin, err
-}
-
-func (p *Plugin) CopyOf(path string) *Plugin {
-    var copy Plugin = *p
-    copy.Path = path
-    return &copy
 }
 
 func (p *Plugin) GetEndpoints(host string) []*Endpoint {
@@ -152,5 +154,13 @@ func getBackendUri(ep *Endpoint, uri, protocol string) string {
 }
 
 func (p *Plugin) IsFramework() bool {
-    return p.Category == "Framework"
+    return p.Category == Framework
+}
+
+func (p *Plugin) IsService() bool {
+    return p.Category == Service
+}
+
+func (p *Plugin) IsLibrary() bool {
+    return p.Category == Library
 }
