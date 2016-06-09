@@ -69,6 +69,10 @@ func (app *Application) DataDir() string {
     return filepath.Join(app.HomeDir(), "data")
 }
 
+func (app *Application) LogDir() string {
+    return filepath.Join(app.HomeDir(), "logs")
+}
+
 func (app *Application) Name() string {
     return app.name
 }

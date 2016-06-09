@@ -41,6 +41,16 @@ func runDownloadCmd(cmd *cobra.Command, args []string) {
             includes = container.IncludeRepo
         }
 
-        return c.Download(includes, os.Stdout)
+        var dir string
+        if len(args) == 1 {
+            dir = "."
+        } else {
+            dir = args[1];
+        }
+        if dir == "-" {
+            return c.DownloadArchive(includes, os.Stdout)
+        } else {
+            return c.DownloadFiles(includes, dir)
+        }
     })
 }

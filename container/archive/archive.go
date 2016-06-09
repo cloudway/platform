@@ -205,3 +205,43 @@ func CopyFileTree(tw* tar.Writer, dst, src string, followLinks bool) error {
         return err
     })
 }
+
+func ExtractFiles(tr *tar.Reader, dst string) error {
+    for {
+        hdr, err := tr.Next()
+        if err != nil {
+            if err == io.EOF {
+                return nil
+            }
+            return err
+        }
+
+        dst := filepath.Join(dst, hdr.Name)
+        switch hdr.Typeflag {
+        case tar.TypeDir:
+            logrus.Debugf("Creating directory: %s", dst)
+            if err = os.MkdirAll(dst, os.FileMode(hdr.Mode)); err != nil {
+                return err
+            }
+            os.Chtimes(dst, hdr.AccessTime, hdr.ChangeTime)
+
+        case tar.TypeReg:
+            logrus.Debugf("Extracting %s", dst)
+            os.MkdirAll(filepath.Dir(dst), 0755)
+            w, err := os.Create(dst)
+            if err != nil {
+                return err
+            }
+            _, err = io.Copy(w, tr);
+            w.Close()
+            if err != nil {
+                return err
+            }
+            os.Chmod(dst, os.FileMode(hdr.Mode));
+            os.Chtimes(dst, hdr.AccessTime, hdr.ChangeTime)
+
+        default:
+            return fmt.Errorf("Unable to extract file %s", hdr.Name) // FIXME
+        }
+    }
+}

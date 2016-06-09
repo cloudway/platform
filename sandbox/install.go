@@ -4,7 +4,6 @@ import (
     "fmt"
     "io"
     "os"
-    "archive/tar"
     "strings"
     "regexp"
     "errors"
@@ -33,9 +32,9 @@ func (app *Application) Install(name string, source string, input io.Reader) err
     }
 
     if input != nil {
-        err = app.extractPluginFiles(target, input)
+        err = app.ExtractFiles(target, input)
     } else {
-        err = app.copyPluginFiles(target, source)
+        err = app.MoveFiles(target, source)
     }
 
     if err == nil {
@@ -96,92 +95,6 @@ func (app *Application) installPlugin(target string) error {
     return chownR(target, app.uid, app.gid)
 }
 
-func (app *Application) extractPluginFiles(target string, source io.Reader) error {
-    tr := tar.NewReader(source)
-
-    for {
-        hdr, err := tr.Next()
-        if err != nil {
-            if err == io.EOF {
-                return nil
-            }
-            return err
-        }
-
-        dst := filepath.Join(target, hdr.Name)
-        switch hdr.Typeflag {
-        case tar.TypeDir:
-            logrus.Debugf("Creating directory: %s", dst)
-            if err = os.MkdirAll(dst, os.FileMode(hdr.Mode)); err != nil {
-                return err
-            }
-            os.Chtimes(dst, hdr.AccessTime, hdr.ChangeTime)
-
-        case tar.TypeReg:
-            logrus.Debugf("Extracting %s", dst)
-            os.MkdirAll(filepath.Dir(dst), 0755)
-            w, err := os.Create(dst)
-            if err != nil {
-                return err
-            }
-            _, err = io.Copy(w, tr);
-            w.Close()
-            if err != nil {
-                return err
-            }
-            os.Chmod(dst, os.FileMode(hdr.Mode));
-            os.Chtimes(dst, hdr.AccessTime, hdr.ChangeTime)
-
-        default:
-            return fmt.Errorf("Unable to extract file %s", hdr.Name) // FIXME
-        }
-    }
-}
-
-func (app *Application) copyPluginFiles(dst, src string) error {
-    defer os.RemoveAll(src)
-
-    return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-        if err != nil {
-            return err
-        }
-
-        target, err := filepath.Rel(src, path)
-        if err != nil {
-            logrus.WithError(err).Debug("Failed to get relative path")
-            return nil
-        }
-        target = filepath.Join(dst, target)
-        logrus.Debugf("Copying %s to %s", path, target)
-
-        if info.IsDir() {
-            os.MkdirAll(target, info.Mode())
-            return nil
-        }
-
-        in, err := os.Open(path)
-        if err != nil {
-            return err
-        }
-        defer in.Close()
-
-        out, err := os.Create(target)
-        if err != nil {
-            return err
-        }
-        defer out.Close()
-
-        _, err = io.Copy(out, in)
-        if err != nil {
-            return err
-        }
-
-        os.Chmod(target, info.Mode())
-        os.Chtimes(target, info.ModTime(), info.ModTime())
-        return nil
-    })
-}
-
 var _TEMPLATE_RE = regexp.MustCompile(`^\.?(.*)\.cwt$`)
 
 func processTemplates(root string, env map[string]string) error {
@@ -231,7 +144,7 @@ func (app *Application) populateFromTemplate(basedir string) error {
     if fi, err := os.Stat(t); err != nil || !fi.IsDir() {
         return nil
     } else {
-        if err := app.copyPluginFiles(app.RepoDir(), t); err == nil {
+        if err := app.MoveFiles(app.RepoDir(), t); err == nil {
             err = chownR(app.RepoDir(), app.uid, app.gid)
         }
         return err

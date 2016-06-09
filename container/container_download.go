@@ -2,8 +2,10 @@ package container
 
 import (
     "io"
+    "os"
     "archive/tar"
     "github.com/docker/distribution/context"
+    "github.com/cloudway/platform/container/archive"
 )
 
 type Includes uint8
@@ -16,23 +18,23 @@ const (
     IncludeAll = IncludeData | IncludeRepo | IncludeLogs
 )
 
-func (c *Container) Download(includes Includes, w io.Writer) (err error) {
+func (c *Container) DownloadArchive(includes Includes, w io.Writer) (err error) {
     tw := tar.NewWriter(w)
 
     if (includes & IncludeRepo) != 0 {
-        err = download(tw, c, "repo", c.RepoDir())
+        err = downloadArchive(tw, c, "repo", c.RepoDir())
     }
     if err == nil && (includes & IncludeData) != 0 {
-        err = download(tw, c, "data", c.DataDir())
+        err = downloadArchive(tw, c, "data", c.DataDir())
     }
     if err == nil && (includes & IncludeLogs) != 0 {
-        err = download(tw, c, "logs", c.LogDir())
+        err = downloadArchive(tw, c, "logs", c.LogDir())
     }
 
     return tw.Close()
 }
 
-func download(tw *tar.Writer, c *Container, dir, path string) (err error) {
+func downloadArchive(tw *tar.Writer, c *Container, dir, path string) (err error) {
     r, _, err := c.CopyFromContainer(context.Background(), c.ID, path)
     if err != nil {
         return err
@@ -60,4 +62,32 @@ func download(tw *tar.Writer, c *Container, dir, path string) (err error) {
     }
 
     return nil
+}
+
+func (c *Container) DownloadFiles(includes Includes, dst string) (err error) {
+    if (includes & IncludeRepo) != 0 {
+        err = downloadFiles(c, c.RepoDir(), dst)
+    }
+    if err == nil && (includes & IncludeData) != 0 {
+        err = downloadFiles(c, c.DataDir(), dst)
+    }
+    if err == nil && (includes & IncludeLogs) != 0 {
+        err = downloadFiles(c, c.LogDir(), dst)
+    }
+    return nil
+}
+
+func downloadFiles(c *Container, path, dst string) (err error) {
+    r, _, err := c.CopyFromContainer(context.Background(), c.ID, path)
+    if err != nil {
+        return err
+    }
+    defer r.Close()
+
+    if err = os.MkdirAll(dst, 0755); err != nil {
+        return err
+    }
+
+    tr := tar.NewReader(r)
+    return archive.ExtractFiles(tr, dst)
 }
