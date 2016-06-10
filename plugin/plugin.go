@@ -21,6 +21,12 @@ const (
     Library   Category = "Library"
 )
 
+type ApplicationInfo struct {
+    Env             map[string]string
+    Endpoints       []*Endpoint
+    Plugins         []*Plugin
+}
+
 type Plugin struct {
     Path            string `yaml:"-"`
     Name            string `yaml:"Name"`

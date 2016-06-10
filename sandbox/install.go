@@ -57,11 +57,11 @@ func (app *Application) installPlugin(target string) error {
     name := meta.Name
 
     // add environemnt variables
-    app.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_DIR", target)
-    app.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_VERSION", meta.Version)
+    app.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_DIR", target, false)
+    app.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_VERSION", meta.Version, false)
     if meta.IsFramework() {
-        app.Setenv("CLOUDWAY_FRAMEWORK", name)
-        app.Setenv("CLOUDWAY_FRAMEWORK_DIR", target)
+        app.Setenv("CLOUDWAY_FRAMEWORK", name, false)
+        app.Setenv("CLOUDWAY_FRAMEWORK_DIR", target, false)
     }
 
     // process templates by substitution with environment variables

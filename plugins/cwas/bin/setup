@@ -48,8 +48,8 @@ mkdir -p ${CLOUDWAY_CWAS_DIR}/{data,logs,run}
 username=$(generate_username)
 password=$(generate_password)
 
-cwctl setenv CLOUDWAY_CWAS_ADMIN_USERNAME "$username"
-cwctl setenv CLOUDWAY_CWAS_ADMIN_PASSWORD "$password"
+cwctl setenv --export CLOUDWAY_CWAS_ADMIN_USERNAME "$username"
+cwctl setenv --export CLOUDWAY_CWAS_ADMIN_PASSWORD "$password"
 
 echo ""
 echo "Please make note of these credentials:"

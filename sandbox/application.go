@@ -188,8 +188,8 @@ func (app *Application) CreatePrivateEndpoints(ip string) error {
 
     for _, p := range plugins {
         for _, ep := range p.GetEndpoints(ip) {
-            app.SetPluginEnv(p, ep.PrivateHostName, ip)
-            app.SetPluginEnv(p, ep.PrivatePortName, strconv.Itoa(int(ep.PrivatePort)))
+            app.SetPluginEnv(p, ep.PrivateHostName, ip, true)
+            app.SetPluginEnv(p, ep.PrivatePortName, strconv.Itoa(int(ep.PrivatePort)), true)
         }
     }
 

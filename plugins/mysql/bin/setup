@@ -52,8 +52,8 @@ password=$(generate_password)
 
 /usr/local/mysql/scripts/mysql_install_db --basedir=/usr/local/mysql --datadir=${datadir} --skip-name-resolve --force > /dev/null
 
-cwctl setenv CLOUDWAY_MYSQL_DB_USERNAME "$username"
-cwctl setenv CLOUDWAY_MYSQL_DB_PASSWORD "$password"
+cwctl setenv --export CLOUDWAY_MYSQL_DB_USERNAME "$username"
+cwctl setenv --export CLOUDWAY_MYSQL_DB_PASSWORD "$password"
 cwctl setenv CLOUDWAY_MYSQL_DB_SOCKET   "$socket"
 
 echo ""

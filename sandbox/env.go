@@ -11,19 +11,20 @@ import (
     "github.com/cloudway/platform/plugin"
 )
 
-var validEnvKey = regexp.MustCompile("^[A-Z_0-9]+$")
+var validEnvKey = regexp.MustCompile(`^[A-Z_0-9]+(\.export)?$`)
+const exportSuffix = ".export"
 
 func (a *Application) Environ() map[string]string {
     var env = make(map[string]string)
 
     // load user environment variables
-    loadEnv(env, filepath.Join(a.RepoDir(), ".cloudway", "env"))
+    loadEnv(env, filepath.Join(a.RepoDir(), ".cloudway", "env"), false)
 
     // merge application environment variables
-    loadEnv(env, a.EnvDir())
+    loadEnv(env, a.EnvDir(), false)
 
     // Merge plugin environemnt variables
-    loadPluginsEnv(env, a.HomeDir());
+    loadPluginsEnv(env, a.HomeDir(), false);
 
     // Merge system environemnt variables
     for _, e := range os.Environ() {
@@ -38,7 +39,19 @@ func (a *Application) Environ() map[string]string {
     return env
 }
 
-func loadEnv(env map[string]string, path string) {
+func (a *Application) ExportedEnviron() map[string]string {
+    var env = make(map[string]string)
+
+    // load exported application environment variables
+    loadEnv(env, a.EnvDir(), true)
+
+    // Merge plugin exported environment variable
+    loadPluginsEnv(env, a.HomeDir(), true)
+
+    return env
+}
+
+func loadEnv(env map[string]string, path string, exporting bool) {
     logrus.Debugf("Loading environemnts from %s", path)
     files, err := ioutil.ReadDir(path)
     if err != nil {
@@ -54,6 +67,15 @@ func loadEnv(env map[string]string, path string) {
             val, err := readEnvFile(filename)
             if err != nil {
                 logrus.Debug(err)
+                continue
+            }
+
+            exported := strings.HasSuffix(key, exportSuffix)
+            if exported {
+                key = key[:len(key)-len(exportSuffix)]
+            }
+            if exporting && !exported {
+                continue
             } else {
                 logrus.Debugf("ENV: %s=%q", key, val)
                 env[key] = val
@@ -62,7 +84,7 @@ func loadEnv(env map[string]string, path string) {
     }
 }
 
-func loadPluginsEnv(env map[string]string, home string) {
+func loadPluginsEnv(env map[string]string, home string, exporting bool) {
     files, err := ioutil.ReadDir(home)
     if err != nil {
         logrus.Debug(err)
@@ -72,7 +94,7 @@ func loadPluginsEnv(env map[string]string, home string) {
     for _, subdir := range files {
         path := filepath.Join(home, subdir.Name())
         if subdir.IsDir() && plugin.IsPluginDir(path) {
-            loadEnv(env, filepath.Join(path, "env"))
+            loadEnv(env, filepath.Join(path, "env"), exporting)
         }
     }
 }
@@ -130,30 +152,48 @@ func writeEnvFile(filename, value string) error {
 }
 
 func (a *Application) Getenv(name string) string {
-    val := os.Getenv(name)
-    if val == "" {
-        val, _ = readEnvFile(a.envfile(name))
+    var (
+        val string
+        err error
+        ok  bool
+    )
+    if val, ok = os.LookupEnv(name); !ok {
+        filename := a.envfile(name)
+        if val, err = readEnvFile(filename); err != nil {
+            val, _ = readEnvFile(filename + exportSuffix)
+        }
     }
     return val
 }
 
-func (a *Application) Setenv(name, value string) error {
-    return writeEnvFile(a.envfile(name), value)
+func (a *Application) Setenv(name, value string, export bool) error {
+    filename := a.envfile(name)
+    if export {
+        filename += exportSuffix
+    }
+    return writeEnvFile(filename, value)
 }
 
-func (a *Application) Unsetenv(name string) error {
-    return os.Remove(a.envfile(name))
+func (a *Application) Unsetenv(name string) {
+    filename := a.envfile(name)
+    os.Remove(filename)
+    os.Remove(filename + exportSuffix)
 }
 
-func (a *Application) SetPluginEnv(p *plugin.Plugin, name, value string) error {
+func (a *Application) SetPluginEnv(p *plugin.Plugin, name, value string, export bool) error {
     envdir := filepath.Join(p.Path, "env")
     if err := os.MkdirAll(envdir, 0755); err != nil {
         return err
     }
-    return writeEnvFile(filepath.Join(envdir, name), value)
+    filename := filepath.Join(envdir, name)
+    if export {
+        filename += exportSuffix
+    }
+    return writeEnvFile(filename, value)
 }
 
-func (a *Application) UnsetPluginEnv(p *plugin.Plugin, name string) error {
+func (a *Application) UnsetPluginEnv(p *plugin.Plugin, name string) {
     filename := filepath.Join(p.Path, "env", name)
-    return os.Remove(filename)
+    os.Remove(filename)
+    os.Remove(filename + exportSuffix)
 }

@@ -20,6 +20,8 @@ func init() {
                 return nil
             },
         }
+
+        cmdSetenv.Flags().Bool("export", false, "Export the environment variable")
         RootCommand.AddCommand(cmdSetenv)
     }
 }
@@ -27,5 +29,6 @@ func init() {
 func runSetenv(cmd *cobra.Command, args []string) {
     app := sandbox.NewApplication()
     name, value := args[0], args[1]
-    check(app.Setenv(name, value))
+    export, _ := cmd.Flags().GetBool("export")
+    check(app.Setenv(name, value, export))
 }

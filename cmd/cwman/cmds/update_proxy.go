@@ -5,6 +5,7 @@ import (
     "os"
     "bytes"
     "encoding/json"
+    "archive/tar"
     "github.com/spf13/cobra"
     "github.com/Sirupsen/logrus"
     "github.com/docker/engine-api/client"
@@ -80,21 +81,19 @@ func runUpdateProxyCmd(cmd *cobra.Command, args []string) {
 }
 
 func handleStart(proxy proxy.Proxy, c *container.Container) error {
-    // run a container command to reterieve endpoint info
-    var buf bytes.Buffer
-    err := c.ExecE("root", nil, &buf, "/usr/bin/cwctl", "endpoints", "--ip", c.IP())
+    // reterieve application info from container
+    info, err := c.GetInfo()
     if err != nil {
         return err
     }
 
-    var endpoints []*plugin.Endpoint
-    dec := json.NewDecoder(&buf)
-    if err = dec.Decode(&endpoints); err != nil {
+    // add endpoints to the proxy server
+    if err = proxy.AddEndpoints(c.ID, info.Endpoints); err != nil {
         return err
     }
 
-    err = proxy.AddEndpoints(c.ID, endpoints)
-    if err != nil {
+    // distribute environments to other containers
+    if err = distributeEnv(c, info.Env); err != nil {
         return err
     }
 
@@ -107,4 +106,49 @@ func handleStop(proxy proxy.Proxy, id string) error {
         return err
     }
     return nil
+}
+
+func distributeEnv(c *container.Container, env map[string]string) error {
+    if c.Category() != plugin.Service || len(env) == 0 {
+        return nil
+    }
+
+    // Create an archive that contains all exported environment files
+    buf := createEnvFile(env)
+
+    // Write environments to all containers in the application
+    cs, err := container.FindAll(c.Name, c.Namespace)
+    if err != nil {
+        return err
+    }
+
+    ctx := context.Background()
+    for _, cc := range cs {
+        if cc.ID != c.ID {
+            err := cc.CopyToContainer(ctx, cc.ID, cc.EnvDir(), bytes.NewReader(buf), types.CopyToContainerOptions{})
+            if err != nil {
+                logrus.Error(err)
+            }
+        }
+    }
+
+    return nil
+}
+
+func createEnvFile(env map[string]string) []byte {
+    buf := &bytes.Buffer{}
+    tw := tar.NewWriter(buf)
+
+    for name, value := range env {
+        hdr := tar.Header{
+            Name: name,
+            Size: int64(len(value)),
+            Mode: 0644,
+        }
+        tw.WriteHeader(&hdr)
+        tw.Write([]byte(value))
+    }
+
+    tw.Close()
+    return buf.Bytes()
 }
