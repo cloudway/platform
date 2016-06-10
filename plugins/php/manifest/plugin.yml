@@ -5,8 +5,6 @@ Description: PHP is a general-purpose server side scripting language orginally
   designed for Web development to produce dynamic Web pages.
 Version: '5.6'
 Vendor: php.net
-Plugin-Version: '1.0'
-Plugin-Vendor: cloudway
 Category: Framework
 Base-Image: php:5.6-apache
 Endpoints:

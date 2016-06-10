@@ -58,11 +58,17 @@ func Create(config CreateOptions) ([]*Container, error) {
         return nil, err
     }
 
-    if config.Home == "" {
-        config.Home = defaults.AppHome()
-    }
     if config.User == "" {
-        config.User = defaults.AppUser()
+        if meta.User != "" {
+            config.User = meta.User
+        } else {
+            config.User = defaults.AppUser()
+        }
+    }
+    if config.User == "root" {
+        config.Home = "/root"
+    } else {
+        config.Home = defaults.AppHome()
     }
 
     config.Category   = meta.Category

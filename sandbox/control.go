@@ -57,8 +57,15 @@ func (app *Application) Control(action string, enable_action_hooks, process_temp
 }
 
 func runPluginAction(path string, env []string, action string, args ...string) error {
-    executable := filepath.Join(path, "bin", action)
-    cmd := exec.Command(executable, args...)
+    filename := filepath.Join(path, "bin", action)
+    if _, err := os.Stat(filename); err != nil {
+        if os.IsNotExist(err) {
+            return nil
+        }
+        return err
+    }
+
+    cmd := exec.Command(filename, args...)
     cmd.Stdin  = os.Stdin
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
@@ -69,16 +76,20 @@ func runPluginAction(path string, env []string, action string, args ...string) e
 
 func (app *Application) runActionHook(action string, env []string) error {
     hook := filepath.Join(app.RepoDir(), ".cloudway", "hooks", action)
-    if _, err := os.Stat(hook); err == nil {
-        cmd := exec.Command(hook)
-        cmd.Stdin  = os.Stdin
-        cmd.Stdout = os.Stdout
-        cmd.Stderr = os.Stderr
-        cmd.Env    = env
-        cmd.Dir    = app.HomeDir()
-        return cmd.Run()
+    if _, err := os.Stat(hook); err != nil {
+        if os.IsNotExist(err) {
+            return nil
+        }
+        return err
     }
-    return nil
+
+    cmd := exec.Command(hook)
+    cmd.Stdin  = os.Stdin
+    cmd.Stdout = os.Stdout
+    cmd.Stderr = os.Stderr
+    cmd.Env    = env
+    cmd.Dir    = app.HomeDir()
+    return cmd.Run()
 }
 
 func makeExecEnv(env map[string]string) []string {

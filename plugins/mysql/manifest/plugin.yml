@@ -3,8 +3,6 @@ Name: mysql
 Display-Name: MySQL 5.5
 Version: '5.5'
 Vendor: Oracle
-Plugin-Version: '1.0'
-Plugin-Vendor: cloudway
 Category: Service
 Base-Image: mysql:5.5
 Endpoints:

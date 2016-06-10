@@ -31,13 +31,12 @@ type Plugin struct {
     Path            string `yaml:"-"`
     Name            string `yaml:"Name"`
     DisplayName     string `yaml:"Display-Name"`
-    Description     string `yaml:"Description"`
+    Description     string `yaml:"Description,omitempty"`
     Version         string `yaml:"Version"`
     Vendor          string `yaml:"Vendor"`
-    PluginVersion   string `yaml:"Plugin-Version"`
-    PluginVendor    string `yaml:"Plugin-Vendor"`
     Category        Category `yaml:"Category"`
     BaseImage       string `yaml:"Base-Image"`
+    User            string `yaml:"User,omitempty"`
     Endpoints       []*Endpoint `yaml:"Endpoints,omitempty"`
 }
 

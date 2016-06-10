@@ -14,6 +14,7 @@ func init() {
         Run:     runCreate,
     }
 
+    cmdCreate.Flags().StringP("user", "u", "", "Specifiy the username")
     cmdCreate.Flags().StringP("capacity", "c", "", "Application capacity (small,medium,large)")
     cmdCreate.Flags().IntP("scale", "s", 1, "Application scaling")
 
@@ -45,6 +46,8 @@ func runCreate(cmd* cobra.Command, args []string) {
         ServiceName:    service,
         PluginSource:   args[1],
     }
+
+    config.User, _     = cmd.Flags().GetString("user")
     config.Capacity, _ = cmd.Flags().GetString("capacity")
     config.Scaling,  _ = cmd.Flags().GetInt("scale")
 
