@@ -248,7 +248,7 @@ func createDockerfile(t *template.Template, plugin *plugin.Plugin, config Create
     b, err := archive.ReadFile(plugin.Path, "bin/install")
     if err == nil {
         script := strings.Replace(string(b), "\n", "\\n\\\n", -1)
-        script  = strings.Replace(script, "\"", "\\\"", -1)
+        script  = strings.Replace(script, "'", "'\\''", -1)
         config.InstallScript = script
     } else {
         config.InstallScript = ""

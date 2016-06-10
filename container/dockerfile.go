@@ -6,7 +6,7 @@ var dockerfileTemplate = template.Must(template.New("Dockerfile").Parse(`
 FROM {{.BaseImage}}
 
 {{ if .InstallScript -}}
-RUN echo "{{.InstallScript}}" | /bin/sh
+RUN echo '{{.InstallScript}}' | /bin/sh
 {{- end }}
 
 {{ if eq .User "root" -}}
