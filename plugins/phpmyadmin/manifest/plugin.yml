@@ -1,0 +1,15 @@
+---
+Name: phpmyadmin
+Display-Name: phpMyAdmin 4.6.2
+Version: '4.6.2'
+Vendor: phpmyadmin.net
+Category: Service
+Base-Image: nazarpc/phpmyadmin
+User: root
+Endpoints:
+- Private-Host-Name: HOST
+  Private-Port-Name: PORT
+  Private-Port: 80
+  Proxy-Mappings:
+  - Frontend: /
+    Backend: /

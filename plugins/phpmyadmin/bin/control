@@ -1,0 +1,57 @@
+#!/bin/bash -eu
+
+HTTPD_PID_FILE=/var/run/apache2/apache2.pid
+
+function apache {
+    /usr/sbin/apache2 -k $1
+}
+
+function start {
+    apache start
+    ret=$?
+    [ "$ret" == "0" ] && wait_for_start
+    return $ret
+}
+
+function restart {
+    apache restart
+    return $?
+}
+
+function reload {
+    apache graceful
+    return $?
+}
+
+function stop {
+    apache stop
+    ret=$?
+    [ "$ret" == "0" ] && wait_for_stop
+    return $ret
+}
+
+function wait_for_start {
+    [ -f "$HTTPD_PID_FILE" ] && return 0
+    for i in {1..10}; do
+        sleep .5
+        [ -f "$HTTPD_PID_FILE" ] && break
+    done
+}
+
+function wait_for_stop {
+    ! [ -f "$HTTPD_PID_FILE" ] && return 0
+    for i in {1..10}; do
+        sleep .5
+        ! [ -f "$HTTPD_PID_FILE" ] && break
+    done
+}
+
+case "$1" in
+    start)      echo "Starting PHP";    start ;;
+    stop)       echo "Stopping PHP";    stop ;;
+    restart)    echo "Restarting PHP";  restart ;;
+    reload)     echo "Reloading PHP";   reload ;;
+    *)          exit 0
+esac
+
+exit $?

@@ -33,7 +33,9 @@ function reload {
 
 function stop {
     apache stop
-    return $?
+    ret=$?
+    wait_for_stop
+    return $ret
 }
 
 function tidy {
@@ -59,9 +61,17 @@ function write_httpd_passenv {
 
 function wait_for_start {
     [ -f "$HTTPD_PID_FILE" ] && return 0
-    for i in {1..20}; do
+    for i in {1..10}; do
         sleep .5
         [ -f "$HTTPD_PID_FILE" ] && break
+    done
+}
+
+function wait_for_stop {
+    ! [ -f "$HTTPD_PID_FILE" ] && return 0
+    for i in {1..10}; do
+        sleep .5
+        ! [ -f "$HTTPD_PID_FILE" ] && break
     done
 }
 

@@ -12,7 +12,7 @@ import (
 )
 
 func (c *Container) UploadArchive(r io.Reader) error {
-    return c.ExecE("", r, nil, "/usr/bin/cwctl", "upload")
+    return c.Exec("", r, os.Stdout, os.Stderr, "/usr/bin/cwctl", "upload")
 }
 
 func (c *Container) UploadFiles(src string, repoOnly bool) (err error) {
@@ -72,5 +72,5 @@ func (c *Container) UploadFiles(src string, repoOnly bool) (err error) {
         }
     }
 
-    return c.ExecE("", tf, nil, "/usr/bin/cwctl", "upload")
+    return c.Exec("", tf, os.Stdout, os.Stderr, "/usr/bin/cwctl", "upload")
 }
