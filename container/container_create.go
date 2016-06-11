@@ -28,22 +28,23 @@ import (
 )
 
 type CreateOptions struct {
-    Name            string
-    Namespace       string
-    Category        plugin.Category
-    ServiceName     string
-    Home            string
-    User            string
-    Hostname        string
-    FQDN            string
-    Capacity        string
-    Scaling         int
-    PluginSource    string
-    PluginName      string
-    PluginPath      string
-    BaseImage       string
-    InstallScript   string
-    Debug           bool
+    Name              string
+    Namespace         string
+    Category          plugin.Category
+    ServiceName       string
+    Home              string
+    User              string
+    Hostname          string
+    FQDN              string
+    Capacity          string
+    Scaling           int
+    PluginPath        string
+    PluginName        string
+    PluginInstallPath string
+    BaseImage         string
+    DependsOn         []string
+    InstallScript     string
+    Debug             bool
 }
 
 // Create new application containers.
@@ -53,7 +54,7 @@ func Create(config CreateOptions) ([]*Container, error) {
         return nil, err
     }
 
-    meta, err := archive.ReadManifest(config.PluginSource)
+    meta, err := archive.ReadManifest(config.PluginPath)
     if err != nil {
         return nil, err
     }
@@ -73,21 +74,22 @@ func Create(config CreateOptions) ([]*Container, error) {
 
     config.Category   = meta.Category
     config.PluginName = meta.Name
-    config.PluginPath = filepath.Base(meta.Path)
+    config.PluginInstallPath = filepath.Base(config.PluginPath)
     config.BaseImage  = meta.BaseImage
+    config.DependsOn  = meta.DependsOn
     config.Debug      = DEBUG
 
     switch config.Category {
     case plugin.Framework:
-        return createApplicationContainer(cli, meta, config)
+        return createApplicationContainer(cli, config)
     case plugin.Service:
-        return createServiceContainer(cli, meta, config)
+        return createServiceContainer(cli, config)
     default:
-        return nil, fmt.Errorf("%s is not a valid plugin", meta.Path)
+        return nil, fmt.Errorf("%s is not a valid plugin", config.PluginPath)
     }
 }
 
-func createApplicationContainer(cli *client.Client, plugin *plugin.Plugin, config CreateOptions) ([]*Container, error) {
+func createApplicationContainer(cli *client.Client, config CreateOptions) ([]*Container, error) {
     if config.ServiceName != "" {
         return nil, fmt.Errorf("The application name cannot contains a serivce name: %s", config.ServiceName)
     }
@@ -100,7 +102,7 @@ func createApplicationContainer(cli *client.Client, plugin *plugin.Plugin, confi
         return nil, err
     }
 
-    image, err := buildImage(cli, dockerfileTemplate, plugin, config)
+    image, err := buildImage(cli, dockerfileTemplate, config)
     if err != nil {
         return nil, err
     }
@@ -136,9 +138,9 @@ func getScaling(name, namespace string, scale int) (int, error) {
     return scale - n, nil
 }
 
-func createServiceContainer(cli *client.Client, plugin *plugin.Plugin, config CreateOptions) ([]*Container, error) {
+func createServiceContainer(cli *client.Client, config CreateOptions) ([]*Container, error) {
     if config.ServiceName == "" {
-        config.ServiceName = plugin.Name
+        config.ServiceName = config.PluginName
     }
 
     name, namespace, service := config.Name, config.Namespace, config.ServiceName
@@ -153,7 +155,7 @@ func createServiceContainer(cli *client.Client, plugin *plugin.Plugin, config Cr
         return nil, fmt.Errorf("Service already installed: %s", service)
     }
 
-    image, err := buildImage(cli, dockerfileTemplate, plugin, config)
+    image, err := buildImage(cli, dockerfileTemplate, config)
     if err != nil {
         return nil, err
     }
@@ -166,7 +168,7 @@ func createServiceContainer(cli *client.Client, plugin *plugin.Plugin, config Cr
     }
 }
 
-func buildImage(cli *client.Client, t *template.Template, plugin *plugin.Plugin, config CreateOptions) (image string, err error) {
+func buildImage(cli *client.Client, t *template.Template, config CreateOptions) (image string, err error) {
     // Create temporary tar archive to create build context
     tarFile, err := ioutil.TempFile("", "docker");
     if err != nil {
@@ -181,7 +183,7 @@ func buildImage(cli *client.Client, t *template.Template, plugin *plugin.Plugin,
     logrus.Debugf("Created temporary build context: %s", tarFile.Name())
 
     // create and add Dockerfile to archive
-    dockerfile := createDockerfile(t, plugin, config)
+    dockerfile := createDockerfile(t, config)
     if err = archive.AddFile(tw, "Dockerfile", 0644, dockerfile); err != nil {
         return
     }
@@ -193,7 +195,7 @@ func buildImage(cli *client.Client, t *template.Template, plugin *plugin.Plugin,
     }
 
     // add plugin files
-    if err = addPluginFiles(tw, plugin.Path); err != nil {
+    if err = addPluginFiles(tw, config.PluginInstallPath, config.PluginPath); err != nil {
         return
     }
 
@@ -244,8 +246,8 @@ func readBuildImageId(in io.Reader) (id string, err error) {
     return id, err
 }
 
-func createDockerfile(t *template.Template, plugin *plugin.Plugin, config CreateOptions) []byte{
-    b, err := archive.ReadFile(plugin.Path, "bin/install")
+func createDockerfile(t *template.Template, config CreateOptions) []byte{
+    b, err := archive.ReadFile(config.PluginPath, "bin/install")
     if err == nil {
         script := strings.Replace(string(b), "\n", "\\n\\\n", -1)
         script  = strings.Replace(script, "'", "'\\''", -1)
@@ -264,15 +266,15 @@ func createDockerfile(t *template.Template, plugin *plugin.Plugin, config Create
     return buf.Bytes()
 }
 
-func addPluginFiles(tw *tar.Writer, path string) error {
+func addPluginFiles(tw *tar.Writer, dst, path string) error {
     stat, err := os.Stat(path)
     if err != nil {
         return err
     }
     if stat.IsDir() {
-        return archive.CopyFileTree(tw, filepath.Base(path), path, false)
+        return archive.CopyFileTree(tw, dst, path, false)
     } else {
-        return archive.CopyFile(tw, path, filepath.Base(path), 0)
+        return archive.CopyFile(tw, path, dst, 0)
     }
 }
 
@@ -292,6 +294,11 @@ func createContainer(cli *client.Client, imageId string, options CreateOptions) 
     if options.Category == plugin.Service {
         config.Hostname = options.Hostname
         config.Labels[SERVICE_NAME_KEY] = options.ServiceName
+        config.Labels[SERVICE_PLUGIN_KEY] = options.PluginName
+    }
+
+    if options.DependsOn != nil {
+        config.Labels[SERVICE_DEPENDS_KEY] = strings.Join(options.DependsOn, ",")
     }
 
     hostConfig := &container.HostConfig{}

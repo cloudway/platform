@@ -61,8 +61,10 @@ func runContainerAction(id string, action func (*container.Container) error) {
             containers, err = container.FindApplications(name, namespace)
             check(err)
         } else if service == "*" {
+            // assume the key is '*.name-namespace'
             containers, err = container.FindAll(name, namespace)
             check(err)
+            check(container.ResolveServiceDependencies(containers))
         } else {
             // assume the key is 'service.name-namespace'
             containers, err = container.FindService(name, namespace, service)

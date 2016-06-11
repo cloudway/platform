@@ -5,6 +5,7 @@ Version: '4.6.2'
 Vendor: phpmyadmin.net
 Category: Service
 Base-Image: nazarpc/phpmyadmin
+Depends-On: [mysql]
 User: root
 Endpoints:
 - Private-Host-Name: HOST

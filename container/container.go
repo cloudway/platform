@@ -2,6 +2,7 @@ package container
 
 import (
     "fmt"
+    "strings"
 
     "github.com/docker/engine-api/client"
     "github.com/docker/engine-api/types"
@@ -18,6 +19,8 @@ const (
     APP_HOME_KEY        = "com.cloudway.app.home"
     CATEGORY_KEY        = "com.cloudway.container.category"
     SERVICE_NAME_KEY    = "com.cloudway.service.name"
+    SERVICE_PLUGIN_KEY  = "com.cloudway.service.plugin"
+    SERVICE_DEPENDS_KEY = "com.cloudway.service.depends"
 )
 
 var DEBUG bool
@@ -99,54 +102,56 @@ func ids(cli *client.Client) (ids []string, err error) {
 
 // Returns a list of application container objects for every cloudway
 // container in the system.
-func All() (containers []*Container, err error) {
+func All() ([]*Container, error) {
     cli, err := docker_client()
     if err != nil {
         return nil, err
     }
 
     ids, err := ids(cli)
-    if err == nil {
-        containers = make([]*Container, len(ids))
-        for i, id := range ids {
-            c, err := Inspect(cli, id)
-            if err != nil {
-                break
-            }
-            containers[i] = c
-        }
+    if err != nil {
+        return nil, err
     }
-    return containers, err
+
+    containers := make([]*Container, 0, len(ids))
+    for _, id := range ids {
+        c, err := Inspect(cli, id)
+        if err != nil {
+            return nil, err
+        }
+        containers = append(containers, c)
+    }
+    return containers, nil
 }
 
 // Find all containers with the given name and namespace.
-func FindAll(name, namespace string) (container []*Container, err error) {
+func FindAll(name, namespace string) ([]*Container, error) {
     return find(name, namespace, filters.NewArgs())
 }
 
 // Find all application containers with the given name and namespace.
-func FindApplications(name, namespace string) (containers []*Container, err error) {
+func FindApplications(name, namespace string) ([]*Container, error) {
     args := filters.NewArgs()
-    args.Add("label", CATEGORY_KEY + "=Framework")
+    args.Add("label", CATEGORY_KEY + "=" + string(plugin.Framework))
     return find(name, namespace, args)
 }
 
 // Find all service containers associated with the given name and namespace.
-func FindServices(name, namespace string) (containers []*Container, err error) {
+func FindServices(name, namespace string) ([]*Container, error) {
     args := filters.NewArgs()
-    args.Add("label", CATEGORY_KEY + "=Service")
+    args.Add("label", CATEGORY_KEY + "=" + string(plugin.Service))
     return find(name, namespace, args)
 }
 
 // Find service container with the give name, namespace and service name.
-func FindService(name, namespace, service string) (Container []*Container, err error) {
+func FindService(name, namespace, service string) ([]*Container, error) {
     args := filters.NewArgs()
-    args.Add("label", CATEGORY_KEY + "=Service")
+    args.Add("label", CATEGORY_KEY + "=" + string(plugin.Service))
     args.Add("label", SERVICE_NAME_KEY + "=" + service)
     return find(name, namespace, args)
 }
 
-func find(name, namespace string, args filters.Args) (containers []*Container, err error) {
+func find(name, namespace string, args filters.Args) ([]*Container, error) {
     cli, err := docker_client()
     if err != nil {
         return nil, err
@@ -156,18 +161,20 @@ func find(name, namespace string, args filters.Args) (containers []*Container, e
     args.Add("label", APP_NAMESPACE_KEY + "=" + namespace)
     options := types.ContainerListOptions{All: true, Filter: args}
 
-    list, err := cli.ContainerList(context.Background(), options);
-    if err == nil {
-        containers = make([]*Container, 0, len(list))
-        for _, c := range list {
-            cc, err := Inspect(cli, c.ID)
-            if err != nil {
-                return nil, err
-            }
-            containers = append(containers, cc)
-        }
+    list, err := cli.ContainerList(context.Background(), options)
+    if err != nil {
+        return nil, err
     }
-    return containers, err
+
+    containers := make([]*Container, 0, len(list))
+    for _, c := range list {
+        cc, err := Inspect(cli, c.ID)
+        if err != nil {
+            return nil, err
+        }
+        containers = append(containers, cc)
+    }
+    return containers, nil
 }
 
 func (c *Container) Category() plugin.Category {
@@ -178,8 +185,17 @@ func (c *Container) ServiceName() string {
     return c.Config.Labels[SERVICE_NAME_KEY]
 }
 
-func (c *Container) GetServices() ([]*Container, error) {
-    return FindServices(c.Name, c.Namespace)
+func (c *Container) ServicePlugin() string {
+    return c.Config.Labels[SERVICE_PLUGIN_KEY]
+}
+
+func (c *Container) DependsOn() []string {
+    depends := c.Config.Labels[SERVICE_DEPENDS_KEY]
+    if depends != "" {
+        return strings.Split(depends, ",")
+    } else {
+        return nil
+    }
 }
 
 // Returns the host name of the container.

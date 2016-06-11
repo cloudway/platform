@@ -28,15 +28,16 @@ type ApplicationInfo struct {
 }
 
 type Plugin struct {
-    Path            string `yaml:"-"`
-    Name            string `yaml:"Name"`
-    DisplayName     string `yaml:"Display-Name"`
-    Description     string `yaml:"Description,omitempty"`
-    Version         string `yaml:"Version"`
-    Vendor          string `yaml:"Vendor"`
-    Category        Category `yaml:"Category"`
-    BaseImage       string `yaml:"Base-Image"`
-    User            string `yaml:"User,omitempty"`
+    Path            string      `yaml:"-"`
+    Name            string      `yaml:"Name"`
+    DisplayName     string      `yaml:"Display-Name"`
+    Description     string      `yaml:"Description,omitempty"`
+    Version         string      `yaml:"Version"`
+    Vendor          string      `yaml:"Vendor"`
+    Category        Category    `yaml:"Category"`
+    BaseImage       string      `yaml:"Base-Image"`
+    DependsOn       []string    `yaml:"Depends-On,omitempty"`
+    User            string      `yaml:"User,omitempty"`
     Endpoints       []*Endpoint `yaml:"Endpoints,omitempty"`
 }
 

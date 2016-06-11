@@ -44,7 +44,7 @@ func runCreate(cmd* cobra.Command, args []string) {
         Name:           name,
         Namespace:      namespace,
         ServiceName:    service,
-        PluginSource:   args[1],
+        PluginPath:     args[1],
     }
 
     config.User, _     = cmd.Flags().GetString("user")

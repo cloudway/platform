@@ -21,7 +21,7 @@ RUN groupadd {{.User}} && useradd -g {{.User}} -d {{.Home}} -m -s /usr/bin/cwsh 
 WORKDIR {{.Home}}
 
 COPY support /
-ADD {{.PluginPath}} /tmp/install_{{.PluginName}}
+ADD {{.PluginInstallPath}} /tmp/install_{{.PluginName}}
 
 ENV CLOUDWAY_APP_NAME={{printf "%q" .Name}} \
     CLOUDWAY_APP_NAMESPACE={{printf "%q" .Namespace}} \

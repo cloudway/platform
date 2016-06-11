@@ -47,10 +47,10 @@ function wait_for_stop {
 }
 
 case "$1" in
-    start)      echo "Starting PHP";    start ;;
-    stop)       echo "Stopping PHP";    stop ;;
-    restart)    echo "Restarting PHP";  restart ;;
-    reload)     echo "Reloading PHP";   reload ;;
+    start)      echo "Starting phpMyAdmin";    start ;;
+    stop)       echo "Stopping phpMyAdmin";    stop ;;
+    restart)    echo "Restarting phpMyAdmin";  restart ;;
+    reload)     echo "Reloading phpMyAdmin";   reload ;;
     *)          exit 0
 esac
 
