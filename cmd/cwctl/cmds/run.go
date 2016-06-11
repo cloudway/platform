@@ -20,6 +20,10 @@ func init() {
 }
 
 func runRun(cmd *cobra.Command, args []string) {
+    // reaping zombie processes
+    signal.Ignore(syscall.SIGCHLD)
+
+    // start application
     app := sandbox.NewApplication()
     err := app.Start()
     if err == nil {
@@ -28,8 +32,9 @@ func runRun(cmd *cobra.Command, args []string) {
         logrus.WithError(err).Error("Application start failed")
     }
 
+    // handle termination signals
     sigchan := make(chan os.Signal, 1)
-    signal.Notify(sigchan, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGKILL)
+    signal.Notify(sigchan, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 
     for {
         sig := <-sigchan

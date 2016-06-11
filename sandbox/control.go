@@ -3,6 +3,7 @@ package sandbox
 import (
     "os"
     "os/exec"
+    "syscall"
     "path/filepath"
 )
 
@@ -71,7 +72,7 @@ func runPluginAction(path string, env []string, action string, args ...string) e
     cmd.Stderr = os.Stderr
     cmd.Env    = env
     cmd.Dir    = path
-    return cmd.Run()
+    return RunCommand(cmd)
 }
 
 func (app *Application) runActionHook(action string, env []string) error {
@@ -89,7 +90,17 @@ func (app *Application) runActionHook(action string, env []string) error {
     cmd.Stderr = os.Stderr
     cmd.Env    = env
     cmd.Dir    = app.HomeDir()
-    return cmd.Run()
+    return RunCommand(cmd)
+}
+
+func RunCommand(cmd *exec.Cmd) error {
+    err := cmd.Run()
+    if syserr, ok := err.(*os.SyscallError); ok && syserr.Err == syscall.ECHILD {
+        // the child process is reaped, so ignore
+        return nil
+    } else {
+        return err
+    }
 }
 
 func makeExecEnv(env map[string]string) []string {
