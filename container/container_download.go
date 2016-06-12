@@ -5,7 +5,7 @@ import (
     "os"
     "archive/tar"
     "github.com/docker/distribution/context"
-    "github.com/cloudway/platform/container/archive"
+    "github.com/cloudway/platform/pkg/archive"
 )
 
 type Includes uint8
@@ -88,6 +88,5 @@ func downloadFiles(c *Container, path, dst string) (err error) {
         return err
     }
 
-    tr := tar.NewReader(r)
-    return archive.ExtractFiles(tr, dst)
+    return archive.ExtractFiles(dst, r)
 }

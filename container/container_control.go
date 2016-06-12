@@ -7,7 +7,6 @@ import (
     "golang.org/x/net/context"
     "github.com/Sirupsen/logrus"
     "github.com/docker/engine-api/types"
-    "github.com/cloudway/platform/plugin"
 )
 
 const _WAIT_SECONDS = 60
@@ -50,7 +49,7 @@ func startContainer(c *Container) error {
 }
 
 func distributeEnv(c *Container, env map[string]string) error {
-    if c.Category() != plugin.Service || len(env) == 0 {
+    if !c.Category().IsService() || len(env) == 0 {
         return nil
     }
 

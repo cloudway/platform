@@ -1,7 +1,5 @@
 package container
 
-import "github.com/cloudway/platform/plugin"
-
 // Resolve service dependencies.
 func ResolveServiceDependencies(cs []*Container) error {
     nodes := make([]*node, len(cs))
@@ -11,10 +9,10 @@ func ResolveServiceDependencies(cs []*Container) error {
 
     // build the dependency graph
     for i := range cs {
-        if cs[i].Category() == plugin.Framework {
+        if cs[i].Category().IsFramework() {
             // framework plugin depends on all services
             for j := range cs {
-                if cs[j].Category() != plugin.Framework {
+                if !cs[j].Category().IsFramework() {
                     nodes[i].dependsOn(nodes[j])
                 }
             }

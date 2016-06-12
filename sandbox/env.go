@@ -8,7 +8,7 @@ import (
     "path/filepath"
     "regexp"
     "github.com/Sirupsen/logrus"
-    "github.com/cloudway/platform/plugin"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
 var validEnvKey = regexp.MustCompile(`^[A-Z_0-9]+(\.export)?$`)
@@ -93,7 +93,7 @@ func loadPluginsEnv(env map[string]string, home string, exporting bool) {
 
     for _, subdir := range files {
         path := filepath.Join(home, subdir.Name())
-        if subdir.IsDir() && plugin.IsPluginDir(path) {
+        if subdir.IsDir() && manifest.IsPluginDir(path) {
             loadEnv(env, filepath.Join(path, "env"), exporting)
         }
     }
@@ -180,7 +180,7 @@ func (a *Application) Unsetenv(name string) {
     os.Remove(filename + exportSuffix)
 }
 
-func (a *Application) SetPluginEnv(p *plugin.Plugin, name, value string, export bool) error {
+func (a *Application) SetPluginEnv(p *manifest.Plugin, name, value string, export bool) error {
     envdir := filepath.Join(p.Path, "env")
     if err := os.MkdirAll(envdir, 0755); err != nil {
         return err
@@ -192,7 +192,7 @@ func (a *Application) SetPluginEnv(p *plugin.Plugin, name, value string, export 
     return writeEnvFile(filename, value)
 }
 
-func (a *Application) UnsetPluginEnv(p *plugin.Plugin, name string) {
+func (a *Application) UnsetPluginEnv(p *manifest.Plugin, name string) {
     filename := filepath.Join(p.Path, "env", name)
     os.Remove(filename)
     os.Remove(filename + exportSuffix)

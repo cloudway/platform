@@ -1,4 +1,4 @@
-package plugin
+package manifest
 
 // This package is exported to sandbox and container manager, please
 // keep it clean.
@@ -20,6 +20,18 @@ const (
     Service   Category = "Service"
     Library   Category = "Library"
 )
+
+func (cat Category) IsFramework() bool {
+    return cat == Framework
+}
+
+func (cat Category) IsService() bool {
+    return cat == Service
+}
+
+func (cat Category) IsLibrary() bool {
+    return cat == Library
+}
 
 type ApplicationInfo struct {
     Env             map[string]string
@@ -78,7 +90,7 @@ func Load(path string) (*Plugin, error) {
     }
     defer f.Close()
 
-    plugin, err := ReadManifest(f)
+    plugin, err := Read(f)
     if err != nil {
         return nil, err
     }
@@ -87,7 +99,7 @@ func Load(path string) (*Plugin, error) {
     return plugin, nil
 }
 
-func ReadManifest(f io.Reader) (*Plugin, error) {
+func Read(f io.Reader) (*Plugin, error) {
     data, err := ioutil.ReadAll(f)
     if err != nil {
         return nil, err

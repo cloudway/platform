@@ -3,7 +3,7 @@ package proxy
 import (
     "net/url"
     "strings"
-    "github.com/cloudway/platform/plugin"
+    "github.com/cloudway/platform/pkg/manifest"
     "github.com/garyburd/redigo/redis"
     "github.com/Sirupsen/logrus"
 )
@@ -26,7 +26,7 @@ func (px *hipacheProxy) Close() error {
     return px.conn.Close()
 }
 
-func (px *hipacheProxy) AddEndpoints(id string, endpoints []*plugin.Endpoint) error {
+func (px *hipacheProxy) AddEndpoints(id string, endpoints []*manifest.Endpoint) error {
     // remove previously configured endpoints
     if err := px.RemoveEndpoints(id); err != nil {
         return err

@@ -9,7 +9,7 @@ import (
     "strconv"
     "path/filepath"
     "github.com/Sirupsen/logrus"
-    "github.com/cloudway/platform/plugin"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
 type Application struct {
@@ -103,17 +103,17 @@ func (app *Application) GetLocalIP() (string, error) {
     return "", errors.New("No local IP address found")
 }
 
-func (app *Application) GetPlugins() (map[string]*plugin.Plugin, error) {
+func (app *Application) GetPlugins() (map[string]*manifest.Plugin, error) {
     files, err := ioutil.ReadDir(app.HomeDir())
     if err != nil {
         return nil, err
     }
 
-    plugins := make(map[string]*plugin.Plugin)
+    plugins := make(map[string]*manifest.Plugin)
     for _, file := range files {
         subdir := filepath.Join(app.HomeDir(), file.Name())
-        if plugin.IsPluginDir(subdir) {
-            if p, err := plugin.Load(subdir); err != nil {
+        if manifest.IsPluginDir(subdir) {
+            if p, err := manifest.Load(subdir); err != nil {
                 logrus.WithError(err).Errorf("Faield to load plugin %s", file.Name())
             } else {
                 plugins[p.Name] = p
@@ -123,7 +123,7 @@ func (app *Application) GetPlugins() (map[string]*plugin.Plugin, error) {
     return plugins, nil
 }
 
-func (app *Application) GetPlugin(name string) *plugin.Plugin {
+func (app *Application) GetPlugin(name string) *manifest.Plugin {
     plugins, err := app.GetPlugins()
     if err == nil {
         return plugins[name]
@@ -132,7 +132,7 @@ func (app *Application) GetPlugin(name string) *plugin.Plugin {
     }
 }
 
-func (app *Application) GetFrameworkPlugin() *plugin.Plugin {
+func (app *Application) GetFrameworkPlugin() *manifest.Plugin {
     plugins, err := app.GetPlugins()
     if err == nil {
         for _, p := range plugins {
@@ -144,7 +144,7 @@ func (app *Application) GetFrameworkPlugin() *plugin.Plugin {
     return nil
 }
 
-func (app *Application) GetEndpoints(ip string) ([]*plugin.Endpoint, error) {
+func (app *Application) GetEndpoints(ip string) ([]*manifest.Endpoint, error) {
     plugins, err := app.GetPlugins()
     if err != nil {
         return nil, err
@@ -158,7 +158,7 @@ func (app *Application) GetEndpoints(ip string) ([]*plugin.Endpoint, error) {
     }
 
     fqdn := app.FQDN()
-    endpoints := make([]*plugin.Endpoint, 0)
+    endpoints := make([]*manifest.Endpoint, 0)
 
     for _, p := range plugins {
         eps := p.GetEndpoints(ip)

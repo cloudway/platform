@@ -10,7 +10,7 @@ import (
     "golang.org/x/net/context"
 
     "github.com/cloudway/platform/container/conf/defaults"
-    "github.com/cloudway/platform/plugin"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
 const (
@@ -132,21 +132,21 @@ func FindAll(name, namespace string) ([]*Container, error) {
 // Find all application containers with the given name and namespace.
 func FindApplications(name, namespace string) ([]*Container, error) {
     args := filters.NewArgs()
-    args.Add("label", CATEGORY_KEY + "=" + string(plugin.Framework))
+    args.Add("label", CATEGORY_KEY + "=" + string(manifest.Framework))
     return find(name, namespace, args)
 }
 
 // Find all service containers associated with the given name and namespace.
 func FindServices(name, namespace string) ([]*Container, error) {
     args := filters.NewArgs()
-    args.Add("label", CATEGORY_KEY + "=" + string(plugin.Service))
+    args.Add("label", CATEGORY_KEY + "=" + string(manifest.Service))
     return find(name, namespace, args)
 }
 
 // Find service container with the give name, namespace and service name.
 func FindService(name, namespace, service string) ([]*Container, error) {
     args := filters.NewArgs()
-    args.Add("label", CATEGORY_KEY + "=" + string(plugin.Service))
+    args.Add("label", CATEGORY_KEY + "=" + string(manifest.Service))
     args.Add("label", SERVICE_NAME_KEY + "=" + service)
     return find(name, namespace, args)
 }
@@ -177,8 +177,8 @@ func find(name, namespace string, args filters.Args) ([]*Container, error) {
     return containers, nil
 }
 
-func (c *Container) Category() plugin.Category {
-     return plugin.Category(c.Config.Labels[CATEGORY_KEY])
+func (c *Container) Category() manifest.Category {
+     return manifest.Category(c.Config.Labels[CATEGORY_KEY])
 }
 
 func (c *Container) ServiceName() string {
@@ -200,7 +200,7 @@ func (c *Container) DependsOn() []string {
 
 // Returns the host name of the container.
 func (c *Container) Hostname() string {
-    if c.Category() == plugin.Service {
+    if c.Category().IsService() {
         return c.ServiceName() + "." + c.Name + "-" + c.Namespace
     } else {
         return c.Name + "-" + c.Namespace

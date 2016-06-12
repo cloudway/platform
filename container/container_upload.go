@@ -5,17 +5,12 @@ import (
     "io/ioutil"
     "os"
     "strings"
-    "path/filepath"
     "archive/tar"
     "compress/gzip"
-    "github.com/cloudway/platform/container/archive"
+    "github.com/cloudway/platform/pkg/archive"
 )
 
-func (c *Container) UploadArchive(r io.Reader) error {
-    return c.Exec("", r, os.Stdout, os.Stderr, "/usr/bin/cwctl", "upload")
-}
-
-func (c *Container) UploadFiles(src string, repoOnly bool) (err error) {
+func (c *Container) Upload(src string) (err error) {
     var tf io.Reader
     stat, err := os.Stat(src)
     if err != nil {
@@ -33,22 +28,9 @@ func (c *Container) UploadFiles(src string, repoOnly bool) (err error) {
         }()
 
         tw := tar.NewWriter(f)
-        if repoOnly {
-            err = archive.CopyFileTree(tw, "repo", src, false)
-            if err != nil {
-                return err
-            }
-        } else {
-            for _, dir := range []string{"repo", "data", "logs"} {
-                path := filepath.Join(src, dir)
-                if _, err := os.Stat(path); os.IsNotExist(err) {
-                    continue
-                }
-                err = archive.CopyFileTree(tw, dir, path, false);
-                if err != nil {
-                    return err
-                }
-            }
+        err = archive.CopyFileTree(tw, "", src, false)
+        if err != nil {
+            return err
         }
 
         tw.Close()

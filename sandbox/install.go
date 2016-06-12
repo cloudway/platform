@@ -10,7 +10,9 @@ import (
     "path/filepath"
     "text/template"
     "github.com/Sirupsen/logrus"
-    "github.com/cloudway/platform/plugin"
+    "github.com/cloudway/platform/pkg/manifest"
+    "github.com/cloudway/platform/pkg/archive"
+    "github.com/cloudway/platform/pkg/files"
 )
 
 // Install plugin in the application. The plugin directory should already
@@ -32,9 +34,9 @@ func (app *Application) Install(name string, source string, input io.Reader) err
     }
 
     if input != nil {
-        err = app.ExtractFiles(target, input)
+        err = archive.ExtractFiles(target, input)
     } else {
-        err = app.MoveFiles(target, source)
+        err = files.MoveFiles(source, target)
     }
 
     if err == nil {
@@ -50,7 +52,7 @@ func (app *Application) Install(name string, source string, input io.Reader) err
 
 func (app *Application) installPlugin(target string) error {
     // load plugin manifest from target directory
-    meta, err := plugin.Load(target)
+    meta, err := manifest.Load(target)
     if err != nil {
         return err
     }
@@ -144,7 +146,7 @@ func (app *Application) populateFromTemplate(basedir string) error {
     if fi, err := os.Stat(t); err != nil || !fi.IsDir() {
         return nil
     } else {
-        if err := app.MoveFiles(app.RepoDir(), t); err == nil {
+        if err := files.MoveFiles(t, app.RepoDir()); err == nil {
             err = chownR(app.RepoDir(), app.uid, app.gid)
         }
         return err

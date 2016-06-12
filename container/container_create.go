@@ -21,16 +21,16 @@ import (
     "github.com/docker/engine-api/types/network"
     "github.com/docker/engine-api/types/strslice"
 
-    "github.com/cloudway/platform/plugin"
+    "github.com/cloudway/platform/pkg/manifest"
     "github.com/cloudway/platform/container/conf"
     "github.com/cloudway/platform/container/conf/defaults"
-    "github.com/cloudway/platform/container/archive"
+    "github.com/cloudway/platform/pkg/archive"
 )
 
 type CreateOptions struct {
     Name              string
     Namespace         string
-    Category          plugin.Category
+    Category          manifest.Category
     ServiceName       string
     Home              string
     User              string
@@ -80,9 +80,9 @@ func Create(config CreateOptions) ([]*Container, error) {
     config.Debug      = DEBUG
 
     switch config.Category {
-    case plugin.Framework:
+    case manifest.Framework:
         return createApplicationContainer(cli, config)
-    case plugin.Service:
+    case manifest.Service:
         return createServiceContainer(cli, config)
     default:
         return nil, fmt.Errorf("%s is not a valid plugin", config.PluginPath)
@@ -291,7 +291,7 @@ func createContainer(cli *client.Client, imageId string, options CreateOptions) 
         Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "run"},
     }
 
-    if options.Category == plugin.Service {
+    if options.Category.IsService() {
         config.Hostname = options.Hostname
         config.Labels[SERVICE_NAME_KEY] = options.ServiceName
         config.Labels[SERVICE_PLUGIN_KEY] = options.PluginName

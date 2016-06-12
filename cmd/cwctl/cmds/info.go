@@ -5,7 +5,7 @@ import (
     "github.com/spf13/cobra"
     "github.com/cloudway/platform/sandbox"
     "encoding/json"
-    "github.com/cloudway/platform/plugin"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
 func init() {
@@ -32,12 +32,12 @@ func runInfoCmd(cmd *cobra.Command, args []string) {
 
     ps, err := app.GetPlugins()
     check(err)
-    plugins := make([]*plugin.Plugin, 0, len(ps))
+    plugins := make([]*manifest.Plugin, 0, len(ps))
     for _, p := range ps {
         plugins = append(plugins, p)
     }
 
-    info := plugin.ApplicationInfo{
+    info := manifest.ApplicationInfo{
         Env:        env,
         Endpoints:  endpoints,
         Plugins:    plugins,

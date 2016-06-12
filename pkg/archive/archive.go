@@ -10,7 +10,7 @@ import (
     "archive/tar"
     "path/filepath"
     "github.com/Sirupsen/logrus"
-    "github.com/cloudway/platform/plugin"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
 type UnsupportedArchiveError struct {
@@ -52,15 +52,15 @@ func ReadFile(path, name string) ([]byte, error) {
     }
 }
 
-func ReadManifest(path string) (*plugin.Plugin, error) {
+func ReadManifest(path string) (*manifest.Plugin, error) {
     stat, err := os.Stat(path)
     if err != nil {
         return nil, err
     }
 
-    var p *plugin.Plugin
+    var p *manifest.Plugin
     if stat.IsDir() {
-        p, err = plugin.Load(path)
+        p, err = manifest.Load(path)
     } else {
         f, err := os.Open(path)
         if err != nil {
@@ -68,11 +68,11 @@ func ReadManifest(path string) (*plugin.Plugin, error) {
         }
         defer f.Close()
 
-        r, err := openArchiveFile(f, plugin.ManifestEntry)
+        r, err := openArchiveFile(f, manifest.ManifestEntry)
         if err != nil {
             return nil, err
         }
-        p, err = plugin.ReadManifest(r)
+        p, err = manifest.Read(r)
     }
 
     if err == nil {
@@ -206,7 +206,9 @@ func CopyFileTree(tw* tar.Writer, dst, src string, followLinks bool) error {
     })
 }
 
-func ExtractFiles(tr *tar.Reader, dst string) error {
+func ExtractFiles(dst string, r io.Reader) error {
+    tr := tar.NewReader(r)
+
     for {
         hdr, err := tr.Next()
         if err != nil {

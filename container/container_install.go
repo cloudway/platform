@@ -10,7 +10,7 @@ import (
     "strings"
     "compress/gzip"
     "github.com/Sirupsen/logrus"
-    "github.com/cloudway/platform/container/archive"
+    "github.com/cloudway/platform/pkg/archive"
 )
 
 func (c *Container) Install(source string) error {

@@ -4,11 +4,11 @@ import (
     "fmt"
     "errors"
     "net/url"
-    "github.com/cloudway/platform/plugin"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
 type Proxy interface {
-    AddEndpoints(id string, endpoints []*plugin.Endpoint) error
+    AddEndpoints(id string, endpoints []*manifest.Endpoint) error
     RemoveEndpoints(id string) error
     Close() error
 }
