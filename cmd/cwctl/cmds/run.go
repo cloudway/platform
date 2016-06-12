@@ -5,21 +5,10 @@ import (
     "os/signal"
     "syscall"
     "github.com/Sirupsen/logrus"
-    "github.com/spf13/cobra"
     "github.com/cloudway/platform/sandbox"
 )
 
-func init() {
-    cmdRun := &cobra.Command{
-        Use:    "run",
-        Short:  "Run the application",
-        Run:    runRun,
-        Hidden: true,
-    }
-    RootCommand.AddCommand(cmdRun)
-}
-
-func runRun(cmd *cobra.Command, args []string) {
+func (cli *CWCtl) CmdRun(args ...string) error {
     // reaping zombie processes
     signal.Ignore(syscall.SIGCHLD)
 

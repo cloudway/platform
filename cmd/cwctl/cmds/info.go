@@ -2,36 +2,32 @@ package cmds
 
 import (
     "os"
-    "github.com/spf13/cobra"
     "github.com/cloudway/platform/sandbox"
     "encoding/json"
     "github.com/cloudway/platform/pkg/manifest"
 )
 
-func init() {
-    if os.Getuid() == 0 {
-        cmdInfo := &cobra.Command{
-            Use:    "info",
-            Short:  "Output application environments",
-            Run:    runInfoCmd,
-        }
-
-        cmdInfo.Flags().String("ip", "", "Set IP address for endpoints")
-        RootCommand.AddCommand(cmdInfo)
+func (cli *CWCtl) CmdInfo(args ...string) error {
+    if os.Getuid() != 0 {
+        return os.ErrPermission
     }
-}
 
-func runInfoCmd(cmd *cobra.Command, args []string) {
-    ip, _ := cmd.Flags().GetString("ip")
+    cmd := cli.Subcmd("info")
+    ip := cmd.String([]string{"-ip"}, "", "Set IP address for endpoints")
+    cmd.ParseFlags(args, false)
+
     app := sandbox.NewApplication()
-
     env := app.ExportedEnviron()
 
-    endpoints, err := app.GetEndpoints(ip)
-    check(err)
+    endpoints, err := app.GetEndpoints(*ip)
+    if err != nil {
+        return err
+    }
 
     ps, err := app.GetPlugins()
-    check(err)
+    if err != nil {
+        return err
+    }
     plugins := make([]*manifest.Plugin, 0, len(ps))
     for _, p := range ps {
         plugins = append(plugins, p)
@@ -43,5 +39,5 @@ func runInfoCmd(cmd *cobra.Command, args []string) {
         Plugins:    plugins,
     }
 
-    check(json.NewEncoder(os.Stdout).Encode(&info))
+    return json.NewEncoder(os.Stdout).Encode(&info)
 }

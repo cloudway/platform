@@ -1,28 +1,66 @@
 package cmds
 
 import (
-    "github.com/spf13/cobra"
-    "github.com/Sirupsen/logrus"
     "os"
+    Cli "github.com/cloudway/platform/pkg/cli"
+    flag "github.com/cloudway/platform/pkg/mflag"
 )
 
-var RootCommand = &cobra.Command{
-    Use:    "cwctl",
-    Short:  "Cloudway application management tool",
+// Command is the struct containing the command name and description
+type Command struct {
+    Name        string
+    Description string
 }
 
-func init() {
-    RootCommand.PersistentFlags().Bool("debug", false, "debugging mode")
-    RootCommand.PersistentPreRun = func (cmd *cobra.Command, args []string) {
-        if b, _ := RootCommand.Flags().GetBool("debug"); b {
-            logrus.SetLevel(logrus.DebugLevel)
-        }
-    }
+type CWCtl struct {
+    *Cli.Cli
+    handlers map[string]func(...string)error
 }
 
-func check(err error) {
-    if err != nil {
-        logrus.Fatal(err)
-        os.Exit(1)
+// Commands lists the top level commands and their short usage
+var CommandUsage = []Command {
+    {"start",   "Start the application"},
+    {"stop",    "Stop the application"},
+    {"restart", "Restart the application"},
+}
+
+var Commands = make(map[string]Command)
+
+func Init() *CWCtl {
+    cli := new(CWCtl)
+    cli.Cli = Cli.New("cwctl", cli)
+    cli.Description = "Cloudway application control tool"
+
+    cli.handlers = map[string]func(...string)error {
+        "start":    cli.CmdStart,
+        "stop":     cli.CmdStop,
+        "restart":  cli.CmdRestart,
+        "run":      cli.CmdRun,     // HIDDEN
+        "sh":       cli.CmdSh,      // HIDDEN
+        "upload":   cli.CmdUpload,  // HIDDEN
     }
+
+    if os.Getuid() == 0 {
+        cli.handlers["info"]    = cli.CmdInfo
+        cli.handlers["setenv"]  = cli.CmdSetenv
+        cli.handlers["install"] = cli.CmdInstall
+    }
+
+    for _, cmd := range CommandUsage {
+        Commands[cmd.Name] = cmd
+    }
+
+    return cli
+}
+
+func (cli *CWCtl) Command(name string) func(...string) error {
+    return cli.handlers[name]
+}
+
+func (cli *CWCtl) Subcmd(name string, synopses ...string) *flag.FlagSet {
+    var description string
+    if cmd, ok := Commands[name]; ok {
+        description = cmd.Description
+    }
+    return cli.Cli.Subcmd(name, synopses, description, true)
 }

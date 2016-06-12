@@ -2,55 +2,37 @@ package cmds
 
 import (
     "os"
-    "github.com/spf13/cobra"
+    "golang.org/x/net/context"
+    "github.com/cloudway/platform/pkg/mflag"
+    "github.com/cloudway/platform/pkg/archive"
     "github.com/cloudway/platform/container"
 )
 
-func init() {
-    cmdDownload := &cobra.Command{
-        Use:     "download CONTAINER",
-        Short:   "Download application files",
-        PreRunE: checkContainerArg,
-        Run:     runDownloadCmd,
-    }
+func (cli *CWMan) CmdDownload(args ...string) error {
+    cmd := cli.Subcmd("download", "CONTAINER [PATH]")
+    cmd.Require(mflag.Min, 1)
+    cmd.Require(mflag.Max, 2)
+    cmd.ParseFlags(args, true)
 
-    cmdDownload.Flags().Bool("repo", false, "Includes repo directory")
-    cmdDownload.Flags().Bool("data", false, "Includes data directory")
-    cmdDownload.Flags().Bool("logs", false, "Includes logs directory")
-    cmdDownload.Flags().Bool("all",  false, "Includes all directories")
-    RootCommand.AddCommand(cmdDownload)
+    return runContainerAction(cmd.Arg(0), func (c *container.Container) error {
+        var dir string
+        if cmd.NArg() == 1 {
+            dir = c.Name + "-" + c.Namespace
+        } else {
+            dir = cmd.Arg(1)
+        }
+        return download(c, dir, c.RepoDir()+"/.")
+    })
 }
 
-func runDownloadCmd(cmd *cobra.Command, args []string) {
-    runContainerAction(args[0], func (c *container.Container) error {
-        var includes container.Includes
-        if b, _ := cmd.Flags().GetBool("all"); b {
-            includes = container.IncludeAll
-        }
-        if b, _ := cmd.Flags().GetBool("repo"); b {
-            includes |= container.IncludeRepo
-        }
-        if b, _ := cmd.Flags().GetBool("data"); b {
-            includes |= container.IncludeData
-        }
-        if b, _ := cmd.Flags().GetBool("logs"); b {
-            includes |= container.IncludeLogs
-        }
-
-        if includes == 0 {
-            includes = container.IncludeRepo
-        }
-
-        var dir string
-        if len(args) == 1 {
-            dir = "."
-        } else {
-            dir = args[1];
-        }
-        if dir == "-" {
-            return c.DownloadArchive(includes, os.Stdout)
-        } else {
-            return c.DownloadFiles(includes, dir)
-        }
-    })
+func download(c *container.Container, dst, src string) (err error) {
+    r, _, err := c.CopyFromContainer(context.Background(), c.ID, src)
+    if err != nil {
+        return err
+    }
+    defer r.Close()
+    if err = os.MkdirAll(dst, 0755); err != nil {
+        return err
+    }
+    return archive.ExtractFiles(dst, r)
 }

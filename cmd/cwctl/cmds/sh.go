@@ -3,22 +3,20 @@ package cmds
 import (
     "os"
     "strings"
-    "github.com/cloudway/platform/sandbox"
-    "github.com/spf13/cobra"
     "syscall"
+    "github.com/cloudway/platform/sandbox"
 )
 
-func init() {
-    cmdShell := &cobra.Command{
-        Use:    "sh",
-        Short:  "Run interacive shell",
-        Run:    runShellCmd,
-        Hidden: true,
+func (cli *CWCtl) CmdSh(args ...string) error {
+    if len(args) == 0 {
+        return os.ErrInvalid
     }
-    RootCommand.AddCommand(cmdShell)
+
+    runShell(args)
+    return nil
 }
 
-func runShellCmd(c *cobra.Command, args[]string) {
+func runShell(args[]string) {
     env   := sandbox.NewApplication().Environ()
     prog  := args[0]
     cmd   := []string{"/bin/bash"}

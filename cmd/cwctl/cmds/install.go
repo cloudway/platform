@@ -2,29 +2,24 @@ package cmds
 
 import (
     "os"
-    "errors"
-    "github.com/spf13/cobra"
     "github.com/cloudway/platform/sandbox"
+    "github.com/cloudway/platform/pkg/mflag"
 )
 
-func init() {
-    if os.Getuid() == 0 {
-        cmdInstall := &cobra.Command{
-            Use:    "install PATH",
-            Short:  "Install a plugin",
-            Run:    runInstall,
-        }
-        RootCommand.AddCommand(cmdInstall)
+func (cli *CWCtl) CmdInstall(args ...string) error {
+    if os.Getuid() != 0 {
+        return os.ErrPermission
     }
-}
 
-func runInstall(cmd *cobra.Command, args []string) {
+    cmd := cli.Subcmd("install")
+    cmd.Require(mflag.Min, 1)
+    cmd.Require(mflag.Max, 2)
+    cmd.ParseFlags(args, false)
+
     app := sandbox.NewApplication()
-    if len(args) == 1 {
-        check(app.Install(args[0], "", os.Stdin))
-    } else if len(args) == 2 {
-        check(app.Install(args[0], args[1], nil))
+    if cmd.NArg() == 1 {
+        return app.Install(cmd.Arg(0), "", os.Stdin)
     } else {
-        check(errors.New("Invalid number of arguments"))
+        return app.Install(cmd.Arg(0), cmd.Arg(1), nil)
     }
 }

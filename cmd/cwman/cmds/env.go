@@ -1,23 +1,17 @@
 package cmds
 
 import (
-    "github.com/spf13/cobra"
+    "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/container"
     "fmt"
 )
 
-func init() {
-    cmdEnv := &cobra.Command{
-        Use: "env CONTAINER",
-        Short: "Show container environment variables",
-        PreRunE: checkContainerArg,
-        Run: runEnvCmd,
-    }
-    RootCommand.AddCommand(cmdEnv)
-}
+func (cli *CWMan) CmdEnv(args ...string) error {
+    cmd := cli.Subcmd("env", "CONTAINER [CONTAINER...]")
+    cmd.Require(mflag.Min, 1)
+    cmd.ParseFlags(args, true)
 
-func runEnvCmd(cmd *cobra.Command, args []string) {
-    runContainerAction(args[0], func (c *container.Container) error {
+    return runContainerAction(cmd.Arg(0), func(c *container.Container) error {
         info, err := c.GetInfo()
         if err != nil {
             return err

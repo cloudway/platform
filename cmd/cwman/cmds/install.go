@@ -1,30 +1,16 @@
 package cmds
 
 import (
-    "github.com/spf13/cobra"
-    "errors"
+    "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/container"
 )
 
-func init() {
-    cmdInstall := &cobra.Command{
-        Use:     "install CONTAINER PATH",
-        Short:   "Install a plugin to application container",
-        PreRunE: checkInstallArgs,
-        Run:     runInstallCmd,
-    }
-    RootCommand.AddCommand(cmdInstall)
-}
+func (cli *CWMan) CmdInstall(args ...string) error {
+    cmd := cli.Subcmd("install", "CONTAINER PATH")
+    cmd.Require(mflag.Exact, 2)
+    cmd.ParseFlags(args, true)
 
-func checkInstallArgs(cmd *cobra.Command, args []string) error {
-    if len(args) != 2 {
-        return errors.New("Invalid number of arguments")
-    }
-    return nil
-}
-
-func runInstallCmd(cmd *cobra.Command, args []string) {
-    runContainerAction(args[0], func (c *container.Container) error {
-        return c.Install(args[1])
+    return runContainerAction(cmd.Arg(0), func(c *container.Container) error {
+        return c.Install(cmd.Arg(1))
     })
 }

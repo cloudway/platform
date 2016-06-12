@@ -1,39 +1,27 @@
 package cmds
 
 import (
-    "github.com/spf13/cobra"
     "github.com/cloudway/platform/sandbox"
+    "github.com/cloudway/platform/pkg/mflag"
 )
 
-func init() {
-    RootCommand.AddCommand(
-        &cobra.Command{
-            Use: "start",
-            Short: "Start the application",
-            Run: runControlCmd((*sandbox.Application).Start),
-        },
-    )
-
-    RootCommand.AddCommand(
-        &cobra.Command{
-            Use: "stop",
-            Short: "Stop the application",
-            Run: runControlCmd((*sandbox.Application).Stop),
-        },
-    )
-
-    RootCommand.AddCommand(
-        &cobra.Command{
-            Use: "restart",
-            Short: "Restart the application",
-            Run: runControlCmd((*sandbox.Application).Restart),
-        },
-    )
+func (cli *CWCtl) CmdStart(args ...string) error {
+    cmd := cli.Subcmd("start")
+    cmd.Require(mflag.Exact, 0)
+    cmd.ParseFlags(args, true)
+    return sandbox.NewApplication().Start()
 }
 
-func runControlCmd(action func (*sandbox.Application) error) func (*cobra.Command, []string) {
-    return func (cmd *cobra.Command, args []string) {
-        app := sandbox.NewApplication()
-        check(action(app))
-    }
+func (cli *CWCtl) CmdStop(args ...string) error {
+    cmd := cli.Subcmd("stop")
+    cmd.Require(mflag.Exact, 0)
+    cmd.ParseFlags(args, true)
+    return sandbox.NewApplication().Stop()
+}
+
+func (cli *CWCtl) CmdRestart(args ...string) error {
+    cmd := cli.Subcmd("restart")
+    cmd.Require(mflag.Exact, 0)
+    cmd.ParseFlags(args, true)
+    return sandbox.NewApplication().Restart()
 }

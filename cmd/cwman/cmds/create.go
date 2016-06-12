@@ -1,32 +1,20 @@
 package cmds
 
 import (
+    "github.com/cloudway/platform/pkg/mflag"
     "errors"
-    "github.com/spf13/cobra"
     "github.com/cloudway/platform/container"
 )
 
-func init() {
-    cmdCreate := &cobra.Command{
-        Use:     "create [SERVICE.]NAME-NAMESPACE PLUGIN",
-        Short:   "Create a new application container",
-        PreRunE: checkCreateArgs,
-        Run:     runCreate,
-    }
+func (cli *CWMan) CmdCreate(args ...string) error {
+    cmd := cli.Subcmd("create", "[SERVICE.]NAME-NAMESPACE PLUGIN")
+    user := cmd.String([]string{"u", "-user"}, "", "Specify the username")
+    capacity := cmd.String([]string{"c", "-capacity"}, "", "Application capacity (small,medium,large)")
+    scale := cmd.Int([]string{"s", "scale"}, 1, "Application scaling")
+    cmd.Require(mflag.Exact, 2)
+    cmd.ParseFlags(args, true)
 
-    cmdCreate.Flags().StringP("user", "u", "", "Specifiy the username")
-    cmdCreate.Flags().StringP("capacity", "c", "", "Application capacity (small,medium,large)")
-    cmdCreate.Flags().IntP("scale", "s", 1, "Application scaling")
-
-    RootCommand.AddCommand(cmdCreate)
-}
-
-func checkCreateArgs(cmd *cobra.Command, args []string) error {
-    if len(args) != 2 {
-        return errors.New("Illegal number of arguments.")
-    }
-
-    service, name, namespace := splitContainerName(args[0])
+    service, name, namespace := splitContainerName(cmd.Arg(0))
     if name == "" || namespace == "" || service == "*" {
         return (errors.New(
             "The name and namespace arguments can only containes " +
@@ -35,22 +23,16 @@ func checkCreateArgs(cmd *cobra.Command, args []string) error {
             "a dash (-) character."))
     }
 
-    return nil
-}
-
-func runCreate(cmd* cobra.Command, args []string) {
-    service, name, namespace := splitContainerName(args[0])
     config := container.CreateOptions{
         Name:           name,
         Namespace:      namespace,
         ServiceName:    service,
-        PluginPath:     args[1],
+        PluginPath:     cmd.Arg(1),
+        User:           *user,
+        Capacity:       *capacity,
+        Scaling:        *scale,
     }
 
-    config.User, _     = cmd.Flags().GetString("user")
-    config.Capacity, _ = cmd.Flags().GetString("capacity")
-    config.Scaling,  _ = cmd.Flags().GetInt("scale")
-
     _, err := container.Create(config)
-    check(err)
+    return err
 }

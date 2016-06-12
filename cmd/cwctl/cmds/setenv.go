@@ -2,33 +2,20 @@ package cmds
 
 import (
     "os"
-    "errors"
-    "github.com/spf13/cobra"
     "github.com/cloudway/platform/sandbox"
+    "github.com/cloudway/platform/pkg/mflag"
 )
 
-func init() {
-    if os.Getuid() == 0 {
-        cmdSetenv := &cobra.Command{
-            Use:     "setenv NAME VALUE",
-            Short:   "Set application environment",
-            Run:     runSetenv,
-            PreRunE: func(cmd *cobra.Command, args []string) error {
-                if len(args) != 2 {
-                    return errors.New("Invalid argument number")
-                }
-                return nil
-            },
-        }
-
-        cmdSetenv.Flags().Bool("export", false, "Export the environment variable")
-        RootCommand.AddCommand(cmdSetenv)
+func (cli *CWCtl) CmdSetenv(args ...string) error {
+    if os.Getuid() != 0 {
+        return os.ErrPermission
     }
-}
 
-func runSetenv(cmd *cobra.Command, args []string) {
+    cmd := cli.Cli.Subcmd("setenv", []string{"NAME VALUE"}, "Set application environment", true)
+    export := cmd.Bool([]string{"-export"}, false, "Export the environment variable")
+    cmd.Require(mflag.Exact, 2)
+    cmd.ParseFlags(args, false)
+
     app := sandbox.NewApplication()
-    name, value := args[0], args[1]
-    export, _ := cmd.Flags().GetBool("export")
-    check(app.Setenv(name, value, export))
+    return app.Setenv(cmd.Arg(0), cmd.Arg(1), *export)
 }

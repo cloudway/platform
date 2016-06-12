@@ -1,87 +1,75 @@
 package cmds
 
 import (
-    "fmt"
-    "os"
-    "errors"
-    "regexp"
-    "github.com/spf13/cobra"
-    "github.com/Sirupsen/logrus"
-    "github.com/cloudway/platform/container"
+    Cli "github.com/cloudway/platform/pkg/cli"
+    flag "github.com/cloudway/platform/pkg/mflag"
 )
 
-// RootCommand is the root of the command tree.
-var RootCommand = &cobra.Command{
-    Use:   "cwman",
-    Short: "Cloudway application container management tool",
+// Command is the struct containing the command name and description
+type Command struct {
+    Name        string
+    Description string
 }
+
+type CWMan struct {
+    *Cli.Cli
+    handlers map[string]func(...string)error
+}
+
+// Commands lists the top level commands and their short usage
+var CommandUsage = []Command {
+    {"create",   "Create a new application container"},
+    {"destroy",  "Destroy application containers"},
+    {"list",     "List all application containers"},
+    {"start",    "Start one or more stopped containers"},
+    {"stop",     "Stop a running container"},
+    {"restart",  "Restart a container"},
+    {"run",      "Run one-off command in a running container"},
+    {"env",      "Show container environment variables"},
+    {"install",  "Install a plugin to application container"},
+    {"download", "Download application files"},
+    {"upload",   "Upload files into repo directory"},
+}
+
+var Commands = make(map[string]Command)
 
 func init() {
-    RootCommand.PersistentFlags().BoolVar(&container.DEBUG, "debug", false, "debugging mode")
-    RootCommand.PersistentPreRun = func (cmd *cobra.Command, args []string) {
-        if container.DEBUG {
-            logrus.SetLevel(logrus.DebugLevel)
-        }
+    for _, cmd := range CommandUsage {
+        Commands[cmd.Name] = cmd
     }
 }
 
-func check(err error) {
-    if err != nil {
-        logrus.Fatal(err)
-        os.Exit(1)
+func Init() *CWMan {
+    cli := new(CWMan)
+    cli.Cli = Cli.New("cwman", cli)
+    cli.Description = "Cloudway application container management tool"
+
+    cli.handlers = map[string]func(...string)error {
+        "create":   cli.CmdCreate,
+        "destroy":  cli.CmdDestroy,
+        "list":     cli.CmdList,
+        "start":    cli.CmdStart,
+        "stop":     cli.CmdStop,
+        "restart":  cli.CmdRestart,
+        "run":      cli.CmdRun,
+        "env":      cli.CmdEnv,
+        "install":  cli.CmdInstall,
+        "download": cli.CmdDownload,
+        "upload":   cli.CmdUpload,
+        "update-proxy": cli.CmdUpdateProxy,
     }
+
+    return cli
 }
 
-func checkContainerArg(cmd *cobra.Command, args []string) error {
-    if len(args) == 0 {
-        return errors.New(cmd.Name() + ": you must provide the contaienr ID or name")
-    }
-    return nil
+func (cli *CWMan) Command(name string) func(...string) error {
+    return cli.handlers[name]
 }
 
-var reNamePattern = regexp.MustCompile(`^((\*|[a-z][a-z_0-9]*)\.)?([a-z][a-z_0-9]*)-([a-z][a-z_0-9]*)$`)
-
-func splitContainerName(name string) (string, string, string) {
-    m := reNamePattern.FindStringSubmatch(name)
-    if m != nil && len(m) != 0 {
-        return m[2], m[3], m[4]
-    } else {
-        return "", "", ""
+func (cli *CWMan) Subcmd(name string, synopses ...string) *flag.FlagSet {
+    var description string
+    if cmd, ok := Commands[name]; ok {
+        description = cmd.Description
     }
-}
-
-func runContainerAction(id string, action func (*container.Container) error) {
-    service, name, namespace := splitContainerName(id)
-    if name != "" && namespace != "" {
-        var containers []*container.Container
-        var err error
-
-        if service == "" {
-            // assume the key is 'name-namespace'
-            containers, err = container.FindApplications(name, namespace)
-            check(err)
-        } else if service == "*" {
-            // assume the key is '*.name-namespace'
-            containers, err = container.FindAll(name, namespace)
-            check(err)
-            check(container.ResolveServiceDependencies(containers))
-        } else {
-            // assume the key is 'service.name-namespace'
-            containers, err = container.FindService(name, namespace, service)
-            check(err)
-        }
-
-        if len(containers) == 0 {
-            check(fmt.Errorf("%s: Not found", id))
-        }
-
-        for _, c := range containers {
-            check(action(c))
-        }
-    } else {
-        // assume the key is an application id
-        c, err := container.FromId(id)
-        check(err)
-        check(action(c))
-    }
+    return cli.Cli.Subcmd(name, synopses, description, true)
 }
