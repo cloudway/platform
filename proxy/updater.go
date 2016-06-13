@@ -13,6 +13,39 @@ import (
 )
 
 func RunUpdater(cli *client.Client, proxy Proxy) error {
+    if err := rebuild(cli, proxy); err != nil {
+        return err
+    }
+    if err := listen(cli, proxy); err != nil {
+        return err
+    }
+    return nil
+}
+
+func rebuild(cli *client.Client, proxy Proxy) error {
+    if err := proxy.Reset(); err != nil {
+        return err
+    }
+
+    ids, err := container.IDs()
+    if err != nil {
+        return err
+    }
+
+    for _, id := range ids {
+        c, err := container.Inspect(cli, id)
+        if err == nil && c.State.Running && !c.State.Paused {
+            err = handleStart(proxy, c)
+        }
+        if err != nil {
+            logrus.Error(err)
+            continue
+        }
+    }
+    return nil
+}
+
+func listen(cli *client.Client, proxy Proxy) error {
     var err error
 
     filters := filters.NewArgs()

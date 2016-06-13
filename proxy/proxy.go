@@ -8,8 +8,16 @@ import (
 )
 
 type Proxy interface {
+    // Add endpoints associated to a container.
     AddEndpoints(id string, endpoints []*manifest.Endpoint) error
+
+    // Remove endpoints associated to a container.
     RemoveEndpoints(id string) error
+
+    // Reset the proxy to an initial state.
+    Reset() error
+
+    // Close connection to the proxy.
     Close() error
 }
 

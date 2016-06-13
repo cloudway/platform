@@ -103,7 +103,7 @@ func (px *hipacheProxy) RemoveEndpoints(id string) error {
     for _, rec := range vs {
         kv := strings.SplitN(rec, " ", 2)
         frontend, backend := kv[0], kv[1]
-        if _, err = px.conn.Do("LREM", frontend, 0, backend); err != nil {
+        if _, err = px.conn.Do("LREM", frontend, 0, backend); err == nil {
             logrus.Infof("remove %s -> %s", frontend, backend)
         }
 
@@ -122,5 +122,11 @@ func (px *hipacheProxy) RemoveEndpoints(id string) error {
         logrus.Infof("remove %s", key)
     }
 
+    return err
+}
+
+func (px *hipacheProxy) Reset() error {
+    // remove all keys from redis database
+    _, err := px.conn.Do("FLUSHALL")
     return err
 }
