@@ -43,7 +43,7 @@ function pad_string {
 }
 
 ln -s /usr/local/cwas/lib ${CLOUDWAY_CWAS_DIR}/
-mkdir -p ${CLOUDWAY_CWAS_DIR}/{data,logs,run}
+mkdir -p ${CLOUDWAY_CWAS_DIR}/{data,run}
 
 username=$(generate_username)
 password=$(generate_password)

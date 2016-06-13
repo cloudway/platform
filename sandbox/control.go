@@ -67,7 +67,7 @@ func runPluginAction(path string, env []string, action string, args ...string) e
     }
 
     cmd := exec.Command(filename, args...)
-    cmd.Stdin  = os.Stdin
+    cmd.Stdin  = nil
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
     cmd.Env    = env
@@ -85,7 +85,7 @@ func (app *Application) runActionHook(action string, env []string) error {
     }
 
     cmd := exec.Command(hook)
-    cmd.Stdin  = os.Stdin
+    cmd.Stdin  = nil
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
     cmd.Env    = env

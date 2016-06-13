@@ -66,6 +66,12 @@ func (app *Application) installPlugin(target string) error {
         app.Setenv("CLOUDWAY_FRAMEWORK_DIR", target, false)
     }
 
+    // create log dir
+    logdir := filepath.Join(app.LogDir(), name)
+    os.MkdirAll(logdir, 0750)
+    os.Chown(logdir, app.uid, app.gid)
+    app.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_LOG_DIR", logdir, false)
+
     // process templates by substitution with environment variables
     if err = processTemplates(target, app.Environ()); err != nil {
         return err

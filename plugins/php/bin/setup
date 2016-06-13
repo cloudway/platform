@@ -1,7 +1,7 @@
 #!/bin/bash -eu
 
 # Create additional directories required by PHP
-mkdir -p $CLOUDWAY_PHP_DIR/{logs,run,lock,tmp,sessions}
+mkdir -p $CLOUDWAY_PHP_DIR/{env,run,lock,tmp,sessions}
 
 # Clone default Apache configurations
 rm -f $CLOUDWAY_PHP_DIR/etc/apache2/{mods-available,mods-enabled,conf-available,conf-enabled,magic}

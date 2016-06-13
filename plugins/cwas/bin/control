@@ -67,7 +67,7 @@ function start {
   if isrunning; then
     echo "Application is already running"
   else
-    ${CLOUDWAY_CWAS_DIR}/bin/run.sh 2>&1 | /usr/bin/rotatelogs ${CLOUDWAY_CWAS_DIR}/logs/server.log.%Y%m%d 86400 &
+    ${CLOUDWAY_CWAS_DIR}/bin/run.sh 2>&1 | /usr/bin/rotatelogs ${CLOUDWAY_CWAS_LOG_DIR}/server.log.%Y%m%d 86400 &>/dev/null &
     if ! ishttpup; then
       echo "Timed out waiting for http listening port"
       exit 1
@@ -106,7 +106,7 @@ function status {
 }
 
 function tidy {
-  rm -rf ${CLOUDWAY_CWAS_DIR}/logs/*
+  rm -rf ${CLOUDWAY_CWAS_LOG_DIR}/*
 }
 
 case "$1" in
