@@ -5,10 +5,8 @@ import (
     "io"
     "os"
     "strings"
-    "regexp"
     "errors"
     "path/filepath"
-    "text/template"
     "github.com/Sirupsen/logrus"
     "github.com/cloudway/platform/pkg/manifest"
     "github.com/cloudway/platform/pkg/archive"
@@ -72,11 +70,6 @@ func (app *Application) installPlugin(target string) error {
     os.Chown(logdir, app.uid, app.gid)
     app.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_LOG_DIR", logdir, false)
 
-    // process templates by substitution with environment variables
-    if err = processTemplates(target, app.Environ()); err != nil {
-        return err
-    }
-
     // run install script for non-framework plugin
     if meta.IsLibrary() {
         if err = runPluginAction(target, nil, "install"); err != nil {
@@ -91,6 +84,10 @@ func (app *Application) installPlugin(target string) error {
         return err
     }
 
+    // remove unused setup scripts
+    os.Remove(filepath.Join(target, "bin", "install"))
+    os.Remove(filepath.Join(target, "bin", "setup"))
+
     // populate repository for framework plugin
     if meta.IsFramework() {
         if err = app.populateRepository(target, ""); err != nil {
@@ -100,43 +97,10 @@ func (app *Application) installPlugin(target string) error {
     }
 
     // change owner of plugin directory
-    return chownR(target, app.uid, app.gid)
-}
+    chownR(target, app.uid, app.gid)
+    chownR(filepath.Join(target, "manifest"), 0, app.gid)
 
-var _TEMPLATE_RE = regexp.MustCompile(`^\.?(.*)\.cwt$`)
-
-func processTemplates(root string, env map[string]string) error {
-    return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-        if err != nil {
-            return err
-        }
-
-        filename := filepath.Base(path)
-        m := _TEMPLATE_RE.FindStringSubmatch(filename)
-        if m == nil {
-            return nil
-        }
-
-        t, err := template.ParseFiles(path)
-        if err != nil {
-            logrus.Error(err)
-            return nil
-        }
-
-        outname := filepath.Join(filepath.Dir(path), m[1])
-        out, err := os.Create(outname)
-        if err != nil {
-            logrus.Error(err)
-            return nil
-        }
-        defer out.Close()
-
-        if err = t.Execute(out, env); err != nil {
-            logrus.Error(err)
-            return nil
-        }
-        return nil
-    })
+    return nil
 }
 
 func (app *Application) populateRepository(path, url string) error {

@@ -123,27 +123,6 @@ func (app *Application) GetPlugins() (map[string]*manifest.Plugin, error) {
     return plugins, nil
 }
 
-func (app *Application) GetPlugin(name string) *manifest.Plugin {
-    plugins, err := app.GetPlugins()
-    if err == nil {
-        return plugins[name]
-    } else {
-        return nil
-    }
-}
-
-func (app *Application) GetFrameworkPlugin() *manifest.Plugin {
-    plugins, err := app.GetPlugins()
-    if err == nil {
-        for _, p := range plugins {
-            if p.IsFramework() {
-                return p
-            }
-        }
-    }
-    return nil
-}
-
 func (app *Application) GetEndpoints(ip string) ([]*manifest.Endpoint, error) {
     plugins, err := app.GetPlugins()
     if err != nil {

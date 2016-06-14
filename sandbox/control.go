@@ -5,6 +5,9 @@ import (
     "os/exec"
     "syscall"
     "path/filepath"
+    "regexp"
+    "text/template"
+    "github.com/Sirupsen/logrus"
 )
 
 func (app *Application) Start() error {
@@ -22,39 +25,71 @@ func (app *Application) Restart() error {
 }
 
 func (app *Application) Control(action string, enable_action_hooks, process_templates bool) error {
-    env  := app.Environ()
-    eenv := makeExecEnv(env)
-
     plugins, err := app.GetPlugins()
     if err != nil {
         return err
     }
 
+    if process_templates {
+        env := app.Environ()
+        for _, p := range plugins {
+            if err := processTemplates(p.Path, env); err != nil {
+                return err
+            }
+        }
+    }
+
+    eenv := makeExecEnv(app.Environ())
+
     if enable_action_hooks {
         if err := app.runActionHook("pre_" + action, eenv); err != nil {
-            return err
+            logrus.WithError(err).Errorf("Error exec 'pre_%s'", action)
         }
     }
 
     for _, p := range plugins {
-        path := p.Path
-        if process_templates {
-            if err := processTemplates(path, env); err != nil {
-                return err
-            }
-        }
-        if err := runPluginAction(path, eenv, "control", action); err != nil {
+        if err := runPluginAction(p.Path, eenv, "control", action); err != nil {
             return err
         }
     }
 
     if enable_action_hooks {
         if err := app.runActionHook("post_" + action, eenv); err != nil {
-            return err
+            logrus.WithError(err).Errorf("Error exec 'post_%s'", action)
         }
     }
 
     return nil
+}
+
+var _TEMPLATE_RE = regexp.MustCompile(`^\.?(.*)\.cwt$`)
+
+func processTemplates(root string, env map[string]string) error {
+    return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+
+        filename := info.Name()
+        m := _TEMPLATE_RE.FindStringSubmatch(filename)
+        if m == nil {
+            return nil
+        }
+
+        t, err := template.ParseFiles(path)
+        if err != nil {
+            return err
+        }
+
+        outname := filepath.Join(filepath.Dir(path), m[1])
+        out, err := os.Create(outname)
+        if err != nil {
+            return err
+        }
+        defer out.Close()
+
+        return t.Execute(out, env);
+    })
 }
 
 func runPluginAction(path string, env []string, action string, args ...string) error {
@@ -96,8 +131,7 @@ func (app *Application) runActionHook(action string, env []string) error {
 func RunCommand(cmd *exec.Cmd) error {
     err := cmd.Run()
     if syserr, ok := err.(*os.SyscallError); ok && syserr.Err == syscall.ECHILD {
-        // the child process is reaped, so ignore
-        return nil
+        return nil // ignore if the child process was reaped
     } else {
         return err
     }
