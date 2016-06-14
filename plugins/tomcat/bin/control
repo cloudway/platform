@@ -1,0 +1,37 @@
+#!/bin/bash -eu
+
+export CATALINA_BASE=$CLOUDWAY_TOMCAT_DIR
+export CATALINA_HOME=$CLOUDWAY_TOMCAT_DIR
+export CATALINA_PID=$CLOUDWAY_TOMCAT_DIR/run/catalina.pid
+export CATALINA_OUT=/dev/null
+
+function catalina {
+  $CATALINA_HOME/bin/catalina.sh $1
+}
+
+function start {
+  echo "Starting Tomcat"
+  catalina start
+  return $?
+}
+
+function stop {
+  echo "Stopping Tomcat"
+  catalina stop
+  return $?
+}
+
+function tidy {
+  rm -rf $CLOUDWAY_TOMCAT_LOG_DIR/*
+  return 0
+}
+
+case "$1" in
+  start)    start ;;
+  stop)     stop ;;
+  restart)  stop; start ;;
+  tidy)     tidy ;;
+  *)        exit 0
+esac
+
+exit $?

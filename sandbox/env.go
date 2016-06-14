@@ -29,7 +29,11 @@ func (a *Application) Environ() map[string]string {
     // Merge system environemnt variables
     for _, e := range os.Environ() {
         kv := strings.SplitN(e, "=", 2)
-        env[kv[0]] = kv[1]
+        if strings.HasPrefix(kv[0], "CLOUDWAY_") {
+            env[kv[0]] = kv[1]
+        } else if _, exists := env[kv[0]]; !exists {
+            env[kv[0]] = kv[1]
+        }
     }
 
     // Collect PATH elements

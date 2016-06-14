@@ -1,0 +1,15 @@
+---
+Name: tomcat
+Display-Name: Apache Tomcat 8.0.35
+Description: Apache Tomcat is an open source implementation of the Java Servlet and JavaServer Pages technologies
+Version: '8.0'
+Vendor: Apache
+Category: Framework
+Base-Image: tomcat:8.0
+Endpoints:
+- Private-Host-Name: HOST
+  Private-Port-Name: PORT
+  Private-Port: 8080
+  Proxy-Mappings:
+    - Frontend: ''
+      Backend: ''

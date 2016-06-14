@@ -1,0 +1,22 @@
+#!/bin/bash -eu
+
+CATALINA_BASE=/usr/local/tomcat
+
+# override default environment variables
+cwctl setenv CATALINA_HOME $CLOUDWAY_TOMCAT_DIR
+
+# create additional directories required by Tomcat
+mkdir -p $CLOUDWAY_TOMCAT_DIR/{conf,run,temp,work}
+
+# link tomcat installation into local directory
+ln -s $CATALINA_BASE/{lib,include} $CLOUDWAY_TOMCAT_DIR
+cp -R $CATALINA_BASE/bin/* $CLOUDWAY_TOMCAT_DIR/bin
+cp -R $CATALINA_BASE/conf/* $CLOUDWAY_TOMCAT_DIR/conf
+
+# make changes to default configuration
+sed -i -e 's|"localhost"|"'$CLOUDWAY_APP_DNS'"|' \
+       -e 's|"logs"|"'$CLOUDWAY_TOMCAT_LOG_DIR'"|' \
+       -e 's|appBase="webapps"|appBase="'$CLOUDWAY_REPO_DIR/webapps'"|' \
+       $CLOUDWAY_TOMCAT_DIR/conf/server.xml
+sed -i -e 's|\${catalina.base}/logs|'$CLOUDWAY_TOMCAT_LOG_DIR'|' \
+       $CLOUDWAY_TOMCAT_DIR/conf/logging.properties
