@@ -1,38 +1,60 @@
 package cmds
 
 import (
-    "github.com/cloudway/platform/pkg/mflag"
     "errors"
+    "github.com/cloudway/platform/pkg/mflag"
+    . "github.com/cloudway/platform/pkg/opts"
     "github.com/cloudway/platform/container"
 )
 
 func (cli *CWMan) CmdCreate(args ...string) error {
-    cmd := cli.Subcmd("create", "[SERVICE.]NAME-NAMESPACE PLUGIN")
-    user := cmd.String([]string{"u", "-user"}, "", "Specify the username")
-    capacity := cmd.String([]string{"c", "-capacity"}, "", "Application capacity (small,medium,large)")
-    scale := cmd.Int([]string{"s", "scale"}, 1, "Application scaling")
-    cmd.Require(mflag.Exact, 2)
+    var start bool
+    var err error
+
+    opts := container.CreateOptions{}
+
+    cmd := cli.Subcmd("create", "[SERVICE.]NAME-NAMESPACE PLUGIN [PLUGIN...]")
+    cmd.StringVar(&opts.User, []string{"u", "-user"}, "", "Specify the username")
+    cmd.StringVar(&opts.Capacity, []string{"c", "-capacity"}, "", "Application capacity (small,medium,large)")
+    cmd.IntVar(&opts.Scaling, []string{"s", "scale"}, 1, "Application scaling")
+    cmd.Var(NewMapOptsRef(&opts.Env, ValidateEnv), []string{"e", "-env"}, "Set environment variables")
+    cmd.BoolVar(&start, []string{"-start"}, false, "Start containers after create")
+    cmd.Require(mflag.Min, 2)
     cmd.ParseFlags(args, true)
 
-    service, name, namespace := splitContainerName(cmd.Arg(0))
-    if name == "" || namespace == "" || service == "*" {
-        return (errors.New(
+    opts.ServiceName, opts.Name, opts.Namespace = splitContainerName(cmd.Arg(0))
+    if opts.Name == "" || opts.Namespace == "" || opts.ServiceName == "*" {
+        return errors.New(
             "The name and namespace arguments can only containes " +
             "lower case letters, digits, or underscores. " +
             "The name and namespace arguments must separated by " +
-            "a dash (-) character."))
+            "a dash (-) character.")
     }
 
-    config := container.CreateOptions{
-        Name:           name,
-        Namespace:      namespace,
-        ServiceName:    service,
-        PluginPath:     cmd.Arg(1),
-        User:           *user,
-        Capacity:       *capacity,
-        Scaling:        *scale,
+    var containers []*container.Container
+    for i := 1; i < cmd.NArg(); i++ {
+        opts.PluginPath = cmd.Arg(i)
+        cs, err := container.Create(opts)
+        if err != nil {
+            for _, c := range containers {
+                c.Destroy()
+            }
+            return err
+        }
+        containers = append(containers, cs...)
     }
 
-    _, err := container.Create(config)
-    return err
+    if start {
+        err = container.ResolveServiceDependencies(containers);
+        if err != nil {
+            return err
+        }
+        for _, c := range containers {
+            if err = c.Start(); err != nil {
+                return err
+            }
+        }
+    }
+
+    return nil
 }

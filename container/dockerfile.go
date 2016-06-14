@@ -23,14 +23,7 @@ WORKDIR {{.Home}}
 COPY support /
 ADD {{.PluginInstallPath}} /tmp/install_{{.PluginName}}
 
-ENV CLOUDWAY_APP_NAME={{printf "%q" .Name}} \
-    CLOUDWAY_APP_NAMESPACE={{printf "%q" .Namespace}} \
-    CLOUDWAY_APP_DNS={{printf  "%q" .FQDN}} \
-    CLOUDWAY_APP_USER={{printf "%q" .User}} \
-    CLOUDWAY_HOME_DIR={{printf "%q" .Home}} \
-    CLOUDWAY_LOG_DIR={{printf  "%q" (printf "%s/logs" .Home)}} \
-    CLOUDWAY_DATA_DIR={{printf "%q" (printf "%s/data" .Home)}} \
-    CLOUDWAY_REPO_DIR={{printf "%q" (printf "%s/repo" .Home)}}
+ENV{{range $key, $value := .Env}}{{printf " %s=%q" $key $value}}{{end}}
 
 {{ if .Debug -}}
 RUN /usr/bin/cwctl --debug install {{.PluginName}} /tmp/install_{{.PluginName}}

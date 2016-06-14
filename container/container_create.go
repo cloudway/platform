@@ -30,28 +30,40 @@ import (
 type CreateOptions struct {
     Name              string
     Namespace         string
-    Category          manifest.Category
     ServiceName       string
+    PluginPath        string
     Home              string
     User              string
-    Hostname          string
-    FQDN              string
     Capacity          string
     Scaling           int
-    PluginPath        string
+    Env               map[string]string
+}
+
+type createConfig struct {
+    *CreateOptions
+    Env               map[string]string // duplicate env map to prevent destruct original map
     PluginName        string
     PluginInstallPath string
+    Category          manifest.Category
     BaseImage         string
-    DependsOn         []string
     InstallScript     string
+    DependsOn         []string
+    Hostname          string
+    FQDN              string
     Debug             bool
 }
 
 // Create new application containers.
-func Create(config CreateOptions) ([]*Container, error) {
+func Create(opts CreateOptions) ([]*Container, error) {
     cli, err := docker_client()
     if err != nil {
         return nil, err
+    }
+
+    config := &createConfig{CreateOptions: &opts}
+    config.Env = make(map[string]string)
+    for k, v := range opts.Env {
+        config.Env[k] = v
     }
 
     meta, err := archive.ReadManifest(config.PluginPath)
@@ -79,6 +91,14 @@ func Create(config CreateOptions) ([]*Container, error) {
     config.DependsOn  = meta.DependsOn
     config.Debug      = DEBUG
 
+    config.Env["CLOUDWAY_APP_NAME"] = config.Name
+    config.Env["CLOUDWAY_APP_NAMESPACE"] = config.Namespace
+    config.Env["CLOUDWAY_APP_USER"] = config.User
+    config.Env["CLOUDWAY_HOME_DIR"] = config.Home
+    config.Env["CLOUDWAY_REPO_DIR"] = config.Home + "/repo"
+    config.Env["CLOUDWAY_DATA_DIR"] = config.Home + "/data"
+    config.Env["CLOUDWAY_LOG_DIR"]  = config.Home + "/logs"
+
     switch config.Category {
     case manifest.Framework:
         return createApplicationContainer(cli, config)
@@ -89,13 +109,14 @@ func Create(config CreateOptions) ([]*Container, error) {
     }
 }
 
-func createApplicationContainer(cli *client.Client, config CreateOptions) ([]*Container, error) {
+func createApplicationContainer(cli *client.Client, config *createConfig) ([]*Container, error) {
     if config.ServiceName != "" {
         return nil, fmt.Errorf("The application name cannot contains a serivce name: %s", config.ServiceName)
     }
 
     config.Hostname = config.Name + "-" + config.Namespace
     config.FQDN = config.Hostname + "." + defaults.Domain()
+    config.Env["CLOUDWAY_APP_DNS"] = config.FQDN
 
     scale, err := getScaling(config.Name, config.Namespace, config.Scaling)
     if err != nil {
@@ -138,7 +159,7 @@ func getScaling(name, namespace string, scale int) (int, error) {
     return scale - n, nil
 }
 
-func createServiceContainer(cli *client.Client, config CreateOptions) ([]*Container, error) {
+func createServiceContainer(cli *client.Client, config *createConfig) ([]*Container, error) {
     if config.ServiceName == "" {
         config.ServiceName = config.PluginName
     }
@@ -146,6 +167,7 @@ func createServiceContainer(cli *client.Client, config CreateOptions) ([]*Contai
     name, namespace, service := config.Name, config.Namespace, config.ServiceName
     config.Hostname = service + "." + name + "-" + namespace
     config.FQDN = config.Hostname + "." + defaults.Domain()
+    config.Env["CLOUDWAY_APP_DNS"] = config.FQDN
 
     cs, err := FindService(name, namespace, service)
     if err != nil {
@@ -168,7 +190,7 @@ func createServiceContainer(cli *client.Client, config CreateOptions) ([]*Contai
     }
 }
 
-func buildImage(cli *client.Client, t *template.Template, config CreateOptions) (image string, err error) {
+func buildImage(cli *client.Client, t *template.Template, config *createConfig) (image string, err error) {
     // Create temporary tar archive to create build context
     tarFile, err := ioutil.TempFile("", "docker");
     if err != nil {
@@ -246,7 +268,7 @@ func readBuildImageId(in io.Reader) (id string, err error) {
     return id, err
 }
 
-func createDockerfile(t *template.Template, config CreateOptions) []byte{
+func createDockerfile(t *template.Template, config *createConfig) []byte{
     b, err := archive.ReadFile(config.PluginPath, "bin/install")
     if err == nil {
         script := strings.Replace(string(b), "\n", "\\n\\\n", -1)
@@ -278,7 +300,7 @@ func addPluginFiles(tw *tar.Writer, dst, path string) error {
     }
 }
 
-func createContainer(cli *client.Client, imageId string, options CreateOptions) (*Container, error) {
+func createContainer(cli *client.Client, imageId string, options *createConfig) (*Container, error) {
     config := &container.Config {
         Image: imageId,
         Labels: map[string]string {
