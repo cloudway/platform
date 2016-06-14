@@ -1,0 +1,16 @@
+#!/bin/bash -e
+
+function daemon {
+    /etc/init.d/redis-server $1
+}
+
+case "$1" in
+  start)    daemon start ;;
+  stop)     daemon stop ;;
+  restart)  daemon restart ;;
+  reload)   daemon reload ;;
+  status)   daemon status ;;
+  *)        exit 0
+esac
+
+exit $?

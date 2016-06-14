@@ -1,0 +1,14 @@
+#!/bin/bash -e
+
+# create password
+password=$(cwctl pwgen -l 64)
+cwctl setenv --export CLOUDWAY_REDIS_PASSWORD "$password"
+
+# modify redis configuration
+sed -i -e '/bind 127.0.0.1/d' -e "/^# requirepass/a requirepass $password" /etc/redis/redis.conf
+
+echo ""
+echo "Redis created. Please make note of these credentials:"
+echo ""
+echo "         Password: $password"
+echo ""

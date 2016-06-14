@@ -1,0 +1,17 @@
+function redis {
+  hostopt="-h $CLOUDWAY_REDIS_HOST"
+  portopt="-p $CLOUDWAY_REDIS_PORT"
+  passopt="-a $CLOUDWAY_REDIS_PASSWORD"
+
+  # Unset default value if it was provided to us.
+  for arg in $@; do
+    case "$arg" in
+      -h) unset hostopt ;;
+      -p) unset portopt ;;
+      -a) unset passopt ;;
+      *) ;;
+    esac
+  done
+
+  /usr/bin/redis-cli $hostopt $portopt $passopt "$@"
+}

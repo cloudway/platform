@@ -38,6 +38,7 @@ func Init() *CWCtl {
         "run":      cli.CmdRun,     // HIDDEN
         "sh":       cli.CmdSh,      // HIDDEN
         "upload":   cli.CmdUpload,  // HIDDEN
+        "pwgen":    cli.CmdPwgen,   // HIDDEN
     }
 
     if os.Getuid() == 0 {
