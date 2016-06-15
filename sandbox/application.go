@@ -6,6 +6,7 @@ import (
     "io/ioutil"
     "net"
     "errors"
+    "strings"
     "strconv"
     "path/filepath"
     "github.com/Sirupsen/logrus"
@@ -85,6 +86,15 @@ func (app *Application) FQDN() string {
     return os.Getenv("CLOUDWAY_APP_DNS")
 }
 
+func (app *Application) GetExtraHosts() []string {
+    extraHosts := app.Getenv("CLOUDWAY_EXTRA_HOSTS")
+    if extraHosts == "" {
+        return nil
+    } else {
+        return strings.Split(extraHosts, ",")
+    }
+}
+
 func (app *Application) GetLocalIP() (string, error) {
     addrs, err := net.InterfaceAddrs()
     if err != nil {
@@ -137,18 +147,15 @@ func (app *Application) GetEndpoints(ip string) ([]*manifest.Endpoint, error) {
     }
 
     fqdn := app.FQDN()
-    endpoints := make([]*manifest.Endpoint, 0)
+    extra := app.GetExtraHosts()
 
+    var endpoints []*manifest.Endpoint
     for _, p := range plugins {
-        eps := p.GetEndpoints(ip)
-        for _, ep := range eps {
-            for _, m := range ep.ProxyMappings {
-                m.Frontend = fqdn + m.Frontend
-            }
+        endpoints = append(endpoints, p.GetEndpoints(fqdn, ip)...)
+        for _, host := range extra {
+            endpoints = append(endpoints, p.GetEndpoints(host, ip)...)
         }
-        endpoints = append(endpoints, eps...)
     }
-
     return endpoints, nil
 }
 
@@ -166,7 +173,7 @@ func (app *Application) CreatePrivateEndpoints(ip string) error {
     }
 
     for _, p := range plugins {
-        for _, ep := range p.GetEndpoints(ip) {
+        for _, ep := range p.GetEndpoints(app.FQDN(), ip) {
             app.SetPluginEnv(p, ep.PrivateHostName, ip, true)
             app.SetPluginEnv(p, ep.PrivatePortName, strconv.Itoa(int(ep.PrivatePort)), true)
         }

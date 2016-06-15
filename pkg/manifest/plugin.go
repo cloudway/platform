@@ -56,6 +56,7 @@ type Plugin struct {
 type Endpoint struct {
     PrivateHostName string `yaml:"Private-Host-Name"`
     PrivatePortName string `yaml:"Private-Port-Name"`
+    PublicHost      string `yaml:"-"`
     PrivateHost     string `yaml:"-"`
     PrivatePort     int32  `yaml:"Private-Port"`
     ProxyMappings   []*ProxyMapping `yaml:"Proxy-Mappings,omitempty"`
@@ -110,7 +111,7 @@ func Read(f io.Reader) (*Plugin, error) {
     return plugin, err
 }
 
-func (p *Plugin) GetEndpoints(host string) []*Endpoint {
+func (p *Plugin) GetEndpoints(publicHost, privateHost string) []*Endpoint {
     endpoints := make([]*Endpoint, 0, len(p.Endpoints))
 
     for _, ep := range p.Endpoints {
@@ -121,7 +122,8 @@ func (p *Plugin) GetEndpoints(host string) []*Endpoint {
         ep2 := &Endpoint{
             PrivateHostName: host_name,
             PrivatePortName: port_name,
-            PrivateHost:     host,
+            PublicHost:      publicHost,
+            PrivateHost:     privateHost,
             PrivatePort:     ep.PrivatePort,
         }
         ep2.ProxyMappings = proxyMappings(ep2, ep.ProxyMappings)
@@ -140,7 +142,7 @@ func proxyMappings(ep *Endpoint, mappings []*ProxyMapping) []*ProxyMapping {
         }
         for _, prot := range protocols {
             m2 := ProxyMapping{
-                Frontend: getFrontendUri(m.Frontend),
+                Frontend: ep.PublicHost + getFrontendUri(m.Frontend),
                 Backend:  getBackendUri(ep, m.Backend, prot),
                 Protocol: prot,
             }

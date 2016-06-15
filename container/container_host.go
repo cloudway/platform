@@ -1,0 +1,52 @@
+package container
+
+import "strings"
+
+const EXTRA_HOSTS_KEY = "CLOUDWAY_EXTRA_HOSTS"
+
+func (c *Container) AddHost(host string, more ...string) error {
+    hosts := c.GetHosts()
+    hosts = addToSlice(hosts, host)
+    for _, v := range more {
+        hosts = addToSlice(hosts, v)
+    }
+    return c.Setenv(EXTRA_HOSTS_KEY, strings.Join(hosts, ","))
+}
+
+func (c *Container) RemoveHost(host string, more ...string) error {
+    hosts := c.GetHosts()
+    if len(hosts) == 0 {
+        return nil
+    }
+    hosts = removeFromSlice(hosts, host)
+    for _, v := range more {
+        hosts = removeFromSlice(hosts, v)
+    }
+    return c.Setenv(EXTRA_HOSTS_KEY, strings.Join(hosts, ","))
+}
+
+func (c *Container) GetHosts() []string {
+    hosts, _ := c.Getenv(EXTRA_HOSTS_KEY)
+    if hosts == "" {
+        return nil
+    }
+    return strings.Split(hosts, ",")
+}
+
+func addToSlice(xs []string, x string) []string {
+    for _, v := range xs {
+        if v == x {
+            return xs
+        }
+    }
+    return append(xs, x)
+}
+
+func removeFromSlice(xs []string, x string) []string {
+    for i, v := range xs {
+        if v == x {
+            return append(xs[:i], xs[i+1:]...)
+        }
+    }
+    return xs
+}
