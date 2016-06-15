@@ -1,0 +1,39 @@
+function mongo {
+  hostopt="--host $CLOUDWAY_MONGO_DB_HOST"
+  portopt="--port $CLOUDWAY_MONGO_DB_PORT"
+  useropt="-u $CLOUDWAY_MONGO_DB_USERNAME"
+  passopt="-p $CLOUDWAY_MONGO_DB_PASSWORD"
+
+  # Unset default value if it was provided to us.
+  for arg in $@; do
+    case "$arg" in
+      --host)         unset hostopt ;;
+      --port)         unset portopt ;;
+      --username|-u)  unset useropt ;;
+      --password|-p)  unset passopt ;;
+      *) ;;
+    esac
+  done
+
+  /usr/bin/mongo $CLOUDWAY_APP_NAME $hostopt $portopt $useropt $passopt --authenticationDatabase admin "$@"
+}
+
+function mongo-admin {
+  hostopt="--host $CLOUDWAY_MONGO_DB_HOST"
+  portopt="--port $CLOUDWAY_MONGO_DB_PORT"
+  useropt="-u $CLOUDWAY_MONGO_DB_ADMIN_USERNAME"
+  passopt="-p $CLOUDWAY_MONGO_DB_ADMIN_PASSWORD"
+
+  # Unset default value if it was provided to us.
+  for arg in $@; do
+    case "$arg" in
+      --host)         unset hostopt ;;
+      --port)         unset portopt ;;
+      --username|-u)  unset useropt ;;
+      --password|-p)  unset passopt ;;
+      *) ;;
+    esac
+  done
+
+  /usr/bin/mongo admin $hostopt $portopt $useropt $passopt "$@"
+}

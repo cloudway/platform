@@ -25,3 +25,10 @@ func (cli *CWCtl) CmdRestart(args ...string) error {
     cmd.ParseFlags(args, true)
     return sandbox.NewApplication().Restart()
 }
+
+func (cli *CWCtl) CmdStatus(args ...string) error {
+    cmd := cli.Subcmd("status")
+    cmd.Require(mflag.Exact, 0)
+    cmd.ParseFlags(args, true)
+    return sandbox.NewApplication().Control("status", false, false)
+}

@@ -1,0 +1,45 @@
+#!/bin/sh -e
+
+# patch the init file
+sed -i '/start-stop-daemon --stop/{s/\\$/--retry 300/;n;N;N;d}' /etc/init.d/mongod
+
+# create the configuration file
+cat <<EOF >/etc/mongod.conf
+systemLog:
+  destination: file
+  logAppend: true
+  path: /var/log/mongodb/mongod.log
+storage:
+  dbPath: /data/db
+  journal:
+    enabled: true
+net:
+  port: 27017
+security:
+  authorization: enabled
+EOF
+
+# create the admin user
+admin_username=admin
+admin_password=$(cwctl pwgen)
+mongo_username=$(cwctl pwgen mongo-)
+mongo_password=$(cwctl pwgen)
+
+cwctl setenv CLOUDWAY_MONGO_DB_ADMIN_USERNAME "$admin_username"
+cwctl setenv CLOUDWAY_MONGO_DB_ADMIN_PASSWORD "$admin_password"
+cwctl setenv --export CLOUDWAY_MONGO_DB_USERNAME "$mongo_username"
+cwctl setenv --export CLOUDWAY_MONGO_DB_PASSWORD "$mongo_password"
+
+echo ""
+echo "MongoDB database added. Please make note of these credentials:"
+echo ""
+echo "  Admin User Name: $admin_username"
+echo "   Admin Password: $admin_password"
+echo "    Database Name: admin"
+echo ""
+echo "        User Name: $mongo_username"
+echo "         Password: $mongo_password"
+echo "    Database Name: $CLOUDWAY_APP_NAME"
+echo ""
+
+touch ~/.firstrun

@@ -1,6 +1,8 @@
 package cmds
 
 import (
+    "os"
+    "github.com/Sirupsen/logrus"
     flag "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/container"
 )
@@ -31,6 +33,20 @@ func (cli *CWMan) CmdDestroy(args ...string) error {
     cmd.Require(flag.Min, 1)
     cmd.ParseFlags(args, true)
     return runControlCmd(cmd.Args(), (*container.Container).Destroy)
+}
+
+func (cli *CWMan) CmdStatus(args ...string) error {
+    cmd := cli.Subcmd("status", "CONTAINER [CONTAINER...]")
+    cmd.Require(flag.Min, 1)
+    cmd.ParseFlags(args, true)
+
+    return runControlCmd(cmd.Args(), func(c *container.Container) error {
+        err := c.Exec("", nil, os.Stdout, os.Stderr, "/usr/bin/cwctl", "status")
+        if err != nil {
+            logrus.Error(err)
+        }
+        return nil
+    })
 }
 
 func runControlCmd(args []string, action func(*container.Container) error) error {

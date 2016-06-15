@@ -1,0 +1,13 @@
+---
+Name: mongo
+Display-Name: MongoDB 3.2.6
+Description: MongoDB document database provide high availability and easy scalability.
+Version: '3.2.6'
+Vendor: MongoDB Inc.
+Category: Service
+Base-Image: mongo:3.2
+User: root
+Endpoints:
+- Private-Host-Name: DB_HOST
+  Private-Port-Name: DB_PORT
+  Private-Port: 27017

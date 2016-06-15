@@ -22,6 +22,7 @@ var CommandUsage = []Command {
     {"start",   "Start the application"},
     {"stop",    "Stop the application"},
     {"restart", "Restart the application"},
+    {"status",  "Show application status"},
 }
 
 var Commands = make(map[string]Command)
@@ -35,6 +36,7 @@ func Init() *CWCtl {
         "start":    cli.CmdStart,
         "stop":     cli.CmdStop,
         "restart":  cli.CmdRestart,
+        "status":   cli.CmdStatus,
         "run":      cli.CmdRun,     // HIDDEN
         "sh":       cli.CmdSh,      // HIDDEN
         "upload":   cli.CmdUpload,  // HIDDEN

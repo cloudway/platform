@@ -1,0 +1,42 @@
+#!/bin/bash -eu
+
+function daemon {
+    /etc/init.d/mongod $1
+}
+
+function start {
+  daemon start
+  initdb
+}
+
+function initdb {
+  if [ -f ~/.firstrun ]; then
+    mongo admin --port $CLOUDWAY_MONGO_DB_PORT <<EOF >/dev/null
+db.createUser({
+    user: "$CLOUDWAY_MONGO_DB_ADMIN_USERNAME",
+    pwd:  "$CLOUDWAY_MONGO_DB_ADMIN_PASSWORD",
+    roles: [{role:"userAdminAnyDatabase", db:"admin"}]
+})
+
+db.auth("$CLOUDWAY_MONGO_DB_ADMIN_USERNAME", "$CLOUDWAY_MONGO_DB_ADMIN_PASSWORD")
+
+db.createUser({
+    user: "$CLOUDWAY_MONGO_DB_USERNAME",
+    pwd:  "$CLOUDWAY_MONGO_DB_PASSWORD",
+    roles: [{role: "dbOwner", db: "$CLOUDWAY_APP_NAME"}]
+})
+EOF
+    rm -f ~/.firstrun
+  fi
+}
+
+case "$1" in
+  start)    start ;;
+  stop)     daemon stop ;;
+  restart)  daemon restart ;;
+  reload)   daemon reload ;;
+  status)   daemon status ;;
+  *)        exit 0
+esac
+
+exit $?
