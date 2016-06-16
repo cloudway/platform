@@ -10,7 +10,7 @@ func (cli *CWMan) CmdInstall(args ...string) error {
     cmd.Require(mflag.Exact, 2)
     cmd.ParseFlags(args, true)
 
-    return runContainerAction(cmd.Arg(0), func(c *container.Container) error {
+    return cli.runContainerAction(cmd.Arg(0), func(c *container.Container) error {
         return c.Install(cmd.Arg(1))
     })
 }

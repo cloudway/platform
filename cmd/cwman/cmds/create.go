@@ -22,7 +22,7 @@ func (cli *CWMan) CmdCreate(args ...string) error {
     cmd.Require(mflag.Min, 2)
     cmd.ParseFlags(args, true)
 
-    opts.ServiceName, opts.Name, opts.Namespace = splitContainerName(cmd.Arg(0))
+    opts.ServiceName, opts.Name, opts.Namespace = container.SplitNames(cmd.Arg(0))
     if opts.Name == "" || opts.Namespace == "" || opts.ServiceName == "*" {
         return errors.New(
             "The name and namespace arguments can only containes " +
@@ -34,7 +34,7 @@ func (cli *CWMan) CmdCreate(args ...string) error {
     var containers []*container.Container
     for i := 1; i < cmd.NArg(); i++ {
         opts.PluginPath = cmd.Arg(i)
-        cs, err := container.Create(opts)
+        cs, err := cli.Create(opts)
         if err != nil {
             for _, c := range containers {
                 c.Destroy()

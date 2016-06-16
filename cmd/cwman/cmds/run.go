@@ -11,7 +11,7 @@ func (cli *CWMan) CmdRun(args ...string) error {
     cmd.Require(mflag.Min, 1)
     cmd.ParseFlags(args, true)
 
-    return runContainerAction(cmd.Arg(0), func (c *container.Container) error {
+    return cli.runContainerAction(cmd.Arg(0), func (c *container.Container) error {
         cargs := cmd.Args()[1:]
         if len(cargs) == 0 {
             cargs = []string{"/usr/bin/cwsh"}

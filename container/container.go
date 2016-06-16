@@ -3,14 +3,13 @@ package container
 import (
     "fmt"
     "strings"
+    "regexp"
 
-    "github.com/docker/engine-api/client"
+    "golang.org/x/net/context"
     "github.com/docker/engine-api/types"
     "github.com/docker/engine-api/types/filters"
-    "golang.org/x/net/context"
-
-    "github.com/cloudway/platform/container/conf/defaults"
     "github.com/cloudway/platform/pkg/manifest"
+    "github.com/cloudway/platform/container/conf/defaults"
 )
 
 const (
@@ -30,31 +29,24 @@ type Container struct {
     Namespace   string
     State       ContainerState
 
-    *client.Client
+    DockerClient
     *types.ContainerJSON
 }
 
-var docker *client.Client
+var reNamePattern = regexp.MustCompile(`^((\*|[a-z][a-z_0-9]*)\.)?([a-z][a-z_0-9]*)-([a-z][a-z_0-9]*)$`)
 
-func docker_client() (cli *client.Client, err error) {
-    if cli = docker; cli == nil {
-        cli, err = client.NewEnvClient()
-        docker = cli
+func SplitNames(name string) (string, string, string) {
+    m := reNamePattern.FindStringSubmatch(name)
+    if len(m) != 0 {
+        return m[2], m[3], m[4]
+    } else {
+        return "", "", ""
     }
-    return cli, err
 }
 
 // Returns an application container object constructed from the
 // container id in the system.
-func FromId(id string) (*Container, error) {
-    cli, err := docker_client()
-    if err != nil {
-        return nil, err
-    }
-    return Inspect(cli, id)
-}
-
-func Inspect(cli *client.Client, id string) (*Container, error) {
+func (cli DockerClient) Inspect(id string) (*Container, error) {
     info, err := cli.ContainerInspect(context.Background(), id)
     if err != nil {
         return nil, err
@@ -70,21 +62,13 @@ func Inspect(cli *client.Client, id string) (*Container, error) {
         Name:           name,
         Namespace:      namespace,
         State:          ContainerState{info.State},
-        Client:         cli,
+        DockerClient:   cli,
         ContainerJSON:  &info,
     }, nil
 }
 
 // Returns a list of ids for every cloudway container in the system.
-func IDs() ([]string, error) {
-    cli, err := docker_client()
-    if err != nil {
-        return nil, err
-    }
-    return ids(cli)
-}
-
-func ids(cli *client.Client) (ids []string, err error) {
+func (cli DockerClient) IDs() (ids []string, err error) {
     args := filters.NewArgs()
     args.Add("label", APP_NAME_KEY)
     args.Add("label", APP_NAMESPACE_KEY)
@@ -102,20 +86,15 @@ func ids(cli *client.Client) (ids []string, err error) {
 
 // Returns a list of application container objects for every cloudway
 // container in the system.
-func All() ([]*Container, error) {
-    cli, err := docker_client()
-    if err != nil {
-        return nil, err
-    }
-
-    ids, err := ids(cli)
+func (cli DockerClient) ListAll() ([]*Container, error) {
+    ids, err := cli.IDs()
     if err != nil {
         return nil, err
     }
 
     containers := make([]*Container, 0, len(ids))
     for _, id := range ids {
-        c, err := Inspect(cli, id)
+        c, err := cli.Inspect(id)
         if err != nil {
             return nil, err
         }
@@ -125,38 +104,33 @@ func All() ([]*Container, error) {
 }
 
 // Find all containers with the given name and namespace.
-func FindAll(name, namespace string) ([]*Container, error) {
-    return find(name, namespace, filters.NewArgs())
+func (cli DockerClient) FindAll(name, namespace string) ([]*Container, error) {
+    return find(cli, name, namespace, filters.NewArgs())
 }
 
 // Find all application containers with the given name and namespace.
-func FindApplications(name, namespace string) ([]*Container, error) {
+func (cli DockerClient) FindApplications(name, namespace string) ([]*Container, error) {
     args := filters.NewArgs()
     args.Add("label", CATEGORY_KEY + "=" + string(manifest.Framework))
-    return find(name, namespace, args)
+    return find(cli, name, namespace, args)
 }
 
 // Find all service containers associated with the given name and namespace.
-func FindServices(name, namespace string) ([]*Container, error) {
+func (cli DockerClient) FindServices(name, namespace string) ([]*Container, error) {
     args := filters.NewArgs()
     args.Add("label", CATEGORY_KEY + "=" + string(manifest.Service))
-    return find(name, namespace, args)
+    return find(cli, name, namespace, args)
 }
 
 // Find service container with the give name, namespace and service name.
-func FindService(name, namespace, service string) ([]*Container, error) {
+func (cli DockerClient) FindService(name, namespace, service string) ([]*Container, error) {
     args := filters.NewArgs()
     args.Add("label", CATEGORY_KEY + "=" + string(manifest.Service))
     args.Add("label", SERVICE_NAME_KEY + "=" + service)
-    return find(name, namespace, args)
+    return find(cli, name, namespace, args)
 }
 
-func find(name, namespace string, args filters.Args) ([]*Container, error) {
-    cli, err := docker_client()
-    if err != nil {
-        return nil, err
-    }
-
+func find(cli DockerClient, name, namespace string, args filters.Args) ([]*Container, error) {
     args.Add("label", APP_NAME_KEY + "=" + name)
     args.Add("label", APP_NAMESPACE_KEY + "=" + namespace)
     options := types.ContainerListOptions{All: true, Filter: args}
@@ -168,7 +142,7 @@ func find(name, namespace string, args filters.Args) ([]*Container, error) {
 
     containers := make([]*Container, 0, len(list))
     for _, c := range list {
-        cc, err := Inspect(cli, c.ID)
+        cc, err := cli.Inspect(c.ID)
         if err != nil {
             return nil, err
         }

@@ -20,18 +20,18 @@ func (cli *CWMan) CmdUpload(args ...string) error {
     cmd.ParseFlags(args, true)
 
     var containers []*container.Container
-    service, name, namespace := splitContainerName(cmd.Arg(0))
+    service, name, namespace := container.SplitNames(cmd.Arg(0))
     if name != "" && namespace != "" {
         if service != "" && service != "*" {
             return fmt.Errorf("Cannot upload files to service containers")
         }
-        cs, err := container.FindApplications(name, namespace)
+        cs, err := cli.FindApplications(name, namespace)
         if err != nil {
             return err
         }
         containers = cs
     } else {
-        c, err := container.FromId(cmd.Arg(0))
+        c, err := cli.Inspect(cmd.Arg(0))
         if err != nil {
             return err
         }

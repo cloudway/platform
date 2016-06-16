@@ -5,14 +5,13 @@ import (
     "encoding/json"
     "github.com/Sirupsen/logrus"
     "golang.org/x/net/context"
-    "github.com/docker/engine-api/client"
     "github.com/docker/engine-api/types"
     "github.com/docker/engine-api/types/filters"
     "github.com/docker/engine-api/types/events"
     "github.com/cloudway/platform/container"
 )
 
-func RunUpdater(cli *client.Client, proxy Proxy) error {
+func RunUpdater(cli container.DockerClient, proxy Proxy) error {
     if err := rebuild(cli, proxy); err != nil {
         return err
     }
@@ -22,18 +21,18 @@ func RunUpdater(cli *client.Client, proxy Proxy) error {
     return nil
 }
 
-func rebuild(cli *client.Client, proxy Proxy) error {
+func rebuild(cli container.DockerClient, proxy Proxy) error {
     if err := proxy.Reset(); err != nil {
         return err
     }
 
-    ids, err := container.IDs()
+    ids, err := cli.IDs()
     if err != nil {
         return err
     }
 
     for _, id := range ids {
-        c, err := container.Inspect(cli, id)
+        c, err := cli.Inspect(id)
         if err == nil && c.State.Running && !c.State.Paused {
             err = handleStart(proxy, c)
         }
@@ -45,7 +44,7 @@ func rebuild(cli *client.Client, proxy Proxy) error {
     return nil
 }
 
-func listen(cli *client.Client, proxy Proxy) error {
+func listen(cli container.DockerClient, proxy Proxy) error {
     var err error
 
     filters := filters.NewArgs()
@@ -76,7 +75,7 @@ func listen(cli *client.Client, proxy Proxy) error {
         switch event.Action {
         case "start":
             logrus.Debugf("container started: %s", event.Actor.ID)
-            c, err := container.Inspect(cli, event.Actor.ID)
+            c, err := cli.Inspect(event.Actor.ID)
             if err == nil {
                 err = handleStart(proxy, c)
             }

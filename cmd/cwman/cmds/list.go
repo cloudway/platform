@@ -3,7 +3,6 @@ package cmds
 import (
     "fmt"
     "github.com/cloudway/platform/pkg/mflag"
-    "github.com/cloudway/platform/container"
 )
 
 func (cli *CWMan) CmdList(args ...string) error {
@@ -11,7 +10,7 @@ func (cli *CWMan) CmdList(args ...string) error {
     cmd.Require(mflag.Exact, 0)
     cmd.ParseFlags(args, true)
 
-    containers, err := container.All()
+    containers, err := cli.ListAll()
     if err != nil {
         return err
     }

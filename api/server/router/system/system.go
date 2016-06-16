@@ -8,16 +8,16 @@ import (
     "github.com/cloudway/platform/api/types"
     "github.com/cloudway/platform/api"
     "github.com/cloudway/platform/api/server/httputils"
-    "github.com/docker/engine-api/client"
+    "github.com/cloudway/platform/container"
 )
 
 type systemRouter struct {
-    *client.Client
+    container.DockerClient
     routes []router.Route
 }
 
-func NewRouter(client *client.Client) router.Router {
-    r := &systemRouter{Client: client}
+func NewRouter(client container.DockerClient) router.Router {
+    r := &systemRouter{DockerClient: client}
 
     r.routes = []router.Route{
         router.NewGetRoute("/ping", handlePing),

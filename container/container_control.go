@@ -57,7 +57,7 @@ func distributeEnv(c *Container, env map[string]string) error {
     envfile := createEnvFile(env)
 
     // Write environments to all containers in the application
-    cs, err := FindAll(c.Name, c.Namespace)
+    cs, err := c.FindAll(c.Name, c.Namespace)
     if err != nil {
         return err
     }

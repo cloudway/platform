@@ -6,7 +6,6 @@ import (
     "strings"
     "strconv"
     "fmt"
-    "runtime"
     "github.com/cloudway/platform/api/server/httputils"
 )
 
@@ -22,13 +21,15 @@ func (badRequestError) HTTPErrorStatusCode() int {
 type VersionMiddleware struct {
     serverVersion  string
     minVersion     string
+    dockerVersion  string
 }
 
 // NewVersionMiddleware creates a new VersionMiddleware with the default versions
-func NewVersionMiddleware(s, m string) VersionMiddleware {
+func NewVersionMiddleware(s, m, d string) VersionMiddleware {
     return VersionMiddleware{
         serverVersion:  s,
         minVersion:     m,
+        dockerVersion:  d,
     }
 }
 
@@ -53,7 +54,7 @@ func (v VersionMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIF
             }
         }
 
-        header := fmt.Sprintf("Cloudway/%s (%s)", v.serverVersion, runtime.GOOS)
+        header := fmt.Sprintf("Cloudway-API/%s Docker/%s", v.serverVersion, v.dockerVersion)
         w.Header().Set("Server", header)
         ctx = context.WithValue(ctx, httputils.APIVersionKey, apiVersion)
         return handler(ctx, w, r, vars)

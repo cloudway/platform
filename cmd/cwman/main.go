@@ -53,7 +53,13 @@ func main() {
         logrus.SetLevel(logrus.DebugLevel)
     }
 
-    c := cmds.Init()
+    docker, err := container.NewEnvClient()
+    if err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(1)
+    }
+
+    c := cmds.Init(docker)
     if err := c.Run(flag.Args()...); err != nil {
         fmt.Fprintln(os.Stderr, err)
         os.Exit(1)

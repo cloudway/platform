@@ -11,7 +11,7 @@ func (cli *CWMan) CmdEnv(args ...string) error {
     cmd.Require(mflag.Min, 1)
     cmd.ParseFlags(args, true)
 
-    return runContainerAction(cmd.Arg(0), func(c *container.Container) error {
+    return cli.runContainerAction(cmd.Arg(0), func(c *container.Container) error {
         info, err := c.GetInfo()
         if err != nil {
             return err

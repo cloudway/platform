@@ -11,28 +11,28 @@ func (cli *CWMan) CmdStart(args ...string) error {
     cmd := cli.Subcmd("start", "CONTAINER [CONTAINER...]", "all")
     cmd.Require(flag.Min, 1)
     cmd.ParseFlags(args, true)
-    return runControlCmd(cmd.Args(), (*container.Container).Start)
+    return runControlCmd(cli, cmd.Args(), (*container.Container).Start)
 }
 
 func (cli *CWMan) CmdStop(args ...string) error {
     cmd := cli.Subcmd("stop", "CONTAINER [CONTAINER...]", "all")
     cmd.Require(flag.Min, 1)
     cmd.ParseFlags(args, true)
-    return runControlCmd(cmd.Args(), (*container.Container).Stop)
+    return runControlCmd(cli, cmd.Args(), (*container.Container).Stop)
 }
 
 func (cli *CWMan) CmdRestart(args ...string) error {
     cmd := cli.Subcmd("restart", "CONTAINER [CONTAINER...]", "all")
     cmd.Require(flag.Min, 1)
     cmd.ParseFlags(args, true)
-    return runControlCmd(cmd.Args(), (*container.Container).Restart)
+    return runControlCmd(cli, cmd.Args(), (*container.Container).Restart)
 }
 
 func (cli *CWMan) CmdDestroy(args ...string) error {
     cmd := cli.Subcmd("destroy", "CONTAINER [CONTAINER...]", "all")
     cmd.Require(flag.Min, 1)
     cmd.ParseFlags(args, true)
-    return runControlCmd(cmd.Args(), (*container.Container).Destroy)
+    return runControlCmd(cli, cmd.Args(), (*container.Container).Destroy)
 }
 
 func (cli *CWMan) CmdStatus(args ...string) error {
@@ -40,7 +40,7 @@ func (cli *CWMan) CmdStatus(args ...string) error {
     cmd.Require(flag.Min, 1)
     cmd.ParseFlags(args, true)
 
-    return runControlCmd(cmd.Args(), func(c *container.Container) error {
+    return runControlCmd(cli, cmd.Args(), func(c *container.Container) error {
         err := c.Exec("", nil, os.Stdout, os.Stderr, "/usr/bin/cwctl", "status")
         if err != nil {
             logrus.Error(err)
@@ -49,9 +49,9 @@ func (cli *CWMan) CmdStatus(args ...string) error {
     })
 }
 
-func runControlCmd(args []string, action func(*container.Container) error) error {
+func runControlCmd(cli *CWMan, args []string, action func(*container.Container) error) error {
     if len(args) == 1 && args[0] == "all" {
-        containers, err := container.All()
+        containers, err := cli.ListAll()
         if err != nil {
             return err
         }
@@ -62,7 +62,7 @@ func runControlCmd(args []string, action func(*container.Container) error) error
         }
     } else {
         for _, id := range args {
-            if err := runContainerAction(id, action); err != nil {
+            if err := cli.runContainerAction(id, action); err != nil {
                 return err
             }
         }

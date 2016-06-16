@@ -3,6 +3,7 @@ package cmds
 import (
     Cli "github.com/cloudway/platform/pkg/cli"
     flag "github.com/cloudway/platform/pkg/mflag"
+    "github.com/cloudway/platform/container"
 )
 
 // Command is the struct containing the command name and description
@@ -13,6 +14,7 @@ type Command struct {
 
 type CWMan struct {
     *Cli.Cli
+    container.DockerClient
     handlers map[string]func(...string)error
 }
 
@@ -43,9 +45,10 @@ func init() {
     }
 }
 
-func Init() *CWMan {
+func Init(docker container.DockerClient) *CWMan {
     cli := new(CWMan)
     cli.Cli = Cli.New("cwman", cli)
+    cli.DockerClient = docker
     cli.Description = "Cloudway application container management tool"
 
     cli.handlers = map[string]func(...string)error {

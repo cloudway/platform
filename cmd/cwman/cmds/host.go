@@ -9,41 +9,41 @@ func (cli *CWMan) CmdAddHost(args ...string) error {
     cmd := cli.Subcmd("addhost", "CONTAINER HOSTNAME [HOSTNAME...]")
     cmd.Require(mflag.Min, 2)
     cmd.ParseFlags(args, true)
-    return modifyExtraHosts(cmd.Args(), (*Container).AddHost)
+    return modifyExtraHosts(cli, cmd.Args(), (*Container).AddHost)
 }
 
 func (cli *CWMan) CmdRemoveHost(args ...string) error {
     cmd := cli.Subcmd("rmhost", "CONTAINER HOSTNAME [HOSTNAME...]")
     cmd.Require(mflag.Min, 2)
     cmd.ParseFlags(args, true)
-    return modifyExtraHosts(cmd.Args(), (*Container).RemoveHost)
+    return modifyExtraHosts(cli, cmd.Args(), (*Container).RemoveHost)
 }
 
 type hostAction func(*Container, string, ...string) error
 
-func modifyExtraHosts(args []string, action hostAction) error {
-    service, name, namespace := splitContainerName(args[0])
+func modifyExtraHosts(cli *CWMan, args []string, action hostAction) error {
+    service, name, namespace := SplitNames(args[0])
     hosts := args[1:]
 
     if name == "" || namespace == "" {
-        return modifyContainerHosts(args[0], hosts, action)
+        return modifyContainerHosts(cli, args[0], hosts, action)
     } else if service == "" || service == "*" {
-        return modifyApplicationHosts(name, namespace, hosts, action)
+        return modifyApplicationHosts(cli, name, namespace, hosts, action)
     } else {
-        return modifyServiceHosts(name, namespace, service, hosts, action)
+        return modifyServiceHosts(cli, name, namespace, service, hosts, action)
     }
 }
 
-func modifyContainerHosts(id string, hosts []string, action hostAction) error {
-    c, err := FromId(id)
+func modifyContainerHosts(cli *CWMan, id string, hosts []string, action hostAction) error {
+    c, err := cli.Inspect(id)
     if err != nil {
         return err
     }
     return action(c, hosts[0], hosts[1:]...)
 }
 
-func modifyApplicationHosts(name, namespace string, hosts []string, action hostAction) error {
-    cs, err := FindAll(name, namespace)
+func modifyApplicationHosts(cli *CWMan, name, namespace string, hosts []string, action hostAction) error {
+    cs, err := cli.FindAll(name, namespace)
     if err != nil {
         return err
     }
@@ -66,8 +66,8 @@ func modifyApplicationHosts(name, namespace string, hosts []string, action hostA
     return nil
 }
 
-func modifyServiceHosts(name, namespace, service string, hosts []string, action hostAction) error {
-    cs, err := FindService(name, namespace, service)
+func modifyServiceHosts(cli *CWMan, name, namespace, service string, hosts []string, action hostAction) error {
+    cs, err := cli.FindService(name, namespace, service)
     if err != nil {
         return err
     }

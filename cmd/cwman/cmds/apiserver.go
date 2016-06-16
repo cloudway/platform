@@ -8,12 +8,14 @@ import (
     "syscall"
     "sync/atomic"
 
+    "golang.org/x/net/context"
     "github.com/Sirupsen/logrus"
-    "github.com/docker/engine-api/client"
+    "github.com/docker/engine-api/types"
     "github.com/cloudway/platform/api"
     "github.com/cloudway/platform/api/server"
     "github.com/cloudway/platform/api/server/router/system"
     "github.com/cloudway/platform/api/server/middleware"
+    "github.com/cloudway/platform/container"
 )
 
 func (cli *CWMan) CmdAPIServer(args ...string) error {
@@ -26,7 +28,8 @@ func (cli *CWMan) CmdAPIServer(args ...string) error {
     stopc := make(chan bool)
     defer close(stopc)
 
-    dockerClient, err := client.NewEnvClient()
+    docker := cli.DockerClient
+    version, err := docker.ServerVersion(context.Background())
     if err != nil {
         return err
     }
@@ -39,8 +42,8 @@ func (cli *CWMan) CmdAPIServer(args ...string) error {
     }
     api.Accept(addr, l)
 
-    initMiddlewares(api)
-    initRouters(api, dockerClient)
+    initMiddlewares(api, version)
+    initRouters(api, docker)
 
     // The serve API routine never exists unless an error occurs
     // we need to start it as a goroutine and wait on it so
@@ -62,12 +65,12 @@ func (cli *CWMan) CmdAPIServer(args ...string) error {
     return nil
 }
 
-func initMiddlewares(s *server.Server) {
-    vm := middleware.NewVersionMiddleware(api.Version, api.MinVersion)
+func initMiddlewares(s *server.Server, v types.Version) {
+    vm := middleware.NewVersionMiddleware(api.Version, api.MinVersion, v.Version)
     s.UseMiddleware(vm)
 }
 
-func initRouters(s *server.Server, cli *client.Client) {
+func initRouters(s *server.Server, cli container.DockerClient) {
     s.InitRouter(
         system.NewRouter(cli),
     )

@@ -15,7 +15,6 @@ import (
 
     "golang.org/x/net/context"
     "github.com/Sirupsen/logrus"
-    "github.com/docker/engine-api/client"
     "github.com/docker/engine-api/types"
     "github.com/docker/engine-api/types/container"
     "github.com/docker/engine-api/types/network"
@@ -54,12 +53,7 @@ type createConfig struct {
 }
 
 // Create new application containers.
-func Create(opts CreateOptions) ([]*Container, error) {
-    cli, err := docker_client()
-    if err != nil {
-        return nil, err
-    }
-
+func (cli DockerClient) Create(opts CreateOptions) ([]*Container, error) {
     config := &createConfig{CreateOptions: &opts}
     config.Env = make(map[string]string)
     for k, v := range opts.Env {
@@ -109,7 +103,7 @@ func Create(opts CreateOptions) ([]*Container, error) {
     }
 }
 
-func createApplicationContainer(cli *client.Client, config *createConfig) ([]*Container, error) {
+func createApplicationContainer(cli DockerClient, config *createConfig) ([]*Container, error) {
     if config.ServiceName != "" {
         return nil, fmt.Errorf("The application name cannot contains a serivce name: %s", config.ServiceName)
     }
@@ -118,7 +112,7 @@ func createApplicationContainer(cli *client.Client, config *createConfig) ([]*Co
     config.FQDN = config.Hostname + "." + defaults.Domain()
     config.Env["CLOUDWAY_APP_DNS"] = config.FQDN
 
-    scale, err := getScaling(config.Name, config.Namespace, config.Scaling)
+    scale, err := getScaling(cli, config.Name, config.Namespace, config.Scaling)
     if err != nil {
         return nil, err
     }
@@ -140,12 +134,12 @@ func createApplicationContainer(cli *client.Client, config *createConfig) ([]*Co
     return containers, nil
 }
 
-func getScaling(name, namespace string, scale int) (int, error) {
+func getScaling(cli DockerClient, name, namespace string, scale int) (int, error) {
     if scale <= 0 {
         return 0, fmt.Errorf("Invalid scaling value, it must be greater than 0")
     }
 
-    cs, err := FindApplications(name, namespace)
+    cs, err := cli.FindApplications(name, namespace)
     if err != nil {
         return 0, err
     }
@@ -159,7 +153,7 @@ func getScaling(name, namespace string, scale int) (int, error) {
     return scale - n, nil
 }
 
-func createServiceContainer(cli *client.Client, config *createConfig) ([]*Container, error) {
+func createServiceContainer(cli DockerClient, config *createConfig) ([]*Container, error) {
     if config.ServiceName == "" {
         config.ServiceName = config.PluginName
     }
@@ -169,7 +163,7 @@ func createServiceContainer(cli *client.Client, config *createConfig) ([]*Contai
     config.FQDN = config.Hostname + "." + defaults.Domain()
     config.Env["CLOUDWAY_APP_DNS"] = config.FQDN
 
-    cs, err := FindService(name, namespace, service)
+    cs, err := cli.FindService(name, namespace, service)
     if err != nil {
         return nil, err
     }
@@ -190,7 +184,7 @@ func createServiceContainer(cli *client.Client, config *createConfig) ([]*Contai
     }
 }
 
-func buildImage(cli *client.Client, t *template.Template, config *createConfig) (image string, err error) {
+func buildImage(cli DockerClient, t *template.Template, config *createConfig) (image string, err error) {
     // Create temporary tar archive to create build context
     tarFile, err := ioutil.TempFile("", "docker");
     if err != nil {
@@ -300,7 +294,7 @@ func addPluginFiles(tw *tar.Writer, dst, path string) error {
     }
 }
 
-func createContainer(cli *client.Client, imageId string, options *createConfig) (*Container, error) {
+func createContainer(cli DockerClient, imageId string, options *createConfig) (*Container, error) {
     config := &container.Config {
         Image: imageId,
         Labels: map[string]string {
@@ -330,5 +324,5 @@ func createContainer(cli *client.Client, imageId string, options *createConfig) 
     if err != nil {
         return nil, err
     }
-    return Inspect(cli, resp.ID)
+    return cli.Inspect(resp.ID)
 }
