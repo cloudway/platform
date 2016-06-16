@@ -2,14 +2,16 @@ package conf
 
 import (
     "os"
+    "strings"
     "path/filepath"
-    "github.com/spf13/viper"
+    "github.com/cloudway/platform/pkg/conf"
 )
 
 // The root directory of cloudway installation.
 var RootDir string
 
-const defaultConfigType = "toml"
+// The global configuration file
+var cfg *conf.ConfigFile
 
 // Initializes the global configuration file.
 func Initialize() (err error) {
@@ -26,43 +28,40 @@ func Initialize() (err error) {
 
     // Load configuration file
     cfgFile := filepath.Join(RootDir, "conf", "cloudway.conf")
-    viper.AutomaticEnv()
-    viper.SetConfigFile(cfgFile)
-    viper.SetConfigType(defaultConfigType)
-
-    err = viper.ReadInConfig()
-    if err != nil {
-        // Use defaults if configuration file is missing
-        if _, ok := err.(viper.ConfigParseError); ok {
-            return err
-        }
+    cfg, err = conf.ReadConfigFile(cfgFile)
+    if err != nil && !os.IsNotExist(err) { // Use defaults if configuration file is missing
+        return err
     }
-
     return nil
 }
 
-// Load a configuration file.
-func Load(name string) (*viper.Viper, error) {
-    cfgType := filepath.Ext(name)
-    if cfgType == "" {
-        name += ".conf"
-        cfgType = defaultConfigType
-    } else {
-        cfgType = cfgType[1:]
-    }
-
-    cfgFile := filepath.Join(RootDir, "conf", name)
-
-    conf := viper.New()
-    conf.SetConfigFile(cfgFile)
-    conf.SetConfigType(cfgType)
-    return conf, conf.ReadInConfig()
+// Get a configuration value as string.
+func Get(key string) string {
+    return GetOrDefault(key, "")
 }
 
+// Get a configuration value, if no such value configured then the default value is returned.
 func GetOrDefault(key, deflt string) string {
-    if viper.IsSet(key) {
-        return viper.GetString(key)
-    } else {
-        return deflt
+    // get value from environment
+    envKey := "CLOUDWAY_" + strings.ToUpper(key)
+    envKey  = strings.Replace(envKey, "-", "_", -1)
+    envKey  = strings.Replace(envKey, ".", "_", -1)
+    if envValue, ok := os.LookupEnv(envKey); ok {
+        return envValue
     }
+
+    // get value from configuration file
+    if cfg != nil {
+        section := conf.DefaultSection
+        parts := strings.SplitN(key, ".", 2)
+        if len(parts) == 2 {
+            section, key = parts[0], parts[1]
+        }
+        if value, err := cfg.GetString(section, key); err == nil {
+            return value
+        }
+    }
+
+    // return the default value
+    return deflt
 }

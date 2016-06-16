@@ -205,7 +205,7 @@ func buildImage(cli DockerClient, t *template.Template, config *createConfig) (i
     }
 
     // copy application support files
-    support := filepath.Join(conf.RootDir, "libexec")
+    support := filepath.Join(conf.RootDir, "support")
     if err = archive.CopyFileTree(tw, "support", support, true); err != nil {
         return
     }
