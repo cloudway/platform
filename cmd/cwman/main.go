@@ -27,7 +27,7 @@ func main() {
 
         commands := cmds.CommandUsage
         for _, cmd := range commands {
-            help += fmt.Sprintf("  %-10.10s%s\n", cmd.Name, cmd.Description)
+            help += fmt.Sprintf("  %-12.12s%s\n", cmd.Name, cmd.Description)
         }
         fmt.Fprintf(stdout, "%s\n", help)
 

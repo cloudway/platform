@@ -32,6 +32,7 @@ var CommandUsage = []Command {
     {"install",  "Install a plugin to application container"},
     {"download", "Download application files"},
     {"upload",   "Upload files into repo directory"},
+    {"api-server","Start the API server"},
 }
 
 var Commands = make(map[string]Command)
@@ -48,21 +49,22 @@ func Init() *CWMan {
     cli.Description = "Cloudway application container management tool"
 
     cli.handlers = map[string]func(...string)error {
-        "create":   cli.CmdCreate,
-        "destroy":  cli.CmdDestroy,
-        "list":     cli.CmdList,
-        "start":    cli.CmdStart,
-        "stop":     cli.CmdStop,
-        "restart":  cli.CmdRestart,
-        "status":   cli.CmdStatus,
-        "run":      cli.CmdRun,
-        "env":      cli.CmdEnv,
-        "addhost":  cli.CmdAddHost,
-        "rmhost":   cli.CmdRemoveHost,
-        "install":  cli.CmdInstall,
-        "download": cli.CmdDownload,
-        "upload":   cli.CmdUpload,
+        "create":       cli.CmdCreate,
+        "destroy":      cli.CmdDestroy,
+        "list":         cli.CmdList,
+        "start":        cli.CmdStart,
+        "stop":         cli.CmdStop,
+        "restart":      cli.CmdRestart,
+        "status":       cli.CmdStatus,
+        "run":          cli.CmdRun,
+        "env":          cli.CmdEnv,
+        "addhost":      cli.CmdAddHost,
+        "rmhost":       cli.CmdRemoveHost,
+        "install":      cli.CmdInstall,
+        "download":     cli.CmdDownload,
+        "upload":       cli.CmdUpload,
         "update-proxy": cli.CmdUpdateProxy,
+        "api-server":   cli.CmdAPIServer,
     }
 
     return cli
