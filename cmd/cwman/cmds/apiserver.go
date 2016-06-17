@@ -15,6 +15,7 @@ import (
     "github.com/cloudway/platform/api/server"
     "github.com/cloudway/platform/api/server/router/system"
     "github.com/cloudway/platform/api/server/middleware"
+    "github.com/cloudway/platform/api/server/auth"
     "github.com/cloudway/platform/container"
 )
 
@@ -34,6 +35,11 @@ func (cli *CWMan) CmdAPIServer(args ...string) error {
         return err
     }
 
+    authz, err := auth.NewAuthenticator()
+    if err != nil {
+        return err
+    }
+
     api := server.New()
 
     l, err := net.Listen("tcp", addr)
@@ -42,8 +48,8 @@ func (cli *CWMan) CmdAPIServer(args ...string) error {
     }
     api.Accept(addr, l)
 
-    initMiddlewares(api, version)
-    initRouters(api, docker)
+    initMiddlewares(api, version, authz)
+    initRouters(api, docker, authz)
 
     // The serve API routine never exists unless an error occurs
     // we need to start it as a goroutine and wait on it so
@@ -65,14 +71,16 @@ func (cli *CWMan) CmdAPIServer(args ...string) error {
     return nil
 }
 
-func initMiddlewares(s *server.Server, v types.Version) {
+func initMiddlewares(s *server.Server, v types.Version, authz *auth.Authenticator) {
     vm := middleware.NewVersionMiddleware(api.Version, api.MinVersion, v.Version)
     s.UseMiddleware(vm)
+
+    s.UseMiddleware(middleware.NewAuthMiddleware(authz))
 }
 
-func initRouters(s *server.Server, cli container.DockerClient) {
+func initRouters(s *server.Server, cli container.DockerClient, authz *auth.Authenticator) {
     s.InitRouter(
-        system.NewRouter(cli),
+        system.NewRouter(cli, authz),
     )
 }
 

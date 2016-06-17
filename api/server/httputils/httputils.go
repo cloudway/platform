@@ -3,10 +3,11 @@ package httputils
 import (
     "fmt"
     "net/http"
-    "golang.org/x/net/context"
+    "strings"
     "mime"
-    "github.com/Sirupsen/logrus"
     "encoding/json"
+    "golang.org/x/net/context"
+    "github.com/Sirupsen/logrus"
 )
 
 // APIVersionKey is the client's requested API version.
@@ -39,6 +40,18 @@ func WriteJSON(w http.ResponseWriter, code int, v interface{}) error {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(code)
     return json.NewEncoder(w).Encode(v)
+}
+
+// ParseForm ensures the request form is parsed even with invalid content types.
+// If we don't do this, POST method without Content-type (even with empty body) will fail.
+func ParseForm(r *http.Request) error {
+    if r == nil {
+        return nil
+    }
+    if err := r.ParseForm(); err != nil && !strings.HasPrefix(err.Error(), "mime:") {
+        return err
+    }
+    return nil
 }
 
 // MatchesContentType validates the content type against the expected one

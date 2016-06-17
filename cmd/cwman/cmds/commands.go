@@ -20,20 +20,22 @@ type CWMan struct {
 
 // Commands lists the top level commands and their short usage
 var CommandUsage = []Command {
-    {"create",   "Create a new application container"},
-    {"destroy",  "Destroy application containers"},
-    {"list",     "List all application containers"},
-    {"start",    "Start one or more stopped containers"},
-    {"stop",     "Stop a running container"},
-    {"restart",  "Restart a container"},
-    {"status",   "Show application container status"},
-    {"run",      "Run one-off command in a running container"},
-    {"env",      "Show container environment variables"},
-    {"addhost",  "Add extra host name to the container"},
-    {"rmhost",   "Remove extra host name from the container"},
-    {"install",  "Install a plugin to application container"},
-    {"download", "Download application files"},
-    {"upload",   "Upload files into repo directory"},
+    {"create",    "Create a new application container"},
+    {"destroy",   "Destroy application containers"},
+    {"list",      "List all application containers"},
+    {"start",     "Start one or more stopped containers"},
+    {"stop",      "Stop a running container"},
+    {"restart",   "Restart a container"},
+    {"status",    "Show application container status"},
+    {"run",       "Run one-off command in a running container"},
+    {"env",       "Show container environment variables"},
+    {"addhost",   "Add extra host name to the container"},
+    {"rmhost",    "Remove extra host name from the container"},
+    {"install",   "Install a plugin to application container"},
+    {"download",  "Download application files"},
+    {"upload",    "Upload files into repo directory"},
+    {"useradd",   "Add a user"},
+    {"userdel",   "Remove a user"},
     {"api-server","Start the API server"},
 }
 
@@ -66,8 +68,10 @@ func Init(docker container.DockerClient) *CWMan {
         "install":      cli.CmdInstall,
         "download":     cli.CmdDownload,
         "upload":       cli.CmdUpload,
-        "update-proxy": cli.CmdUpdateProxy,
+        "useradd":      cli.CmdUserAdd,
+        "userdel":      cli.CmdUserDel,
         "api-server":   cli.CmdAPIServer,
+        "update-proxy": cli.CmdUpdateProxy,
     }
 
     return cli
