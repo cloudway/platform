@@ -6,33 +6,34 @@ import (
     "golang.org/x/net/context"
     "github.com/Sirupsen/logrus"
     "github.com/cloudway/platform/api/server/httputils"
-    "github.com/cloudway/platform/api/server/auth"
+    "github.com/cloudway/platform/api/server/runtime"
 )
 
 type authMiddleware struct {
-    auth *auth.Authenticator
+    *runtime.Runtime
+    noAuthPattern *regexp.Regexp
 }
 
-func NewAuthMiddleware(auth *auth.Authenticator) authMiddleware {
-    return authMiddleware{auth}
+func NewAuthMiddleware(rt *runtime.Runtime, contextRoot string) authMiddleware {
+    pattern := regexp.MustCompile("^" + contextRoot + "(/v[0-9.]+)?/(version|auth)$")
+    return authMiddleware{rt, pattern}
 }
 
-var noAuthPattern = regexp.MustCompile("^(/v[0-9.]+)?/(version|auth)$")
-
-func (a authMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc {
+func (m authMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc {
     return func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-        if noAuthPattern.MatchString(r.URL.Path) {
+        if m.noAuthPattern.MatchString(r.URL.Path) {
             return handler(ctx, w, r, vars)
         }
 
-        user, err := a.auth.Verify(w, r)
+        user, err := m.Authz.Verify(w, r)
         if err != nil {
             w.WriteHeader(http.StatusUnauthorized)
             return nil
         }
 
         logrus.Debugf("Logged in user: %v", user)
-        ctx = context.WithValue(ctx, "login-user", user)
+        vars["user"] = user.Name
+        vars["namespace"] = user.Namespace
         return handler(ctx, w, r, vars)
     }
 }

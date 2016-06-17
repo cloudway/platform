@@ -4,22 +4,23 @@ import (
     "os"
     "os/signal"
     "net"
-    "runtime"
+    prof "runtime"
     "syscall"
     "sync/atomic"
-
-    "golang.org/x/net/context"
     "github.com/Sirupsen/logrus"
-    "github.com/docker/engine-api/types"
-    "github.com/cloudway/platform/api"
+
     "github.com/cloudway/platform/api/server"
-    "github.com/cloudway/platform/api/server/router/system"
+    "github.com/cloudway/platform/api/server/runtime"
     "github.com/cloudway/platform/api/server/middleware"
-    "github.com/cloudway/platform/api/server/auth"
+    "github.com/cloudway/platform/api/server/router/system"
+    "github.com/cloudway/platform/auth"
+    "github.com/cloudway/platform/auth/user"
     "github.com/cloudway/platform/container"
 )
 
-func (cli *CWMan) CmdAPIServer(args ...string) error {
+const _CONTEXT_ROOT = "/api"
+
+func (cli *CWMan) CmdAPIServer(args ...string) (err error) {
     var addr string
 
     cmd := cli.Subcmd("api-server")
@@ -29,18 +30,12 @@ func (cli *CWMan) CmdAPIServer(args ...string) error {
     stopc := make(chan bool)
     defer close(stopc)
 
-    docker := cli.DockerClient
-    version, err := docker.ServerVersion(context.Background())
+    rt, err := initRuntime(cli.DockerClient)
     if err != nil {
         return err
     }
 
-    authz, err := auth.NewAuthenticator()
-    if err != nil {
-        return err
-    }
-
-    api := server.New()
+    api := server.New(_CONTEXT_ROOT)
 
     l, err := net.Listen("tcp", addr)
     if err != nil {
@@ -48,8 +43,8 @@ func (cli *CWMan) CmdAPIServer(args ...string) error {
     }
     api.Accept(addr, l)
 
-    initMiddlewares(api, version, authz)
-    initRouters(api, docker, authz)
+    initMiddlewares(api, rt)
+    initRouters(api, rt)
 
     // The serve API routine never exists unless an error occurs
     // we need to start it as a goroutine and wait on it so
@@ -71,16 +66,31 @@ func (cli *CWMan) CmdAPIServer(args ...string) error {
     return nil
 }
 
-func initMiddlewares(s *server.Server, v types.Version, authz *auth.Authenticator) {
-    vm := middleware.NewVersionMiddleware(api.Version, api.MinVersion, v.Version)
-    s.UseMiddleware(vm)
+func initRuntime(cli container.DockerClient) (rt *runtime.Runtime, err error) {
+    rt = new(runtime.Runtime)
+    rt.DockerClient = cli
 
-    s.UseMiddleware(middleware.NewAuthMiddleware(authz))
+    rt.UserDB, err = user.OpenUserDatabase()
+    if err != nil {
+        return
+    }
+
+    rt.Authz, err = auth.NewAuthenticator(rt.UserDB)
+    if err != nil {
+        return
+    }
+
+    return rt, nil
 }
 
-func initRouters(s *server.Server, cli container.DockerClient, authz *auth.Authenticator) {
+func initMiddlewares(s *server.Server, rt *runtime.Runtime) {
+    s.UseMiddleware(middleware.NewVersionMiddleware(rt))
+    s.UseMiddleware(middleware.NewAuthMiddleware(rt, _CONTEXT_ROOT))
+}
+
+func initRouters(s *server.Server, rt *runtime.Runtime) {
     s.InitRouter(
-        system.NewRouter(cli, authz),
+        system.NewRouter(rt),
     )
 }
 
@@ -122,7 +132,7 @@ func dumpStacks() {
     bufferLen := 16384
     for stackSize == len(buf) {
         buf = make([]byte, bufferLen)
-        stackSize = runtime.Stack(buf, true)
+        stackSize = prof.Stack(buf, true)
         bufferLen *= 2
     }
     buf = buf[:stackSize]

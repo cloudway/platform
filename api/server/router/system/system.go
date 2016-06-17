@@ -1,25 +1,23 @@
 package system
 
 import (
-    "runtime"
+    osruntime "runtime"
     "net/http"
     "golang.org/x/net/context"
     "github.com/cloudway/platform/api"
     "github.com/cloudway/platform/api/types"
     "github.com/cloudway/platform/api/server/router"
     "github.com/cloudway/platform/api/server/httputils"
-    "github.com/cloudway/platform/api/server/auth"
-    "github.com/cloudway/platform/container"
+    "github.com/cloudway/platform/api/server/runtime"
 )
 
 type systemRouter struct {
-    container.DockerClient
-    authz *auth.Authenticator
+    *runtime.Runtime
     routes []router.Route
 }
 
-func NewRouter(client container.DockerClient, authz *auth.Authenticator) router.Router {
-    r := &systemRouter{DockerClient: client, authz: authz}
+func NewRouter(rt *runtime.Runtime) router.Router {
+    r := &systemRouter{Runtime: rt}
 
     r.routes = []router.Route{
         router.NewGetRoute("/version", r.getVersion),
@@ -42,8 +40,8 @@ func (s *systemRouter) getVersion(ctx context.Context, w http.ResponseWriter, r 
     v := types.Version{
         Version:        api.Version,
         DockerVersion:  info.Version,
-        Os:             runtime.GOOS,
-        Arch:           runtime.GOARCH,
+        Os:             osruntime.GOOS,
+        Arch:           osruntime.GOARCH,
     }
 
     return httputils.WriteJSON(w, http.StatusOK, v)
@@ -56,7 +54,7 @@ func (s *systemRouter) postAuth(ctx context.Context, w http.ResponseWriter, r *h
         return nil
     }
 
-    _, token, err := s.authz.Authenticate(username, password)
+    _, token, err := s.Authz.Authenticate(username, password)
     if err != nil {
         w.WriteHeader(http.StatusForbidden)
         return nil

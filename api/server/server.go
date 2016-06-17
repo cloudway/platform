@@ -20,16 +20,17 @@ const versionMatcher = "/v{version:[0-9.]+}"
 
 // Server contains instance details for the server
 type Server struct {
-    servers         []*HTTPServer
-    routers         []router.Router
-    mux             *mux.Router
-    middlewares     []middleware.Middleware
+    servers     []*HTTPServer
+    middlewares []middleware.Middleware
+    routers     []router.Router
+    contextRoot string
+    Mux         *mux.Router
 }
 
 // New returns a new instance of the server based on the specified configuration.
 // It allocates resources which will be needed for ServeAPI(ports, unix-sockets).
-func New() *Server {
-    return &Server{}
+func New(contextRoot string) *Server {
+    return &Server{contextRoot: contextRoot}
 }
 
 // UseMiddleware appends a new middleware to the request chain.
@@ -63,7 +64,7 @@ func (s *Server) Close() {
 func (s *Server) serveAPI() error {
     var chErrors = make(chan error, len(s.servers))
     for _, srv := range s.servers {
-        srv.srv.Handler = s.mux
+        srv.srv.Handler = s.Mux
         go func(srv *HTTPServer) {
             var err error
             logrus.Infof("API server listen on %s", srv.l.Addr())
@@ -127,7 +128,7 @@ func (s *Server) InitRouter(routers ...router.Router) {
     for _, r := range routers {
         s.routers = append(s.routers, r)
     }
-    s.mux = s.createMux()
+    s.Mux = s.createMux()
 }
 
 // createMux initializes the main router the server uses.
@@ -139,9 +140,9 @@ func (s *Server) createMux() *mux.Router {
         for _, r := range apiRouter.Routes() {
             f := s.makeHTTPHandler(r.Handler())
 
-            logrus.Debugf("Registering %s, %s", r.Method(), r.Path())
-            m.Path(versionMatcher + r.Path()).Methods(r.Method()).Handler(f)
-            m.Path(r.Path()).Methods(r.Method()).Handler(f)
+            logrus.Debugf("Registering %s %s", r.Method(), r.Path())
+            m.Path(s.contextRoot + versionMatcher + r.Path()).Methods(r.Method()).Handler(f)
+            m.Path(s.contextRoot + r.Path()).Methods(r.Method()).Handler(f)
         }
     }
 

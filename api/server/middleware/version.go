@@ -6,7 +6,9 @@ import (
     "strings"
     "strconv"
     "fmt"
+    "github.com/cloudway/platform/api"
     "github.com/cloudway/platform/api/server/httputils"
+    "github.com/cloudway/platform/api/server/runtime"
 )
 
 type badRequestError struct {
@@ -19,42 +21,50 @@ func (badRequestError) HTTPErrorStatusCode() int {
 
 // VersionMiddleware is a middleware that validates the client and server versions.
 type VersionMiddleware struct {
-    serverVersion  string
-    minVersion     string
-    dockerVersion  string
+    *runtime.Runtime
+    dockerVersion string
 }
 
 // NewVersionMiddleware creates a new VersionMiddleware with the default versions
-func NewVersionMiddleware(s, m, d string) VersionMiddleware {
-    return VersionMiddleware{
-        serverVersion:  s,
-        minVersion:     m,
-        dockerVersion:  d,
-    }
+func NewVersionMiddleware(rt *runtime.Runtime) VersionMiddleware {
+    return VersionMiddleware{Runtime: rt}
 }
 
 // WrapHandler returns a new handler function wrapping the previous one in the request chain
-func (v VersionMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc {
+func (m VersionMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc {
     return func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
         apiVersion := vars["version"]
         if apiVersion == "" {
-            apiVersion = v.serverVersion
+            apiVersion = api.Version
         }
 
-        if compareVersions(apiVersion, v.serverVersion) > 0 {
+        if compareVersions(apiVersion, api.Version) > 0 {
             return badRequestError{
                 fmt.Errorf("client is newer than server (client API version: %s, server API version: %s)",
-                           apiVersion, v.serverVersion),
+                           apiVersion, api.Version),
             }
         }
-        if compareVersions(apiVersion, v.minVersion) < 0 {
+        if compareVersions(apiVersion, api.MinVersion) < 0 {
             return badRequestError{
                 fmt.Errorf("client version %s is too old. Minimum supported API version is %s, " +
-                           "please upgrade your client to a newer version", apiVersion, v.minVersion),
+                           "please upgrade your client to a newer version", apiVersion, api.MinVersion),
             }
         }
 
-        header := fmt.Sprintf("Cloudway-API/%s Docker/%s", v.serverVersion, v.dockerVersion)
+        if m.dockerVersion == "" {
+            v, err := m.ServerVersion(ctx)
+            if err == nil {
+                m.dockerVersion = v.Version
+            }
+        }
+
+        var header string
+        if m.dockerVersion != "" {
+            header = fmt.Sprintf("Cloudway-API/%s Docker/%s", api.Version, m.dockerVersion)
+        } else {
+            header = fmt.Sprintf("Cloudway-API/%s", api.Version)
+        }
+
         w.Header().Set("Server", header)
         ctx = context.WithValue(ctx, httputils.APIVersionKey, apiVersion)
         return handler(ctx, w, r, vars)

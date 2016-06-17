@@ -7,7 +7,7 @@ import (
     "github.com/Sirupsen/logrus"
     "github.com/dgrijalva/jwt-go"
     "github.com/dgrijalva/jwt-go/request"
-    "github.com/cloudway/platform/api/server/auth/user"
+    "github.com/cloudway/platform/auth/user"
 )
 
 const _TOKEN_EXPIRE_TIME = time.Hour * 8
@@ -18,12 +18,7 @@ type Authenticator struct {
     secret []byte
 }
 
-func NewAuthenticator() (*Authenticator, error) {
-    userdb, err := user.OpenUserDatabase()
-    if err != nil {
-        return nil, err
-    }
-
+func NewAuthenticator(userdb *user.UserDatabase) (*Authenticator, error) {
     secret := make([]byte, 64)
     rand.Read(secret)
 
@@ -53,7 +48,7 @@ func (auth *Authenticator) Authenticate(username, password string) (*user.User, 
     })
 
     // Sign and get the complete encoded token as a string using the secret
-    logrus.Debugf("Authenticated user: %v", token.Claims)
+    logrus.Debugf("Authenticated user: %v", user.Name)
     tokenString, err := token.SignedString(auth.secret)
     return user, tokenString, err
 }

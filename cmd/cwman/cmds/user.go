@@ -2,7 +2,7 @@ package cmds
 
 import (
     "github.com/cloudway/platform/pkg/mflag"
-    "github.com/cloudway/platform/api/server/auth/user"
+    "github.com/cloudway/platform/auth/user"
 )
 
 func (cli *CWMan) CmdUserAdd(args ...string) error {
