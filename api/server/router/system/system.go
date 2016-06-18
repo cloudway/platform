@@ -3,6 +3,7 @@ package system
 import (
     osruntime "runtime"
     "net/http"
+    "github.com/Sirupsen/logrus"
     "golang.org/x/net/context"
     "github.com/cloudway/platform/api"
     "github.com/cloudway/platform/api/types"
@@ -50,17 +51,18 @@ func (s *systemRouter) getVersion(ctx context.Context, w http.ResponseWriter, r 
 func (s *systemRouter) postAuth(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
     username, password, ok := r.BasicAuth()
     if !ok {
-        w.WriteHeader(http.StatusUnauthorized)
+        http.Error(w, "Requires username and password", http.StatusUnauthorized)
         return nil
     }
 
     _, token, err := s.Authz.Authenticate(username, password)
     if err != nil {
-        w.WriteHeader(http.StatusForbidden)
+        logrus.WithField("username", username).WithError(err).Debug("Login failed")
+        http.Error(w, "Login failed", http.StatusUnauthorized)
         return nil
     }
 
-    w.WriteHeader(http.StatusOK)
-    _, err = w.Write([]byte(token))
-    return err
+    return httputils.WriteJSON(w, http.StatusOK, map[string]interface{}{
+        "Token": token,
+    })
 }

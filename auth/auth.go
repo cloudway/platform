@@ -27,14 +27,14 @@ func NewAuthenticator(userdb *user.UserDatabase) (*Authenticator, error) {
 
 type customClaims struct {
     *jwt.StandardClaims
-    *user.User
+    Namespace string `json:"ns"`
 }
 
 // Authenticate user with name and password. Returns the User object
 // and a token.
-func (auth *Authenticator) Authenticate(username, password string) (*user.User, string, error) {
+func (auth *Authenticator) Authenticate(username, password string) (user.User, string, error) {
     // Authenticate user by user database
-    user, err := auth.userdb.Authenticate(username, []byte(password))
+    user, err := auth.userdb.Authenticate(username, password)
     if err != nil {
         return nil, "", err
     }
@@ -43,19 +43,20 @@ func (auth *Authenticator) Authenticate(username, password string) (*user.User, 
     token := jwt.NewWithClaims(jwt.SigningMethodHS256, &customClaims{
         &jwt.StandardClaims{
             ExpiresAt: time.Now().Add(_TOKEN_EXPIRE_TIME).Unix(),
+            Subject: user.GetName(),
         },
-        user,
+        user.GetNamespace(),
     })
 
     // Sign and get the complete encoded token as a string using the secret
-    logrus.Debugf("Authenticated user: %v", user.Name)
+    logrus.Debugf("Authenticated user: %v", user.GetName())
     tokenString, err := token.SignedString(auth.secret)
     return user, tokenString, err
 }
 
 // Verify the current http request is authorized. Returns the
 // authorized User object.
-func (auth *Authenticator) Verify(w http.ResponseWriter, r *http.Request) (*user.User, error) {
+func (auth *Authenticator) Verify(w http.ResponseWriter, r *http.Request) (user.User, error) {
     claims := customClaims{}
 
     // Get token from request
@@ -69,5 +70,6 @@ func (auth *Authenticator) Verify(w http.ResponseWriter, r *http.Request) (*user
         return nil, err
     }
 
-    return claims.User, nil
+    user := user.BasicUser{Name: claims.Subject, Namespace: claims.Namespace}
+    return &user, nil
 }

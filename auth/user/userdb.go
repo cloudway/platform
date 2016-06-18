@@ -5,6 +5,7 @@ import (
     "net/http"
     "net/url"
     "errors"
+    "strings"
     "golang.org/x/crypto/bcrypt"
     "github.com/cloudway/platform/container/conf"
 )
@@ -14,20 +15,28 @@ import (
 // LDAP or Kerberos services.
 type UserDBPlugin interface {
     // Create a new user in the database.
-    Create(user *User) error
+    Create(user User) error
 
-    // Find the user by name.
-    Find(name string) (*User, error)
+    // Find the user by name. You must provide a User interface as the
+    // input argument, the returned User value may or may not be the
+    // input value.
+    Find(name string, result User) error
+
+    // Searchs user database by the given filter.
+    Search(filter interface{}, result interface{}) error
 
     // Remove the user from the database.
     Remove(name string) error
 
     // Update user with the new information.
-    Update(name string, user *User) error
+    Update(name string, fields interface{}) error
 
     // Close the user database.
     Close() error
 }
+
+// Utility type to create filters and update fields.
+type Args map[string]interface{}
 
 // The DuplicateUserError indicates that an user already exists in the database
 // when creating user.
@@ -108,64 +117,79 @@ func OpenUserDatabase() (*UserDatabase, error) {
     return &UserDatabase{plugin}, nil
 }
 
-func (db *UserDatabase) Create(user *User) error {
-    if user.Name == "" || user.Namespace == "" || user.Password == nil {
+func (db *UserDatabase) Create(user User, password string) error {
+    if user.GetName() == "" || user.GetNamespace() == "" || len(password) == 0 {
         return fmt.Errorf("Missing required parameters")
     }
 
-    hashedPassword, err := bcrypt.GenerateFromPassword(user.Password, bcrypt.DefaultCost)
+    hashedPassword, err := hashPassword(password)
     if err != nil {
         return err
     }
 
-    user.HashedPassword = hashedPassword
+    user.SetPassword(hashedPassword)
     return db.plugin.Create(user)
 }
 
-func (db *UserDatabase) Find(name string) (*User, error) {
-    user, err := db.plugin.Find(name)
-    if err != nil {
-        return nil, err
+func hashPassword(password string) ([]byte, error) {
+    // use the password if it's already hashed
+    if strings.HasPrefix(password, "$2a$") {
+        if _, err := bcrypt.Cost([]byte(password)); err == nil {
+            return []byte(password), nil
+        }
     }
-    return user, nil
+
+    // otherwise, generate a hashed password
+    return bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 }
 
-func (db *UserDatabase) Authenticate(name string, password []byte) (*User, error) {
-    user, err := db.plugin.Find(name)
-    if err != nil {
-        return nil, err
-    }
+func (db *UserDatabase) Find(name string, result User) error {
+    return db.plugin.Find(name, result)
+}
 
-    err = bcrypt.CompareHashAndPassword(user.HashedPassword, password)
-    if err != nil {
-        return nil, err
-    }
-
-    return user, nil
+func (db *UserDatabase) Search(filter interface{}, result interface{}) error {
+    return db.plugin.Search(filter, result)
 }
 
 func (db *UserDatabase) Remove(name string) error {
     return db.plugin.Remove(name)
 }
 
-func (db *UserDatabase) ChangePassword(name string, oldPassword, newPassword []byte) error {
-    user, err := db.plugin.Find(name)
+func (db *UserDatabase) Update(name string, fields interface{}) error {
+    return db.plugin.Update(name, fields)
+}
+
+func (db *UserDatabase) Authenticate(name string, password string) (User, error) {
+    var user BasicUser
+    if err := db.plugin.Find(name, &user); err != nil {
+        return nil, err
+    }
+
+    err := bcrypt.CompareHashAndPassword(user.GetPassword(), []byte(password))
+    if err != nil {
+        return nil, err
+    }
+
+    return &user, nil
+}
+
+func (db *UserDatabase) ChangePassword(name string, oldPassword, newPassword string) error {
+    var user BasicUser
+    if err := db.plugin.Find(name, &user); err != nil {
+        return err
+    }
+
+    err := bcrypt.CompareHashAndPassword(user.GetPassword(), []byte(oldPassword))
     if err != nil {
         return err
     }
 
-    err = bcrypt.CompareHashAndPassword(user.HashedPassword, oldPassword)
+    hashedPassword, err := hashPassword(newPassword)
     if err != nil {
         return err
     }
 
-    hashedPassword, err := bcrypt.GenerateFromPassword(newPassword, bcrypt.DefaultCost)
-    if err != nil {
-        return err
-    }
-
-    user.HashedPassword = hashedPassword
-    return db.plugin.Update(name, user)
+    return db.plugin.Update(name, Args{"password": hashedPassword})
 }
 
 func (db *UserDatabase) Close() error {

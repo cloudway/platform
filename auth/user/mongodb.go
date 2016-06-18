@@ -1,8 +1,8 @@
 package user
 
 import (
-    "gopkg.in/mgo.v2"
     "net/url"
+    "gopkg.in/mgo.v2"
     "gopkg.in/mgo.v2/bson"
 )
 
@@ -42,21 +42,24 @@ func ensureUniqueIndex(c *mgo.Collection, key string) error {
     })
 }
 
-func (db *mongodb) Create(user *User) error {
+func (db *mongodb) Create(user User) error {
     err := db.users.Insert(user)
     if mgo.IsDup(err) {
-        err = DuplicateUserError{user.Name}
+        err = DuplicateUserError{user.GetName()}
     }
     return err
 }
 
-func (db *mongodb) Find(name string) (*User, error) {
-    var user User
-    err := db.users.Find(bson.M{"name": name}).One(&user)
+func (db *mongodb) Find(name string, result User) error {
+    err := db.users.Find(bson.M{"name": name}).One(result)
     if err == mgo.ErrNotFound {
         err = UserNotFoundError{name}
     }
-    return &user, err
+    return err
+}
+
+func (db *mongodb) Search(filter interface{}, result interface{}) error {
+    return db.users.Find(filter).All(result)
 }
 
 func (db *mongodb) Remove(name string) error {
@@ -67,12 +70,12 @@ func (db *mongodb) Remove(name string) error {
     return err
 }
 
-func (db *mongodb) Update(name string, user *User) error {
-    err := db.users.Update(bson.M{"name": name}, user)
+func (db *mongodb) Update(name string, fields interface{}) error {
+    err := db.users.Update(bson.M{"name": name}, bson.M{"$set": fields})
     if err == mgo.ErrNotFound {
         err = UserNotFoundError{name}
     } else if mgo.IsDup(err) {
-        err = DuplicateNamespaceError{user.Namespace}
+        err = DuplicateNamespaceError{name}
     }
     return err
 }

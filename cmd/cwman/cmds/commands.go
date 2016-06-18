@@ -36,6 +36,8 @@ var CommandUsage = []Command {
     {"upload",    "Upload files into repo directory"},
     {"useradd",   "Add a user"},
     {"userdel",   "Remove a user"},
+    {"usermod",   "Modify a user"},
+    {"password",  "Change user password"},
     {"api-server","Start the API server"},
 }
 
@@ -70,6 +72,8 @@ func Init(docker container.DockerClient) *CWMan {
         "upload":       cli.CmdUpload,
         "useradd":      cli.CmdUserAdd,
         "userdel":      cli.CmdUserDel,
+        "usermod":      cli.CmdUserMod,
+        "password":     cli.CmdPassword,
         "api-server":   cli.CmdAPIServer,
         "update-proxy": cli.CmdUpdateProxy,
     }

@@ -32,8 +32,8 @@ func (m authMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc
         }
 
         logrus.Debugf("Logged in user: %v", user)
-        vars["user"] = user.Name
-        vars["namespace"] = user.Namespace
+        vars["user"] = user.GetName()
+        vars["namespace"] = user.GetNamespace()
         return handler(ctx, w, r, vars)
     }
 }
