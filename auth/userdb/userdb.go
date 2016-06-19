@@ -1,25 +1,22 @@
-package user
+package userdb
 
 import (
     "fmt"
     "net/http"
     "net/url"
-    "errors"
     "strings"
     "golang.org/x/crypto/bcrypt"
     "github.com/cloudway/platform/container/conf"
 )
 
-// The UserDBPlugin interface represents a user database plugin.
-// The user database can be backed by relational or NoSQL database,
-// LDAP or Kerberos services.
-type UserDBPlugin interface {
+// The Plugin interface represents a user database plugin. This interface
+// provides CRUD operations for users. The user database can be backed by
+// relational or NoSQL database, LDAP or Kerberos services.
+type Plugin interface {
     // Create a new user in the database.
     Create(user User) error
 
-    // Find the user by name. You must provide a User interface as the
-    // input argument, the returned User value may or may not be the
-    // input value.
+    // Find the user by name.
     Find(name string, result User) error
 
     // Searchs user database by the given filter.
@@ -28,11 +25,30 @@ type UserDBPlugin interface {
     // Remove the user from the database.
     Remove(name string) error
 
-    // Update user with the new information.
+    // Update user with the new data.
     Update(name string, fields interface{}) error
 
     // Close the user database.
     Close() error
+}
+
+var NewPlugin = func() (Plugin, error) {
+    dbtype := conf.Get("userdb.type")
+    dburl  := conf.Get("userdb.url")
+
+    if dbtype == "" && dburl != "" {
+        u, err := url.Parse(dburl)
+        if err != nil {
+            return nil, err
+        }
+        dbtype = u.Scheme
+    }
+
+    if dbtype == "" {
+        return nil, fmt.Errorf("The user database plugin does not configured")
+    } else {
+        return nil, fmt.Errorf("Unsupported user database scheme: %s", dbtype)
+    }
 }
 
 // Utility type to create filters and update fields.
@@ -40,23 +56,17 @@ type Args map[string]interface{}
 
 // The DuplicateUserError indicates that an user already exists in the database
 // when creating user.
-type DuplicateUserError struct {
-    Name string
-}
+type DuplicateUserError string
 
 // The DuplicateNamespaceError indicates that a namespace already exists in the
 // database when creating or modifying user.
-type DuplicateNamespaceError struct {
-    Namespace string
-}
+type DuplicateNamespaceError string
 
 // The UserNotFoundError indicates that a user not found in the database.
-type UserNotFoundError struct {
-    Name string
-}
+type UserNotFoundError string
 
 func (e DuplicateUserError) Error() string {
-    return fmt.Sprintf("User already exists: %s", e.Name)
+    return fmt.Sprintf("User already exists: %s", string(e))
 }
 
 func (e DuplicateUserError) HTTPErrorStatusCode() int {
@@ -64,7 +74,7 @@ func (e DuplicateUserError) HTTPErrorStatusCode() int {
 }
 
 func (e DuplicateNamespaceError) Error() string {
-    return fmt.Sprintf("Namespace already exists: %s", e.Namespace)
+    return fmt.Sprintf("Namespace already exists: %s", string(e))
 }
 
 func (e DuplicateNamespaceError) HTTPErrorStatusCode() int {
@@ -72,48 +82,23 @@ func (e DuplicateNamespaceError) HTTPErrorStatusCode() int {
 }
 
 func (e UserNotFoundError) Error() string {
-    return fmt.Sprintf("User not found: %s", e.Name)
+    return fmt.Sprintf("User not found: %s", string(e))
 }
 
 func (e UserNotFoundError) HTTPErrorStatusCode() int {
     return http.StatusNotFound
 }
 
-// Registry for the user database plugins.
-var pluginRegistry = make(map[string]func(*url.URL)(UserDBPlugin, error))
-
-// Register a user database plugin.
-func RegisterPlugin(scheme string, fn func(*url.URL)(UserDBPlugin, error)) {
-    pluginRegistry[scheme] = fn
-}
-
 // The UserDatabase type is the central point of user management.
 type UserDatabase struct {
-    plugin UserDBPlugin
+    plugin Plugin
 }
 
-// Open the user database by the specified URL.
-func OpenUserDatabase() (*UserDatabase, error) {
-    dbUrl := conf.Get("userdb-url")
-    if dbUrl == "" {
-        return nil, errors.New("User database URL not configured")
-    }
-
-    u, err := url.Parse(dbUrl)
+func Open() (*UserDatabase, error) {
+    plugin, err := NewPlugin()
     if err != nil {
         return nil, err
     }
-
-    fn := pluginRegistry[u.Scheme]
-    if fn == nil {
-        return nil, fmt.Errorf("Unsupported user database scheme: %s", u.Scheme)
-    }
-
-    plugin, err := fn(u)
-    if err != nil {
-        return nil, err
-    }
-
     return &UserDatabase{plugin}, nil
 }
 

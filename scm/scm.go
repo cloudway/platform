@@ -1,13 +1,17 @@
 package scm
 
-import "errors"
+import (
+    "fmt"
+    "github.com/cloudway/platform/container/conf"
+)
 
 // Source Code Management interface.
 type SCM interface {
     // Create a namespace in the SCM.
     // For user based SCM, a new user is created.
     // For project based SCM, a new project is created.
-    // Otherwise, the SCM must have a separate database to manage namespace and repositories.
+    // Otherwise, the SCM must have maintain a database to manage namespaces
+    // and repositories.
     CreateNamespace(namespace string) error
 
     // Remove the namespace from SCM. All repositories in the namespace
@@ -31,5 +35,9 @@ type SCM interface {
 }
 
 var New = func() (SCM, error) {
-    return nil, errors.New("The SCM plugin does not configured")
+    scmtype := conf.Get("scm.type")
+    if scmtype == "" {
+        return nil, fmt.Errorf("The SCM plugin does not configured")
+    }
+    return nil, fmt.Errorf("Unsuuported SCM type: %s", scmtype)
 }

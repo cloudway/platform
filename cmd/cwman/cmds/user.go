@@ -2,12 +2,12 @@ package cmds
 
 import (
     "github.com/cloudway/platform/pkg/mflag"
-    "github.com/cloudway/platform/auth/user"
     "github.com/cloudway/platform/pkg/opts"
+    "github.com/cloudway/platform/auth/userdb"
 )
 
 type CustomUser struct {
-    user.BasicUser `bson:",inline"`
+    userdb.BasicUser `bson:",inline"`
     Email string
 }
 
@@ -16,20 +16,20 @@ func (cli *CWMan) CmdUserAdd(args ...string) error {
     cmd.Require(mflag.Exact, 3)
     cmd.ParseFlags(args, true)
 
-    userdb, err := user.OpenUserDatabase()
+    db, err := userdb.Open()
     if err != nil {
         return err
     }
 
     user := &CustomUser{
-        BasicUser: user.BasicUser {
+        BasicUser: userdb.BasicUser {
             Name:       cmd.Arg(0),
             Namespace:  cmd.Arg(2),
         },
         Email: cmd.Arg(0) + "@example.com",
     }
 
-    return userdb.Create(user, cmd.Arg(1))
+    return db.Create(user, cmd.Arg(1))
 }
 
 func (cli *CWMan) CmdUserDel(args ...string) error {
@@ -37,11 +37,11 @@ func (cli *CWMan) CmdUserDel(args ...string) error {
     cmd.Require(mflag.Exact, 1)
     cmd.ParseFlags(args, true)
 
-    userdb, err := user.OpenUserDatabase()
+    db, err := userdb.Open()
     if err != nil {
         return err
     }
-    return userdb.Remove(cmd.Arg(0))
+    return db.Remove(cmd.Arg(0))
 }
 
 func (cli *CWMan) CmdUserMod(args ...string) error {
@@ -52,7 +52,7 @@ func (cli *CWMan) CmdUserMod(args ...string) error {
     cmd.Require(mflag.Exact, 1)
     cmd.ParseFlags(args, true)
 
-    userdb, err := user.OpenUserDatabase()
+    db, err := userdb.Open()
     if err != nil {
         return err
     }
@@ -61,7 +61,7 @@ func (cli *CWMan) CmdUserMod(args ...string) error {
     delete(fields, "namespace")
     delete(fields, "password")
 
-    return userdb.Update(cmd.Arg(0), fields)
+    return db.Update(cmd.Arg(0), fields)
 }
 
 func (cli *CWMan) CmdPassword(args ...string) error {
@@ -69,9 +69,9 @@ func (cli *CWMan) CmdPassword(args ...string) error {
     cmd.Require(mflag.Exact, 3)
     cmd.ParseFlags(args, true)
 
-    userdb, err := user.OpenUserDatabase()
+    db, err := userdb.Open()
     if err != nil {
         return err
     }
-    return userdb.ChangePassword(cmd.Arg(0), cmd.Arg(1), cmd.Arg(2))
+    return db.ChangePassword(cmd.Arg(0), cmd.Arg(1), cmd.Arg(2))
 }

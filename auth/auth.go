@@ -7,18 +7,18 @@ import (
     "github.com/Sirupsen/logrus"
     "github.com/dgrijalva/jwt-go"
     "github.com/dgrijalva/jwt-go/request"
-    "github.com/cloudway/platform/auth/user"
+    "github.com/cloudway/platform/auth/userdb"
 )
 
 const _TOKEN_EXPIRE_TIME = time.Hour * 8
 
 // The authenticator authenticate user via http protocol.
 type Authenticator struct {
-    userdb *user.UserDatabase
+    userdb *userdb.UserDatabase
     secret []byte
 }
 
-func NewAuthenticator(userdb *user.UserDatabase) (*Authenticator, error) {
+func NewAuthenticator(userdb *userdb.UserDatabase) (*Authenticator, error) {
     secret := make([]byte, 64)
     rand.Read(secret)
 
@@ -32,7 +32,7 @@ type customClaims struct {
 
 // Authenticate user with name and password. Returns the User object
 // and a token.
-func (auth *Authenticator) Authenticate(username, password string) (user.User, string, error) {
+func (auth *Authenticator) Authenticate(username, password string) (userdb.User, string, error) {
     // Authenticate user by user database
     user, err := auth.userdb.Authenticate(username, password)
     if err != nil {
@@ -56,7 +56,7 @@ func (auth *Authenticator) Authenticate(username, password string) (user.User, s
 
 // Verify the current http request is authorized. Returns the
 // authorized User object.
-func (auth *Authenticator) Verify(w http.ResponseWriter, r *http.Request) (user.User, error) {
+func (auth *Authenticator) Verify(w http.ResponseWriter, r *http.Request) (userdb.User, error) {
     claims := customClaims{}
 
     // Get token from request
@@ -70,6 +70,6 @@ func (auth *Authenticator) Verify(w http.ResponseWriter, r *http.Request) (user.
         return nil, err
     }
 
-    user := user.BasicUser{Name: claims.Subject, Namespace: claims.Namespace}
+    user := userdb.BasicUser{Name: claims.Subject, Namespace: claims.Namespace}
     return &user, nil
 }

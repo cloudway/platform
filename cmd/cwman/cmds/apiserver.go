@@ -13,11 +13,6 @@ import (
     "github.com/cloudway/platform/api/server/runtime"
     "github.com/cloudway/platform/api/server/middleware"
     "github.com/cloudway/platform/api/server/router/system"
-    "github.com/cloudway/platform/auth"
-    "github.com/cloudway/platform/auth/user"
-    "github.com/cloudway/platform/container"
-    "github.com/cloudway/platform/scm"
-    _ "github.com/cloudway/platform/scm/bitbucket"
 )
 
 const _CONTEXT_ROOT = "/api"
@@ -32,7 +27,7 @@ func (cli *CWMan) CmdAPIServer(args ...string) (err error) {
     stopc := make(chan bool)
     defer close(stopc)
 
-    rt, err := initRuntime(cli.DockerClient)
+    rt, err := runtime.New(cli.DockerClient)
     if err != nil {
         return err
     }
@@ -66,28 +61,6 @@ func (cli *CWMan) CmdAPIServer(args ...string) (err error) {
     }
     logrus.Info("API server terminated")
     return nil
-}
-
-func initRuntime(cli container.DockerClient) (rt *runtime.Runtime, err error) {
-    rt = new(runtime.Runtime)
-    rt.DockerClient = cli
-
-    rt.UserDB, err = user.OpenUserDatabase()
-    if err != nil {
-        return
-    }
-
-    rt.Authz, err = auth.NewAuthenticator(rt.UserDB)
-    if err != nil {
-        return
-    }
-
-    rt.SCM, err = scm.New()
-    if err != nil {
-        return
-    }
-
-    return rt, nil
 }
 
 func initMiddlewares(s *server.Server, rt *runtime.Runtime) {

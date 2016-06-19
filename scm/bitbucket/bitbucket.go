@@ -20,12 +20,18 @@ type bitbucketClient struct {
 }
 
 func init() {
+    old := scm.New
     scm.New = func() (scm.SCM, error) {
-        host := conf.Get("scm-url")
-        if host == "" {
-            return nil, errors.New("Source code management URL not configured")
+        scmtype := conf.Get("scm.type")
+        if scmtype != "bitbucket" {
+            return old()
         }
-        u, err := url.Parse(host)
+
+        scmurl := conf.Get("scm.url")
+        if scmurl == "" {
+            return nil, errors.New("Bitbucket URL not configured")
+        }
+        u, err := url.Parse(scmurl)
         if err != nil {
             return nil, err
         }
@@ -38,7 +44,7 @@ func init() {
             "Authorization" : "Basic " + auth, // TODO
         }
 
-        cli, err := rest.NewClient(host, "", nil, headers)
+        cli, err := rest.NewClient(scmurl, "", nil, headers)
         if err != nil {
             return nil, err
         }

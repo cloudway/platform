@@ -1,4 +1,4 @@
-package user
+package userdb
 
 type User interface {
     // Returns the user name.

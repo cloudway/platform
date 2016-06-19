@@ -5,7 +5,6 @@ import (
     "io/ioutil"
     "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/scm"
-    _ "github.com/cloudway/platform/scm/bitbucket"
 )
 
 func (cli *CWMan) CmdCreateNamespace(args ...string) error {

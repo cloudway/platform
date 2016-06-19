@@ -1,9 +1,12 @@
-package user
+package mongodb
 
 import (
-    "net/url"
+    "errors"
+    "strings"
     "gopkg.in/mgo.v2"
     "gopkg.in/mgo.v2/bson"
+    "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/auth/userdb"
 )
 
 // User database backed by MongoDB database.
@@ -13,8 +16,22 @@ type mongodb struct {
 }
 
 func init() {
-    RegisterPlugin("mongodb", func(u *url.URL) (UserDBPlugin, error) {
-        session, err := mgo.Dial(u.String())
+    prev := userdb.NewPlugin
+    userdb.NewPlugin = func() (userdb.Plugin, error) {
+        dbtype := conf.Get("userdb.type")
+        dburl  := conf.Get("userdb.url")
+
+        if dbtype != "" && dbtype != "mongodb" {
+            return prev()
+        }
+        if dbtype == "" && !strings.HasPrefix(dburl, "mongodb://") {
+            return prev()
+        }
+        if dburl == "" {
+            return nil, errors.New("MongoDB URL not configured")
+        }
+
+        session, err := mgo.Dial(dburl)
         if err != nil {
             return nil, err
         }
@@ -32,7 +49,7 @@ func init() {
         }
 
         return db, nil
-    })
+    }
 }
 
 func ensureUniqueIndex(c *mgo.Collection, key string) error {
@@ -42,18 +59,18 @@ func ensureUniqueIndex(c *mgo.Collection, key string) error {
     })
 }
 
-func (db *mongodb) Create(user User) error {
+func (db *mongodb) Create(user userdb.User) error {
     err := db.users.Insert(user)
     if mgo.IsDup(err) {
-        err = DuplicateUserError{user.GetName()}
+        err = userdb.DuplicateUserError(user.GetName())
     }
     return err
 }
 
-func (db *mongodb) Find(name string, result User) error {
+func (db *mongodb) Find(name string, result userdb.User) error {
     err := db.users.Find(bson.M{"name": name}).One(result)
     if err == mgo.ErrNotFound {
-        err = UserNotFoundError{name}
+        err = userdb.UserNotFoundError(name)
     }
     return err
 }
@@ -65,7 +82,7 @@ func (db *mongodb) Search(filter interface{}, result interface{}) error {
 func (db *mongodb) Remove(name string) error {
     err := db.users.Remove(bson.M{"name": name})
     if err == mgo.ErrNotFound {
-        err = UserNotFoundError{name}
+        err = userdb.UserNotFoundError(name)
     }
     return err
 }
@@ -73,9 +90,9 @@ func (db *mongodb) Remove(name string) error {
 func (db *mongodb) Update(name string, fields interface{}) error {
     err := db.users.Update(bson.M{"name": name}, bson.M{"$set": fields})
     if err == mgo.ErrNotFound {
-        err = UserNotFoundError{name}
+        err = userdb.UserNotFoundError(name)
     } else if mgo.IsDup(err) {
-        err = DuplicateNamespaceError{name}
+        err = userdb.DuplicateNamespaceError(name)
     }
     return err
 }
