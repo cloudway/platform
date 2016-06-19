@@ -77,6 +77,14 @@ func Init(docker container.DockerClient) *CWMan {
         "password":     cli.CmdPassword,
         "api-server":   cli.CmdAPIServer,
         "update-proxy": cli.CmdUpdateProxy,
+
+        "create-namespace": cli.CmdCreateNamespace,
+        "remove-namespace": cli.CmdRemoveNamespace,
+        "create-repo":      cli.CmdCreateRepo,
+        "remove-repo":      cli.CmdRemoveRepo,
+        "add-key":          cli.CmdAddKey,
+        "remove-key":       cli.CmdRemoveKey,
+        "list-keys":        cli.CmdListKeys,
     }
 
     return cli

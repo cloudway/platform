@@ -16,6 +16,8 @@ import (
     "github.com/cloudway/platform/auth"
     "github.com/cloudway/platform/auth/user"
     "github.com/cloudway/platform/container"
+    "github.com/cloudway/platform/scm"
+    _ "github.com/cloudway/platform/scm/bitbucket"
 )
 
 const _CONTEXT_ROOT = "/api"
@@ -76,6 +78,11 @@ func initRuntime(cli container.DockerClient) (rt *runtime.Runtime, err error) {
     }
 
     rt.Authz, err = auth.NewAuthenticator(rt.UserDB)
+    if err != nil {
+        return
+    }
+
+    rt.SCM, err = scm.New()
     if err != nil {
         return
     }
