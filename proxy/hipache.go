@@ -60,7 +60,7 @@ func addEndpoint(conn redis.Conn, id, frontend, backend string) error {
         if err != nil {
             return err
         }
-        logrus.Infof("add %s", frontend)
+        logrus.Debugf("add %s", frontend)
     }
 
     // add endpoint record
@@ -68,7 +68,7 @@ func addEndpoint(conn redis.Conn, id, frontend, backend string) error {
     if err != nil {
         return err
     } else {
-        logrus.Infof("add %s -> %s", key, backend)
+        logrus.Debugf("add %s -> %s", key, backend)
     }
 
     // add container record
@@ -76,7 +76,7 @@ func addEndpoint(conn redis.Conn, id, frontend, backend string) error {
     if err != nil {
         return err
     } else {
-        logrus.Infof("add %s", ckey)
+        logrus.Debugf("add %s", ckey)
     }
 
     return nil
@@ -104,7 +104,7 @@ func (px *hipacheProxy) RemoveEndpoints(id string) error {
         kv := strings.SplitN(rec, " ", 2)
         frontend, backend := kv[0], kv[1]
         if _, err = px.conn.Do("LREM", frontend, 0, backend); err == nil {
-            logrus.Infof("remove %s -> %s", frontend, backend)
+            logrus.Debugf("remove %s -> %s", frontend, backend)
         }
 
         n, err := redis.Int(px.conn.Do("LLEN", frontend))
@@ -112,14 +112,14 @@ func (px *hipacheProxy) RemoveEndpoints(id string) error {
             // remove the whole frontend
             _, err := px.conn.Do("DEL", frontend)
             if err == nil {
-                logrus.Infof("remove %s", frontend)
+                logrus.Debugf("remove %s", frontend)
             }
         }
     }
 
     // remove container record
     if _, err = px.conn.Do("DEL", key); err == nil {
-        logrus.Infof("remove %s", key)
+        logrus.Debugf("remove %s", key)
     }
 
     return err

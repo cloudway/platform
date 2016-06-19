@@ -2,6 +2,9 @@ package proxy
 
 import (
     "io"
+    "os"
+    "os/signal"
+    "syscall"
     "encoding/json"
     "github.com/Sirupsen/logrus"
     "golang.org/x/net/context"
@@ -9,9 +12,39 @@ import (
     "github.com/docker/engine-api/types/filters"
     "github.com/docker/engine-api/types/events"
     "github.com/cloudway/platform/container"
+    "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
 func RunUpdater(cli container.DockerClient, proxy Proxy) error {
+    sigchan := make(chan os.Signal, 1)
+    signal.Notify(sigchan, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
+
+    go func() {
+        for {
+            switch <- sigchan {
+            case syscall.SIGHUP:
+                logrus.Info("Reload mappings")
+                if err := conf.Initialize(); err != nil {
+                    logrus.Error(err)
+                }
+                if err := updateStaticMap(proxy); err != nil {
+                    logrus.Error(err)
+                }
+            default:
+                logrus.Info("Exiting")
+                proxy.Close()
+                os.Exit(0)
+            }
+        }
+    }()
+
+    if err := proxy.Reset(); err != nil {
+        return err
+    }
+    if err := updateStaticMap(proxy); err != nil {
+        return err
+    }
     if err := rebuild(cli, proxy); err != nil {
         return err
     }
@@ -21,11 +54,29 @@ func RunUpdater(cli container.DockerClient, proxy Proxy) error {
     return nil
 }
 
-func rebuild(cli container.DockerClient, proxy Proxy) error {
-    if err := proxy.Reset(); err != nil {
-        return err
+func updateStaticMap(proxy Proxy) error {
+    var mappings []*manifest.ProxyMapping
+    for frontend, backend := range conf.GetSection("proxy-mapping") {
+        mappings = append(mappings, &manifest.ProxyMapping{
+            Frontend: frontend,
+            Backend:  backend,
+            Protocol: "http",
+        })
     }
 
+    if len(mappings) != 0 {
+        eps := []*manifest.Endpoint{
+            &manifest.Endpoint{
+                ProxyMappings: mappings,
+            },
+        }
+        return proxy.AddEndpoints("static", eps)
+    }
+
+    return nil
+}
+
+func rebuild(cli container.DockerClient, proxy Proxy) error {
     ids, err := cli.IDs()
     if err != nil {
         return err

@@ -1,0 +1,15 @@
+#!/bin/sh -e
+
+conf=/usr/local/cloudway/conf/cloudway.conf
+frontend=$1
+backend=$2
+
+if [ -z "$frontend" -o -z "$backend" ]; then
+  echo "Usage: $0 frontend backend"
+  exit 1
+fi
+
+sed -i /$(echo $frontend | sed 's/\./\\./')/d $conf
+sed -i '$ a '"$frontend = $backend" $conf
+
+kill -HUP $(supervisorctl pid proxy-updater)

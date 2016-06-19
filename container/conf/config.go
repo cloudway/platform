@@ -65,3 +65,26 @@ func GetOrDefault(key, deflt string) string {
     // return the default value
     return deflt
 }
+
+// Get a section in the configuration file.
+func GetSection(section string) map[string]string {
+    result := make(map[string]string)
+
+    if cfg == nil {
+        return result
+    }
+
+    options, err := cfg.GetOptions(section)
+    if err != nil {
+        return result
+    }
+
+    for _, opt := range options {
+        value, err := cfg.GetString(section, opt)
+        if err == nil {
+            result[opt] = value
+        }
+    }
+
+    return result
+}

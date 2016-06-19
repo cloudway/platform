@@ -21,12 +21,20 @@ type Proxy interface {
     Close() error
 }
 
+var ErrMisconfigured = errors.New("Proxy URL not configured")
+
+type UnsupportedSchemeError string
+
+func (scheme UnsupportedSchemeError) Error() string {
+    return fmt.Sprintf("Unsupported proxy scheme: %s", scheme)
+}
+
 type proxyFunc func(*url.URL)(Proxy, error)
 var proxyRegistry map[string]proxyFunc = make(map[string]proxyFunc)
 
 func New(proxyUrl string) (Proxy, error) {
     if proxyUrl == "" {
-        return nil, errors.New("Proxy URL not configured")
+        return nil, ErrMisconfigured
     }
 
     u, err := url.Parse(proxyUrl)
@@ -36,7 +44,7 @@ func New(proxyUrl string) (Proxy, error) {
 
     fn := proxyRegistry[u.Scheme]
     if fn == nil {
-        return nil, fmt.Errorf("Unsuported proxy scheme: %s", u.Scheme)
+        return nil, UnsupportedSchemeError(u.Scheme)
     } else {
         return fn(u)
     }
