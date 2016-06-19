@@ -56,6 +56,7 @@ func Init(docker container.DockerClient) *CWMan {
     cli.Description = "Cloudway application container management tool"
 
     cli.handlers = map[string]func(...string)error {
+        "version":      cli.CmdVersion,
         "create":       cli.CmdCreate,
         "destroy":      cli.CmdDestroy,
         "list":         cli.CmdList,
