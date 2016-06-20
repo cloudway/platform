@@ -5,6 +5,7 @@ import (
     "github.com/cloudway/platform/pkg/mflag"
     . "github.com/cloudway/platform/pkg/opts"
     "github.com/cloudway/platform/container"
+    "github.com/cloudway/platform/hub"
 )
 
 func (cli *CWMan) CmdCreate(args ...string) error {
@@ -31,10 +32,19 @@ func (cli *CWMan) CmdCreate(args ...string) error {
             "a dash (-) character.")
     }
 
+    hub, err := hub.New()
+    if err != nil {
+        return err
+    }
+
     var containers []*container.Container
     for i := 1; i < cmd.NArg(); i++ {
-        opts.PluginPath = cmd.Arg(i)
-        cs, err := cli.Create(opts)
+        var cs []*container.Container
+
+        opts.PluginPath, err = hub.GetPluginPath(cmd.Arg(i))
+        if err == nil {
+            cs, err = cli.Create(opts)
+        }
         if err != nil {
             for _, c := range containers {
                 c.Destroy()

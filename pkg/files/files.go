@@ -5,6 +5,9 @@ import (
     "io"
     "path/filepath"
     "github.com/Sirupsen/logrus"
+    "strings"
+    "compress/gzip"
+    "github.com/cloudway/platform/pkg/archive"
 )
 
 func CopyFiles(src, dst string) error {
@@ -65,4 +68,23 @@ func MoveFiles(src, dst string) (err error) {
         return err
     }
     return CopyFiles(src, dst)
+}
+
+func ExtractFiles(src, dst string) (err error) {
+    srcf, err := os.Open(src)
+    if err != nil {
+        return err
+    }
+    defer srcf.Close()
+
+    switch {
+    case strings.HasSuffix(src, ".tar.gz") || strings.HasSuffix(src, ".tgz"):
+        zr, zerr := gzip.NewReader(srcf)
+        if zerr != nil {
+            return zerr
+        }
+        return archive.ExtractFiles(dst, zr)
+    default:
+        return archive.ExtractFiles(dst, srcf)
+    }
 }

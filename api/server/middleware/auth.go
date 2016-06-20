@@ -15,13 +15,13 @@ type authMiddleware struct {
 }
 
 func NewAuthMiddleware(rt *runtime.Runtime, contextRoot string) authMiddleware {
-    pattern := regexp.MustCompile("^" + contextRoot + "(/v[0-9.]+)?/(version|auth)$")
+    pattern := regexp.MustCompile("^" + contextRoot + "(/v[0-9.]+)?/(version|auth|plugins)")
     return authMiddleware{rt, pattern}
 }
 
 func (m authMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc {
     return func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-        if m.noAuthPattern.MatchString(r.URL.Path) {
+        if r.Method == "GET" &&  m.noAuthPattern.MatchString(r.URL.Path) {
             return handler(ctx, w, r, vars)
         }
 

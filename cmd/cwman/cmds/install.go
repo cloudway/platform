@@ -1,16 +1,25 @@
 package cmds
 
 import (
+    "github.com/cloudway/platform/hub"
     "github.com/cloudway/platform/pkg/mflag"
-    "github.com/cloudway/platform/container"
 )
 
-func (cli *CWMan) CmdInstall(args ...string) error {
-    cmd := cli.Subcmd("install", "CONTAINER PATH")
-    cmd.Require(mflag.Exact, 2)
+func (cli *CWMan) CmdInstallPlugin(args ...string) error {
+    cmd := cli.Subcmd("install", "PATH...")
+    cmd.Require(mflag.Min, 1)
     cmd.ParseFlags(args, true)
 
-    return cli.runContainerAction(cmd.Arg(0), func(c *container.Container) error {
-        return c.Install(cmd.Arg(1))
-    })
+    hub, err := hub.New()
+    if err != nil {
+        return err
+    }
+
+    for _, path := range cmd.Args() {
+        if err = hub.InstallPlugin("", path); err != nil {
+            return err
+        }
+    }
+
+    return nil
 }

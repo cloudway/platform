@@ -13,20 +13,10 @@ import (
     "github.com/cloudway/platform/pkg/manifest"
 )
 
-type UnsupportedArchiveError struct {
-    file string
-}
-
-func (e UnsupportedArchiveError) Error() string {
-    return fmt.Sprintf("Unsupported plugin archive file: %s", e.file)
-}
-
-type InvalidArchiveError struct {
-    file string
-}
+type InvalidArchiveError string
 
 func (e InvalidArchiveError) Error() string {
-    return fmt.Sprintf("Invalid plugin archive file: %s", e.file)
+    return fmt.Sprintf("Invalid plugin archive file: %s", string(e))
 }
 
 func ReadFile(path, name string) ([]byte, error) {
@@ -87,10 +77,8 @@ func openArchiveFile(f *os.File, name string) (io.Reader, error) {
     switch {
     case strings.HasSuffix(path, ".tar.gz") || strings.HasSuffix(path, ".tgz"):
         return openTarGzFile(f, name)
-    case strings.HasSuffix(path, ".tar"):
-        return openTarFile(path, f, name)
     default:
-        return nil, UnsupportedArchiveError{file: path}
+        return openTarFile(path, f, name)
     }
 }
 
@@ -116,7 +104,7 @@ func openTarFile(path string, r io.Reader, name string) (io.Reader, error) {
             return tr, nil
         }
     }
-    return nil, InvalidArchiveError{file: path}
+    return nil, InvalidArchiveError(path)
 }
 
 func AddFile(tw *tar.Writer, filename string, filemode int64, content []byte) error {

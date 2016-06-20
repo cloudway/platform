@@ -13,6 +13,7 @@ import (
     "github.com/cloudway/platform/api/server/runtime"
     "github.com/cloudway/platform/api/server/middleware"
     "github.com/cloudway/platform/api/server/router/system"
+    "github.com/cloudway/platform/api/server/router/plugins"
 )
 
 const _CONTEXT_ROOT = "/api"
@@ -71,6 +72,7 @@ func initMiddlewares(s *server.Server, rt *runtime.Runtime) {
 func initRouters(s *server.Server, rt *runtime.Runtime) {
     s.InitRouter(
         system.NewRouter(rt),
+        plugins.NewRouter(rt),
     )
 }
 

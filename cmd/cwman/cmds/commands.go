@@ -22,6 +22,7 @@ type CWMan struct {
 var CommandUsage = []Command {
     {"create",    "Create a new application container"},
     {"destroy",   "Destroy application containers"},
+    {"add",       "Add a plugin to application container"},
     {"list",      "List all application containers"},
     {"start",     "Start one or more stopped containers"},
     {"stop",      "Stop a running container"},
@@ -31,7 +32,6 @@ var CommandUsage = []Command {
     {"env",       "Show container environment variables"},
     {"addhost",   "Add extra host name to the container"},
     {"rmhost",    "Remove extra host name from the container"},
-    {"install",   "Install a plugin to application container"},
     {"download",  "Download application files"},
     {"upload",    "Upload files into repo directory"},
     {"useradd",   "Add a user"},
@@ -59,6 +59,7 @@ func Init(docker container.DockerClient) *CWMan {
         "version":      cli.CmdVersion,
         "create":       cli.CmdCreate,
         "destroy":      cli.CmdDestroy,
+        "add":          cli.CmdAdd,
         "list":         cli.CmdList,
         "start":        cli.CmdStart,
         "stop":         cli.CmdStop,
@@ -68,15 +69,15 @@ func Init(docker container.DockerClient) *CWMan {
         "env":          cli.CmdEnv,
         "addhost":      cli.CmdAddHost,
         "rmhost":       cli.CmdRemoveHost,
-        "install":      cli.CmdInstall,
         "download":     cli.CmdDownload,
         "upload":       cli.CmdUpload,
+
+        "install":      cli.CmdInstallPlugin,
+
         "useradd":      cli.CmdUserAdd,
         "userdel":      cli.CmdUserDel,
         "usermod":      cli.CmdUserMod,
         "password":     cli.CmdPassword,
-        "api-server":   cli.CmdAPIServer,
-        "update-proxy": cli.CmdUpdateProxy,
 
         "create-namespace": cli.CmdCreateNamespace,
         "remove-namespace": cli.CmdRemoveNamespace,
@@ -85,6 +86,9 @@ func Init(docker container.DockerClient) *CWMan {
         "add-key":          cli.CmdAddKey,
         "remove-key":       cli.CmdRemoveKey,
         "list-keys":        cli.CmdListKeys,
+
+        "api-server":   cli.CmdAPIServer,
+        "update-proxy": cli.CmdUpdateProxy,
     }
 
     return cli
