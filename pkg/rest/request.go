@@ -141,7 +141,7 @@ func (cli *Client) sendClientRequest(ctx context.Context, method, path string, q
                                           "check if the server supports the requested API version",
                                           http.StatusText(serverResp.StatusCode), req.URL)
         }
-        return serverResp, fmt.Errorf("Error response from server: %s", bytes.TrimSpace(body))
+        return serverResp, ServerError(bytes.TrimSpace(body))
     }
 
     serverResp.Body = resp.Body

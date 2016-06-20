@@ -1,5 +1,10 @@
 package bitbucket
 
+import (
+    "bytes"
+    "fmt"
+)
+
 type Page struct {
     Size            int  `json:"size"`
     Limit           int  `json:"limit"`
@@ -36,4 +41,24 @@ type SSHKey struct {
 type SSHKeyPage struct {
     Page
     Values []SSHKey `json:"values"`
+}
+
+type ServerErrors struct {
+    Errors []struct {
+        Context string `json:"context"`
+        Message string `json:"message"`
+    } `json:"errors"`
+}
+
+func (se ServerErrors) Error() string {
+    if len(se.Errors) == 1 {
+        return fmt.Sprintf("Error response from server: %s", se.Errors[0].Message)
+    }
+
+    var buf bytes.Buffer
+    fmt.Fprintln(&buf, "Error response from server:")
+    for _, e := range se.Errors {
+        fmt.Fprintln(&buf, e.Message)
+    }
+    return buf.String()
 }

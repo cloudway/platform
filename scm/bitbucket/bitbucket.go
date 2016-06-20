@@ -42,6 +42,7 @@ func init() {
 
         headers := map[string]string {
             "Authorization" : "Basic " + auth, // TODO
+            "Accept": "application/json",
         }
 
         cli, err := rest.NewClient(scmurl, "", nil, headers)
@@ -60,7 +61,7 @@ func (cli *bitbucketClient) CreateNamespace(namespace string) error {
 
     path := "/rest/api/1.0/projects"
     resp, err := cli.Post(context.Background(), path, nil, opts, nil)
-    return checkNamespaceError(namespace, resp.StatusCode, err)
+    return checkNamespaceError(namespace, resp, err)
 }
 
 func (cli *bitbucketClient) RemoveNamespace(namespace string) error {
@@ -71,7 +72,7 @@ func (cli *bitbucketClient) RemoveNamespace(namespace string) error {
         path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos", namespace)
         params := url.Values{"start": []string{strconv.Itoa(start)}}
         resp, err := cli.Get(ctx, path, params, nil)
-        err = checkNamespaceError(namespace, resp.StatusCode, err)
+        err = checkNamespaceError(namespace, resp, err)
         if err != nil {
             return err
         }
@@ -86,7 +87,7 @@ func (cli *bitbucketClient) RemoveNamespace(namespace string) error {
             path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s", namespace, repo.Slug)
             resp, err := cli.Delete(ctx, path, nil, nil)
             if err != nil && resp.StatusCode != http.StatusNotFound {
-                return err
+                return checkServerError(resp, err)
             }
         }
 
@@ -98,7 +99,7 @@ func (cli *bitbucketClient) RemoveNamespace(namespace string) error {
 
     path := fmt.Sprintf("/rest/api/1.0/projects/%s", namespace)
     resp, err := cli.Delete(context.Background(), path, nil, nil)
-    return checkNamespaceError(namespace, resp.StatusCode, err)
+    return checkNamespaceError(namespace, resp, err)
 }
 
 func (cli *bitbucketClient) CreateRepo(namespace, name string) error {
@@ -115,7 +116,7 @@ func (cli *bitbucketClient) CreateRepo(namespace, name string) error {
     case http.StatusConflict:
         return scm.RepoExistError(name)
     default:
-        return err
+        return checkServerError(resp, err)
     }
 }
 
@@ -127,7 +128,7 @@ func (cli *bitbucketClient) RemoveRepo(namespace, name string) error {
     case http.StatusNotFound:
         return scm.RepoNotFoundError(name)
     default:
-        return err
+        return checkServerError(resp, err)
     }
 }
 
@@ -142,7 +143,7 @@ func (cli *bitbucketClient) AddKey(namespace string, key string) error {
     if resp.StatusCode == http.StatusBadRequest {
         return scm.InvalidKeyError{}
     }
-    return checkNamespaceError(namespace, resp.StatusCode, err)
+    return checkNamespaceError(namespace, resp, err)
 }
 
 func (cli *bitbucketClient) RemoveKey(namespace string, key string) error {
@@ -155,9 +156,9 @@ func (cli *bitbucketClient) RemoveKey(namespace string, key string) error {
     for _, k := range keys {
         if strings.TrimSpace(k.Key.Text) == strings.TrimSpace(key) {
             path := fmt.Sprintf("/rest/keys/1.0/projects/%s/ssh/%d", namespace, k.Key.Id)
-            _, err := cli.Delete(ctx, path, nil, nil)
+            resp, err := cli.Delete(ctx, path, nil, nil)
             if err != nil {
-                return err
+                return checkServerError(resp, err)
             }
         }
     }
@@ -186,7 +187,7 @@ func (cli *bitbucketClient) listKeys(ctx context.Context, namespace string) ([]S
         path := fmt.Sprintf("/rest/keys/1.0/projects/%s/ssh", namespace)
         params := url.Values{"start": []string{strconv.Itoa(start)}}
         resp, err := cli.Get(ctx, path, params, nil)
-        err = checkNamespaceError(namespace, resp.StatusCode, err)
+        err = checkNamespaceError(namespace, resp, err)
         if err != nil {
             return keys, err
         }
@@ -208,15 +209,25 @@ func (cli *bitbucketClient) listKeys(ctx context.Context, namespace string) ([]S
     return keys, nil
 }
 
-func checkNamespaceError(namespace string, status int, err error) error {
-    switch status {
+func checkNamespaceError(namespace string, resp *rest.ServerResponse, err error) error {
+    switch resp.StatusCode {
     case http.StatusNotFound:
         return scm.NamespaceNotFoundError(namespace)
     case http.StatusConflict:
         return scm.NamespaceExistError(namespace)
     default:
-        return err
+        return checkServerError(resp, err)
     }
+}
+
+func checkServerError(resp *rest.ServerResponse, err error) error {
+    if se, ok := err.(rest.ServerError); ok {
+        var errors ServerErrors
+        if json.Unmarshal(se.RawError(), &errors) == nil {
+            return errors
+        }
+    }
+    return err
 }
 
 var _ scm.SCM = &bitbucketClient{}

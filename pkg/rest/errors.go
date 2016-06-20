@@ -1,22 +1,20 @@
 package rest
 
-import "errors"
+import (
+    "errors"
+    "fmt"
+)
 
 // ErrConnectionFailed is an error raised when the connection between the client and server failed.
 var ErrConnectionFailed = errors.New("Cannot connect to the server.")
 
-// unauthorizedError represents an authorization error in a API server.
-type unauthorizedError struct {
-    cause error
+// A error that contains error messages returned from API server.
+type ServerError []byte
+
+func (se ServerError) Error() string {
+    return fmt.Sprintf("Error response from server: %s", string(se))
 }
 
-// Error returns a string representation of an unauthorizedError
-func (u unauthorizedError) Error() string {
-    return u.cause.Error()
-}
-
-// IsUnauthorizedError returns true if the error is caused when a server authentication fails.
-func IsUnauthorizedError(err error) bool {
-    _, ok := err.(unauthorizedError)
-    return ok
+func (se ServerError) RawError() []byte {
+    return []byte(se)
 }
