@@ -150,6 +150,18 @@ func CopyFile(tw *tar.Writer, path, filename string, filemode int64) error {
 }
 
 func CopyFileTree(tw* tar.Writer, dst, src string, followLinks bool) error {
+    fi, err := os.Lstat(src)
+    if err != nil {
+        return err
+    }
+    if fi.Mode() & os.ModeSymlink != 0 {
+        if link, err := os.Readlink(src); err != nil {
+            return err
+        } else {
+            src = link
+        }
+    }
+
     return filepath.Walk(src, func (path string, info os.FileInfo, err error) error {
         if err != nil || info.IsDir() {
             return err
@@ -194,7 +206,7 @@ func CopyFileTree(tw* tar.Writer, dst, src string, followLinks bool) error {
     })
 }
 
-func ExtractFiles(dst string, r io.Reader) error {
+func ExtractFiles(extractDir string, r io.Reader) error {
     tr := tar.NewReader(r)
 
     for {
@@ -206,32 +218,59 @@ func ExtractFiles(dst string, r io.Reader) error {
             return err
         }
 
-        dst := filepath.Join(dst, hdr.Name)
+        hdrInfo := hdr.FileInfo()
+        dst := filepath.Join(extractDir, hdr.Name)
+
         switch hdr.Typeflag {
         case tar.TypeDir:
+            // Create directory unless it exists as a directory already.
+            // In that case we just want to merge the two.
             logrus.Debugf("Creating directory: %s", dst)
-            if err = os.MkdirAll(dst, os.FileMode(hdr.Mode)); err != nil {
-                return err
+            if fi, err := os.Lstat(dst); !(err == nil && fi.IsDir()) {
+                if err := os.Mkdir(dst, hdrInfo.Mode()); err != nil {
+                    return err
+                }
             }
-            os.Chtimes(dst, hdr.AccessTime, hdr.ChangeTime)
 
-        case tar.TypeReg:
+        case tar.TypeReg, tar.TypeRegA:
             logrus.Debugf("Extracting %s", dst)
-            os.MkdirAll(filepath.Dir(dst), 0755)
-            w, err := os.Create(dst)
+            w, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, hdrInfo.Mode())
             if err != nil {
                 return err
             }
-            _, err = io.Copy(w, tr);
+            if _, err := io.Copy(w, tr); err != nil {
+                w.Close()
+                return err
+            }
             w.Close()
-            if err != nil {
+
+        case tar.TypeLink:
+            targetPath := filepath.Join(extractDir, hdr.Linkname)
+            // check for hardlink breakout
+            if !strings.HasPrefix(targetPath, extractDir) {
+                return fmt.Errorf("invalid hardlink %q -> %q", dst, hdr.Linkname)
+            }
+            if err := os.Link(targetPath, dst); err != nil {
                 return err
             }
-            os.Chmod(dst, os.FileMode(hdr.Mode));
-            os.Chtimes(dst, hdr.AccessTime, hdr.ChangeTime)
+
+        case tar.TypeSymlink:
+            targetPath := filepath.Join(filepath.Dir(dst), hdr.Linkname)
+            if !strings.HasPrefix(targetPath, extractDir) {
+                return fmt.Errorf("invalid symlink %q -> %q", dst, hdr.Linkname)
+            }
+            if err := os.Symlink(hdr.Linkname, dst); err != nil {
+                return err
+            }
+
+        case tar.TypeBlock, tar.TypeChar, tar.TypeFifo:
+            logrus.Debugf("Ignored device file: %s", hdr.Name)
+
+        case tar.TypeXGlobalHeader:
+            logrus.Debugf("PAX Global Extended Headers found and ignored")
 
         default:
-            return fmt.Errorf("Unable to extract file %s", hdr.Name) // FIXME
+            return fmt.Errorf("Unable to extract file %s", hdr.Name)
         }
     }
 }

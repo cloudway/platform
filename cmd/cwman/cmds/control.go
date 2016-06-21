@@ -28,13 +28,6 @@ func (cli *CWMan) CmdRestart(args ...string) error {
     return runControlCmd(cli, cmd.Args(), (*container.Container).Restart)
 }
 
-func (cli *CWMan) CmdDestroy(args ...string) error {
-    cmd := cli.Subcmd("destroy", "CONTAINER [CONTAINER...]", "all")
-    cmd.Require(flag.Min, 1)
-    cmd.ParseFlags(args, true)
-    return runControlCmd(cli, cmd.Args(), (*container.Container).Destroy)
-}
-
 func (cli *CWMan) CmdStatus(args ...string) error {
     cmd := cli.Subcmd("status", "CONTAINER [CONTAINER...]")
     cmd.Require(flag.Min, 1)

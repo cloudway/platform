@@ -61,6 +61,7 @@ func Init(docker container.DockerClient) *CWMan {
         "destroy":      cli.CmdDestroy,
         "add":          cli.CmdAdd,
         "list":         cli.CmdList,
+        "deploy":       cli.CmdDeploy,
         "start":        cli.CmdStart,
         "stop":         cli.CmdStop,
         "restart":      cli.CmdRestart,

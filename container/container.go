@@ -105,36 +105,40 @@ func (cli DockerClient) ListAll() ([]*Container, error) {
 
 // Find all containers with the given name and namespace.
 func (cli DockerClient) FindAll(name, namespace string) ([]*Container, error) {
-    return find(cli, name, namespace, filters.NewArgs())
+    return find(cli, "", "", name, namespace)
 }
 
 // Find all application containers with the given name and namespace.
 func (cli DockerClient) FindApplications(name, namespace string) ([]*Container, error) {
-    args := filters.NewArgs()
-    args.Add("label", CATEGORY_KEY + "=" + string(manifest.Framework))
-    return find(cli, name, namespace, args)
+    return find(cli, manifest.Framework, "", name, namespace)
 }
 
 // Find all service containers associated with the given name and namespace.
 func (cli DockerClient) FindServices(name, namespace string) ([]*Container, error) {
-    args := filters.NewArgs()
-    args.Add("label", CATEGORY_KEY + "=" + string(manifest.Service))
-    return find(cli, name, namespace, args)
+    return find(cli, manifest.Service, "", name, namespace)
 }
 
 // Find service container with the give name, namespace and service name.
 func (cli DockerClient) FindService(name, namespace, service string) ([]*Container, error) {
-    args := filters.NewArgs()
-    args.Add("label", CATEGORY_KEY + "=" + string(manifest.Service))
-    args.Add("label", SERVICE_NAME_KEY + "=" + service)
-    return find(cli, name, namespace, args)
+    return find(cli, manifest.Service, service, name, namespace)
 }
 
-func find(cli DockerClient, name, namespace string, args filters.Args) ([]*Container, error) {
-    args.Add("label", APP_NAME_KEY + "=" + name)
-    args.Add("label", APP_NAMESPACE_KEY + "=" + namespace)
-    options := types.ContainerListOptions{All: true, Filter: args}
+func find(cli DockerClient, category manifest.Category, service, name, namespace string) ([]*Container, error) {
+    args := filters.NewArgs()
+    if category != "" {
+        args.Add("label", CATEGORY_KEY + "=" + string(category))
+    }
+    if service != "" {
+        args.Add("label", SERVICE_NAME_KEY + "=" + service)
+    }
+    if name != "" {
+        args.Add("label", APP_NAME_KEY + "=" + name)
+    }
+    if namespace != "" {
+        args.Add("label", APP_NAMESPACE_KEY + "=" + namespace)
+    }
 
+    options := types.ContainerListOptions{All: true, Filter: args}
     list, err := cli.ContainerList(context.Background(), options)
     if err != nil {
         return nil, err
@@ -212,6 +216,10 @@ func (c *Container) EnvDir() string {
 
 func (c *Container) RepoDir() string {
     return c.Home() + "/repo"
+}
+
+func (c *Container) DeployDir() string {
+    return c.Home() + "/deploy"
 }
 
 func (c *Container) DataDir() string {

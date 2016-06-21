@@ -32,6 +32,9 @@ type SCM interface {
 
     // List all SSH keys in the given namespace.
     ListKeys(namespace string) ([]string, error)
+
+    // Deploy application with new commit.
+    Deploy(namespace, name string) error
 }
 
 var New = func() (SCM, error) {

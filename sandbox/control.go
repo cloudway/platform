@@ -12,6 +12,9 @@ import (
 
 func (app *Application) Start() error {
     app.CreatePrivateEndpoints("")
+    if err := app.Deploy(); err != nil {
+        return err
+    }
     return app.Control("start", true, true)
 }
 
@@ -20,8 +23,10 @@ func (app *Application) Stop() error {
 }
 
 func (app *Application) Restart() error {
-    app.CreatePrivateEndpoints("")
-    return app.Control("restart", true, true)
+    if err := app.Stop(); err != nil {
+        return err
+    }
+    return app.Start()
 }
 
 func (app *Application) Control(action string, enable_action_hooks, process_templates bool) error {

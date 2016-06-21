@@ -66,6 +66,10 @@ func (app *Application) RepoDir() string {
     return filepath.Join(app.HomeDir(), "repo")
 }
 
+func (app *Application) DeployDir() string {
+    return filepath.Join(app.HomeDir(), "deploy")
+}
+
 func (app *Application) DataDir() string {
     return filepath.Join(app.HomeDir(), "data")
 }

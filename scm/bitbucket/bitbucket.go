@@ -41,8 +41,9 @@ func init() {
         auth := string(base64.StdEncoding.EncodeToString([]byte(username + ":" + password)))
 
         headers := map[string]string {
-            "Authorization" : "Basic " + auth, // TODO
-            "Accept": "application/json",
+            "Authorization":     "Basic " + auth, // TODO
+            "X-Atlassian-Token": "nocheck",
+            "Accept":            "application/json",
         }
 
         cli, err := rest.NewClient(scmurl, "", nil, headers)
@@ -109,15 +110,25 @@ func (cli *bitbucketClient) CreateRepo(namespace, name string) error {
 
     path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos", namespace)
     resp, err := cli.Post(context.Background(), path, nil, opts, nil)
-
     switch resp.StatusCode {
     case http.StatusNotFound:
-        return scm.NamespaceNotFoundError(namespace)
+        err = scm.NamespaceNotFoundError(namespace)
     case http.StatusConflict:
-        return scm.RepoExistError(name)
+        err = scm.RepoExistError(name)
     default:
-        return checkServerError(resp, err)
+        err = checkServerError(resp, err)
     }
+    if err != nil {
+        return err
+    }
+
+    const hookKey = "com.cloudway.bitbucket.plugins.repo-deployer:repo-deployer"
+
+    // enable post-receive hook
+    path = fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s/settings/hooks/%s/enabled", namespace, name, hookKey)
+    headers := map[string][]string{ "Content-Type": []string{"application/json"} }
+    resp, err = cli.Put(context.Background(), path, nil, nil, headers)
+    return checkServerError(resp, err)
 }
 
 func (cli *bitbucketClient) RemoveRepo(namespace, name string) error {
@@ -140,10 +151,14 @@ func (cli *bitbucketClient) AddKey(namespace string, key string) error {
     path := fmt.Sprintf("/rest/keys/1.0/projects/%s/ssh", namespace)
     resp, err := cli.Post(context.Background(), path, nil, opts, nil)
 
-    if resp.StatusCode == http.StatusBadRequest {
+    switch resp.StatusCode {
+    case http.StatusBadRequest:
         return scm.InvalidKeyError{}
+    case http.StatusConflict:
+        return fmt.Errorf("SSH key already exists");
+    default:
+        return checkNamespaceError(namespace, resp, err)
     }
-    return checkNamespaceError(namespace, resp, err)
 }
 
 func (cli *bitbucketClient) RemoveKey(namespace string, key string) error {
@@ -207,6 +222,12 @@ func (cli *bitbucketClient) listKeys(ctx context.Context, namespace string) ([]S
     }
 
     return keys, nil
+}
+
+func (cli *bitbucketClient) Deploy(namespace, name string) error {
+    path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/deploy", namespace, name)
+    resp, err := cli.Post(context.Background(), path, nil, nil, nil)
+    return checkNamespaceError(namespace, resp, err)
 }
 
 func checkNamespaceError(namespace string, resp *rest.ServerResponse, err error) error {

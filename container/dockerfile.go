@@ -10,10 +10,10 @@ RUN echo '{{.InstallScript}}' | /bin/sh
 {{- end }}
 
 {{ if eq .User "root" -}}
-RUN mkdir -p {{.Home}}/.env {{.Home}}/repo {{.Home}}/data {{.Home}}/logs
+RUN mkdir -p {{.Home}}/.env {{.Home}}/repo {{.Home}}/deploy {{.Home}}/data {{.Home}}/logs
 {{- else -}}
 RUN groupadd {{.User}} && useradd -g {{.User}} -d {{.Home}} -m -s /usr/bin/cwsh {{.User}} \
- && mkdir -p {{.Home}}/.env {{.Home}}/repo {{.Home}}/data {{.Home}}/logs \
+ && mkdir -p {{.Home}}/.env {{.Home}}/repo {{.Home}}/deploy {{.Home}}/data {{.Home}}/logs \
  && chown -R {{.User}}:{{.User}} {{.Home}} \
  && chown root:root {{.Home}}/.env
 {{- end }}

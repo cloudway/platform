@@ -14,9 +14,8 @@ import (
 )
 
 func (cli *CWMan) CmdUpload(args ...string) error {
-    cmd := cli.Subcmd("upload", "CONTAINER [PATH]")
-    cmd.Require(mflag.Min, 1)
-    cmd.Require(mflag.Max, 2)
+    cmd := cli.Subcmd("upload", "CONTAINER PATH")
+    cmd.Require(mflag.Exact, 2)
     cmd.ParseFlags(args, true)
 
     var containers []*container.Container
@@ -38,13 +37,7 @@ func (cli *CWMan) CmdUpload(args ...string) error {
         containers = []*container.Container{c}
     }
 
-    var path string
-    if cmd.NArg() == 1 {
-        path = "."
-    } else {
-        path = cmd.Arg(1)
-    }
-
+    path := cmd.Arg(1)
     stat, err := os.Stat(path);
     if err != nil {
         return err
