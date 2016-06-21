@@ -1,6 +1,7 @@
 package scm
 
 import (
+    "io"
     "fmt"
     "github.com/cloudway/platform/container/conf"
 )
@@ -24,6 +25,15 @@ type SCM interface {
     // Remove the repository with the given name in the given namespace.
     RemoveRepo(namespace, name string) error
 
+    // Populate repository from a template.
+    Populate(namespace, name string, payload io.Reader, size int64) error
+
+    // Populate repository from an URL.
+    PopulateURL(namespace, name string, url string) error
+
+    // Deploy application with new commit.
+    Deploy(namespace, name string) error
+
     // Add an SSH key to the given namespace.
     AddKey(namespace string, key string) error
 
@@ -32,9 +42,6 @@ type SCM interface {
 
     // List all SSH keys in the given namespace.
     ListKeys(namespace string) ([]string, error)
-
-    // Deploy application with new commit.
-    Deploy(namespace, name string) error
 }
 
 var New = func() (SCM, error) {

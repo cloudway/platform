@@ -20,10 +20,12 @@ import (
     "github.com/docker/engine-api/types/network"
     "github.com/docker/engine-api/types/strslice"
 
-    "github.com/cloudway/platform/pkg/manifest"
     "github.com/cloudway/platform/container/conf"
     "github.com/cloudway/platform/container/conf/defaults"
+    . "github.com/cloudway/platform/scm"
+    "github.com/cloudway/platform/pkg/manifest"
     "github.com/cloudway/platform/pkg/archive"
+    "github.com/cloudway/platform/pkg/files"
 )
 
 type CreateOptions struct {
@@ -36,6 +38,7 @@ type CreateOptions struct {
     Capacity          string
     Scaling           int
     Env               map[string]string
+    Repo              string
 }
 
 type createConfig struct {
@@ -53,85 +56,96 @@ type createConfig struct {
 }
 
 // Create new application containers.
-func (cli DockerClient) Create(opts CreateOptions) ([]*Container, error) {
-    config := &createConfig{CreateOptions: &opts}
-    config.Env = make(map[string]string)
+func (cli DockerClient) Create(scm SCM, opts CreateOptions) ([]*Container, error) {
+    cfg := &createConfig{CreateOptions: &opts}
+    cfg.Env = make(map[string]string)
     for k, v := range opts.Env {
-        config.Env[k] = v
+        cfg.Env[k] = v
     }
 
-    meta, err := archive.ReadManifest(config.PluginPath)
+    meta, err := archive.ReadManifest(cfg.PluginPath)
     if err != nil {
         return nil, err
     }
 
-    if config.User == "" {
+    if cfg.User == "" {
         if meta.User != "" {
-            config.User = meta.User
+            cfg.User = meta.User
         } else {
-            config.User = defaults.AppUser()
+            cfg.User = defaults.AppUser()
         }
     }
-    if config.User == "root" {
-        config.Home = "/root"
+    if cfg.User == "root" {
+        cfg.Home = "/root"
     } else {
-        config.Home = defaults.AppHome()
+        cfg.Home = defaults.AppHome()
     }
 
-    config.Category   = meta.Category
-    config.PluginName = meta.Name
-    config.PluginInstallPath = filepath.Base(config.PluginPath)
-    config.BaseImage  = meta.BaseImage
-    config.DependsOn  = meta.DependsOn
-    config.Debug      = DEBUG
+    cfg.Category   = meta.Category
+    cfg.PluginName = meta.Name
+    cfg.PluginInstallPath = filepath.Base(cfg.PluginPath)
+    cfg.BaseImage  = meta.BaseImage
+    cfg.DependsOn  = meta.DependsOn
+    cfg.Debug      = DEBUG
 
-    config.Env["CLOUDWAY_APP_NAME"] = config.Name
-    config.Env["CLOUDWAY_APP_NAMESPACE"] = config.Namespace
-    config.Env["CLOUDWAY_APP_USER"] = config.User
-    config.Env["CLOUDWAY_HOME_DIR"] = config.Home
-    config.Env["CLOUDWAY_REPO_DIR"] = config.Home + "/repo"
-    config.Env["CLOUDWAY_DATA_DIR"] = config.Home + "/data"
-    config.Env["CLOUDWAY_LOG_DIR"]  = config.Home + "/logs"
+    cfg.Env["CLOUDWAY_APP_NAME"] = cfg.Name
+    cfg.Env["CLOUDWAY_APP_NAMESPACE"] = cfg.Namespace
+    cfg.Env["CLOUDWAY_APP_USER"] = cfg.User
+    cfg.Env["CLOUDWAY_HOME_DIR"] = cfg.Home
+    cfg.Env["CLOUDWAY_REPO_DIR"] = cfg.Home + "/repo"
+    cfg.Env["CLOUDWAY_DATA_DIR"] = cfg.Home + "/data"
+    cfg.Env["CLOUDWAY_LOG_DIR"]  = cfg.Home + "/logs"
 
-    switch config.Category {
+    switch cfg.Category {
     case manifest.Framework:
-        return createApplicationContainer(cli, config)
+        return createApplicationContainer(cli, scm, cfg)
     case manifest.Service:
-        return createServiceContainer(cli, config)
+        return createServiceContainer(cli, cfg)
     default:
-        return nil, fmt.Errorf("%s is not a valid plugin", config.PluginPath)
+        return nil, fmt.Errorf("%s is not a valid plugin", cfg.PluginPath)
     }
 }
 
-func createApplicationContainer(cli DockerClient, config *createConfig) ([]*Container, error) {
-    if config.ServiceName != "" {
-        return nil, fmt.Errorf("The application name cannot contains a serivce name: %s", config.ServiceName)
+func createApplicationContainer(cli DockerClient, scm SCM, cfg *createConfig) ([]*Container, error) {
+    if cfg.ServiceName != "" {
+        return nil, fmt.Errorf("The application name cannot contains a serivce name: %s", cfg.ServiceName)
     }
 
-    config.Hostname = config.Name + "-" + config.Namespace
-    config.FQDN = config.Hostname + "." + defaults.Domain()
-    config.Env["CLOUDWAY_APP_DNS"] = config.FQDN
+    cfg.Hostname = cfg.Name + "-" + cfg.Namespace
+    cfg.FQDN = cfg.Hostname + "." + defaults.Domain()
+    cfg.Env["CLOUDWAY_APP_DNS"] = cfg.FQDN
 
-    scale, err := getScaling(cli, config.Name, config.Namespace, config.Scaling)
+    scale, err := getScaling(cli, cfg.Name, cfg.Namespace, cfg.Scaling)
     if err != nil {
         return nil, err
     }
 
-    image, err := buildImage(cli, dockerfileTemplate, config)
+    image, err := buildImage(cli, dockerfileTemplate, cfg)
     if err != nil {
         return nil, err
     }
 
     var containers []*Container
     for i := 0; i < scale; i++ {
-        if c, err := createContainer(cli, image, config); err != nil {
-            return nil, err
+        if c, err := createContainer(cli, image, cfg); err != nil {
+            return containers, err
         } else {
             containers = append(containers, c)
         }
     }
 
-    return containers, nil
+    // create and populate repository if needed
+    err = scm.CreateRepo(cfg.Namespace, cfg.Name)
+    if err == nil {
+        err = populateRepo(scm, cfg)
+        if err == nil {
+            err = scm.Deploy(cfg.Namespace, cfg.Name)
+        }
+    } else if _, ok := err.(RepoExistError); ok {
+        err = nil
+    }
+
+    return containers, err
 }
 
 func getScaling(cli DockerClient, name, namespace string, scale int) (int, error) {
@@ -153,15 +167,53 @@ func getScaling(cli DockerClient, name, namespace string, scale int) (int, error
     return scale - n, nil
 }
 
-func createServiceContainer(cli DockerClient, config *createConfig) ([]*Container, error) {
-    if config.ServiceName == "" {
-        config.ServiceName = config.PluginName
+func populateRepo(scm SCM, cfg *createConfig) error {
+    if strings.ToLower(cfg.Repo) == "empty" {
+        return nil
+    } else if cfg.Repo == "" {
+        return populateFromTemplate(scm, cfg)
+    } else {
+        return scm.PopulateURL(cfg.Namespace, cfg.Name, cfg.Repo)
+    }
+}
+
+func populateFromTemplate(scm SCM, cfg *createConfig) error {
+    tpl := filepath.Join(cfg.PluginPath, "template")
+    if fi, err := os.Stat(tpl); err != nil || !fi.IsDir() {
+        return nil
     }
 
-    name, namespace, service := config.Name, config.Namespace, config.ServiceName
-    config.Hostname = service + "." + name + "-" + namespace
-    config.FQDN = config.Hostname + "." + defaults.Domain()
-    config.Env["CLOUDWAY_APP_DNS"] = config.FQDN
+    f, err := files.TempFile("", "repo", ".tar")
+    if err != nil {
+        return err
+    }
+    defer func() {
+        f.Close()
+        os.Remove(f.Name())
+    }()
+
+    tw := tar.NewWriter(f)
+    if err = archive.CopyFileTree(tw, "", tpl, false); err != nil {
+        return err
+    }
+    tw.Close()
+
+    size, err := f.Seek(0, os.SEEK_CUR); f.Seek(0, os.SEEK_SET)
+    if err == nil {
+        err = scm.Populate(cfg.Namespace, cfg.Name, f, size)
+    }
+    return err
+}
+
+func createServiceContainer(cli DockerClient, cfg *createConfig) ([]*Container, error) {
+    if cfg.ServiceName == "" {
+        cfg.ServiceName = cfg.PluginName
+    }
+
+    name, namespace, service := cfg.Name, cfg.Namespace, cfg.ServiceName
+    cfg.Hostname = service + "." + name + "-" + namespace
+    cfg.FQDN = cfg.Hostname + "." + defaults.Domain()
+    cfg.Env["CLOUDWAY_APP_DNS"] = cfg.FQDN
 
     cs, err := cli.FindService(name, namespace, service)
     if err != nil {
@@ -171,12 +223,12 @@ func createServiceContainer(cli DockerClient, config *createConfig) ([]*Containe
         return nil, fmt.Errorf("Service already installed: %s", service)
     }
 
-    image, err := buildImage(cli, dockerfileTemplate, config)
+    image, err := buildImage(cli, dockerfileTemplate, cfg)
     if err != nil {
         return nil, err
     }
 
-    c, err := createContainer(cli, image, config)
+    c, err := createContainer(cli, image, cfg)
     if err != nil {
         return nil, err
     } else {
@@ -184,7 +236,7 @@ func createServiceContainer(cli DockerClient, config *createConfig) ([]*Containe
     }
 }
 
-func buildImage(cli DockerClient, t *template.Template, config *createConfig) (image string, err error) {
+func buildImage(cli DockerClient, t *template.Template, cfg *createConfig) (image string, err error) {
     // Create temporary tar archive to create build context
     tarFile, err := ioutil.TempFile("", "docker");
     if err != nil {
@@ -199,7 +251,7 @@ func buildImage(cli DockerClient, t *template.Template, config *createConfig) (i
     logrus.Debugf("Created temporary build context: %s", tarFile.Name())
 
     // create and add Dockerfile to archive
-    dockerfile := createDockerfile(t, config)
+    dockerfile := createDockerfile(t, cfg)
     if err = archive.AddFile(tw, "Dockerfile", 0644, dockerfile); err != nil {
         return
     }
@@ -211,7 +263,7 @@ func buildImage(cli DockerClient, t *template.Template, config *createConfig) (i
     }
 
     // add plugin files
-    if err = addPluginFiles(tw, config.PluginInstallPath, config.PluginPath); err != nil {
+    if err = addPluginFiles(tw, cfg.PluginInstallPath, cfg.PluginPath); err != nil {
         return
     }
 
@@ -262,18 +314,18 @@ func readBuildImageId(in io.Reader) (id string, err error) {
     return id, err
 }
 
-func createDockerfile(t *template.Template, config *createConfig) []byte{
-    b, err := archive.ReadFile(config.PluginPath, "bin/install")
+func createDockerfile(t *template.Template, cfg *createConfig) []byte{
+    b, err := archive.ReadFile(cfg.PluginPath, "bin/install")
     if err == nil {
         script := strings.Replace(string(b), "\n", "\\n\\\n", -1)
         script  = strings.Replace(script, "'", "'\\''", -1)
-        config.InstallScript = script
+        cfg.InstallScript = script
     } else {
-        config.InstallScript = ""
+        cfg.InstallScript = ""
     }
 
     var buf bytes.Buffer
-    if err = t.Execute(&buf, config); err != nil {
+    if err = t.Execute(&buf, cfg); err != nil {
         panic(err)
     }
     if DEBUG {
@@ -294,27 +346,27 @@ func addPluginFiles(tw *tar.Writer, dst, path string) error {
     }
 }
 
-func createContainer(cli DockerClient, imageId string, options *createConfig) (*Container, error) {
+func createContainer(cli DockerClient, imageId string, cfg *createConfig) (*Container, error) {
     config := &container.Config {
         Image: imageId,
         Labels: map[string]string {
-            CATEGORY_KEY:      string(options.Category),
-            APP_NAME_KEY:      options.Name,
-            APP_NAMESPACE_KEY: options.Namespace,
-            APP_HOME_KEY:      options.Home,
+            CATEGORY_KEY:      string(cfg.Category),
+            APP_NAME_KEY:      cfg.Name,
+            APP_NAMESPACE_KEY: cfg.Namespace,
+            APP_HOME_KEY:      cfg.Home,
         },
-        User: options.User,
+        User: cfg.User,
         Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "run"},
     }
 
-    if options.Category.IsService() {
-        config.Hostname = options.Hostname
-        config.Labels[SERVICE_NAME_KEY] = options.ServiceName
-        config.Labels[SERVICE_PLUGIN_KEY] = options.PluginName
+    if cfg.Category.IsService() {
+        config.Hostname = cfg.Hostname
+        config.Labels[SERVICE_NAME_KEY] = cfg.ServiceName
+        config.Labels[SERVICE_PLUGIN_KEY] = cfg.PluginName
     }
 
-    if options.DependsOn != nil {
-        config.Labels[SERVICE_DEPENDS_KEY] = strings.Join(options.DependsOn, ",")
+    if cfg.DependsOn != nil {
+        config.Labels[SERVICE_DEPENDS_KEY] = strings.Join(cfg.DependsOn, ",")
     }
 
     hostConfig := &container.HostConfig{}

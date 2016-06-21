@@ -103,10 +103,6 @@ func (cli *Client) sendClientRequest(ctx context.Context, method, path string, q
     req.URL.Host = cli.addr
     req.URL.Scheme = cli.transport.Scheme()
 
-    if expectedPayload && req.Header.Get("Content-Type") == "" {
-        req.Header.Set("Content-Type", "text/plain")
-    }
-
     resp, err := cancellable.Do(ctx, cli.transport, req)
     if err != nil {
         if isTimeout(err) || strings.Contains(err.Error(), "connection refused") ||

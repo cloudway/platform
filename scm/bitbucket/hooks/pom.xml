@@ -6,7 +6,7 @@
   <groupId>com.cloudway.bitbucket.plugins</groupId>
   <artifactId>repo-deployer</artifactId>
   <version>1.0</version>
-  <name>Cloudway Post Receive Hook</name>
+  <name>Cloudway Application Deployer</name>
   <organization>
     <name>Cloudway</name>
     <url>http://www.icloudway.com</url>
@@ -76,6 +76,11 @@
       <groupId>com.atlassian.bitbucket.server</groupId>
       <artifactId>bitbucket-util</artifactId>
       <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-compress</artifactId>
+      <version>1.9</version>
     </dependency>
   </dependencies>
 

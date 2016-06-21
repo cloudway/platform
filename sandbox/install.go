@@ -5,7 +5,6 @@ import (
     "io"
     "os"
     "strings"
-    "errors"
     "path/filepath"
     "github.com/Sirupsen/logrus"
     "github.com/cloudway/platform/pkg/manifest"
@@ -88,43 +87,11 @@ func (app *Application) installPlugin(target string) error {
     os.Remove(filepath.Join(target, "bin", "install"))
     os.Remove(filepath.Join(target, "bin", "setup"))
 
-    // populate repository for framework plugin
-    if meta.IsFramework() {
-        if err = app.populateRepository(target, ""); err != nil {
-            logrus.WithError(err).Error("Failed to populate repository")
-            return err
-        }
-    }
-
     // change owner of plugin directory
     chownR(target, app.uid, app.gid)
     chownR(filepath.Join(target, "manifest"), 0, app.gid)
 
     return nil
-}
-
-func (app *Application) populateRepository(path, url string) error {
-    if url == "" {
-        return app.populateFromTemplate(path)
-    } else {
-        return app.populateFromURL(url)
-    }
-}
-
-func (app *Application) populateFromTemplate(basedir string) error {
-    t := filepath.Join(basedir, "template")
-    if fi, err := os.Stat(t); err != nil || !fi.IsDir() {
-        return nil
-    } else {
-        if err := files.MoveFiles(t, app.RepoDir()); err == nil {
-            err = chownR(app.RepoDir(), app.uid, app.gid)
-        }
-        return err
-    }
-}
-
-func (app *Application) populateFromURL(url string) error {
-    return errors.New("NYI")
 }
 
 func chownR(root string, uid, gid int) error {

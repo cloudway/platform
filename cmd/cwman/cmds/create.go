@@ -6,14 +6,12 @@ import (
     . "github.com/cloudway/platform/pkg/opts"
     "github.com/cloudway/platform/container"
     "github.com/cloudway/platform/api/server/runtime"
-    "github.com/cloudway/platform/scm"
 )
 
 func (cli *CWMan) CmdCreate(args ...string) (err error) {
     var (
-        start       bool
+        nostart     bool
         opts        container.CreateOptions
-        repoCreated bool
         containers  []*container.Container
     )
 
@@ -21,8 +19,9 @@ func (cli *CWMan) CmdCreate(args ...string) (err error) {
     cmd.StringVar(&opts.User, []string{"u", "-user"}, "", "Specify the username")
     cmd.StringVar(&opts.Capacity, []string{"c", "-capacity"}, "", "Application capacity (small,medium,large)")
     cmd.IntVar(&opts.Scaling, []string{"s", "scale"}, 1, "Application scaling")
+    cmd.StringVar(&opts.Repo, []string{"-repo"}, "", "Remote repository URL")
     cmd.Var(NewMapOptsRef(&opts.Env, ValidateEnv), []string{"e", "-env"}, "Set environment variables")
-    cmd.BoolVar(&start, []string{"-start"}, false, "Start containers after create")
+    cmd.BoolVar(&nostart, []string{"-no-start"}, false, "Start containers after create")
     cmd.Require(mflag.Min, 2)
     cmd.ParseFlags(args, true)
 
@@ -46,38 +45,30 @@ func (cli *CWMan) CmdCreate(args ...string) (err error) {
             for _, c := range containers {
                 c.Destroy()
             }
-            if repoCreated {
+
+            // remove repository if no contains created
+            cs, e := cli.FindAll(opts.Namespace, opts.Name)
+            if e == nil && len(cs) == 0 {
                 rt.SCM.RemoveRepo(opts.Namespace, opts.Name)
             }
         }
     }()
-
-    // create repository if needed
-    if opts.ServiceName == "" {
-        err = rt.SCM.CreateRepo(opts.Namespace, opts.Name)
-        if _, ok := err.(scm.RepoExistError); err != nil && !ok {
-            return err
-        } else {
-            err = nil
-            repoCreated = true
-        }
-    }
 
     // create all containers
     for i := 1; i < cmd.NArg(); i++ {
         var cs []*container.Container
         opts.PluginPath, err = rt.Hub.GetPluginPath(cmd.Arg(i))
         if err == nil {
-            cs, err = cli.Create(opts)
+            cs, err = cli.Create(rt.SCM, opts)
+            containers = append(containers, cs...)
         }
         if err != nil {
             return err
         }
-        containers = append(containers, cs...)
     }
 
     // start all containers
-    if start {
+    if !nostart {
         err = container.ResolveServiceDependencies(containers);
         if err != nil {
             return err

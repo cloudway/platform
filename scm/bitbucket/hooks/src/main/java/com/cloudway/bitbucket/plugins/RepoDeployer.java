@@ -13,21 +13,37 @@ import java.nio.channels.Channels;
 import java.nio.channels.Pipe;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.EnumSet;
+import java.util.Set;
 
+import com.atlassian.bitbucket.hook.HookRequestHandle;
+import com.atlassian.bitbucket.hook.HookService;
+import com.atlassian.bitbucket.hook.HookUtils;
 import com.atlassian.bitbucket.repository.Repository;
 import com.atlassian.bitbucket.scm.CommandOutputHandler;
+import com.atlassian.bitbucket.scm.git.GitScmConfig;
 import com.atlassian.bitbucket.scm.git.command.GitCommand;
 import com.atlassian.bitbucket.scm.git.command.GitCommandBuilderFactory;
+import com.atlassian.bitbucket.scm.git.command.GitScmCommandBuilder;
 import com.atlassian.utils.process.ProcessException;
 import com.atlassian.utils.process.Watchdog;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import com.google.common.io.ByteStreams;
+import org.apache.commons.io.FileUtils;
 
 public class RepoDeployer
 {
     private final GitCommandBuilderFactory gitCommandBuilderFactory;
+    private final GitScmConfig gitScmConfig;
+    private final HookService hookService;
 
-    public RepoDeployer(GitCommandBuilderFactory gitCommandBuilderFactory) {
+    public RepoDeployer(GitCommandBuilderFactory gitCommandBuilderFactory,
+                        GitScmConfig gitScmConfig, HookService hookService) {
         this.gitCommandBuilderFactory = gitCommandBuilderFactory;
+        this.gitScmConfig = gitScmConfig;
+        this.hookService = hookService;
     }
 
     public void deploy(Repository repository) throws IOException {
@@ -155,5 +171,122 @@ public class RepoDeployer
         public Void getOutput() {
             return null;
         }
+    }
+
+    public void populate(Repository repository, InputStream payload) throws IOException {
+        Path tempRepoDir = Files.createTempDirectory("repo");
+        untarTemplateFiles(tempRepoDir, payload);
+        createTemplateRepo(tempRepoDir);
+        pushTemplateToNewRepo(tempRepoDir, repository);
+        FileUtils.deleteDirectory(tempRepoDir.toFile());
+    }
+
+    public void populate(Repository repository, String url) throws IOException {
+        Path tempRepoDir = Files.createTempDirectory("repo");
+        cloneTemplateRepo(tempRepoDir, url);
+        pushTemplateToNewRepo(tempRepoDir, repository);
+        FileUtils.deleteDirectory(tempRepoDir.toFile());
+    }
+
+    private static void untarTemplateFiles(Path tempRepoDir, InputStream in) throws IOException {
+        TarArchiveInputStream tar = new TarArchiveInputStream(in);
+        TarArchiveEntry entry;
+
+        while ((entry = tar.getNextTarEntry()) != null) {
+            Path dest = tempRepoDir.resolve(entry.getName());
+            if (entry.isDirectory()) {
+                Files.createDirectory(dest);
+            } else if (entry.isFile()) {
+                Files.createDirectories(dest.getParent());
+                Files.copy(tar, dest);
+            } else {
+                continue; // TODO: handle symlinks
+            }
+            chmod(dest, entry.getMode() & 0777);
+        }
+    }
+
+    private static void chmod(Path path, int mode) throws IOException {
+        // chmod never changes the permissions of symblic links;
+        // the chmod system call cannot change their permissions.
+        // This is not a problem since the permissions of symbolic
+        // links are never used.
+        if (!Files.isSymbolicLink(path)) {
+            Files.setPosixFilePermissions(path, getPermissions(mode));
+        }
+    }
+
+    private static final PosixFilePermission[] PERM_BITS = {
+        PosixFilePermission.OTHERS_EXECUTE,
+        PosixFilePermission.OTHERS_WRITE,
+        PosixFilePermission.OTHERS_READ,
+        PosixFilePermission.GROUP_EXECUTE,
+        PosixFilePermission.GROUP_WRITE,
+        PosixFilePermission.GROUP_READ,
+        PosixFilePermission.OWNER_EXECUTE,
+        PosixFilePermission.OWNER_WRITE,
+        PosixFilePermission.OWNER_READ
+    };
+
+    private static Set<PosixFilePermission> getPermissions(int bits) {
+        Set<PosixFilePermission> set = EnumSet.noneOf(PosixFilePermission.class);
+        for (PosixFilePermission p : PERM_BITS) {
+            if ((bits & 1) != 0)
+                set.add(p);
+            bits >>= 1;
+        }
+        return set;
+    }
+
+    private void cloneTemplateRepo(Path tempRepoDir, String url) {
+        gitCommandBuilderFactory.builder()
+            .workingDirectory(tempRepoDir.toString())
+            .command("clone")
+            .argument("--bare")
+            .argument("--no-hardlinks")
+            .argument(url)
+            .argument(".")
+            .build(new LoggingHandler(System.err))
+            .call();
+    }
+
+    private void createTemplateRepo(Path tempRepoDir) {
+        // git init
+        gitCommandBuilderFactory.builder()
+            .init()
+            .directory(tempRepoDir.toString())
+            .build()
+            .call();
+
+        // git add
+        gitCommandBuilderFactory.builder()
+            .add()
+            .workingDirectory(tempRepoDir.toString())
+            .all(true)
+            .path(".")
+            .build()
+            .call();
+
+        // git commit
+        gitCommandBuilderFactory.builder()
+            .commit()
+            .workingDirectory(tempRepoDir.toString())
+            .message("Populate template")
+            .author("nobody", "nobody@example.com")
+            .build()
+            .call();
+    }
+
+    private void pushTemplateToNewRepo(Path tempRepoDir, Repository newRepo) {
+        GitScmCommandBuilder builder = gitCommandBuilderFactory.builder()
+            .workingDirectory(tempRepoDir.toString())
+            .command("push")
+            .argument("--mirror")
+            .argument(gitScmConfig.getRepositoryDir(newRepo).getAbsolutePath());
+
+        HookRequestHandle requestHandle = hookService.registerRequest(newRepo.getId());
+        HookUtils.configure(requestHandle, builder);
+
+        builder.build(new LoggingHandler(System.err)).call();
     }
 }

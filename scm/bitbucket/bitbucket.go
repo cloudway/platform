@@ -1,6 +1,7 @@
 package bitbucket
 
 import (
+    "io"
     "fmt"
     "errors"
     "strconv"
@@ -110,24 +111,22 @@ func (cli *bitbucketClient) CreateRepo(namespace, name string) error {
 
     path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos", namespace)
     resp, err := cli.Post(context.Background(), path, nil, opts, nil)
-    switch resp.StatusCode {
-    case http.StatusNotFound:
-        err = scm.NamespaceNotFoundError(namespace)
-    case http.StatusConflict:
-        err = scm.RepoExistError(name)
-    default:
-        err = checkServerError(resp, err)
-    }
-    if err != nil {
-        return err
-    }
 
-    const hookKey = "com.cloudway.bitbucket.plugins.repo-deployer:repo-deployer"
+    if err != nil {
+        switch resp.StatusCode {
+        case http.StatusNotFound:
+            return scm.NamespaceNotFoundError(namespace)
+        case http.StatusConflict:
+            return scm.RepoExistError(name)
+        default:
+            return checkServerError(resp, err)
+        }
+    }
 
     // enable post-receive hook
+    const hookKey = "com.cloudway.bitbucket.plugins.repo-deployer:repo-deployer"
     path = fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s/settings/hooks/%s/enabled", namespace, name, hookKey)
-    headers := map[string][]string{ "Content-Type": []string{"application/json"} }
-    resp, err = cli.Put(context.Background(), path, nil, nil, headers)
+    resp, err = cli.Put(context.Background(), path, nil, nil, nil)
     return checkServerError(resp, err)
 }
 
@@ -141,6 +140,71 @@ func (cli *bitbucketClient) RemoveRepo(namespace, name string) error {
     default:
         return checkServerError(resp, err)
     }
+}
+
+func (cli *bitbucketClient) Populate(namespace, name string, payload io.Reader, size int64) error {
+    path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/populate", namespace, name)
+
+    // check to see if repository already populated
+    resp, err := cli.Head(context.Background(), path, nil, nil)
+    if resp.StatusCode == http.StatusForbidden {
+        return nil
+    }
+    if err != nil {
+        return checkServerError(resp, err)
+    }
+
+    headers := map[string][]string {
+        "Content-Type":   []string{"application/tar"},
+        "Content-Length": []string{strconv.FormatInt(size, 10)},
+    }
+    resp, err = cli.PutRaw(context.Background(), path, nil, payload, headers)
+    return checkNamespaceError(namespace, resp, err)
+}
+
+var allowedSchemes = []string{
+    "git", "http", "https", "ftp", "ftps", "rsync",
+}
+
+func isAllowedScheme(scheme string) bool {
+    for _, s := range allowedSchemes {
+        if s == scheme {
+            return true
+        }
+    }
+    return false
+}
+
+func (cli *bitbucketClient) PopulateURL(namespace, name, remote string) error {
+    u, err := url.Parse(remote)
+    if err != nil {
+        return err
+    }
+    if u.Scheme == "" || !isAllowedScheme(u.Scheme) {
+        return fmt.Errorf("Unsupported Git clone scheme: %s", u.Scheme)
+    }
+
+    path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/populate", namespace, name)
+
+    // check to see if repository already populated
+    resp, err := cli.Head(context.Background(), path, nil, nil)
+    if resp.StatusCode == http.StatusForbidden {
+        return nil
+    }
+    if err != nil {
+        return checkServerError(resp, err)
+    }
+
+    // populate repository from template URL
+    query := url.Values{"url": []string{remote}}
+    resp, err = cli.Post(context.Background(), path, query, nil, nil)
+    return checkNamespaceError(namespace, resp, err)
+}
+
+func (cli *bitbucketClient) Deploy(namespace, name string) error {
+    path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/deploy", namespace, name)
+    resp, err := cli.Post(context.Background(), path, nil, nil, nil)
+    return checkNamespaceError(namespace, resp, err)
 }
 
 func (cli *bitbucketClient) AddKey(namespace string, key string) error {
@@ -222,12 +286,6 @@ func (cli *bitbucketClient) listKeys(ctx context.Context, namespace string) ([]S
     }
 
     return keys, nil
-}
-
-func (cli *bitbucketClient) Deploy(namespace, name string) error {
-    path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/deploy", namespace, name)
-    resp, err := cli.Post(context.Background(), path, nil, nil, nil)
-    return checkNamespaceError(namespace, resp, err)
 }
 
 func checkNamespaceError(namespace string, resp *rest.ServerResponse, err error) error {

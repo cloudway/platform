@@ -4,15 +4,12 @@
     <description>${project.name}</description>
     <version>${project.version}</version>
     <vendor name="${project.organization.name}" url="${project.organization.url}" />
-    <param name="plugin-icon">images/pluginIcon.png</param>
-    <param name="plugin-logo">images/pluginLogo.png</param>
   </plugin-info>
 
   <resource type="i18n" name="i18n" location="repo-deployer" />
 
-  <repository-hook key="repo-deployer" name="Cloudway Repo Deployer" class="com.cloudway.bitbucket.plugins.AsyncPostReceiveDeployer">
+  <repository-hook key="repo-deployer" name="Repo Deployer Hook" class="com.cloudway.bitbucket.plugins.AsyncPostReceiveDeployer">
     <description>Deploy Cloudway application repository.</description>
-    <icon>images/pluginLogo-beamsplitter.png</icon>
   </repository-hook>
 
   <rest name="Repo Deployer Resource" i18n-name-key="repo-deployer-resource.name"
@@ -23,5 +20,7 @@
 
   <component-import key="gitCommandBuilderFactory" interface="com.atlassian.bitbucket.scm.git.command.GitCommandBuilderFactory" />
   <component-import key="gitScmConfig" interface="com.atlassian.bitbucket.scm.git.GitScmConfig"/>
+  <component-import key="hookService" interface="com.atlassian.bitbucket.hook.HookService"/>
+  <component-import key="repositoryService" interface="com.atlassian.bitbucket.repository.RepositoryService"/>
 
 </atlassian-plugin>
