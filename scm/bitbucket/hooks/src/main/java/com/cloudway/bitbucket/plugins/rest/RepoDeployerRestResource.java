@@ -21,6 +21,7 @@ import javax.ws.rs.core.Response;
 import java.io.InputStream;
 
 import com.atlassian.bitbucket.hook.HookService;
+import com.atlassian.bitbucket.hook.repository.RepositoryHookService;
 import com.atlassian.bitbucket.permission.Permission;
 import com.atlassian.bitbucket.permission.PermissionValidationService;
 import com.atlassian.bitbucket.repository.Repository;
@@ -40,11 +41,12 @@ public class RepoDeployerRestResource {
     private final RepositoryService repositoryService;
     private final PermissionValidationService validator;
 
-    RepoDeployerRestResource(GitCommandBuilderFactory gitCommandBuilderFactory,
+    RepoDeployerRestResource(GitCommandBuilderFactory cmdFactory,
                              GitScmConfig gitScmConfig, HookService hookService,
                              RepositoryService repositoryService,
-                             PermissionValidationService validator) {
-        this.deployer = new RepoDeployer(gitCommandBuilderFactory, gitScmConfig, hookService);
+                             PermissionValidationService validator,
+                             RepositoryHookService repositoryHookService) {
+        this.deployer = new RepoDeployer(cmdFactory, gitScmConfig, hookService, repositoryHookService);
         this.repositoryService = repositoryService;
         this.validator = validator;
     }
@@ -69,7 +71,7 @@ public class RepoDeployerRestResource {
         validator.validateForRepository(repository, Permission.REPO_READ);
 
         try {
-            deployer.deploy(repository);
+            deployer.deploy(repository, false);
             return Response.ok().build();
         } catch (Exception ex) {
             return Response.serverError().build();

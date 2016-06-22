@@ -5,6 +5,7 @@ import (
     "strings"
     "path/filepath"
     "io/ioutil"
+    "compress/gzip"
     "github.com/cloudway/platform/pkg/archive"
     "github.com/cloudway/platform/pkg/files"
 )
@@ -12,7 +13,7 @@ import (
 func (app *Application) Deploy() error {
     base := app.DeployDir()
 
-    deployments, err := getDeployments(base)
+    deployments, err := deployments(base)
     if err != nil {
         return err
     }
@@ -21,11 +22,16 @@ func (app *Application) Deploy() error {
     }
     defer removeDeployments(base, deployments)
 
-    latest := getLatestDeployment(deployments)
+    latest := latestDeployment(deployments)
     return app.deploy(latest.Name())
 }
 
-func getDeployments(deployDir string) ([]os.FileInfo, error) {
+func (app *Application) hasDeployments() bool {
+    deployments, _ := deployments(app.DeployDir())
+    return len(deployments) != 0
+}
+
+func deployments(deployDir string) ([]os.FileInfo, error) {
     f, err := os.Open(deployDir)
     if err != nil {
         return nil, err
@@ -37,7 +43,7 @@ func getDeployments(deployDir string) ([]os.FileInfo, error) {
 
     var deployments []os.FileInfo
     for _, fi := range files {
-        if strings.HasPrefix(fi.Name(), "deploy") && strings.HasSuffix(fi.Name(), ".tar") {
+        if strings.HasPrefix(fi.Name(), "deploy") && strings.HasSuffix(fi.Name(), ".tar.gz") {
             deployments = append(deployments, fi)
         }
     }
@@ -50,7 +56,7 @@ func removeDeployments(deployDir string, deployments []os.FileInfo) {
     }
 }
 
-func getLatestDeployment(deployments []os.FileInfo) os.FileInfo {
+func latestDeployment(deployments []os.FileInfo) os.FileInfo {
     var last *os.FileInfo
     for _, d := range deployments {
         if last == nil {
@@ -69,6 +75,11 @@ func (app *Application) deploy(name string) (err error) {
     }
     defer f.Close()
 
+    zr, err := gzip.NewReader(f)
+    if err != nil {
+        return err
+    }
+
     // Create temporary directory to extract deployment
     tmpdir, err := ioutil.TempDir("", "deploy")
     if err != nil {
@@ -77,7 +88,7 @@ func (app *Application) deploy(name string) (err error) {
     defer os.RemoveAll(tmpdir)
 
     // extract archive file into temporary directory
-    if err = archive.ExtractFiles(tmpdir, f); err != nil {
+    if err = archive.ExtractFiles(tmpdir, zr); err != nil {
         return err
     }
 

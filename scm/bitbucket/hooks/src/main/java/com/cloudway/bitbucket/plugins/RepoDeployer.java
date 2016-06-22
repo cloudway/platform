@@ -20,6 +20,7 @@ import java.util.Set;
 import com.atlassian.bitbucket.hook.HookRequestHandle;
 import com.atlassian.bitbucket.hook.HookService;
 import com.atlassian.bitbucket.hook.HookUtils;
+import com.atlassian.bitbucket.hook.repository.RepositoryHookService;
 import com.atlassian.bitbucket.repository.Repository;
 import com.atlassian.bitbucket.scm.CommandOutputHandler;
 import com.atlassian.bitbucket.scm.git.GitScmConfig;
@@ -38,62 +39,64 @@ public class RepoDeployer
     private final GitCommandBuilderFactory gitCommandBuilderFactory;
     private final GitScmConfig gitScmConfig;
     private final HookService hookService;
+    private final RepositoryHookService repositoryHookService;
 
     public RepoDeployer(GitCommandBuilderFactory gitCommandBuilderFactory,
-                        GitScmConfig gitScmConfig, HookService hookService) {
+                        GitScmConfig gitScmConfig, HookService hookService,
+                        RepositoryHookService repositoryHookService) {
         this.gitCommandBuilderFactory = gitCommandBuilderFactory;
         this.gitScmConfig = gitScmConfig;
         this.hookService = hookService;
+        this.repositoryHookService = repositoryHookService;
     }
 
-    public void deploy(Repository repository) throws IOException {
+    public void deploy(Repository repository, boolean asynchronous) throws IOException {
         // Retrieve namespace and name from repository
         String namespace = repository.getProject().getKey().toLowerCase();
         String name = repository.getSlug().toLowerCase();
 
+        // Create a temporary directory to save the repository archive
+        Path archiveDir = Files.createTempDirectory("deploy");
+        Path archiveFile = archiveDir.resolve(archiveDir.getFileName() + ".tar.gz");
+
         // Run git command to generate an archive file
         CommandOutputHandler<Void> handler =
-            new DeploymentHandler(name + '-' + namespace);
+            new DeploymentHandler(name, namespace, archiveDir);
         GitCommand<Void> command = gitCommandBuilderFactory.builder(repository)
             .command("archive")
-            .argument("--format=tar")
+            .argument("--format=tar.gz")
+            .argument("-o")
+            .argument(archiveFile.toString())
             .argument("master")
             .build(handler);
 
         // The remaining task is performed in the command handler
-        command.start();
+        if (asynchronous) {
+            command.start();
+        } else {
+            command.call();
+        }
     }
 
-    static class DeploymentHandler implements CommandOutputHandler<Void> {
-        private final String appname;
-        private final Path tarfile;
-        private final OutputStream tar;
+    static class DeploymentHandler extends LoggingHandler {
+        private final String name, namespace;
+        private final Path archiveDir;
 
-        DeploymentHandler(String appname) throws IOException {
-            this.appname = appname;
-
-            // Create a tar archive containing the command output
-            tarfile = Files.createTempFile("deploy", ".tar");
-            tar = Files.newOutputStream(tarfile);
-        }
-
-        @Override
-        public void process(InputStream in) throws ProcessException {
-            try {
-                ByteStreams.copy(in, tar);
-            } catch (IOException ex) {
-                throw new ProcessException(ex);
-            }
+        DeploymentHandler(String name, String namespace, Path archiveDir) {
+            super(System.err);
+            this.name = name;
+            this.namespace = namespace;
+            this.archiveDir = archiveDir;
         }
 
         @Override
         public void complete() throws ProcessException {
-            try {
-                tar.close();
+            super.complete();
 
+            try {
                 // Run cwman to deploy the archive
                 ProcessBuilder builder = new ProcessBuilder();
-                builder.command("/usr/bin/cwman", "deploy", appname, tarfile.toString());
+                builder.command("/usr/bin/cwman", "deploy", name, namespace, archiveDir.toString());
                 builder.start().waitFor();
             } catch (Exception ex) {
                 throw new ProcessException(ex);
@@ -104,20 +107,10 @@ public class RepoDeployer
 
         private void cleanup() throws ProcessException {
             try {
-                Files.delete(tarfile);
+                FileUtils.deleteDirectory(archiveDir.toFile());
             } catch (IOException ex) {
                 throw new ProcessException(ex);
             }
-        }
-
-        @Override
-        public void setWatchdog(Watchdog wdog) {
-            // noop
-        }
-
-        @Override
-        public Void getOutput() {
-            return null;
         }
     }
 
@@ -277,16 +270,24 @@ public class RepoDeployer
             .call();
     }
 
+    private static final String HOOK_KEY = "com.cloudway.bitbucket.plugins.repo-deployer:repo-deployer";
+
     private void pushTemplateToNewRepo(Path tempRepoDir, Repository newRepo) {
-        GitScmCommandBuilder builder = gitCommandBuilderFactory.builder()
-            .workingDirectory(tempRepoDir.toString())
-            .command("push")
-            .argument("--mirror")
-            .argument(gitScmConfig.getRepositoryDir(newRepo).getAbsolutePath());
+        // temprarily disable post-receive hook
+        repositoryHookService.disable(newRepo, HOOK_KEY);
+        try {
+            GitScmCommandBuilder builder = gitCommandBuilderFactory.builder()
+                .workingDirectory(tempRepoDir.toString())
+                .command("push")
+                .argument("--mirror")
+                .argument(gitScmConfig.getRepositoryDir(newRepo).getAbsolutePath());
 
-        HookRequestHandle requestHandle = hookService.registerRequest(newRepo.getId());
-        HookUtils.configure(requestHandle, builder);
+            HookRequestHandle requestHandle = hookService.registerRequest(newRepo.getId());
+            HookUtils.configure(requestHandle, builder);
 
-        builder.build(new LoggingHandler(System.err)).call();
+            builder.build(new LoggingHandler(System.err)).call();
+        } finally {
+            repositoryHookService.enable(newRepo, HOOK_KEY);
+        }
     }
 }

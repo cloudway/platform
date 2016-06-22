@@ -20,7 +20,5 @@
 
   <component-import key="gitCommandBuilderFactory" interface="com.atlassian.bitbucket.scm.git.command.GitCommandBuilderFactory" />
   <component-import key="gitScmConfig" interface="com.atlassian.bitbucket.scm.git.GitScmConfig"/>
-  <component-import key="hookService" interface="com.atlassian.bitbucket.hook.HookService"/>
-  <component-import key="repositoryService" interface="com.atlassian.bitbucket.repository.RepositoryService"/>
 
 </atlassian-plugin>

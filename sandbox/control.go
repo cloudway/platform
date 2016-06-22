@@ -22,11 +22,16 @@ func (app *Application) Stop() error {
     return app.Control("stop", true, false)
 }
 
-func (app *Application) Restart() error {
-    if err := app.Stop(); err != nil {
+func (app *Application) Restart() (err error) {
+    if app.hasDeployments() {
+        if err = app.Stop(); err == nil {
+            err = app.Start()
+        }
         return err
+    } else {
+        app.CreatePrivateEndpoints("")
+        return app.Control("restart", true, true)
     }
-    return app.Start()
 }
 
 func (app *Application) Control(action string, enable_action_hooks, process_templates bool) error {

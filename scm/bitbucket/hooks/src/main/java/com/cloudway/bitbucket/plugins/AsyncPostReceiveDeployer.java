@@ -11,6 +11,7 @@ import java.util.Collection;
 import com.atlassian.bitbucket.hook.HookService;
 import com.atlassian.bitbucket.hook.repository.AsyncPostReceiveRepositoryHook;
 import com.atlassian.bitbucket.hook.repository.RepositoryHookContext;
+import com.atlassian.bitbucket.hook.repository.RepositoryHookService;
 import com.atlassian.bitbucket.repository.RefChange;
 import com.atlassian.bitbucket.scm.git.GitScmConfig;
 import com.atlassian.bitbucket.scm.git.command.GitCommandBuilderFactory;
@@ -21,16 +22,28 @@ public class AsyncPostReceiveDeployer implements AsyncPostReceiveRepositoryHook 
 
     AsyncPostReceiveDeployer(GitCommandBuilderFactory factory,
                              GitScmConfig gitScmConfig,
-                             HookService hookService) {
-        deployer = new RepoDeployer(factory, gitScmConfig, hookService);
+                             HookService hookService,
+                             RepositoryHookService repositoryHookService) {
+        deployer = new RepoDeployer(factory, gitScmConfig, hookService, repositoryHookService);
     }
 
     @Override
     public void postReceive(RepositoryHookContext context, Collection<RefChange> refChanges) {
-        try {
-            deployer.deploy(context.getRepository());
-        } catch (Exception ex) {
-            ex.printStackTrace();
+        if (masterBranchChanged(refChanges)) {
+            try {
+                deployer.deploy(context.getRepository(), true);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
         }
+    }
+
+    private static boolean masterBranchChanged(Collection<RefChange> refChanges) {
+        for (RefChange change : refChanges) {
+            if ("refs/heads/master".equals(change.getRef().getId())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
