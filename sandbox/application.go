@@ -137,6 +137,19 @@ func (app *Application) GetPlugins() (map[string]*manifest.Plugin, error) {
     return plugins, nil
 }
 
+func (app *Application) GetPrimaryPlugin() (*manifest.Plugin, error) {
+    plugins, err := app.GetPlugins()
+    if err != nil {
+        return nil, err
+    }
+    for _, p := range plugins {
+        if p.IsFramework() {
+            return p, nil
+        }
+    }
+    return nil, errors.New("Primary plugin not found in this container")
+}
+
 func (app *Application) GetEndpoints(ip string) ([]*manifest.Endpoint, error) {
     plugins, err := app.GetPlugins()
     if err != nil {

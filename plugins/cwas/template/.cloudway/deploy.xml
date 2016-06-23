@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <deploy>
-  <application name="ROOT" location="file:${CLOUDWAY_REPO_DIR}/webapp" start="auto"/>
+  <application name="ROOT" location="file:${CLOUDWAY_REPO_DIR}/webapps/ROOT.war" start="auto"/>
 </deploy>

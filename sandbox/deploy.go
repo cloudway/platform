@@ -23,7 +23,10 @@ func (app *Application) Deploy() error {
     defer removeDeployments(base, deployments)
 
     latest := latestDeployment(deployments)
-    return app.deploy(latest.Name())
+    if err = app.checkout(latest.Name()); err == nil {
+        err = app.deploy()
+    }
+    return err
 }
 
 func (app *Application) hasDeployments() bool {
@@ -68,7 +71,7 @@ func latestDeployment(deployments []os.FileInfo) os.FileInfo {
     return *last
 }
 
-func (app *Application) deploy(name string) (err error) {
+func (app *Application) checkout(name string) (err error) {
     f, err := os.Open(filepath.Join(app.DeployDir(), name))
     if err != nil {
         return err
@@ -99,4 +102,13 @@ func (app *Application) deploy(name string) (err error) {
     }
 
     return nil
+}
+
+func (app *Application) deploy() (err error) {
+    primary, err := app.GetPrimaryPlugin()
+    if err == nil {
+        eenv := makeExecEnv(app.Environ())
+        err = runPluginAction(primary.Path, eenv, "build")
+    }
+    return err
 }

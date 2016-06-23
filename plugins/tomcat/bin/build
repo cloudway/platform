@@ -1,0 +1,24 @@
+#!/bin/bash -e
+
+if [ ! -f ${CLOUDWAY_REPO_DIR}/pom.xml ]; then
+  echo "Skipping maven build due to absence of pom.xml"
+  exit 0
+fi
+
+if [ -z "$MAVEN_ARGS" ]; then
+  export MAVEN_ARGS="clean package -Pcloudway -DskipTests"
+fi
+
+(
+  cd ${CLOUDWAY_REPO_DIR}
+  MVN_CMD="mvn $MAVEN_ARGS"
+  echo "Found pom.xml... attempting to build with '$MVN_CMD'"
+  sed -i "s/{APP_NAME}/${CLOUDWAY_APP_NAME}/g" pom.xml
+  $MVN_CMD
+)
+
+# clear the tomcat work directory to avoid accumulating old content
+# it will be recreated when tomcat starts or when the webapps directory is changed
+if [ -d ${CLOUDWAY_TOMCAT_DIR}/work ]; then
+  rm -rf ${CLOUDWAY_TOMCAT_DIR}/work/
+fi

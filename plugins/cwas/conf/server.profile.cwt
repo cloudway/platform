@@ -1,4 +1,4 @@
-VERSION = 1.1-SNAPSHOT
+VERSION = 1.1
 
 # OSGi core services
 org.osgi.compendium-4.3.1.jar

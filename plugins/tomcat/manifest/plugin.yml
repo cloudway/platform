@@ -5,7 +5,7 @@ Description: Apache Tomcat is an open source implementation of the Java Servlet 
 Version: '8.0'
 Vendor: Apache
 Category: Framework
-Base-Image: tomcat:8.0
+Base-Image: icloudway/tomcat:8.0
 Endpoints:
 - Private-Host-Name: HOST
   Private-Port-Name: PORT

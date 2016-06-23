@@ -1,3 +1,0 @@
-# install extra packages
-apt-get update
-apt-get install -y lsof apache2-utils bc
