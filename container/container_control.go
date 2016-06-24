@@ -3,17 +3,18 @@ package container
 import (
     "os"
     "bytes"
+    "time"
     "archive/tar"
     "golang.org/x/net/context"
     "github.com/Sirupsen/logrus"
     "github.com/docker/engine-api/types"
 )
 
-const _WAIT_SECONDS = 60
+var _WAIT_SECONDS = time.Second * 60;
 
 // Start the application container.
 func (c *Container) Start() error {
-    err := c.ContainerStart(context.Background(), c.ID, "")
+    err := c.ContainerStart(context.Background(), c.ID, types.ContainerStartOptions{})
     if err != nil {
         return err
     }
@@ -22,7 +23,7 @@ func (c *Container) Start() error {
 
 // Restart the application container.
 func (c *Container) Restart() error {
-    err := c.ContainerRestart(context.Background(), c.ID, _WAIT_SECONDS)
+    err := c.ContainerRestart(context.Background(), c.ID, &_WAIT_SECONDS)
     if err != nil {
         return err
     }
@@ -31,7 +32,7 @@ func (c *Container) Restart() error {
 
 // Stop the application container.
 func (c *Container) Stop() error {
-    return c.ContainerStop(context.Background(), c.ID, _WAIT_SECONDS)
+    return c.ContainerStop(context.Background(), c.ID, &_WAIT_SECONDS)
 }
 
 func startContainer(c *Container) error {
