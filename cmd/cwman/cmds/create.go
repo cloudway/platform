@@ -5,7 +5,6 @@ import (
     "github.com/cloudway/platform/pkg/mflag"
     . "github.com/cloudway/platform/pkg/opts"
     "github.com/cloudway/platform/container"
-    "github.com/cloudway/platform/api/server/runtime"
 )
 
 func (cli *CWMan) CmdCreate(args ...string) (err error) {
@@ -34,40 +33,20 @@ func (cli *CWMan) CmdCreate(args ...string) (err error) {
             "a dash (-) character.")
     }
 
-    rt, err := runtime.New(cli.DockerClient)
+    br, err := cli.NewUserBrokerFromNamespace(opts.Namespace)
     if err != nil {
         return err
     }
 
-    // cleanup on failure
-    defer func() {
-        if err != nil {
-            for _, c := range containers {
-                c.Destroy()
-            }
-
-            // remove repository if no contains created
-            cs, e := cli.FindAll(opts.Namespace, opts.Name)
-            if e == nil && len(cs) == 0 {
-                rt.SCM.RemoveRepo(opts.Namespace, opts.Name)
-            }
-        }
-    }()
-
-    // create all containers
-    for i := 1; i < cmd.NArg(); i++ {
-        var cs []*container.Container
-        opts.PluginPath, err = rt.Hub.GetPluginPath(cmd.Arg(i))
-        if err == nil {
-            cs, err = cli.Create(rt.SCM, opts)
-            containers = append(containers, cs...)
-        }
-        if err != nil {
-            return err
-        }
+    if br.User.Basic().Applications[opts.Name] == nil {
+        containers, err = br.CreateApplication(opts, cmd.Args()[1:])
+    } else {
+        containers, err = br.CreateServices(opts, cmd.Args()[1:])
+    }
+    if err != nil {
+        return err
     }
 
-    // start all containers
     if !nostart {
         err = container.ResolveServiceDependencies(containers);
         if err != nil {

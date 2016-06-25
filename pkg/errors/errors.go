@@ -24,6 +24,10 @@ func (e Errors) Add(err error) {
     }
 }
 
-func (e Errors) Len() int {
-    return len(e.errors)
+func (e Errors) Err() error {
+    if len(e.errors) != 0 {
+        return e
+    } else {
+        return nil
+    }
 }

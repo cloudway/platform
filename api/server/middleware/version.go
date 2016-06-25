@@ -8,7 +8,7 @@ import (
     "fmt"
     "github.com/cloudway/platform/api"
     "github.com/cloudway/platform/api/server/httputils"
-    "github.com/cloudway/platform/api/server/runtime"
+    "github.com/cloudway/platform/broker"
 )
 
 type badRequestError struct {
@@ -21,13 +21,13 @@ func (badRequestError) HTTPErrorStatusCode() int {
 
 // VersionMiddleware is a middleware that validates the client and server versions.
 type VersionMiddleware struct {
-    *runtime.Runtime
+    *broker.Broker
     dockerVersion string
 }
 
 // NewVersionMiddleware creates a new VersionMiddleware with the default versions
-func NewVersionMiddleware(rt *runtime.Runtime) VersionMiddleware {
-    return VersionMiddleware{Runtime: rt}
+func NewVersionMiddleware(broker *broker.Broker) VersionMiddleware {
+    return VersionMiddleware{Broker: broker}
 }
 
 // WrapHandler returns a new handler function wrapping the previous one in the request chain

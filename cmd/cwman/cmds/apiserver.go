@@ -10,10 +10,10 @@ import (
     "github.com/Sirupsen/logrus"
 
     "github.com/cloudway/platform/api/server"
-    "github.com/cloudway/platform/api/server/runtime"
     "github.com/cloudway/platform/api/server/middleware"
     "github.com/cloudway/platform/api/server/router/system"
     "github.com/cloudway/platform/api/server/router/plugins"
+    "github.com/cloudway/platform/broker"
 )
 
 const _CONTEXT_ROOT = "/api"
@@ -28,7 +28,7 @@ func (cli *CWMan) CmdAPIServer(args ...string) (err error) {
     stopc := make(chan bool)
     defer close(stopc)
 
-    rt, err := runtime.New(cli.DockerClient)
+    br, err := broker.New(cli.DockerClient)
     if err != nil {
         return err
     }
@@ -41,8 +41,8 @@ func (cli *CWMan) CmdAPIServer(args ...string) (err error) {
     }
     api.Accept(addr, l)
 
-    initMiddlewares(api, rt)
-    initRouters(api, rt)
+    initMiddlewares(api, br)
+    initRouters(api, br)
 
     // The serve API routine never exists unless an error occurs
     // we need to start it as a goroutine and wait on it so
@@ -64,15 +64,15 @@ func (cli *CWMan) CmdAPIServer(args ...string) (err error) {
     return nil
 }
 
-func initMiddlewares(s *server.Server, rt *runtime.Runtime) {
-    s.UseMiddleware(middleware.NewVersionMiddleware(rt))
-    s.UseMiddleware(middleware.NewAuthMiddleware(rt, _CONTEXT_ROOT))
+func initMiddlewares(s *server.Server, br *broker.Broker) {
+    s.UseMiddleware(middleware.NewVersionMiddleware(br))
+    s.UseMiddleware(middleware.NewAuthMiddleware(br, _CONTEXT_ROOT))
 }
 
-func initRouters(s *server.Server, rt *runtime.Runtime) {
+func initRouters(s *server.Server, br *broker.Broker) {
     s.InitRouter(
-        system.NewRouter(rt),
-        plugins.NewRouter(rt),
+        system.NewRouter(br),
+        plugins.NewRouter(br),
     )
 }
 

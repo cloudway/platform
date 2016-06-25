@@ -3,18 +3,18 @@ package plugins
 import (
     "net/http"
     "golang.org/x/net/context"
-    "github.com/cloudway/platform/api/server/runtime"
+    "github.com/cloudway/platform/broker"
     "github.com/cloudway/platform/api/server/router"
     "github.com/cloudway/platform/api/server/httputils"
 )
 
 type pluginsRouter struct {
-    *runtime.Runtime
+    *broker.Broker
     routes []router.Route
 }
 
-func NewRouter(rt *runtime.Runtime) router.Router {
-    r := &pluginsRouter{Runtime: rt}
+func NewRouter(broker *broker.Broker) router.Router {
+    r := &pluginsRouter{Broker: broker}
 
     r.routes = []router.Route{
         router.NewGetRoute("/plugins/{tag:.*}", r.getPluginInfo),

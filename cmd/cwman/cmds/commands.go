@@ -37,6 +37,7 @@ var CommandUsage = []Command {
     {"useradd",   "Add a user"},
     {"userdel",   "Remove a user"},
     {"usermod",   "Modify a user"},
+    {"namespace", "Create namespace for user"},
     {"password",  "Change user password"},
     {"api-server","Start the API server"},
 }
@@ -78,6 +79,7 @@ func Init(docker container.DockerClient) *CWMan {
         "useradd":      cli.CmdUserAdd,
         "userdel":      cli.CmdUserDel,
         "usermod":      cli.CmdUserMod,
+        "namespace":    cli.CmdNamespace,
         "password":     cli.CmdPassword,
 
         "create-namespace": cli.CmdCreateNamespace,

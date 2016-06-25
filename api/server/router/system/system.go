@@ -9,16 +9,16 @@ import (
     "github.com/cloudway/platform/api/types"
     "github.com/cloudway/platform/api/server/router"
     "github.com/cloudway/platform/api/server/httputils"
-    "github.com/cloudway/platform/api/server/runtime"
+    "github.com/cloudway/platform/broker"
 )
 
 type systemRouter struct {
-    *runtime.Runtime
+    *broker.Broker
     routes []router.Route
 }
 
-func NewRouter(rt *runtime.Runtime) router.Router {
-    r := &systemRouter{Runtime: rt}
+func NewRouter(broker *broker.Broker) router.Router {
+    r := &systemRouter{Broker: broker}
 
     r.routes = []router.Route{
         router.NewGetRoute("/version", r.getVersion),

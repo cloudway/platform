@@ -1,4 +1,4 @@
-package runtime
+package broker
 
 import (
     "github.com/cloudway/platform/container"
@@ -12,8 +12,8 @@ import (
     _ "github.com/cloudway/platform/scm/bitbucket"
 )
 
-// Runtime mantains all external services used by API server.
-type Runtime struct {
+// Broker maintains all external services.
+type Broker struct {
     container.DockerClient
     Users   *userdb.UserDatabase
     Authz   *auth.Authenticator
@@ -21,29 +21,39 @@ type Runtime struct {
     Hub     *hub.PluginHub
 }
 
-func New(cli container.DockerClient) (rt *Runtime, err error) {
-    rt = new(Runtime)
-    rt.DockerClient = cli
+// UserBroker performs user specific operations.
+type UserBroker struct {
+    *Broker
+    User userdb.User
+}
 
-    rt.Users, err = userdb.Open()
+func New(cli container.DockerClient) (broker *Broker, err error) {
+    broker = new(Broker)
+    broker.DockerClient = cli
+
+    broker.Users, err = userdb.Open()
     if err != nil {
         return
     }
 
-    rt.Authz, err = auth.NewAuthenticator(rt.Users)
+    broker.Authz, err = auth.NewAuthenticator(broker.Users)
     if err != nil {
         return
     }
 
-    rt.SCM, err = scm.New()
+    broker.SCM, err = scm.New()
     if err != nil {
         return
     }
 
-    rt.Hub, err = hub.New()
+    broker.Hub, err = hub.New()
     if err != nil {
         return
     }
 
-    return rt, nil
+    return broker, nil
+}
+
+func (br *Broker) NewUserBroker(user userdb.User) *UserBroker {
+    return &UserBroker{Broker: br, User: user}
 }

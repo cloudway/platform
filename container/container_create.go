@@ -134,15 +134,10 @@ func createApplicationContainer(cli DockerClient, scm SCM, cfg *createConfig) ([
         }
     }
 
-    // create and populate repository if needed
-    err = scm.CreateRepo(cfg.Namespace, cfg.Name)
+    // populate repository if needed
+    err = populateRepo(scm, cfg)
     if err == nil {
-        err = populateRepo(scm, cfg)
-        if err == nil {
-            err = scm.Deploy(cfg.Namespace, cfg.Name)
-        }
-    } else if _, ok := err.(RepoExistError); ok {
-        err = nil
+        err = scm.Deploy(cfg.Namespace, cfg.Name)
     }
 
     return containers, err

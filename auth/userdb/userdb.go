@@ -16,6 +16,9 @@ type Plugin interface {
     // Create a new user in the database.
     Create(user User) error
 
+    // Set the namespace for the given user. The namespace must be unique.
+    SetNamespace(username, namespace string) error
+
     // Find the user by name.
     Find(name string, result User) error
 
@@ -74,7 +77,7 @@ func (e DuplicateUserError) HTTPErrorStatusCode() int {
 }
 
 func (e DuplicateNamespaceError) Error() string {
-    return fmt.Sprintf("Namespace already exists: %s", string(e))
+    return fmt.Sprintf("Namespace already in use: %s", string(e))
 }
 
 func (e DuplicateNamespaceError) HTTPErrorStatusCode() int {
@@ -103,7 +106,9 @@ func Open() (*UserDatabase, error) {
 }
 
 func (db *UserDatabase) Create(user User, password string) error {
-    if user.GetName() == "" || user.GetNamespace() == "" || len(password) == 0 {
+    basic := user.Basic()
+
+    if basic.Name == "" || len(password) == 0 {
         return fmt.Errorf("Missing required parameters")
     }
 
@@ -112,7 +117,7 @@ func (db *UserDatabase) Create(user User, password string) error {
         return err
     }
 
-    user.SetPassword(hashedPassword)
+    basic.Password = hashedPassword
     return db.plugin.Create(user)
 }
 
@@ -128,8 +133,18 @@ func hashPassword(password string) ([]byte, error) {
     return bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 }
 
+func (db *UserDatabase) SetNamespace(username, namespace string) error {
+    return db.plugin.SetNamespace(username, namespace)
+}
+
 func (db *UserDatabase) Find(name string, result User) error {
     return db.plugin.Find(name, result)
+}
+
+func (db *UserDatabase) FindByNamespace(namespace string) (User, error) {
+    var user BasicUser
+    err := db.Search(Args{"namespace": namespace}, &user)
+    return &user, err
 }
 
 func (db *UserDatabase) Search(filter interface{}, result interface{}) error {
@@ -144,13 +159,13 @@ func (db *UserDatabase) Update(name string, fields interface{}) error {
     return db.plugin.Update(name, fields)
 }
 
-func (db *UserDatabase) Authenticate(name string, password string) (User, error) {
+func (db *UserDatabase) Authenticate(name string, password string) (*BasicUser, error) {
     var user BasicUser
     if err := db.plugin.Find(name, &user); err != nil {
         return nil, err
     }
 
-    err := bcrypt.CompareHashAndPassword(user.GetPassword(), []byte(password))
+    err := bcrypt.CompareHashAndPassword(user.Password, []byte(password))
     if err != nil {
         return nil, err
     }
@@ -164,7 +179,7 @@ func (db *UserDatabase) ChangePassword(name string, oldPassword, newPassword str
         return err
     }
 
-    err := bcrypt.CompareHashAndPassword(user.GetPassword(), []byte(oldPassword))
+    err := bcrypt.CompareHashAndPassword(user.Password, []byte(oldPassword))
     if err != nil {
         return err
     }

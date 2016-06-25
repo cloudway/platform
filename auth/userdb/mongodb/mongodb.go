@@ -1,8 +1,10 @@
 package mongodb
 
 import (
+    "fmt"
     "errors"
     "strings"
+    "reflect"
     "gopkg.in/mgo.v2"
     "gopkg.in/mgo.v2/bson"
     "github.com/cloudway/platform/container/conf"
@@ -39,11 +41,17 @@ func init() {
         db := &mongodb{Database: session.DB("")}
         db.users = db.C("users")
 
-        if err = ensureUniqueIndex(db.users, "name"); err != nil {
+        err = db.users.EnsureIndex(mgo.Index{
+            Key:    []string{"name"},
+            Unique: true,
+        })
+        if err != nil {
             db.Close()
             return nil, err
         }
-        if err = ensureUniqueIndex(db.users, "namespace"); err != nil {
+
+        err = db.users.EnsureIndexKey("namespace")
+        if err != nil {
             db.Close()
             return nil, err
         }
@@ -52,19 +60,42 @@ func init() {
     }
 }
 
-func ensureUniqueIndex(c *mgo.Collection, key string) error {
-    return c.EnsureIndex(mgo.Index{
-        Key:    []string{key},
-        Unique: true,
-    })
-}
-
 func (db *mongodb) Create(user userdb.User) error {
+    basic := user.Basic()
+
+    if basic.Namespace != "" {
+        n, err := db.users.Find(bson.M{"namespace": basic.Namespace}).Count()
+        if err != nil {
+            return err
+        }
+        if n != 0 {
+            return userdb.DuplicateNamespaceError(basic.Namespace)
+        }
+    }
+
     err := db.users.Insert(user)
     if mgo.IsDup(err) {
-        err = userdb.DuplicateUserError(user.GetName())
+        err = userdb.DuplicateUserError(basic.Name)
     }
     return err
+}
+
+func (db *mongodb) SetNamespace(username, namespace string) error {
+    var user userdb.BasicUser
+    err := db.users.Find(bson.M{"namespace": namespace}).One(&user)
+    if err != nil && err != mgo.ErrNotFound {
+        return err
+    }
+    if err == nil {
+        if user.Name == username {
+            return nil
+        } else {
+            return userdb.DuplicateNamespaceError(namespace)
+        }
+    }
+    return db.users.Update(
+        bson.M{"name": username},
+        bson.M{"$set": bson.M{"namespace": namespace}})
 }
 
 func (db *mongodb) Find(name string, result userdb.User) error {
@@ -76,7 +107,16 @@ func (db *mongodb) Find(name string, result userdb.User) error {
 }
 
 func (db *mongodb) Search(filter interface{}, result interface{}) error {
-    return db.users.Find(filter).All(result)
+    resultv := reflect.ValueOf(result)
+    if resultv.Kind() == reflect.Ptr && resultv.Elem().Kind() == reflect.Slice {
+        return db.users.Find(filter).All(result)
+    } else {
+        err := db.users.Find(filter).One(result)
+        if err == mgo.ErrNotFound {
+            err = userdb.UserNotFoundError(fmt.Sprintf("%v", filter))
+        }
+        return err
+    }
 }
 
 func (db *mongodb) Remove(name string) error {
@@ -91,8 +131,6 @@ func (db *mongodb) Update(name string, fields interface{}) error {
     err := db.users.Update(bson.M{"name": name}, bson.M{"$set": fields})
     if err == mgo.ErrNotFound {
         err = userdb.UserNotFoundError(name)
-    } else if mgo.IsDup(err) {
-        err = userdb.DuplicateNamespaceError(name)
     }
     return err
 }
