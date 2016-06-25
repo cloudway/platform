@@ -13,7 +13,7 @@ import (
     "github.com/cloudway/platform/pkg/manifest"
 )
 
-type Application struct {
+type Sandbox struct {
     name        string
     namespace   string
     home        string
@@ -22,7 +22,7 @@ type Application struct {
     gid         int
 }
 
-func NewApplication() *Application {
+func New() *Sandbox {
     var (
         name      = os.Getenv("CLOUDWAY_APP_NAME")
         namespace = os.Getenv("CLOUDWAY_APP_NAMESPACE")
@@ -44,7 +44,7 @@ func NewApplication() *Application {
         }
     }
 
-    return &Application{
+    return &Sandbox{
         name:       name,
         namespace:  namespace,
         home:       home,
@@ -54,44 +54,44 @@ func NewApplication() *Application {
     }
 }
 
-func (app *Application) HomeDir() string {
-    return app.home
+func (box *Sandbox) HomeDir() string {
+    return box.home
 }
 
-func (app *Application) EnvDir() string {
-    return filepath.Join(app.home, ".env")
+func (box *Sandbox) EnvDir() string {
+    return filepath.Join(box.home, ".env")
 }
 
-func (app *Application) RepoDir() string {
-    return filepath.Join(app.HomeDir(), "repo")
+func (box *Sandbox) RepoDir() string {
+    return filepath.Join(box.HomeDir(), "repo")
 }
 
-func (app *Application) DeployDir() string {
-    return filepath.Join(app.HomeDir(), "deploy")
+func (box *Sandbox) DeployDir() string {
+    return filepath.Join(box.HomeDir(), "deploy")
 }
 
-func (app *Application) DataDir() string {
-    return filepath.Join(app.HomeDir(), "data")
+func (box *Sandbox) DataDir() string {
+    return filepath.Join(box.HomeDir(), "data")
 }
 
-func (app *Application) LogDir() string {
-    return filepath.Join(app.HomeDir(), "logs")
+func (box *Sandbox) LogDir() string {
+    return filepath.Join(box.HomeDir(), "logs")
 }
 
-func (app *Application) Name() string {
-    return app.name
+func (box *Sandbox) Name() string {
+    return box.name
 }
 
-func (app *Application) Namespace() string {
-    return app.namespace
+func (box *Sandbox) Namespace() string {
+    return box.namespace
 }
 
-func (app *Application) FQDN() string {
+func (box *Sandbox) FQDN() string {
     return os.Getenv("CLOUDWAY_APP_DNS")
 }
 
-func (app *Application) GetExtraHosts() []string {
-    extraHosts := app.Getenv("CLOUDWAY_EXTRA_HOSTS")
+func (box *Sandbox) ExtraHosts() []string {
+    extraHosts := box.Getenv("CLOUDWAY_EXTRA_HOSTS")
     if extraHosts == "" {
         return nil
     } else {
@@ -99,7 +99,7 @@ func (app *Application) GetExtraHosts() []string {
     }
 }
 
-func (app *Application) GetLocalIP() (string, error) {
+func (box *Sandbox) LocalIP() (string, error) {
     addrs, err := net.InterfaceAddrs()
     if err != nil {
         return "", err
@@ -117,15 +117,15 @@ func (app *Application) GetLocalIP() (string, error) {
     return "", errors.New("No local IP address found")
 }
 
-func (app *Application) GetPlugins() (map[string]*manifest.Plugin, error) {
-    files, err := ioutil.ReadDir(app.HomeDir())
+func (box *Sandbox) Plugins() (map[string]*manifest.Plugin, error) {
+    files, err := ioutil.ReadDir(box.HomeDir())
     if err != nil {
         return nil, err
     }
 
     plugins := make(map[string]*manifest.Plugin)
     for _, file := range files {
-        subdir := filepath.Join(app.HomeDir(), file.Name())
+        subdir := filepath.Join(box.HomeDir(), file.Name())
         if manifest.IsPluginDir(subdir) {
             if p, err := manifest.Load(subdir); err != nil {
                 logrus.WithError(err).Errorf("Faield to load plugin %s", file.Name())
@@ -137,8 +137,8 @@ func (app *Application) GetPlugins() (map[string]*manifest.Plugin, error) {
     return plugins, nil
 }
 
-func (app *Application) GetPrimaryPlugin() (*manifest.Plugin, error) {
-    plugins, err := app.GetPlugins()
+func (box *Sandbox) PrimaryPlugin() (*manifest.Plugin, error) {
+    plugins, err := box.Plugins()
     if err != nil {
         return nil, err
     }
@@ -150,21 +150,21 @@ func (app *Application) GetPrimaryPlugin() (*manifest.Plugin, error) {
     return nil, errors.New("Primary plugin not found in this container")
 }
 
-func (app *Application) GetEndpoints(ip string) ([]*manifest.Endpoint, error) {
-    plugins, err := app.GetPlugins()
+func (box *Sandbox) GetEndpoints(ip string) ([]*manifest.Endpoint, error) {
+    plugins, err := box.Plugins()
     if err != nil {
         return nil, err
     }
 
     if ip == "" {
-        ip, err = app.GetLocalIP()
+        ip, err = box.LocalIP()
         if err != nil {
             return nil, err
         }
     }
 
-    fqdn := app.FQDN()
-    extra := app.GetExtraHosts()
+    fqdn := box.FQDN()
+    extra := box.ExtraHosts()
 
     var endpoints []*manifest.Endpoint
     for _, p := range plugins {
@@ -176,23 +176,23 @@ func (app *Application) GetEndpoints(ip string) ([]*manifest.Endpoint, error) {
     return endpoints, nil
 }
 
-func (app *Application) CreatePrivateEndpoints(ip string) error {
-    plugins, err := app.GetPlugins()
+func (box *Sandbox) CreatePrivateEndpoints(ip string) error {
+    plugins, err := box.Plugins()
     if err != nil {
         return err
     }
 
     if ip == "" {
-        ip, err = app.GetLocalIP()
+        ip, err = box.LocalIP()
         if err != nil {
             return err
         }
     }
 
     for _, p := range plugins {
-        for _, ep := range p.GetEndpoints(app.FQDN(), ip) {
-            app.SetPluginEnv(p, ep.PrivateHostName, ip, true)
-            app.SetPluginEnv(p, ep.PrivatePortName, strconv.Itoa(int(ep.PrivatePort)), true)
+        for _, ep := range p.GetEndpoints(box.FQDN(), ip) {
+            box.SetPluginEnv(p, ep.PrivateHostName, ip, true)
+            box.SetPluginEnv(p, ep.PrivatePortName, strconv.Itoa(int(ep.PrivatePort)), true)
         }
     }
 

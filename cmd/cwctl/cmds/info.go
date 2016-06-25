@@ -2,8 +2,8 @@ package cmds
 
 import (
     "os"
-    "github.com/cloudway/platform/sandbox"
     "encoding/json"
+    "github.com/cloudway/platform/sandbox"
     "github.com/cloudway/platform/pkg/manifest"
 )
 
@@ -16,15 +16,15 @@ func (cli *CWCtl) CmdInfo(args ...string) error {
     ip := cmd.String([]string{"-ip"}, "", "Set IP address for endpoints")
     cmd.ParseFlags(args, false)
 
-    app := sandbox.NewApplication()
-    env := app.ExportedEnviron()
+    box := sandbox.New()
+    env := box.ExportedEnviron()
 
-    endpoints, err := app.GetEndpoints(*ip)
+    endpoints, err := box.GetEndpoints(*ip)
     if err != nil {
         return err
     }
 
-    ps, err := app.GetPlugins()
+    ps, err := box.Plugins()
     if err != nil {
         return err
     }
@@ -33,7 +33,7 @@ func (cli *CWCtl) CmdInfo(args ...string) error {
         plugins = append(plugins, p)
     }
 
-    info := manifest.ApplicationInfo{
+    info := manifest.SandboxInfo{
         Env:        env,
         Endpoints:  endpoints,
         Plugins:    plugins,

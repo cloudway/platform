@@ -10,38 +10,38 @@ import (
     "github.com/Sirupsen/logrus"
 )
 
-func (app *Application) Start() error {
-    app.CreatePrivateEndpoints("")
-    if err := app.Deploy(); err != nil {
+func (box *Sandbox) Start() error {
+    box.CreatePrivateEndpoints("")
+    if err := box.Deploy(); err != nil {
         return err
     }
-    return app.Control("start", true, true)
+    return box.Control("start", true, true)
 }
 
-func (app *Application) Stop() error {
-    return app.Control("stop", true, false)
+func (box *Sandbox) Stop() error {
+    return box.Control("stop", true, false)
 }
 
-func (app *Application) Restart() (err error) {
-    if app.hasDeployments() {
-        if err = app.Stop(); err == nil {
-            err = app.Start()
+func (box *Sandbox) Restart() (err error) {
+    if box.hasDeployments() {
+        if err = box.Stop(); err == nil {
+            err = box.Start()
         }
         return err
     } else {
-        app.CreatePrivateEndpoints("")
-        return app.Control("restart", true, true)
+        box.CreatePrivateEndpoints("")
+        return box.Control("restart", true, true)
     }
 }
 
-func (app *Application) Control(action string, enable_action_hooks, process_templates bool) error {
-    plugins, err := app.GetPlugins()
+func (box *Sandbox) Control(action string, enable_action_hooks, process_templates bool) error {
+    plugins, err := box.Plugins()
     if err != nil {
         return err
     }
 
     if process_templates {
-        env := app.Environ()
+        env := box.Environ()
         for _, p := range plugins {
             if err := processTemplates(p.Path, env); err != nil {
                 return err
@@ -49,10 +49,10 @@ func (app *Application) Control(action string, enable_action_hooks, process_temp
         }
     }
 
-    eenv := makeExecEnv(app.Environ())
+    eenv := makeExecEnv(box.Environ())
 
     if enable_action_hooks {
-        if err := app.runActionHook("pre_" + action, eenv); err != nil {
+        if err := box.runActionHook("pre_" + action, eenv); err != nil {
             logrus.WithError(err).Errorf("Error exec 'pre_%s'", action)
         }
     }
@@ -64,7 +64,7 @@ func (app *Application) Control(action string, enable_action_hooks, process_temp
     }
 
     if enable_action_hooks {
-        if err := app.runActionHook("post_" + action, eenv); err != nil {
+        if err := box.runActionHook("post_" + action, eenv); err != nil {
             logrus.WithError(err).Errorf("Error exec 'post_%s'", action)
         }
     }
@@ -120,8 +120,8 @@ func runPluginAction(path string, env []string, action string, args ...string) e
     return RunCommand(cmd)
 }
 
-func (app *Application) runActionHook(action string, env []string) error {
-    hook := filepath.Join(app.RepoDir(), ".cloudway", "hooks", action)
+func (box *Sandbox) runActionHook(action string, env []string) error {
+    hook := filepath.Join(box.RepoDir(), ".cloudway", "hooks", action)
     if _, err := os.Stat(hook); err != nil {
         if os.IsNotExist(err) {
             return nil
@@ -134,7 +134,7 @@ func (app *Application) runActionHook(action string, env []string) error {
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
     cmd.Env    = env
-    cmd.Dir    = app.HomeDir()
+    cmd.Dir    = box.HomeDir()
     return RunCommand(cmd)
 }
 

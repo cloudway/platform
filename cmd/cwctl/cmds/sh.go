@@ -17,7 +17,7 @@ func (cli *CWCtl) CmdSh(args ...string) error {
 }
 
 func runShell(args[]string) {
-    env   := sandbox.NewApplication().Environ()
+    env   := sandbox.New().Environ()
     prog  := args[0]
     cmd   := []string{"/bin/bash"}
     cmd_i := []string{"/bin/bash", "--init-file", "/etc/cloudway/bashrc", "-i"}

@@ -16,10 +16,10 @@ func (cli *CWCtl) CmdInstall(args ...string) error {
     cmd.Require(mflag.Max, 2)
     cmd.ParseFlags(args, false)
 
-    app := sandbox.NewApplication()
+    box := sandbox.New()
     if cmd.NArg() == 1 {
-        return app.Install(cmd.Arg(0), "", os.Stdin)
+        return box.Install(cmd.Arg(0), "", os.Stdin)
     } else {
-        return app.Install(cmd.Arg(0), cmd.Arg(1), nil)
+        return box.Install(cmd.Arg(0), cmd.Arg(1), nil)
     }
 }

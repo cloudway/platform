@@ -33,7 +33,7 @@ func (cat Category) IsLibrary() bool {
     return cat == Library
 }
 
-type ApplicationInfo struct {
+type SandboxInfo struct {
     Env             map[string]string
     Endpoints       []*Endpoint
     Plugins         []*Plugin

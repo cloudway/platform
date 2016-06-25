@@ -10,8 +10,8 @@ import (
     "github.com/cloudway/platform/pkg/files"
 )
 
-func (app *Application) Deploy() error {
-    base := app.DeployDir()
+func (box *Sandbox) Deploy() error {
+    base := box.DeployDir()
 
     deployments, err := deployments(base)
     if err != nil {
@@ -23,14 +23,14 @@ func (app *Application) Deploy() error {
     defer removeDeployments(base, deployments)
 
     latest := latestDeployment(deployments)
-    if err = app.checkout(latest.Name()); err == nil {
-        err = app.deploy()
+    if err = box.checkout(latest.Name()); err == nil {
+        err = box.deploy()
     }
     return err
 }
 
-func (app *Application) hasDeployments() bool {
-    deployments, _ := deployments(app.DeployDir())
+func (box *Sandbox) hasDeployments() bool {
+    deployments, _ := deployments(box.DeployDir())
     return len(deployments) != 0
 }
 
@@ -71,8 +71,8 @@ func latestDeployment(deployments []os.FileInfo) os.FileInfo {
     return *last
 }
 
-func (app *Application) checkout(name string) (err error) {
-    f, err := os.Open(filepath.Join(app.DeployDir(), name))
+func (box *Sandbox) checkout(name string) (err error) {
+    f, err := os.Open(filepath.Join(box.DeployDir(), name))
     if err != nil {
         return err
     }
@@ -96,7 +96,7 @@ func (app *Application) checkout(name string) (err error) {
     }
 
     // move files into destination
-    err = files.MoveFiles(tmpdir, app.RepoDir())
+    err = files.MoveFiles(tmpdir, box.RepoDir())
     if err != nil && !os.IsNotExist(err) {
         return err
     }
@@ -104,10 +104,10 @@ func (app *Application) checkout(name string) (err error) {
     return nil
 }
 
-func (app *Application) deploy() (err error) {
-    primary, err := app.GetPrimaryPlugin()
+func (box *Sandbox) deploy() (err error) {
+    primary, err := box.PrimaryPlugin()
     if err == nil {
-        eenv := makeExecEnv(app.Environ())
+        eenv := makeExecEnv(box.Environ())
         err = runPluginAction(primary.Path, eenv, "build")
     }
     return err

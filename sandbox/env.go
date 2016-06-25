@@ -14,17 +14,17 @@ import (
 var validEnvKey = regexp.MustCompile(`^[A-Z_0-9]+(\.export)?$`)
 const exportSuffix = ".export"
 
-func (a *Application) Environ() map[string]string {
+func (box *Sandbox) Environ() map[string]string {
     var env = make(map[string]string)
 
     // load user environment variables
-    loadEnv(env, filepath.Join(a.RepoDir(), ".cloudway", "env"), false)
+    loadEnv(env, filepath.Join(box.RepoDir(), ".cloudway", "env"), false)
 
     // merge application environment variables
-    loadEnv(env, a.EnvDir(), false)
+    loadEnv(env, box.EnvDir(), false)
 
     // Merge plugin environemnt variables
-    loadPluginsEnv(env, a.HomeDir(), false);
+    loadPluginsEnv(env, box.HomeDir(), false);
 
     // Merge system environemnt variables
     for _, e := range os.Environ() {
@@ -43,14 +43,14 @@ func (a *Application) Environ() map[string]string {
     return env
 }
 
-func (a *Application) ExportedEnviron() map[string]string {
+func (box *Sandbox) ExportedEnviron() map[string]string {
     var env = make(map[string]string)
 
     // load exported application environment variables
-    loadEnv(env, a.EnvDir(), true)
+    loadEnv(env, box.EnvDir(), true)
 
     // Merge plugin exported environment variable
-    loadPluginsEnv(env, a.HomeDir(), true)
+    loadPluginsEnv(env, box.HomeDir(), true)
 
     return env
 }
@@ -134,8 +134,8 @@ func collectPathElements(env map[string]string, varname string) {
     }
 }
 
-func (a *Application) envfile(name string) string {
-    return filepath.Join(a.EnvDir(), name)
+func (box *Sandbox) envfile(name string) string {
+    return filepath.Join(box.EnvDir(), name)
 }
 
 func readEnvFile(filename string) (string, error) {
@@ -155,14 +155,14 @@ func writeEnvFile(filename, value string) error {
     return ioutil.WriteFile(filename, []byte(value), 0644)
 }
 
-func (a *Application) Getenv(name string) string {
+func (box *Sandbox) Getenv(name string) string {
     var (
         val string
         err error
         ok  bool
     )
     if val, ok = os.LookupEnv(name); !ok {
-        filename := a.envfile(name)
+        filename := box.envfile(name)
         if val, err = readEnvFile(filename); err != nil {
             val, _ = readEnvFile(filename + exportSuffix)
         }
@@ -170,21 +170,21 @@ func (a *Application) Getenv(name string) string {
     return val
 }
 
-func (a *Application) Setenv(name, value string, export bool) error {
-    filename := a.envfile(name)
+func (box *Sandbox) Setenv(name, value string, export bool) error {
+    filename := box.envfile(name)
     if export {
         filename += exportSuffix
     }
     return writeEnvFile(filename, value)
 }
 
-func (a *Application) Unsetenv(name string) {
-    filename := a.envfile(name)
+func (box *Sandbox) Unsetenv(name string) {
+    filename := box.envfile(name)
     os.Remove(filename)
     os.Remove(filename + exportSuffix)
 }
 
-func (a *Application) SetPluginEnv(p *manifest.Plugin, name, value string, export bool) error {
+func (box *Sandbox) SetPluginEnv(p *manifest.Plugin, name, value string, export bool) error {
     envdir := filepath.Join(p.Path, "env")
     if err := os.MkdirAll(envdir, 0755); err != nil {
         return err
@@ -196,7 +196,7 @@ func (a *Application) SetPluginEnv(p *manifest.Plugin, name, value string, expor
     return writeEnvFile(filename, value)
 }
 
-func (a *Application) UnsetPluginEnv(p *manifest.Plugin, name string) {
+func (box *Sandbox) UnsetPluginEnv(p *manifest.Plugin, name string) {
     filename := filepath.Join(p.Path, "env", name)
     os.Remove(filename)
     os.Remove(filename + exportSuffix)

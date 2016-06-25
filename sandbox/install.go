@@ -14,7 +14,7 @@ import (
 
 // Install plugin in the application. The plugin directory should already
 // been populated from broker.
-func (app *Application) Install(name string, source string, input io.Reader) error {
+func (box *Sandbox) Install(name string, source string, input io.Reader) error {
     if os.Getuid() != 0 {
         return os.ErrPermission
     }
@@ -22,7 +22,7 @@ func (app *Application) Install(name string, source string, input io.Reader) err
     var err error
 
     // create plugin directory
-    target := filepath.Join(app.HomeDir(), name)
+    target := filepath.Join(box.HomeDir(), name)
     if _, err = os.Stat(target); err == nil {
         return fmt.Errorf("Plugin already installed: %s", name)
     }
@@ -37,7 +37,7 @@ func (app *Application) Install(name string, source string, input io.Reader) err
     }
 
     if err == nil {
-        err = app.installPlugin(target)
+        err = box.installPlugin(target)
     }
 
     if err != nil {
@@ -47,7 +47,7 @@ func (app *Application) Install(name string, source string, input io.Reader) err
     return err
 }
 
-func (app *Application) installPlugin(target string) error {
+func (box *Sandbox) installPlugin(target string) error {
     // load plugin manifest from target directory
     meta, err := manifest.Load(target)
     if err != nil {
@@ -56,18 +56,18 @@ func (app *Application) installPlugin(target string) error {
     name := meta.Name
 
     // add environemnt variables
-    app.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_DIR", target, false)
-    app.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_VERSION", meta.Version, false)
+    box.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_DIR", target, false)
+    box.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_VERSION", meta.Version, false)
     if meta.IsFramework() {
-        app.Setenv("CLOUDWAY_FRAMEWORK", name, false)
-        app.Setenv("CLOUDWAY_FRAMEWORK_DIR", target, false)
+        box.Setenv("CLOUDWAY_FRAMEWORK", name, false)
+        box.Setenv("CLOUDWAY_FRAMEWORK_DIR", target, false)
     }
 
     // create log dir
-    logdir := filepath.Join(app.LogDir(), name)
+    logdir := filepath.Join(box.LogDir(), name)
     os.MkdirAll(logdir, 0750)
-    os.Chown(logdir, app.uid, app.gid)
-    app.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_LOG_DIR", logdir, false)
+    os.Chown(logdir, box.uid, box.gid)
+    box.Setenv("CLOUDWAY_" + strings.ToUpper(name) + "_LOG_DIR", logdir, false)
 
     // run install script for non-framework plugin
     if meta.IsLibrary() {
@@ -78,7 +78,7 @@ func (app *Application) installPlugin(target string) error {
     }
 
     // run setup script to setup the plugin
-    if err = runPluginAction(target, makeExecEnv(app.Environ()), "setup"); err != nil {
+    if err = runPluginAction(target, makeExecEnv(box.Environ()), "setup"); err != nil {
         logrus.WithError(err).Error("run setup script failed")
         return err
     }
@@ -88,8 +88,8 @@ func (app *Application) installPlugin(target string) error {
     os.Remove(filepath.Join(target, "bin", "setup"))
 
     // change owner of plugin directory
-    chownR(target, app.uid, app.gid)
-    chownR(filepath.Join(target, "manifest"), 0, app.gid)
+    chownR(target, box.uid, box.gid)
+    chownR(filepath.Join(target, "manifest"), 0, box.gid)
 
     return nil
 }

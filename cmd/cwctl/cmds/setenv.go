@@ -16,6 +16,5 @@ func (cli *CWCtl) CmdSetenv(args ...string) error {
     cmd.Require(mflag.Exact, 2)
     cmd.ParseFlags(args, false)
 
-    app := sandbox.NewApplication()
-    return app.Setenv(cmd.Arg(0), cmd.Arg(1), *export)
+    return sandbox.New().Setenv(cmd.Arg(0), cmd.Arg(1), *export)
 }

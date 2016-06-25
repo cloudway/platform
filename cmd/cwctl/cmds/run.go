@@ -16,14 +16,14 @@ func (cli *CWCtl) CmdRun(args ...string) error {
     sigchan := make(chan os.Signal, 1)
     signal.Notify(sigchan, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 
-    app := sandbox.NewApplication()
+    box := sandbox.New()
 
     for {
         sig := <-sigchan
         logrus.Infof("Received signal: %s\n", sig)
         switch sig {
         case syscall.SIGHUP:
-            err := app.Restart()
+            err := box.Restart()
             if err == nil {
                 logrus.Info("Application restarted")
             } else {
@@ -31,7 +31,7 @@ func (cli *CWCtl) CmdRun(args ...string) error {
             }
 
         default:
-            err := app.Stop()
+            err := box.Stop()
             if err == nil {
                 logrus.Info("Application stopped")
                 os.Exit(0)

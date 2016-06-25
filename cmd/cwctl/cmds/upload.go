@@ -8,16 +8,16 @@ import (
 )
 
 func (cli *CWCtl) CmdUpload(args ...string) error {
-    app := sandbox.NewApplication()
+    box := sandbox.New()
 
     // Save upload file in the deployment directory
-    err := saveUploadFile(app.DeployDir(), os.Stdin)
+    err := saveUploadFile(box.DeployDir(), os.Stdin)
     if err != nil {
         return err
     }
 
     // Restart the application to make deployment take effect
-    return app.Restart()
+    return box.Restart()
 }
 
 func saveUploadFile(dir string, r io.Reader) (err error) {
