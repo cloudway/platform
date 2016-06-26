@@ -107,7 +107,7 @@ func (cli *CWMan) CmdListKeys(args ...string) error {
     }
 
     for _, key := range keys {
-        fmt.Println(key)
+        fmt.Println(key.Text)
     }
     return nil
 }

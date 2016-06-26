@@ -14,6 +14,7 @@ type BasicUser struct {
     Name         string
     Namespace    string
     Password     []byte
+    Inactive     bool
     Applications map[string]*Application
 }
 

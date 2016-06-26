@@ -23,5 +23,32 @@ func (br *UserBroker) CreateNamespace(namespace string) (err error) {
     if user.Namespace != "" {
         br.SCM.RemoveNamespace(user.Namespace)
     }
+
+    user.Namespace = namespace
     return br.SCM.CreateNamespace(namespace)
+}
+
+func (br *UserBroker) RemoveNamespace(force bool) (err error) {
+    user := br.User.Basic()
+
+    if user.Namespace == "" {
+        return nil
+    }
+
+    if !force && len(user.Applications) != 0 {
+        return NamespaceNotEmptyError(user.Namespace)
+    }
+
+    err = br.Users.SetNamespace(user.Name, "")
+    if err != nil {
+        return err
+    }
+
+    err = br.SCM.RemoveNamespace(user.Namespace)
+    if err != nil {
+        return err
+    }
+
+    user.Namespace = ""
+    return nil
 }

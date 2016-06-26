@@ -245,15 +245,16 @@ func (cli *bitbucketClient) RemoveKey(namespace string, key string) error {
     return nil
 }
 
-func (cli *bitbucketClient) ListKeys(namespace string) ([]string, error) {
+func (cli *bitbucketClient) ListKeys(namespace string) ([]scm.SSHKey, error) {
     keys, err := cli.listKeys(context.Background(), namespace)
     if err != nil {
         return nil, err
     }
 
-    result := make([]string, len(keys))
+    result := make([]scm.SSHKey, len(keys))
     for i, k := range keys {
-        result[i] = k.Key.Text
+        result[i].Label = k.Key.Label
+        result[i].Text = k.Key.Text
     }
     return result, nil
 }
@@ -276,7 +277,6 @@ func (cli *bitbucketClient) listKeys(ctx context.Context, namespace string) ([]S
         if err != nil {
             return keys, err
         }
-
         keys = append(keys, page.Values...)
 
         if page.IsLastPage {

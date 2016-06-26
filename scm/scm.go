@@ -41,7 +41,12 @@ type SCM interface {
     RemoveKey(namespace string, key string) error
 
     // List all SSH keys in the given namespace.
-    ListKeys(namespace string) ([]string, error)
+    ListKeys(namespace string) ([]SSHKey, error)
+}
+
+type SSHKey struct {
+    Label   string
+    Text    string
 }
 
 var New = func() (SCM, error) {

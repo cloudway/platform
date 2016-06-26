@@ -81,18 +81,21 @@ func (db *mongodb) Create(user userdb.User) error {
 }
 
 func (db *mongodb) SetNamespace(username, namespace string) error {
-    var user userdb.BasicUser
-    err := db.users.Find(bson.M{"namespace": namespace}).One(&user)
-    if err != nil && err != mgo.ErrNotFound {
-        return err
-    }
-    if err == nil {
-        if user.Name == username {
-            return nil
-        } else {
-            return userdb.DuplicateNamespaceError(namespace)
+    if namespace != "" {
+        var user userdb.BasicUser
+        err := db.users.Find(bson.M{"namespace": namespace}).One(&user)
+        if err != nil && err != mgo.ErrNotFound {
+            return err
+        }
+        if err == nil {
+            if user.Name == username {
+                return nil
+            } else {
+                return userdb.DuplicateNamespaceError(namespace)
+            }
         }
     }
+
     return db.users.Update(
         bson.M{"name": username},
         bson.M{"$set": bson.M{"namespace": namespace}})

@@ -32,8 +32,9 @@ type RepoPage struct {
 
 type SSHKey struct {
     Key struct {
-        Id   int      `json:"id,omitempty"`
-        Text string   `json:"text"`
+        Id    int       `json:"id"`
+        Text  string    `json:"text"`
+        Label string    `json:"label"`
     } `json:"key"`
     Permission string `json:"permission"`
 }

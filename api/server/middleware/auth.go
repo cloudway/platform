@@ -21,7 +21,7 @@ func NewAuthMiddleware(broker *broker.Broker, contextRoot string) authMiddleware
 
 func (m authMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc {
     return func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-        if r.Method == "GET" &&  m.noAuthPattern.MatchString(r.URL.Path) {
+        if m.noAuthPattern.MatchString(r.URL.Path) {
             return handler(ctx, w, r, vars)
         }
 

@@ -68,6 +68,9 @@ type DuplicateNamespaceError string
 // The UserNotFoundError indicates that a user not found in the database.
 type UserNotFoundError string
 
+// The InvalidUserError indicates that a user is not valid to login.
+type InactiveUserError string
+
 func (e DuplicateUserError) Error() string {
     return fmt.Sprintf("User already exists: %s", string(e))
 }
@@ -90,6 +93,19 @@ func (e UserNotFoundError) Error() string {
 
 func (e UserNotFoundError) HTTPErrorStatusCode() int {
     return http.StatusNotFound
+}
+
+func IsUserNotFound(err error) bool {
+    _, ok := err.(UserNotFoundError)
+    return ok
+}
+
+func (e InactiveUserError) Error() string {
+    return fmt.Sprintf("You cannot login using this identity: %s", string(e))
+}
+
+func (e InactiveUserError) HTTPErrorStatusCode() int {
+    return http.StatusUnauthorized
 }
 
 // The UserDatabase type is the central point of user management.
@@ -163,6 +179,10 @@ func (db *UserDatabase) Authenticate(name string, password string) (*BasicUser, 
     var user BasicUser
     if err := db.plugin.Find(name, &user); err != nil {
         return nil, err
+    }
+
+    if user.Inactive {
+        return nil, InactiveUserError(name)
     }
 
     err := bcrypt.CompareHashAndPassword(user.Password, []byte(password))
