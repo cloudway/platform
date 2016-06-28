@@ -17,8 +17,8 @@ const (
     APP_NAMESPACE_KEY   = "com.cloudway.app.namespace"
     APP_HOME_KEY        = "com.cloudway.app.home"
     CATEGORY_KEY        = "com.cloudway.container.category"
+    PLUGIN_KEY          = "com.cloudway.container.plugin"
     SERVICE_NAME_KEY    = "com.cloudway.service.name"
-    SERVICE_PLUGIN_KEY  = "com.cloudway.service.plugin"
     SERVICE_DEPENDS_KEY = "com.cloudway.service.depends"
 )
 
@@ -159,12 +159,12 @@ func (c *Container) Category() manifest.Category {
      return manifest.Category(c.Config.Labels[CATEGORY_KEY])
 }
 
-func (c *Container) ServiceName() string {
-    return c.Config.Labels[SERVICE_NAME_KEY]
+func (c *Container) PluginTag() string {
+    return c.Config.Labels[PLUGIN_KEY]
 }
 
-func (c *Container) ServicePlugin() string {
-    return c.Config.Labels[SERVICE_PLUGIN_KEY]
+func (c *Container) ServiceName() string {
+    return c.Config.Labels[SERVICE_NAME_KEY]
 }
 
 func (c *Container) DependsOn() []string {

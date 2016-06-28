@@ -5,12 +5,14 @@ import (
     "time"
     "io"
     "os"
+    "regexp"
     "io/ioutil"
     "net/http"
     "net/smtp"
     "path/filepath"
     "html/template"
-    "regexp"
+    "crypto/md5"
+    "encoding/hex"
 
     "github.com/cloudway/platform/broker"
     "github.com/cloudway/platform/container"
@@ -23,14 +25,12 @@ import (
     "gopkg.in/authboss.v0"
     _ "gopkg.in/authboss.v0/auth"
     _ "gopkg.in/authboss.v0/register"
-    _ "gopkg.in/authboss.v0/lock"
     _ "gopkg.in/authboss.v0/confirm"
     _ "gopkg.in/authboss.v0/recover"
     //_ "gopkg.in/authboss.v0/remember"
 
     "github.com/Sirupsen/logrus"
     "github.com/aarondl/tpl"
-    "github.com/gorilla/schema"
     "github.com/justinas/nosurf"
     "github.com/oxtoacart/bpool"
 )
@@ -39,14 +39,20 @@ var funcs = template.FuncMap{
     "formatDate": func(date time.Time) string {
         return date.Format("2006/01/02 03:04pm")
     },
-    "yield": func() string { return "" },
+    "yield": func() string {
+        return ""
+    },
+    "gravatar": func(email string, size int) string {
+        hash := md5.Sum([]byte(email))
+        id   := hex.EncodeToString(hash[:])
+        return fmt.Sprintf("https://cn.gravatar.com/avatar/%s?s=%d&d=mm&r=g", id, size)
+    },
 }
 
 type Console struct {
                 *broker.Broker
     ab          *authboss.Authboss
     templates   tpl.Templates
-    schemaDec   *schema.Decoder
 }
 
 func NewConsole(br *broker.Broker) (con *Console, err error) {
@@ -59,9 +65,6 @@ func NewConsole(br *broker.Broker) (con *Console, err error) {
 
     viewRoot := filepath.Join(conf.RootDir, "views", "console")
     con.templates = tpl.Must(tpl.Load(viewRoot, filepath.Join(viewRoot, "partials"), "layout.html.tpl", funcs))
-
-    con.schemaDec = schema.NewDecoder()
-    con.schemaDec.IgnoreUnknownKeys(true)
 
     return con, nil
 }
@@ -77,6 +80,7 @@ func (con *Console) InitRoutes(s *server.Server) {
     posts.HandleFunc("/password", con.changePassword)
 
     con.initSettingsRoutes(gets, posts)
+    con.initApplicationsRoutes(gets, posts)
 }
 
 // General Email Regex (RFC 5322 Official Standard)
@@ -124,7 +128,7 @@ func (con *Console) setupAuthboss(br *broker.Broker) error {
         },
     }
 
-    modules := []string{ "auth", "register", "lock" }
+    modules := []string{ "auth", "register" }
     if ab.Mailer = initMailer(); ab.Mailer != nil {
         modules = append(modules, "confirm", "recover")
     }
@@ -180,15 +184,9 @@ func (con *Console) layoutData(w http.ResponseWriter, r *http.Request) authboss.
 }
 
 func (con *Console) layoutUserData(w http.ResponseWriter, r *http.Request, user *userdb.BasicUser) authboss.HTMLData {
-    var username string
-    if user != nil {
-        username = user.Name
-    }
-
     return authboss.HTMLData{
         "loggedin":                 user != nil,
-        "current_user":             user,
-        "current_user_name":        username,
+        "user":                     user,
         authboss.FlashSuccessKey:   con.ab.FlashSuccess(w, r),
         authboss.FlashErrorKey:     con.ab.FlashError(w, r),
     }
@@ -244,8 +242,12 @@ func (con *Console) badRequest(w http.ResponseWriter, r *http.Request, err error
 
 func (con *Console) index(w http.ResponseWriter, r *http.Request) {
     data := con.layoutData(w, r)
-    if data["loggedin"].(bool) && data["current_user"].(*userdb.BasicUser).Namespace == "" {
-        http.Redirect(w, r, "/settings", http.StatusFound)
+    if data["loggedin"].(bool) {
+        if data["user"].(*userdb.BasicUser).Namespace == "" {
+            http.Redirect(w, r, "/settings", http.StatusFound)
+        } else {
+            http.Redirect(w, r, "/applications", http.StatusFound)
+        }
     } else {
         con.mustRender(w, r, "index", data)
     }

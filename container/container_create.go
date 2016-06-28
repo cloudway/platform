@@ -32,7 +32,7 @@ type CreateOptions struct {
     Name              string
     Namespace         string
     ServiceName       string
-    PluginPath        string
+    Plugin            *manifest.Plugin
     Home              string
     User              string
     Capacity          string
@@ -44,7 +44,6 @@ type CreateOptions struct {
 type createConfig struct {
     *CreateOptions
     Env               map[string]string // duplicate env map to prevent destruct original map
-    PluginName        string
     PluginInstallPath string
     Category          manifest.Category
     BaseImage         string
@@ -63,10 +62,7 @@ func (cli DockerClient) Create(scm SCM, opts CreateOptions) ([]*Container, error
         cfg.Env[k] = v
     }
 
-    meta, err := archive.ReadManifest(cfg.PluginPath)
-    if err != nil {
-        return nil, err
-    }
+    meta := opts.Plugin
 
     if cfg.User == "" {
         if meta.User != "" {
@@ -82,8 +78,7 @@ func (cli DockerClient) Create(scm SCM, opts CreateOptions) ([]*Container, error
     }
 
     cfg.Category   = meta.Category
-    cfg.PluginName = meta.Name
-    cfg.PluginInstallPath = filepath.Base(cfg.PluginPath)
+    cfg.PluginInstallPath = meta.Name + "-" + meta.Version
     cfg.BaseImage  = meta.BaseImage
     cfg.DependsOn  = meta.DependsOn
     cfg.Debug      = DEBUG
@@ -102,7 +97,7 @@ func (cli DockerClient) Create(scm SCM, opts CreateOptions) ([]*Container, error
     case manifest.Service:
         return createServiceContainer(cli, cfg)
     default:
-        return nil, fmt.Errorf("%s is not a valid plugin", cfg.PluginPath)
+        return nil, fmt.Errorf("%s:%s is not a valid plugin", meta.Name, meta.Version)
     }
 }
 
@@ -173,7 +168,7 @@ func populateRepo(scm SCM, cfg *createConfig) error {
 }
 
 func populateFromTemplate(scm SCM, cfg *createConfig) error {
-    tpl := filepath.Join(cfg.PluginPath, "template")
+    tpl := filepath.Join(cfg.Plugin.Path, "template")
     if fi, err := os.Stat(tpl); err != nil || !fi.IsDir() {
         return nil
     }
@@ -202,7 +197,7 @@ func populateFromTemplate(scm SCM, cfg *createConfig) error {
 
 func createServiceContainer(cli DockerClient, cfg *createConfig) ([]*Container, error) {
     if cfg.ServiceName == "" {
-        cfg.ServiceName = cfg.PluginName
+        cfg.ServiceName = cfg.Plugin.Name
     }
 
     name, namespace, service := cfg.Name, cfg.Namespace, cfg.ServiceName
@@ -258,7 +253,7 @@ func buildImage(cli DockerClient, t *template.Template, cfg *createConfig) (imag
     }
 
     // add plugin files
-    if err = addPluginFiles(tw, cfg.PluginInstallPath, cfg.PluginPath); err != nil {
+    if err = addPluginFiles(tw, cfg.PluginInstallPath, cfg.Plugin.Path); err != nil {
         return
     }
 
@@ -310,7 +305,7 @@ func readBuildImageId(in io.Reader) (id string, err error) {
 }
 
 func createDockerfile(t *template.Template, cfg *createConfig) []byte{
-    b, err := archive.ReadFile(cfg.PluginPath, "bin/install")
+    b, err := archive.ReadFile(cfg.Plugin.Path, "bin/install")
     if err == nil {
         script := strings.Replace(string(b), "\n", "\\n\\\n", -1)
         script  = strings.Replace(script, "'", "'\\''", -1)
@@ -346,6 +341,7 @@ func createContainer(cli DockerClient, imageId string, cfg *createConfig) (*Cont
         Image: imageId,
         Labels: map[string]string {
             CATEGORY_KEY:      string(cfg.Category),
+            PLUGIN_KEY:        cfg.Plugin.Name + ":" + cfg.Plugin.Version,
             APP_NAME_KEY:      cfg.Name,
             APP_NAMESPACE_KEY: cfg.Namespace,
             APP_HOME_KEY:      cfg.Home,
@@ -357,7 +353,6 @@ func createContainer(cli DockerClient, imageId string, cfg *createConfig) (*Cont
     if cfg.Category.IsService() {
         config.Hostname = cfg.Hostname
         config.Labels[SERVICE_NAME_KEY] = cfg.ServiceName
-        config.Labels[SERVICE_PLUGIN_KEY] = cfg.PluginName
     }
 
     if cfg.DependsOn != nil {

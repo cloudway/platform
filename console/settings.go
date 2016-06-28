@@ -11,10 +11,10 @@ import (
 func (con *Console) initSettingsRoutes(gets *mux.Router, posts *mux.Router) {
     gets.HandleFunc("/settings", con.settings)
     posts.HandleFunc("/settings/namespace", con.createNamespace)
-    gets.HandleFunc("/settings/namespace/delete", con.removeNamespace)
+    posts.HandleFunc("/settings/namespace/delete", con.removeNamespace)
     gets.HandleFunc("/settings/sshkey", con.addkey)
     posts.HandleFunc("/settings/sshkey", con.savekey)
-    gets.HandleFunc("/settings/sshkey/delete", con.delkey)
+    posts.HandleFunc("/settings/sshkey/delete", con.delkey)
 }
 
 func (con *Console) settings(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +43,6 @@ func (con *Console) createNamespace(w http.ResponseWriter, r *http.Request) {
     if user == nil {
         return
     }
-    data := con.layoutUserData(w, r, user)
 
     err := r.ParseForm()
     if err == nil {
@@ -56,6 +55,7 @@ func (con *Console) createNamespace(w http.ResponseWriter, r *http.Request) {
     }
 
     if err != nil {
+        data := con.layoutUserData(w, r, user)
         data.MergeKV("error", err)
         con.mustRender(w, r, "settings", data)
         return
@@ -91,7 +91,6 @@ func (con *Console) savekey(w http.ResponseWriter, r *http.Request) {
     if user == nil {
         return
     }
-    data := con.layoutUserData(w, r, user)
 
     err := r.ParseForm()
     if err == nil {
@@ -100,6 +99,7 @@ func (con *Console) savekey(w http.ResponseWriter, r *http.Request) {
     }
 
     if err != nil {
+        data := con.layoutUserData(w, r, user)
         data.MergeKV("error", err)
         con.mustRender(w, r, "addkey", data)
         return

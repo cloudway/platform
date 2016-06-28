@@ -1,12 +1,15 @@
 package broker
 
 import (
+    "fmt"
+    "time"
     "github.com/cloudway/platform/container"
     "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/pkg/errors"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
-func (br *UserBroker) CreateApplication(opts container.CreateOptions, plugins []string) (containers []*container.Container, err error) {
+func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []string) (containers []*container.Container, err error) {
     var (
         user = br.User.Basic()
         apps = user.Applications
@@ -18,9 +21,33 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, plugins []
         return nil, ApplicationExistError{opts.Name, user.Namespace}
     }
 
-    // cleanup on failure
-    defer func() {
+    // check plugins
+    plugins := make([]*manifest.Plugin, len(tags))
+    var framework *manifest.Plugin
+    for i, tag := range tags {
+        p, err := br.Hub.GetPluginInfo(tag)
         if err != nil {
+            return nil, err
+        }
+        if p.IsFramework() {
+            if framework != nil {
+                return nil, fmt.Errorf("Multiple framework plugins specified: %s and %s", p.Name, framework.Name)
+            }
+            framework = p
+        } else if (!p.IsService()) {
+            return nil, fmt.Errorf("'%s' must be a framework or service plugin", tag)
+        }
+        plugins[i] = p
+        tags[i] = p.Name + ":" + p.Version
+    }
+    if framework == nil {
+        return nil, fmt.Errorf("No framework plugin specified")
+    }
+
+    // cleanup on failure
+    var success bool
+    defer func() {
+        if !success {
             for _, c := range containers {
                 c.Destroy()
             }
@@ -63,30 +90,55 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, plugins []
     }
 
     // add application to the user database
-    apps[opts.Name] = &userdb.Application{}
+    apps[opts.Name] = &userdb.Application{CreatedAt: time.Now(), Plugins: tags}
     err = br.Users.Update(user.Name, userdb.Args{"applications": apps})
+    if err != nil {
+        return
+    }
+
+    success = true
     return
 }
 
-func (br *UserBroker) CreateServices(opts container.CreateOptions, plugins []string) (containers []*container.Container, err error) {
+func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string) (containers []*container.Container, err error) {
     user := br.User.Basic()
+    app  := user.Applications[opts.Name]
 
-    if user.Applications[opts.Name] == nil {
+    if app == nil {
         return nil, ApplicationNotFoundError(opts.Name)
     }
 
+    // check service plugins
+    plugins := make([]*manifest.Plugin, len(tags))
+    for i, tag := range tags {
+        p, err := br.Hub.GetPluginInfo(tag)
+        if err != nil {
+            return nil, err
+        }
+        if !p.IsService() {
+            return nil, fmt.Errorf("'%s' is not a service plugin", tag)
+        }
+        plugins[i] = p
+        tags[i] = p.Name + ":" + p.Version
+    }
+
     opts.Namespace = user.Namespace
-    return br.createContainers(opts, plugins)
+    containers, err = br.createContainers(opts, plugins)
+    if err != nil {
+        return nil, err
+    }
+
+    app.Plugins = append(app.Plugins, tags...)
+    err = br.Users.Update(user.Name, userdb.Args{"applications": user.Applications})
+    return containers, err
 }
 
-func (br *UserBroker) createContainers(opts container.CreateOptions, plugins []string) (containers []*container.Container, err error) {
+func (br *UserBroker) createContainers(opts container.CreateOptions, plugins []*manifest.Plugin) (containers []*container.Container, err error) {
     for _, plugin := range plugins {
+        opts.Plugin = plugin
         var cs []*container.Container
-        opts.PluginPath, err = br.Hub.GetPluginPath(plugin)
-        if err == nil {
-            cs, err = br.Create(br.SCM, opts)
-            containers = append(containers, cs...)
-        }
+        cs, err = br.Create(br.SCM, opts)
+        containers = append(containers, cs...)
         if err != nil {
             return
         }
@@ -127,20 +179,32 @@ func (br *UserBroker) RemoveApplication(name string) (err error) {
 
 func (br *UserBroker) RemoveService(name, service string) (err error) {
     user := br.User.Basic()
+    app  := user.Applications[name]
 
-    if user.Applications[name] == nil {
+    if app == nil {
         return ApplicationNotFoundError(name)
     }
 
     var errors errors.Errors
     var containers []*container.Container
+
     containers, err = br.FindService(name, user.Namespace, service)
     if err != nil {
-        errors.Add(err)
-    } else {
-        for _, c := range containers {
-            errors.Add(c.Destroy())
+        return err
+    }
+
+    for _, c := range containers {
+        errors.Add(c.Destroy())
+
+        tag := c.PluginTag()
+        for i := range app.Plugins {
+            if tag == app.Plugins[i] {
+                app.Plugins = append(app.Plugins[:i], app.Plugins[i+1:]...)
+                break
+            }
         }
     }
+
+    errors.Add(br.Users.Update(user.Name, userdb.Args{"applications": user.Applications}))
     return errors.Err()
 }

@@ -1,5 +1,7 @@
 package userdb
 
+import "time"
+
 // The User interface encapsulates a cloud user. The concret User type must
 // embedded a BasicUser struct that contains core information that used by
 // cloudway controller. Extra fields may be maintained by concret User type
@@ -19,7 +21,9 @@ type BasicUser struct {
 }
 
 type Application struct {
-    Hosts []string `bson:",omitempty"`
+    CreatedAt   time.Time
+    Plugins     []string
+    Hosts       []string `bson:",omitempty"`
 }
 
 func (user *BasicUser) Basic() *BasicUser {

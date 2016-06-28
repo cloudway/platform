@@ -1,5 +1,7 @@
 package container
 
+import "strings"
+
 // Resolve service dependencies.
 func ResolveServiceDependencies(cs []*Container) error {
     nodes := make([]*node, len(cs))
@@ -20,7 +22,7 @@ func ResolveServiceDependencies(cs []*Container) error {
             for _, dep := range cs[i].DependsOn() {
                 for j := range cs {
                     // FIXME: enhancement dependent matching
-                    if dep == cs[j].ServicePlugin() {
+                    if strings.HasPrefix(cs[j].PluginTag(), dep+":") {
                         nodes[i].dependsOn(nodes[j])
                     }
                 }
