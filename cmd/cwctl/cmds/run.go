@@ -9,8 +9,8 @@ import (
 )
 
 func (cli *CWCtl) CmdRun(args ...string) error {
-    // reaping zombie processes
-    signal.Ignore(syscall.SIGCHLD)
+    // reap child processes
+    go sandbox.Reap()
 
     // handle termination signals
     sigchan := make(chan os.Signal, 1)
@@ -20,7 +20,7 @@ func (cli *CWCtl) CmdRun(args ...string) error {
 
     for {
         sig := <-sigchan
-        logrus.Infof("Received signal: %s\n", sig)
+        logrus.Infof("Received signal: %s", sig)
         switch sig {
         case syscall.SIGHUP:
             err := box.Restart()

@@ -3,7 +3,6 @@ package sandbox
 import (
     "os"
     "os/exec"
-    "syscall"
     "path/filepath"
     "regexp"
     "text/template"
@@ -160,15 +159,6 @@ func (box *Sandbox) runActionHook(action string, env []string) error {
     cmd.Env    = env
     cmd.Dir    = box.HomeDir()
     return RunCommand(cmd)
-}
-
-func RunCommand(cmd *exec.Cmd) error {
-    err := cmd.Run()
-    if syserr, ok := err.(*os.SyscallError); ok && syserr.Err == syscall.ECHILD {
-        return nil // ignore if the child process was reaped
-    } else {
-        return err
-    }
 }
 
 func makeExecEnv(env map[string]string) []string {
