@@ -86,7 +86,7 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 
 func (hub *PluginHub) getBaseDir(namespace, name string) string {
     if namespace == "" {
-        return filepath.Join(hub.installDir, ".cloudway", name)
+        return filepath.Join(hub.installDir, "_", name)
     } else {
         return filepath.Join(hub.installDir, namespace, name)
     }

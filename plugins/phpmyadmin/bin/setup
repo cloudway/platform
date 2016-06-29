@@ -1,3 +1,0 @@
-#!/bin/sh -e
-
-cp $CLOUDWAY_PHPMYADMIN_DIR/conf/config.inc.php /var/www/html
