@@ -3,10 +3,12 @@ package container
 import (
     "bytes"
     "strings"
+    "strconv"
     "io/ioutil"
     "archive/tar"
     "golang.org/x/net/context"
     "github.com/docker/engine-api/types"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
 // Adds the variable to the environment with the value, if name does not
@@ -50,4 +52,16 @@ func (c *Container) Getenv(name string) (string, error) {
         return "", err
     }
     return strings.TrimRight(string(content), "\r\n"), nil
+}
+
+func (c *Container) ActiveState() manifest.ActiveState {
+    str, err := c.Getenv(".state")
+    if err != nil {
+        return manifest.StateUnknown
+    }
+    i, err := strconv.Atoi(str)
+    if err != nil {
+        return manifest.StateUnknown
+    }
+    return manifest.ActiveState(i)
 }

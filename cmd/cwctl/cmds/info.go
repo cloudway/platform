@@ -37,6 +37,7 @@ func (cli *CWCtl) CmdInfo(args ...string) error {
         Env:        env,
         Endpoints:  endpoints,
         Plugins:    plugins,
+        State:      box.ActiveState(),
     }
 
     return json.NewEncoder(os.Stdout).Encode(&info)

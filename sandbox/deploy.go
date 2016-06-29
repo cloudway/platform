@@ -8,6 +8,7 @@ import (
     "compress/gzip"
     "github.com/cloudway/platform/pkg/archive"
     "github.com/cloudway/platform/pkg/files"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
 func (box *Sandbox) Deploy() error {
@@ -106,9 +107,17 @@ func (box *Sandbox) checkout(name string) (err error) {
 
 func (box *Sandbox) deploy() (err error) {
     primary, err := box.PrimaryPlugin()
-    if err == nil {
-        eenv := makeExecEnv(box.Environ())
-        err = runPluginAction(primary.Path, eenv, "build")
+    if err != nil {
+        return err
+    }
+
+    state := box.ActiveState()
+    box.SetActiveState(manifest.StateBuilding)
+    err = runPluginAction(primary.Path, makeExecEnv(box.Environ()), "build")
+    if err != nil {
+        box.SetActiveState(manifest.StateFailed)
+    } else {
+        box.SetActiveState(state)
     }
     return err
 }

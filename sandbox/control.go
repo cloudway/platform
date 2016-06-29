@@ -8,30 +8,54 @@ import (
     "regexp"
     "text/template"
     "github.com/Sirupsen/logrus"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
 func (box *Sandbox) Start() error {
     box.CreatePrivateEndpoints("")
+
     if err := box.Deploy(); err != nil {
         return err
     }
-    return box.Control("start", true, true)
+
+    box.SetActiveState(manifest.StateStarting)
+    err := box.Control("start", true, true)
+    if err != nil {
+        box.SetActiveState(manifest.StateFailed)
+    } else {
+        box.SetActiveState(manifest.StateRunning)
+    }
+    return err
 }
 
 func (box *Sandbox) Stop() error {
-    return box.Control("stop", true, false)
+    box.SetActiveState(manifest.StateStopping)
+    err := box.Control("stop", true, false)
+    if err != nil {
+        box.SetActiveState(manifest.StateFailed)
+    } else {
+        box.SetActiveState(manifest.StateStopped)
+    }
+    return err
 }
 
 func (box *Sandbox) Restart() (err error) {
     if box.hasDeployments() {
-        if err = box.Stop(); err == nil {
+        err = box.Stop();
+        if err == nil {
             err = box.Start()
         }
-        return err
     } else {
         box.CreatePrivateEndpoints("")
-        return box.Control("restart", true, true)
+        box.SetActiveState(manifest.StateRestarting)
+        err = box.Control("restart", true, true)
+        if err != nil {
+            box.SetActiveState(manifest.StateFailed)
+        } else {
+            box.SetActiveState(manifest.StateRunning)
+        }
     }
+    return err
 }
 
 func (box *Sandbox) Control(action string, enable_action_hooks, process_templates bool) error {

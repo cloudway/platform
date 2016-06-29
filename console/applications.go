@@ -115,8 +115,9 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    err = startContainers(cs)
+    err = startContainers(cs, (*container.Container).Start)
     if err != nil {
+        logrus.Error(err)
         con.error(w, r, http.StatusInternalServerError, err.Error(), "/applications")
         return
     }
@@ -171,8 +172,9 @@ func (con *Console) createServices(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    err = startContainers(cs)
+    err = startContainers(cs, (*container.Container).Start)
     if err != nil {
+        logrus.Error(err)
         con.error(w, r, http.StatusInternalServerError, err.Error(), "/applications")
         return
     }
@@ -197,19 +199,31 @@ func (con *Console) parseServiceCreateOptions(r *http.Request) (opts container.C
     return
 }
 
-func startContainers(containers []*container.Container) error {
+func startContainers(containers []*container.Container, fn func(*container.Container) error) error {
     err := container.ResolveServiceDependencies(containers)
     if err != nil {
         return err
     }
 
-    for _, c := range containers {
-        if err = c.Start(); err != nil {
-            return err
+    errChan := make(chan error, 1)
+    go func() {
+        for _, c := range containers {
+            if err := fn(c); err != nil {
+                errChan <- err
+                return
+            }
         }
-    }
+        errChan <- nil
+    }()
 
-    return nil
+    timer := time.NewTimer(time.Second * 10)
+    select {
+    case err = <-errChan:
+        timer.Stop()
+        return err
+    case <-timer.C:
+        return nil
+    }
 }
 
 type appData struct {
@@ -267,11 +281,11 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
             services[i].DisplayName = c.PluginTag()
         }
 
-        services[i].ID       = c.ID[:12]
+        services[i].ID       = c.ID
         services[i].Name     = c.ServiceName()
         services[i].Category = c.Category()
         services[i].IP       = c.IP()
-        services[i].State    = c.State.String()
+        services[i].State    = c.ActiveState().String()
     }
 
     appData.Services = services
@@ -306,7 +320,7 @@ func (con *Console) reloadApplication(w http.ResponseWriter, r *http.Request) {
     name := mux.Vars(r)["name"]
     cs, err := con.FindAll(name, user.Namespace)
     if err == nil {
-        err = restartContainers(cs)
+        err = startContainers(cs, (*container.Container).Restart)
     }
 
     if err != nil {
@@ -316,21 +330,6 @@ func (con *Console) reloadApplication(w http.ResponseWriter, r *http.Request) {
     }
 
     http.Redirect(w, r, "/applications/"+name, http.StatusFound)
-}
-
-func restartContainers(containers []*container.Container) error {
-    err := container.ResolveServiceDependencies(containers)
-    if err != nil {
-        return err
-    }
-
-    for _, c := range containers {
-        if err = c.Restart(); err != nil {
-            return err
-        }
-    }
-
-    return nil
 }
 
 func (con *Console) removeApplication(w http.ResponseWriter, r *http.Request) {

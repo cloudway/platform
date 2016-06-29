@@ -3,16 +3,7 @@
 {{$name := .app.Name}}
 <div class="panel panel-default">
   <div class="panel-body">
-    <div class="row container">
-      <div class="col-md-8">
-        <h3><a href="{{.app.URL}}" target="_blank">{{.app.URL}}</a></h3>
-      </div>
-      <div class="col-md-4 text-right">
-        <form action="/applications/{{$name}}/reload" method="post">
-          <button class="btn btn-link" type="submit" title="重新启动"><i class="fa fa-refresh"></i></button>
-        </form>
-      </div>
-    </div>
+    <h3><a href="{{.app.URL}}" target="_blank">{{.app.URL}}</a></h3>
   </div>
 </div>
 
@@ -23,17 +14,23 @@
       <th style="width:12em;">ID</th>
       <th>名称</th>
       <th style="width:12em;">IP</th>
-      <th style="width:12em;">输出端口</th>
-      <th style="width:10em;">状态</th>
-      <th style="width:1em;"></th>
+      <th style="width:15em;">输出端口</th>
+      <th style="width:6em;">状态</th>
+      <th style="width:2em;">
+        <form class="form-inline" action="/applications/{{$name}}/reload" method="post">
+          <button class="btn btn-link" type="submit" style="padding:0;margin:0;" title="重新启动">
+            <i class="fa fa-refresh"></i>
+          </button>
+        </form>
+      </th>
     </tr>
     {{range .app.Services}}
     <tr>
-      <td>{{.ID}}</td>
+      <td>{{printf "%.12s" .ID}}</td>
       <td>{{.DisplayName}}</td>
       <td>{{.IP}}</td>
       <td>{{.Ports}}</td>
-      <td>{{.State}}</td>
+      <td><span class="label state state-{{.State}}">{{.State}}</span></td>
       <td>
         {{if ne .Category "Framework"}}
         <form class="form-inline" action="/applications/{{$name}}/services/{{.Name}}/delete" method="post">
@@ -81,3 +78,10 @@
 {{end}}
 
 {{template "_modal"}}
+
+<script>
+$('.state').addClass('label-default')
+$('.state-running').addClass('label-success')
+$('.state-building').addClass('label-info')
+$('.state-failed').addClass('label-danger')
+</script>

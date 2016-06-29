@@ -7,6 +7,7 @@ import (
     "io/ioutil"
     "path/filepath"
     "regexp"
+    "strconv"
     "github.com/Sirupsen/logrus"
     "github.com/cloudway/platform/pkg/manifest"
 )
@@ -200,4 +201,20 @@ func (box *Sandbox) UnsetPluginEnv(p *manifest.Plugin, name string) {
     filename := filepath.Join(p.Path, "env", name)
     os.Remove(filename)
     os.Remove(filename + exportSuffix)
+}
+
+func (box *Sandbox) ActiveState() manifest.ActiveState {
+    str, err := readEnvFile(box.envfile(".state"))
+    if err != nil {
+        return manifest.StateNew
+    }
+    i, err := strconv.Atoi(str)
+    if err != nil {
+        return manifest.StateUnknown
+    }
+    return manifest.ActiveState(i)
+}
+
+func (box *Sandbox) SetActiveState(s manifest.ActiveState) {
+    writeEnvFile(box.envfile(".state"), strconv.Itoa(int(s)))
 }

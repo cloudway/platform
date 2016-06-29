@@ -33,12 +33,6 @@ func (cat Category) IsLibrary() bool {
     return cat == Library
 }
 
-type SandboxInfo struct {
-    Env             map[string]string
-    Endpoints       []*Endpoint
-    Plugins         []*Plugin
-}
-
 type Plugin struct {
     Path            string      `yaml:"-" json:",omitempty"`
     Name            string      `yaml:"Name"`
