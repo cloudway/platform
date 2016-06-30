@@ -3,6 +3,7 @@ package broker
 import (
     "fmt"
     "time"
+    errs "errors"
     "github.com/cloudway/platform/container"
     "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/pkg/errors"
@@ -207,4 +208,61 @@ func (br *UserBroker) RemoveService(name, service string) (err error) {
 
     errors.Add(br.Users.Update(user.Name, userdb.Args{"applications": user.Applications}))
     return errors.Err()
+}
+
+// Scale application by adding or removing containers in the application.
+func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Container, error) {
+    if num <= 0 || num > 10 {
+        return nil, errs.New("The scaling number must be between 1 and 10")
+    }
+
+    user := br.User.Basic()
+    app  := user.Applications[name]
+
+    if app == nil {
+        return nil, ApplicationNotFoundError(name)
+    }
+    cs, err := br.FindApplications(name, user.Namespace)
+    if err != nil {
+        return nil, err
+    }
+    if len(cs) == 0 {
+        return nil, ApplicationNotFoundError(name)
+    }
+
+    if len(cs) < num {
+        return br.scaleUp(cs[0], num)
+    } else if len(cs) > num {
+        return nil, br.scaleDown(cs, len(cs)-num)
+    } else {
+        return nil, nil
+    }
+}
+
+func (br *UserBroker) scaleUp(replica *container.Container, num int) ([]*container.Container, error) {
+    meta, err := br.Hub.GetPluginInfo(replica.PluginTag())
+    if err != nil {
+        return nil, err
+    }
+
+    opts := container.CreateOptions{
+        Name:       replica.Name,
+        Namespace:  replica.Namespace,
+        Plugin:     meta,
+        Home:       replica.Home(),
+        User:       replica.User(),
+        Scaling:    num,
+        Repo:       "empty",
+    }
+
+    return br.Create(br.SCM, opts)
+}
+
+func (br *UserBroker) scaleDown(containers []*container.Container, num int) error {
+    for i := 0; i<num; i++ {
+        if err := containers[i].Destroy(); err != nil {
+            return err
+        }
+    }
+    return nil
 }

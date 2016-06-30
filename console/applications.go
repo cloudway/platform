@@ -27,6 +27,7 @@ func (con *Console) initApplicationsRoutes(gets *mux.Router, posts *mux.Router) 
     gets.HandleFunc("/applications/{name}", con.getApplication)
     posts.HandleFunc("/applications/{name}/reload", con.reloadApplication)
     posts.HandleFunc("/applications/{name}/delete", con.removeApplication)
+    posts.HandleFunc("/applications/{name}/scale", con.scaleApplication)
     posts.HandleFunc("/applications/{name}/services", con.createServices)
     posts.HandleFunc("/applications/{name}/services/{service}/delete", con.removeService)
 }
@@ -274,6 +275,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
         return
     }
 
+    scale := 0
     services := make([]serviceData, len(cs))
     for i, c := range cs {
         meta, err := con.Hub.GetPluginInfo(c.PluginTag())
@@ -292,6 +294,10 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
         services[i].Category = c.Category()
         services[i].IP       = c.IP()
         services[i].State    = c.ActiveState().String()
+
+        if c.Category().IsFramework() {
+            scale++
+        }
     }
 
     var plugins []*manifest.Plugin
@@ -310,6 +316,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 
     appData.Services = services
     data.MergeKV("app", appData)
+    data.MergeKV("scale", scale)
     data.MergeKV("available_plugins", plugins)
     con.mustRender(w, r, "application", data)
 }
@@ -382,4 +389,31 @@ func (con *Console) removeService(w http.ResponseWriter, r *http.Request) {
     } else {
         http.Redirect(w, r, "/applications/"+name, http.StatusFound)
     }
+}
+
+func (con *Console) scaleApplication(w http.ResponseWriter, r *http.Request) {
+    user := con.currentUser(w, r)
+    if user == nil {
+        return
+    }
+
+    name := mux.Vars(r)["name"]
+    scale, err := strconv.Atoi(r.FormValue("scale"))
+    if con.badRequest(w, r, err, "/applications/"+name) {
+        return
+    }
+
+    cs, err := con.NewUserBroker(user).ScaleApplication(name, scale)
+    if con.badRequest(w, r, err, "/applications/"+name) {
+        return
+    }
+
+    err = startContainers(cs, (*container.Container).Start)
+    if err != nil {
+        logrus.Error(err)
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    http.Redirect(w, r, "/applications/"+name, http.StatusFound)
 }

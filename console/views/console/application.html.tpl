@@ -24,7 +24,20 @@
         </form>
       </th>
     </tr>
-    {{range .app.Services}}
+    {{- range .app.Services}}
+    {{- if eq .Category "Framework"}}
+    <tr>
+      <td>{{printf "%.12s" .ID}}</td>
+      <td>{{.DisplayName}}</td>
+      <td>{{.IP}}</td>
+      <td>{{.Ports}}</td>
+      <td><span class="label state state-{{.State}}">{{.State}}</span></td>
+      <td></td>
+    </tr>
+    {{- end}}
+    {{- end}}
+    {{- range .app.Services}}
+    {{- if ne .Category "Framework"}}
     <tr>
       <td>{{printf "%.12s" .ID}}</td>
       <td>{{.DisplayName}}</td>
@@ -32,17 +45,18 @@
       <td>{{.Ports}}</td>
       <td><span class="label state state-{{.State}}">{{.State}}</span></td>
       <td>
-        {{if ne .Category "Framework"}}
+        {{- if ne .Category "Framework"}}
         <form class="form-inline" action="/applications/{{$name}}/services/{{.Name}}/delete" method="post">
           <button class="btn btn-link" type="button" style="padding:0;margin:0;" title="删除" data-toggle="modal" data-target="#confirm-modal"
                   data-message="<p>即将删除 <strong>{{.DisplayName}}</strong> 服务。</p><p>删除服务有可能使应用运行不正常，与服务相关的所有数据都将被删除，并且无法恢复，是否继续？</p>">
             <i class="fa fa-minus"></i>
           </button>
         </form>
-        {{end}}
+        {{- end}}
       </td>
     </tr>
-    {{end}}
+    {{- end}}
+    {{- end}}
   </table>
 </div>
 
@@ -68,7 +82,25 @@
       <input type="hidden" name="csrf_token" value="{{.csrf_token}}"/>
     </form>
   </div>
-  <div class="col-md-9 text-right">
+
+  <div class="col-md-3">
+    <form id="scaling-form" class="form-inline" action="/applications/{{$name}}/scale" method="POST">
+      <div class="form-group">
+        <p class="form-control-static">伸缩 <span class="badge">{{.scale}}</span></p>
+        <input id="scaling" type="hidden" name="scale" value="{{.scale}}"/>
+        <div class="btn-group">
+          <button id="scaleup" class="btn btn-default btn-xs" {{if ge .scale 10}}disabled="disabled"{{end}} type="button">
+            <i class="fa fa-plus"></i>
+          </button>
+          <button id="scaledown" class="btn btn-default btn-xs" {{if le .scale 1}}disabled="disabled"{{end}} type="button">
+            <i class="fa fa-minus"></i>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-md-6 text-right">
     <form action="/applications/{{$name}}/delete" method="POST">
       <button class="btn btn-danger" type="button" data-toggle="modal"
               data-target="#confirm-modal" data-message="与应用相关的所有数据都将被删除，并且无法恢复，是否继续？">
@@ -94,4 +126,13 @@ $('.state').addClass('label-default')
 $('.state-running').addClass('label-success')
 $('.state-building').addClass('label-info')
 $('.state-failed').addClass('label-danger')
+
+$('#scaleup').on('click', function(e) {
+  $('#scaling').val(Number($('#scaling').val())+1)
+  $('#scaling-form').trigger('submit')
+})
+$('#scaledown').on('click', function(e) {
+  $('#scaling').val(Number($('#scaling').val())-1)
+  $('#scaling-form').trigger('submit')
+})
 </script>
