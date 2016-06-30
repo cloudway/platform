@@ -20,11 +20,9 @@
       <th style="width:15em;">输出端口</th>
       <th style="width:6em;">状态</th>
       <th style="width:2em;">
-        <form class="form-inline" action="/applications/{{$name}}/reload" method="post">
-          <button class="btn btn-link" type="submit" style="padding:0;margin:0;" title="重新启动">
-            <i class="fa fa-refresh"></i>
-          </button>
-        </form>
+        <button id="refresh-btn" class="btn btn-link" type="button" style="padding:0;margin:0;" title="重新启动">
+          <i class="fa fa-refresh"></i>
+        </button>
       </th>
     </tr>
     {{- range .app.Services}}
@@ -34,7 +32,7 @@
       <td>{{.DisplayName}}</td>
       <td>{{.IP}}</td>
       <td>{{.Ports}}</td>
-      <td><span class="label state state-{{.State}}">{{.State}}</span></td>
+      <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
       <td></td>
     </tr>
     {{- end}}
@@ -46,7 +44,7 @@
       <td>{{.DisplayName}}</td>
       <td>{{.IP}}</td>
       <td>{{.Ports}}</td>
-      <td><span class="label state state-{{.State}}">{{.State}}</span></td>
+      <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
       <td>
         {{- if ne .Category "Framework"}}
         <form class="form-inline" action="/applications/{{$name}}/services/{{.Name}}/delete" method="post">
@@ -124,12 +122,8 @@
 
 {{template "_modal"}}
 {{template "_select_plugin"}}
-<script>
-$('.state').addClass('label-default')
-$('.state-running').addClass('label-success')
-$('.state-building').addClass('label-info')
-$('.state-failed').addClass('label-danger')
 
+<script>
 $('#scaleup').on('click', function(e) {
   $('#scaling').val(Number($('#scaling').val())+1)
   $('#scaling-form').trigger('submit')
@@ -138,4 +132,55 @@ $('#scaledown').on('click', function(e) {
   $('#scaling').val(Number($('#scaling').val())-1)
   $('#scaling-form').trigger('submit')
 })
+
+function setStateLabelClass() {
+  $('.state').addClass('label-default')
+  $('.state-running').addClass('label-success')
+  $('.state-building').addClass('label-info')
+  $('.state-failed').addClass('label-danger')
+}
+setStateLabelClass()
+
+$('#refresh-btn').on('click', function(e) {
+  $.post("/applications/{{$name}}/reload/async", function(id) {
+    $('#refresh-btn').attr('disabled', 'disabled')
+    $('#refresh-btn i').addClass('fa-spin')
+    updateStatus(id)
+  })
+})
+
+function updateStatus(id) {
+  var restore = function() {
+    clearInterval(intervalHandle)
+    $('#refresh-btn').removeAttr("disabled")
+    $('#refresh-btn i').removeClass("fa-spin")
+  }
+
+  var update = function(states) {
+    for (var i in states) {
+      var st = states[i]
+      $('#'+st.ID).text(st.State)
+      $('#'+st.ID).attr("class", "label state state-"+st.State)
+    }
+    setStateLabelClass()
+  }
+
+  var intervalHandle = setInterval(function() {
+    $.ajax({
+      url: "/applications/{{$name}}/status",
+      data: {id: id},
+      type: "GET",
+      dataType: "json",
+    })
+    .done(function(json) {
+      update(json.States)
+      if (json.Status == "finished") {
+        restore()
+      }
+    })
+    .fail(function(xhr, status, errorThrown) {
+      restore()
+    })
+  }, 1000)
+}
 </script>

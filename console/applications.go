@@ -8,7 +8,12 @@ import (
     "sort"
     "errors"
     "time"
+    "sync"
     "net/http"
+    "crypto/rand"
+    "crypto/md5"
+    "encoding/hex"
+    "encoding/json"
 
     "github.com/Sirupsen/logrus"
     "github.com/gorilla/mux"
@@ -26,7 +31,9 @@ func (con *Console) initApplicationsRoutes(gets *mux.Router, posts *mux.Router) 
     gets.HandleFunc("/forms/applications", con.createApplicationForm)
     posts.HandleFunc("/applications", con.createApplication)
     gets.HandleFunc("/applications/{name}", con.getApplication)
-    posts.HandleFunc("/applications/{name}/reload", con.reloadApplication)
+    gets.HandleFunc("/applications/{name}/status", con.getApplicationStatus)
+    posts.HandleFunc("/applications/{name}/reload", con.restartApplication)
+    posts.HandleFunc("/applications/{name}/reload/async", con.asyncRestartApplication)
     posts.HandleFunc("/applications/{name}/delete", con.removeApplication)
     posts.HandleFunc("/applications/{name}/scale", con.scaleApplication)
     posts.HandleFunc("/applications/{name}/services", con.createServices)
@@ -348,7 +355,7 @@ func getPrivatePorts(meta *manifest.Plugin) string {
     return strings.Join(ports, ",")
 }
 
-func (con *Console) reloadApplication(w http.ResponseWriter, r *http.Request) {
+func (con *Console) restartApplication(w http.ResponseWriter, r *http.Request) {
     user := con.currentUser(w, r)
     if user == nil {
         return
@@ -367,6 +374,106 @@ func (con *Console) reloadApplication(w http.ResponseWriter, r *http.Request) {
     }
 
     http.Redirect(w, r, "/applications/"+name, http.StatusFound)
+}
+
+var asyncTasks = make(map[string]bool)
+var muTask sync.RWMutex
+
+func (con *Console) asyncRestartApplication(w http.ResponseWriter, r *http.Request) {
+    user := con.currentUser(w, r)
+    if user == nil {
+        return
+    }
+
+    name := mux.Vars(r)["name"]
+    cs, err := con.FindAll(name, user.Namespace)
+    if err != nil || len(cs) == 0 {
+        http.NotFound(w, r)
+        return
+    }
+
+    err = container.ResolveServiceDependencies(cs)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusForbidden)
+        return
+    }
+
+    var b [16]byte
+    rand.Read(b[:])
+    buf := name + "-" + user.Namespace + ":" + string(b[:])
+    hash := md5.Sum([]byte(buf))
+    id := hex.EncodeToString(hash[:])
+
+    w.Header().Set("Content-Type", "text/plain")
+    w.WriteHeader(http.StatusOK)
+    w.Write([]byte(id))
+
+    muTask.Lock()
+    asyncTasks[id] = true
+    muTask.Unlock()
+
+    go func() {
+        defer func() {
+            muTask.Lock()
+            delete(asyncTasks, id)
+            muTask.Unlock()
+        }()
+
+        for _, c := range cs {
+            if err := c.Restart(); err != nil {
+                logrus.Error(err)
+            }
+        }
+    }()
+}
+
+type stateData struct{
+    ID, State string
+}
+
+type statusData struct {
+    Status string
+    States []stateData
+}
+
+func (con *Console) getApplicationStatus(w http.ResponseWriter, r *http.Request) {
+    user := con.currentUser(w, r)
+    if user == nil {
+        return
+    }
+
+    id   := r.FormValue("id")
+    name := mux.Vars(r)["name"]
+
+    var inprogress bool
+    if id != "" {
+        muTask.RLock()
+        inprogress = asyncTasks[id]
+        muTask.RUnlock()
+    }
+
+    cs, err := con.FindAll(name, user.Namespace)
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+
+    status := statusData{}
+    status.States = make([]stateData, len(cs))
+    for i, c := range cs {
+        status.States[i].ID = c.ID
+        status.States[i].State = c.ActiveState().String()
+    }
+
+    if inprogress {
+        status.Status = "inprogress"
+    } else {
+        status.Status = "finished"
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(&status)
 }
 
 func (con *Console) removeApplication(w http.ResponseWriter, r *http.Request) {
