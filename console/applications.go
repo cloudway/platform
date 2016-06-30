@@ -89,6 +89,7 @@ func (con *Console) createApplicationForm(w http.ResponseWriter, r *http.Request
 
     data := con.layoutUserData(w, r, user)
     data.MergeKV("domain", defaults.Domain())
+    data.MergeKV("available_plugins", con.Hub.ListPlugins("", ""))
     con.mustRender(w, r, "createapp", data)
 }
 
@@ -108,9 +109,10 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
         data := con.layoutUserData(w, r, user)
         data.MergeKV("error", err)
         data.MergeKV("name", r.PostForm.Get("name"))
-        data.MergeKV("domain", defaults.Domain())
         data.MergeKV("plugins", r.PostForm.Get("plugins"))
         data.MergeKV("repo", r.PostForm.Get("repo"))
+        data.MergeKV("domain", defaults.Domain())
+        data.MergeKV("available_plugins", con.Hub.ListPlugins("", ""))
         con.mustRender(w, r, "createapp", data)
         return
     }
@@ -236,6 +238,7 @@ type serviceData struct {
     ID          string
     Name        string
     DisplayName string
+    PluginName  string
     Category    manifest.Category
     IP          string
     Ports       string
@@ -275,10 +278,13 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
     for i, c := range cs {
         meta, err := con.Hub.GetPluginInfo(c.PluginTag())
         if err == nil {
+            services[i].PluginName = meta.Name
             services[i].DisplayName = meta.DisplayName
             services[i].Ports = getPrivatePorts(meta)
         } else {
-            services[i].DisplayName = c.PluginTag()
+            tag := c.PluginTag()
+            services[i].PluginName = strings.SplitN(tag, ":", 2)[0]
+            services[i].DisplayName = tag
         }
 
         services[i].ID       = c.ID
@@ -288,8 +294,23 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
         services[i].State    = c.ActiveState().String()
     }
 
+    var plugins []*manifest.Plugin
+    for _, meta := range con.Hub.ListPlugins("", manifest.Service) {
+        var remove bool
+        for _, s := range services {
+            if meta.Name == s.PluginName {
+                remove = true
+                break
+            }
+        }
+        if !remove {
+            plugins = append(plugins, meta)
+        }
+    }
+
     appData.Services = services
     data.MergeKV("app", appData)
+    data.MergeKV("available_plugins", plugins)
     con.mustRender(w, r, "application", data)
 }
 

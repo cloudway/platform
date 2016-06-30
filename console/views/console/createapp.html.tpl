@@ -22,9 +22,28 @@
           </div>
         </div>
         <div class="form-group">
-          <label for="plugins">应用框架及插件：</label>
+          <label for="plugins">应用框架及服务：</label>
           <div class="input-group col-md-12">
-            <input type="text" name="plugins" class="form-control" value="{{.plugins}}">
+            <input type="text" id="plugins" name="plugins" class="form-control" value="{{.plugins}}">
+            {{- with .available_plugins}}
+            <span class="input-group-btn">
+              <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aira-hasgroups="true" aria-expanded="false"><span class="caret"></span></button>
+              <ul class="dropdown-menu">
+                <li class="dropdown-header">框架</li>
+                {{- range .}}
+                {{- if eq .Category "Framework"}}
+                <li><a name="{{.Name}}:{{.Version}}" class="plugin-select" href="#">{{.DisplayName}}</a></li>
+                {{- end}}
+                {{- end}}
+                <li class="dropdown-header">服务</li>
+                {{- range .}}
+                {{- if eq .Category "Service"}}
+                <li><a name="{{.Name}}:{{.Version}}" class="plugin-select" href="#">{{.DisplayName}}</a></li>
+                {{- end}}
+                {{- end}}
+              </ul>
+            </span>
+            {{- end}}
           </div>
         </div>
         <div class="form-group">
@@ -40,3 +59,5 @@
     </div>
   </div>
 </div>
+
+{{template "_select_plugin"}}

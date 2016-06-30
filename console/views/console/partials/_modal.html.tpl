@@ -6,7 +6,7 @@
         <h4 class="modal-title">警告</h4>
       </div>
       <div class="modal-body">
-        <p id="confirm-message"></p>
+        <div id="confirm-message"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-danger" data-dismiss="modal" id="confirm-button">继续</button>
@@ -20,7 +20,7 @@
 $('#confirm-modal').on('show.bs.modal', function(event) {
   var button = $(event.relatedTarget)
   var form = button.closest('form')
-  $('#confirm-message').text(button.data('message'))
+  $('#confirm-message').html(button.data('message'))
   $('#confirm-button').on('click', function(e) {
     form.trigger('submit')
   })

@@ -4,6 +4,7 @@ import (
     "os"
     "fmt"
     "strings"
+    "sort"
     "path/filepath"
     "github.com/cloudway/platform/container/conf"
     "github.com/cloudway/platform/pkg/archive"
@@ -22,6 +23,36 @@ func New() (*PluginHub, error) {
     }
     return &PluginHub{dir}, nil
 }
+
+func (hub *PluginHub) ListPlugins(namespace string, category manifest.Category) []*manifest.Plugin{
+    dir, err := os.Open(hub.getBaseDir(namespace, ""))
+    if err != nil {
+        return nil
+    }
+
+    names, err := dir.Readdirnames(0)
+    if err != nil {
+        return nil
+    }
+
+    var result []*manifest.Plugin
+    for _, tag := range names {
+        if namespace != "" {
+            tag = namespace + "/" + tag
+        }
+        meta, err := hub.GetPluginInfo(tag)
+        if err == nil && (category == "" || category == meta.Category) {
+            result = append(result, meta)
+        }
+    }
+    sort.Sort(byDisplayName(result))
+    return result
+}
+
+type byDisplayName []*manifest.Plugin
+func (a byDisplayName) Len() int { return len(a) }
+func (a byDisplayName) Swap(i, j int) { a[i], a[j] =  a[j], a[i] }
+func (a byDisplayName) Less(i, j int) bool { return a[i].DisplayName < a[j].DisplayName }
 
 func (hub *PluginHub) GetPluginPath(tag string) (string, error) {
     var namespace, name, version string
@@ -86,8 +117,11 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 
 func (hub *PluginHub) getBaseDir(namespace, name string) string {
     if namespace == "" {
-        return filepath.Join(hub.installDir, "_", name)
-    } else {
-        return filepath.Join(hub.installDir, namespace, name)
+        namespace = "_"
     }
+    dir := filepath.Join(hub.installDir, namespace)
+    if name != "" {
+        dir = filepath.Join(dir, name)
+    }
+    return dir
 }

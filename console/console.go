@@ -270,7 +270,7 @@ func (con *Console) changePassword(w http.ResponseWriter, r *http.Request) {
 
     data := con.layoutUserData(w, r, user)
     if newPassword != confirmPassword {
-        data.MergeKV("error", "新密码与确认密码不必配")
+        data.MergeKV("error", "新密码与确认密码不匹配")
         con.mustRender(w, r, "password", data)
         return
     }
