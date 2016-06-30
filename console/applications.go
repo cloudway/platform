@@ -18,6 +18,7 @@ import (
     "github.com/cloudway/platform/container"
     "github.com/cloudway/platform/pkg/manifest"
     "github.com/cloudway/platform/auth/userdb"
+    "github.com/cloudway/platform/container/conf"
 )
 
 func (con *Console) initApplicationsRoutes(gets *mux.Router, posts *mux.Router) {
@@ -232,6 +233,7 @@ func startContainers(containers []*container.Container, fn func(*container.Conta
 type appData struct {
     Name        string
     URL         string
+    CloneURL    string
     Services    []serviceData
 }
 
@@ -267,6 +269,13 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 
     appData := &appData{Name: name}
     appData.URL = fmt.Sprintf("http://%s-%s.%s", name, user.Namespace, defaults.Domain())
+
+    cloneURL := conf.Get("scm.clone_url")
+    if cloneURL != "" {
+        cloneURL = strings.Replace(cloneURL, "<namespace>", user.Namespace, -1)
+        cloneURL = strings.Replace(cloneURL, "<repo>", name, -1)
+        appData.CloneURL = cloneURL
+    }
 
     cs, err := con.FindAll(name, user.Namespace)
     if err != nil {

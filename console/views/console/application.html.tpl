@@ -3,7 +3,10 @@
 {{$name := .app.Name}}
 <div class="panel panel-default">
   <div class="panel-body">
-    <h3><a href="{{.app.URL}}" target="_blank">{{.app.URL}}</a></h3>
+    <h3 style="margin-bottom: 20px;"><a href="{{.app.URL}}" target="_blank">{{.app.URL}}</a></h3>
+    {{- with .app.CloneURL}}
+    <p>检出代码: <mark>{{.}}</mark></p>
+    {{- end}}
   </div>
 </div>
 
