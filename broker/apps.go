@@ -5,6 +5,7 @@ import (
     "time"
     errs "errors"
     "strings"
+    "sync"
     "github.com/cloudway/platform/container"
     "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/pkg/errors"
@@ -337,4 +338,119 @@ func (br *UserBroker) RemoveHost(name, host string) error {
     }
 
     return br.Users.Update(user.Name, userdb.Args{"applications": user.Applications})
+}
+
+func (br *UserBroker) StartApplication(name string) error {
+    return br.startApplication(name, (*container.Container).Start)
+}
+
+func (br *UserBroker) RestartApplication(name string) error {
+    return br.startApplication(name, (*container.Container).Restart)
+}
+
+func (br *UserBroker) StopApplication(name string) error {
+    user := br.User.Basic()
+    app := user.Applications[name]
+    if app == nil {
+        return ApplicationNotFoundError(name)
+    }
+
+    containers, err := br.FindAll(name, user.Namespace)
+    return startParallel(err, containers, (*container.Container).Stop)
+}
+
+func (br *Broker) StartContainers(containers []*container.Container) error {
+    return startContainers(containers, (*container.Container).Start)
+}
+
+func (br *UserBroker) startApplication(name string, fn func(*container.Container) error) error {
+    user := br.User.Basic()
+    app := user.Applications[name]
+    if app == nil {
+        return ApplicationNotFoundError(name)
+    }
+
+    containers, err := br.FindAll(name, user.Namespace)
+    if err != nil {
+        return err
+    }
+    return startContainers(containers, fn)
+}
+
+func startContainers(containers []*container.Container, fn func(*container.Container) error) error {
+    err := container.ResolveServiceDependencies(containers)
+    if err != nil {
+        return err
+    }
+
+    sch := makeSchedule(containers)
+    err = startParallel(nil, sch.parallel, fn)
+    err = startSerial(err, sch.serial, fn)
+    err = startParallel(err, sch.final, fn)
+    return err
+}
+
+type schedule struct {
+    parallel []*container.Container
+    serial   []*container.Container
+    final    []*container.Container
+}
+
+func makeSchedule(containers []*container.Container) *schedule {
+    sch := &schedule{}
+    for _, c := range containers {
+        if c.Category().IsService() {
+            if len(c.DependsOn()) == 0 {
+                sch.parallel = append(sch.parallel, c)
+            } else {
+                sch.serial = append(sch.serial, c)
+            }
+        } else {
+            sch.final = append(sch.final, c)
+        }
+    }
+    return sch
+}
+
+func startParallel(err error, cs []*container.Container, fn func(*container.Container) error) error {
+    if err != nil {
+        return err
+    }
+    if len(cs) == 0 {
+        return nil
+    }
+    if len(cs) == 1 {
+        return fn(cs[0])
+    }
+
+    var wg sync.WaitGroup
+    wg.Add(len(cs))
+
+    var errors errors.Errors
+    var errLock sync.Mutex
+
+    for _, c := range cs {
+        go func(wg *sync.WaitGroup, c *container.Container) {
+            defer wg.Done()
+            if err := fn(c); err != nil {
+                errLock.Lock()
+                errors.Add(err)
+                errLock.Unlock()
+            }
+        }(&wg, c)
+    }
+
+    wg.Wait()
+    return errors.Err()
+}
+
+func startSerial(err error, cs []*container.Container, fn func(*container.Container) error) error {
+    if err == nil {
+        for _, c := range cs {
+            if err = fn(c); err != nil {
+                break
+            }
+        }
+    }
+    return err
 }

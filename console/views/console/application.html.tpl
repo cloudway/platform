@@ -44,6 +44,7 @@
             <i class="fa fa-minus"></i>
           </button>
         </div>
+        <span class="badge">{{.app.Scale}}</span>
       </div>
     </form>
   </div>

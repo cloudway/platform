@@ -130,7 +130,7 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    err = startContainers(cs, (*container.Container).Start)
+    err = con.startContainers(cs)
     if err != nil {
         logrus.Error(err)
         con.error(w, r, http.StatusInternalServerError, err.Error(), "/applications")
@@ -187,7 +187,7 @@ func (con *Console) createServices(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    err = startContainers(cs, (*container.Container).Start)
+    err = con.startContainers(cs)
     if err != nil {
         logrus.Error(err)
         con.error(w, r, http.StatusInternalServerError, err.Error(), "/applications")
@@ -214,26 +214,15 @@ func (con *Console) parseServiceCreateOptions(r *http.Request) (opts container.C
     return
 }
 
-func startContainers(containers []*container.Container, fn func(*container.Container) error) error {
-    err := container.ResolveServiceDependencies(containers)
-    if err != nil {
-        return err
-    }
-
+func (con *Console) startContainers(containers []*container.Container) error {
     errChan := make(chan error, 1)
     go func() {
-        for _, c := range containers {
-            if err := fn(c); err != nil {
-                errChan <- err
-                return
-            }
-        }
-        errChan <- nil
+        errChan <- con.Broker.StartContainers(containers)
     }()
 
     timer := time.NewTimer(time.Second * 10)
     select {
-    case err = <-errChan:
+    case err := <-errChan:
         timer.Stop()
         return err
     case <-timer.C:
@@ -442,17 +431,13 @@ func (con *Console) showApplicationSettings(w http.ResponseWriter, r *http.Reque
 }
 
 func (con *Console) restartApplication(w http.ResponseWriter, r *http.Request) {
+    name := mux.Vars(r)["name"]
     user := con.currentUser(w, r)
     if user == nil {
         return
     }
 
-    name := mux.Vars(r)["name"]
-    cs, err := con.FindAll(name, user.Namespace)
-    if err == nil {
-        err = startContainers(cs, (*container.Container).Restart)
-    }
-
+    err := con.NewUserBroker(user).RestartApplication(name)
     if err != nil {
         logrus.Error(err)
         http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -466,21 +451,9 @@ var asyncTasks = make(map[string]bool)
 var muTask sync.RWMutex
 
 func (con *Console) asyncRestartApplication(w http.ResponseWriter, r *http.Request) {
+    name := mux.Vars(r)["name"]
     user := con.currentUser(w, r)
     if user == nil {
-        return
-    }
-
-    name := mux.Vars(r)["name"]
-    cs, err := con.FindAll(name, user.Namespace)
-    if err != nil || len(cs) == 0 {
-        http.NotFound(w, r)
-        return
-    }
-
-    err = container.ResolveServiceDependencies(cs)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusForbidden)
         return
     }
 
@@ -505,10 +478,9 @@ func (con *Console) asyncRestartApplication(w http.ResponseWriter, r *http.Reque
             muTask.Unlock()
         }()
 
-        for _, c := range cs {
-            if err := c.Restart(); err != nil {
-                logrus.Error(err)
-            }
+        err := con.NewUserBroker(user).RestartApplication(name)
+        if err != nil {
+            logrus.Error(err)
         }
     }()
 }
@@ -625,7 +597,7 @@ func (con *Console) scaleApplication(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    err = startContainers(cs, (*container.Container).Start)
+    err = con.startContainers(cs)
     if err != nil {
         logrus.Error(err)
         http.Error(w, err.Error(), http.StatusInternalServerError)
