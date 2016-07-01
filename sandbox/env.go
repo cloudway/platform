@@ -8,6 +8,9 @@ import (
     "path/filepath"
     "regexp"
     "strconv"
+    "reflect"
+    "unsafe"
+    "syscall"
     "github.com/Sirupsen/logrus"
     "github.com/cloudway/platform/pkg/manifest"
 )
@@ -217,4 +220,23 @@ func (box *Sandbox) ActiveState() manifest.ActiveState {
 
 func (box *Sandbox) SetActiveState(s manifest.ActiveState) {
     writeEnvFile(box.envfile(".state"), strconv.Itoa(int(s)))
+    UpdateActiveState(s)
+}
+
+func UpdateActiveState(state manifest.ActiveState) {
+    if os.Getpid() == 1 {
+        // When we are running in docker container as PID 1, we can change
+        // our argv to expose the state value. Utilities like 'ps' can get
+        // the state value from argv.
+        if len(os.Args) < 2 || len(os.Args[1]) < 3 {
+            panic("cannot change argv")
+        }
+
+        argv1str := (*reflect.StringHeader)(unsafe.Pointer(&os.Args[1]))
+        argv1 := (*[1<<30]byte)(unsafe.Pointer(argv1str.Data))[:argv1str.Len]
+        copy(argv1, fmt.Sprintf("[%d]", state))
+    } else {
+        // Otherwise, signal PID 1 to change its state.
+        syscall.Kill(1, syscall.SIGUSR1)
+    }
 }

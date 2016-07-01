@@ -4,6 +4,8 @@ import (
     "bytes"
     "strings"
     "strconv"
+    "regexp"
+    "errors"
     "io/ioutil"
     "archive/tar"
     "golang.org/x/net/context"
@@ -55,6 +57,15 @@ func (c *Container) Getenv(name string) (string, error) {
 }
 
 func (c *Container) ActiveState() manifest.ActiveState {
+    // Get active state from running processes
+    if c.State.Running {
+        state, err := c.activeStateFromRunningProcess()
+        if err == nil {
+            return state
+        }
+    }
+
+    // Fallback to get active state from state file
     str, err := c.Getenv(".state")
     if err != nil {
         return manifest.StateUnknown
@@ -63,5 +74,40 @@ func (c *Container) ActiveState() manifest.ActiveState {
     if err != nil {
         return manifest.StateUnknown
     }
-    return manifest.ActiveState(i)
+
+    state := manifest.ActiveState(i)
+    if state == manifest.StateRunning && !c.State.Running {
+        // container stopped ungracefully
+        state = manifest.StateStopped
+    }
+    return state
+}
+
+var statePattern = regexp.MustCompile(`^/usr/bin/cwctl \[([0-9])\]`)
+
+func (c *Container) activeStateFromRunningProcess() (manifest.ActiveState, error) {
+    ps, err := c.ContainerTop(context.Background(), c.ID, []string{})
+    if err != nil {
+        return manifest.StateUnknown, err
+    }
+
+    var cmdIndex = -1
+    for i, t := range ps.Titles {
+        if strings.ToUpper(t) == "COMMAND" {
+            cmdIndex = i
+            break
+        }
+    }
+    if cmdIndex == -1 {
+        return manifest.StateUnknown, errors.New("no command column in process list")
+    }
+
+    for _, p := range ps.Processes {
+        command := p[cmdIndex]
+        if m := statePattern.FindStringSubmatch(command); m != nil {
+            state, err := strconv.Atoi(command)
+            return manifest.ActiveState(state), err
+        }
+    }
+    return manifest.StateUnknown, errors.New("sandbox process not found")
 }

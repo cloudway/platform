@@ -14,9 +14,10 @@ func (cli *CWCtl) CmdRun(args ...string) error {
 
     // handle termination signals
     sigchan := make(chan os.Signal, 1)
-    signal.Notify(sigchan, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
+    signal.Notify(sigchan, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
 
     box := sandbox.New()
+    sandbox.UpdateActiveState(box.ActiveState())
 
     for {
         sig := <-sigchan
@@ -29,6 +30,9 @@ func (cli *CWCtl) CmdRun(args ...string) error {
             } else {
                 logrus.WithError(err).Error("Application restart failed")
             }
+
+        case syscall.SIGUSR1:
+            sandbox.UpdateActiveState(box.ActiveState())
 
         default:
             err := box.Stop()
