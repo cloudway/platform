@@ -2,7 +2,6 @@ package cmds
 
 import (
     "github.com/cloudway/platform/pkg/mflag"
-    "github.com/cloudway/platform/pkg/opts"
     "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/broker"
     "github.com/cloudway/platform/container/conf/defaults"
@@ -43,48 +42,4 @@ func (cli *CWMan) CmdUserDel(args ...string) error {
         return err
     }
     return br.RemoveUser(cmd.Arg(0))
-}
-
-func (cli *CWMan) CmdUserMod(args ...string) error {
-    fields := make(map[string]string)
-
-    cmd := cli.Subcmd("usermod NAME")
-    cmd.Var(opts.NewMapOptsRef(&fields, nil), []string{"f"}, "Update fields")
-    cmd.Require(mflag.Exact, 1)
-    cmd.ParseFlags(args, true)
-
-    db, err := userdb.Open()
-    if err != nil {
-        return err
-    }
-
-    delete(fields, "name")
-    delete(fields, "namespace")
-    delete(fields, "password")
-
-    return db.Update(cmd.Arg(0), fields)
-}
-
-func (cli *CWMan) CmdNamespace(args ...string) (err error) {
-    cmd := cli.Subcmd("namespace", "USERNAME NAMESPACE")
-    cmd.Require(mflag.Exact, 2)
-    cmd.ParseFlags(args, true)
-
-    br, err := cli.NewUserBroker(cmd.Arg(0))
-    if err != nil {
-        return err
-    }
-    return br.CreateNamespace(cmd.Arg(1))
-}
-
-func (cli *CWMan) CmdPassword(args ...string) error {
-    cmd := cli.Subcmd("password", "USER OLD_PASSWORD NEW_PASSWORD")
-    cmd.Require(mflag.Exact, 3)
-    cmd.ParseFlags(args, true)
-
-    db, err := userdb.Open()
-    if err != nil {
-        return err
-    }
-    return db.ChangePassword(cmd.Arg(0), cmd.Arg(1), cmd.Arg(2))
 }
