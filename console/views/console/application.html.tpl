@@ -2,17 +2,12 @@
 
 {{$name := .app.Name}}
 <div class="panel panel-default">
-  <div class="panel-body">
-    <h3 style="margin-bottom: 20px;"><a href="{{.app.URL}}" target="_blank">{{.app.URL}}</a></h3>
-    {{- with .app.CloneURL}}
-    <p>检出代码: <mark>{{.}}</mark></p>
-    {{- end}}
-  </div>
+  {{template "_appnav" .}}
 </div>
 
 <div class="panel panel-default">
-  <div class="panel-heading">当前服务</div>
-  <table class="table table-hover">
+  <div class="panel-heading">应用框架</div>
+  <table class="table">
     <tr>
       <th style="width:12em;">ID</th>
       <th>名称</th>
@@ -25,8 +20,7 @@
         </button>
       </th>
     </tr>
-    {{- range .app.Services}}
-    {{- if eq .Category "Framework"}}
+    {{- range .app.Frameworks}}
     <tr>
       <td>{{printf "%.12s" .ID}}</td>
       <td>{{.DisplayName}}</td>
@@ -36,9 +30,38 @@
       <td></td>
     </tr>
     {{- end}}
-    {{- end}}
-    {{- range .app.Services}}
-    {{- if ne .Category "Framework"}}
+  </table>
+  <div class="panel-footer" style="padding-top:5px; padding-bottom:5px;">
+    <form id="scaling-form" class="form-inline" action="/applications/{{$name}}/scale" method="POST">
+      <div class="form-group">
+        <p class="form-control-static">弹性伸缩&nbsp;</p>
+        <input id="scaling" type="hidden" name="scale" value="{{.app.Scale}}"/>
+        <div class="btn-group">
+          <button id="scaleup" class="btn btn-default btn-xs" {{if ge .app.Scale 10}}disabled="disabled"{{end}} type="button">
+            <i class="fa fa-plus"></i>
+          </button>
+          <button id="scaledown" class="btn btn-default btn-xs" {{if le .app.Scale 1}}disabled="disabled"{{end}} type="button">
+            <i class="fa fa-minus"></i>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="panel panel-default">
+  <div class="panel-heading">当前服务</div>
+  {{- with .app.Services}}
+  <table class="table">
+    <tr>
+      <th style="width:12em;">ID</th>
+      <th>名称</th>
+      <th style="width:12em;">IP</th>
+      <th style="width:15em;">输出端口</th>
+      <th style="width:6em;">状态</th>
+      <th style="width:2em;"></th>
+    <tr>
+    {{- range .}}
     <tr>
       <td>{{printf "%.12s" .ID}}</td>
       <td>{{.DisplayName}}</td>
@@ -46,82 +69,57 @@
       <td>{{.Ports}}</td>
       <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
       <td>
-        {{- if ne .Category "Framework"}}
         <form class="form-inline" action="/applications/{{$name}}/services/{{.Name}}/delete" method="post">
           <button class="btn btn-link" type="button" style="padding:0;margin:0;" title="删除" data-toggle="modal" data-target="#confirm-modal"
                   data-message="<p>即将删除 <strong>{{.DisplayName}}</strong> 服务。</p><p>删除服务有可能使应用运行不正常，与服务相关的所有数据都将被删除，并且无法恢复，是否继续？</p>">
             <i class="fa fa-minus"></i>
           </button>
         </form>
-        {{- end}}
       </td>
     </tr>
     {{- end}}
-    {{- end}}
   </table>
-</div>
-
-<div class="row">
-  <div class="col-md-3">
-    <form action="/applications/{{$name}}/services" method="POST">
-      <div class="input-group">
-        {{- with .available_plugins}}
-        <span class="input-group-btn">
-          <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-hasgroups="true" aria-expanded="false"><span class="caret"></span></button>
-          <ul class="dropdown-menu">
-            {{- range .}}
-            <li><a name="{{.Name}}:{{.Version}}" class="plugin-select" href="#">{{.DisplayName}}</a></li>
+  {{- else}}
+  <div class="panel-body">无</div>
+  {{- end}}
+  <div class="panel-footer">
+    <div class="row">
+      <div class="col-md-3">
+        <form action="/applications/{{$name}}/services" method="POST">
+          <div class="input-group">
+            {{- with .available_plugins}}
+            <span class="input-group-btn">
+              <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-hasgroups="true" aria-expanded="false"><span class="caret"></span></button>
+              <ul class="dropdown-menu">
+                {{- range .}}
+                <li><a name="{{.Name}}:{{.Version}}" class="plugin-select" href="#">{{.DisplayName}}</a></li>
+                {{- end}}
+              </ul>
+            </span>
             {{- end}}
-          </ul>
-        </span>
-        {{- end}}
-        <input type="text" id="plugins" name="plugins" class="form-control" value="{{.plugins}}" placeholder="增加服务...">
-        <span class="input-group-btn">
-          <button class="btn btn-primary" type="submit"><i class="fa fa-plus"></i></button>
-        </span>
+            <input type="text" id="plugins" name="plugins" class="form-control input-sm" value="{{.plugins}}" placeholder="增加服务...">
+            <span class="input-group-btn">
+              <button class="btn btn-primary btn-sm" type="submit"><i class="fa fa-plus"></i></button>
+            </span>
+          </div>
+          <input type="hidden" name="csrf_token" value="{{.csrf_token}}"/>
+        </form>
       </div>
-      <input type="hidden" name="csrf_token" value="{{.csrf_token}}"/>
-    </form>
-  </div>
-
-  <div class="col-md-3">
-    <form id="scaling-form" class="form-inline" action="/applications/{{$name}}/scale" method="POST">
-      <div class="form-group">
-        <p class="form-control-static">伸缩 <span class="badge">{{.scale}}</span></p>
-        <input id="scaling" type="hidden" name="scale" value="{{.scale}}"/>
-        <div class="btn-group">
-          <button id="scaleup" class="btn btn-default btn-xs" {{if ge .scale 10}}disabled="disabled"{{end}} type="button">
-            <i class="fa fa-plus"></i>
-          </button>
-          <button id="scaledown" class="btn btn-default btn-xs" {{if le .scale 1}}disabled="disabled"{{end}} type="button">
-            <i class="fa fa-minus"></i>
-          </button>
-        </div>
-      </div>
-    </form>
-  </div>
-
-  <div class="col-md-6 text-right">
-    <form action="/applications/{{$name}}/delete" method="POST">
-      <button class="btn btn-danger" type="button" data-toggle="modal"
-              data-target="#confirm-modal" data-message="与应用相关的所有数据都将被删除，并且无法恢复，是否继续？">
-        <i class="fa fa-trash-o fa-lg"></i> 删除应用...
-      </button>
-    </form>
+    </div>
   </div>
 </div>
 
-{{with .error}}
+{{- with .error}}
 <div class="alert alert-danger alert-dismissible" role="alert" style="margin-top: 20px;">
   <button type="button" class="close" data-dismiss="alert" aria-label="Close">
     <span aria-hidden="true">&times;</span>
   </button>
   <p>{{.}}</p>
 </div>
-{{end}}
+{{- end}}
 
-{{template "_modal"}}
-{{template "_select_plugin"}}
+{{- template "_danger_modal"}}
+{{- template "_select_plugin"}}
 
 <script>
 $('#scaleup').on('click', function(e) {

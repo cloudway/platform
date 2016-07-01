@@ -37,6 +37,7 @@ type CreateOptions struct {
     User              string
     Capacity          string
     Scaling           int
+    Hosts             []string
     Env               map[string]string
     Repo              string
 }
@@ -366,5 +367,22 @@ func createContainer(cli DockerClient, imageId string, cfg *createConfig) (*Cont
     if err != nil {
         return nil, err
     }
-    return cli.Inspect(resp.ID)
+    c, err := cli.Inspect(resp.ID)
+    if err != nil {
+        return nil, err
+    }
+
+    if len(cfg.Hosts) != 0 {
+        hosts := cfg.Hosts
+        if cfg.Category.IsService() {
+            shosts := make([]string, len(hosts))
+            for i := range hosts {
+                shosts[i] = cfg.ServiceName + "." + hosts[i]
+            }
+            hosts = shosts
+        }
+        c.AddHost(hosts[0], hosts[1:]...)
+    }
+
+    return c, nil
 }

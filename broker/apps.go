@@ -4,10 +4,12 @@ import (
     "fmt"
     "time"
     errs "errors"
+    "strings"
     "github.com/cloudway/platform/container"
     "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/pkg/errors"
     "github.com/cloudway/platform/pkg/manifest"
+    "github.com/cloudway/platform/container/conf/defaults"
 )
 
 func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []string) (containers []*container.Container, err error) {
@@ -124,6 +126,7 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
     }
 
     opts.Namespace = user.Namespace
+    opts.Hosts = app.Hosts
     containers, err = br.createContainers(opts, plugins)
     if err != nil {
         return nil, err
@@ -231,7 +234,7 @@ func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Conta
     }
 
     if len(cs) < num {
-        return br.scaleUp(cs[0], num)
+        return br.scaleUp(cs[0], num, app.Hosts)
     } else if len(cs) > num {
         return nil, br.scaleDown(cs, len(cs)-num)
     } else {
@@ -239,7 +242,7 @@ func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Conta
     }
 }
 
-func (br *UserBroker) scaleUp(replica *container.Container, num int) ([]*container.Container, error) {
+func (br *UserBroker) scaleUp(replica *container.Container, num int, hosts []string) ([]*container.Container, error) {
     meta, err := br.Hub.GetPluginInfo(replica.PluginTag())
     if err != nil {
         return nil, err
@@ -248,6 +251,7 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int) ([]*contain
     opts := container.CreateOptions{
         Name:       replica.Name,
         Namespace:  replica.Namespace,
+        Hosts:      hosts,
         Plugin:     meta,
         Home:       replica.Home(),
         User:       replica.User(),
@@ -265,4 +269,72 @@ func (br *UserBroker) scaleDown(containers []*container.Container, num int) erro
         }
     }
     return nil
+}
+
+func (br *UserBroker) AddHost(name, host string) error {
+    if host == "" || strings.HasSuffix(host, "."+defaults.Domain()) {
+        return errs.New("Invalid domain name")
+    }
+
+    user := br.User.Basic()
+    app  := user.Applications[name]
+    if app == nil {
+        return ApplicationNotFoundError(name)
+    }
+
+    for _, h := range app.Hosts {
+        if host == h {
+            return nil
+        }
+    }
+
+    cs, err := br.FindAll(name, user.Namespace)
+    if err != nil {
+        return err
+    }
+
+    for _, c := range cs {
+        if c.Category().IsFramework() {
+            c.AddHost(host)
+        } else if (c.Category().IsService()) {
+            c.AddHost(c.ServiceName() + "." + host)
+        }
+    }
+
+    app.Hosts = append(app.Hosts, host)
+    return br.Users.Update(user.Name, userdb.Args{"applications": user.Applications})
+}
+
+func (br *UserBroker) RemoveHost(name, host string) error {
+    user := br.User.Basic()
+    app  := user.Applications[name]
+    if app == nil {
+        return ApplicationNotFoundError(name)
+    }
+
+    var removed bool
+    for i, h := range app.Hosts {
+        if host == h {
+            app.Hosts = append(app.Hosts[:i], app.Hosts[i+1:]...)
+            removed = true
+        }
+    }
+    if !removed {
+        return nil
+    }
+
+    cs, err := br.FindAll(name, user.Namespace)
+    if err != nil {
+        return err
+    }
+
+    for _, c := range cs {
+        if c.Category().IsFramework() {
+            c.RemoveHost(host)
+        } else if (c.Category().IsService()) {
+            c.RemoveHost(c.ServiceName() + "." + host)
+        }
+    }
+
+    return br.Users.Update(user.Name, userdb.Args{"applications": user.Applications})
 }

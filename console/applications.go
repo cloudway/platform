@@ -32,10 +32,14 @@ func (con *Console) initApplicationsRoutes(gets *mux.Router, posts *mux.Router) 
     posts.HandleFunc("/applications", con.createApplication)
     gets.HandleFunc("/applications/{name}", con.getApplication)
     gets.HandleFunc("/applications/{name}/status", con.getApplicationStatus)
+    gets.HandleFunc("/applications/{name}/settings", con.getApplicationSettings)
+    posts.HandleFunc("/applications/{name}/host", con.addHost)
+    posts.HandleFunc("/applications/{name}/host/delete", con.removeHost)
     posts.HandleFunc("/applications/{name}/reload", con.restartApplication)
     posts.HandleFunc("/applications/{name}/reload/async", con.asyncRestartApplication)
-    posts.HandleFunc("/applications/{name}/delete", con.removeApplication)
+    posts.HandleFunc("/applications/{name}/deploy", con.deployApplication)
     posts.HandleFunc("/applications/{name}/scale", con.scaleApplication)
+    posts.HandleFunc("/applications/{name}/delete", con.removeApplication)
     posts.HandleFunc("/applications/{name}/services", con.createServices)
     posts.HandleFunc("/applications/{name}/services/{service}/delete", con.removeService)
 }
@@ -239,9 +243,12 @@ func startContainers(containers []*container.Container, fn func(*container.Conta
 
 type appData struct {
     Name        string
-    URL         string
+    DNS         string
     CloneURL    string
+    Frameworks  []serviceData
     Services    []serviceData
+    Hosts       []string
+    Scale       int
 }
 
 type serviceData struct {
@@ -275,7 +282,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
     }
 
     appData := &appData{Name: name}
-    appData.URL = fmt.Sprintf("http://%s-%s.%s", name, user.Namespace, defaults.Domain())
+    appData.DNS = fmt.Sprintf("%s-%s.%s", name, user.Namespace, defaults.Domain())
 
     cloneURL := conf.Get("scm.clone_url")
     if cloneURL != "" {
@@ -291,28 +298,36 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
         return
     }
 
-    scale := 0
-    services := make([]serviceData, len(cs))
-    for i, c := range cs {
-        meta, err := con.Hub.GetPluginInfo(c.PluginTag())
-        if err == nil {
-            services[i].PluginName = meta.Name
-            services[i].DisplayName = meta.DisplayName
-            services[i].Ports = getPrivatePorts(meta)
-        } else {
-            tag := c.PluginTag()
-            services[i].PluginName = strings.SplitN(tag, ":", 2)[0]
-            services[i].DisplayName = tag
+    var (
+        frameworks  = make([]serviceData, 0, len(cs))
+        services    = make([]serviceData, 0, len(cs))
+        scale       = 0
+    )
+    for _, c := range cs {
+        service := serviceData{
+            ID:         c.ID,
+            Name:       c.ServiceName(),
+            Category:   c.Category(),
+            IP:         c.IP(),
+            State:      c.ActiveState().String(),
         }
 
-        services[i].ID       = c.ID
-        services[i].Name     = c.ServiceName()
-        services[i].Category = c.Category()
-        services[i].IP       = c.IP()
-        services[i].State    = c.ActiveState().String()
+        meta, err := con.Hub.GetPluginInfo(c.PluginTag())
+        if err == nil {
+            service.PluginName = meta.Name
+            service.DisplayName = meta.DisplayName
+            service.Ports = getPrivatePorts(meta)
+        } else {
+            tag := c.PluginTag()
+            service.PluginName = strings.SplitN(tag, ":", 2)[0]
+            service.DisplayName = tag
+        }
 
         if c.Category().IsFramework() {
             scale++
+            frameworks = append(frameworks, service)
+        } else {
+            services = append(services, service)
         }
     }
 
@@ -331,8 +346,10 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
     }
 
     appData.Services = services
+    appData.Frameworks = frameworks
+    appData.Scale = scale
+
     data.MergeKV("app", appData)
-    data.MergeKV("scale", scale)
     data.MergeKV("available_plugins", plugins)
     con.mustRender(w, r, "application", data)
 }
@@ -353,6 +370,75 @@ func getPrivatePorts(meta *manifest.Plugin) string {
         }
     }
     return strings.Join(ports, ",")
+}
+
+func (con *Console) getApplicationSettings(w http.ResponseWriter, r *http.Request) {
+    user := con.currentUser(w, r)
+    if user == nil {
+        return
+    }
+
+    data := con.layoutUserData(w, r, user)
+    con.showApplicationSettings(w, r, user, data)
+}
+
+func (con *Console) addHost(w http.ResponseWriter, r *http.Request) {
+    user := con.currentUser(w, r)
+    if user == nil {
+        return
+    }
+
+    name := mux.Vars(r)["name"]
+    host := r.FormValue("hostname")
+    err  := con.NewUserBroker(user).AddHost(name, host)
+
+    if err != nil {
+        data := con.layoutUserData(w, r, user)
+        data.MergeKV("error", err)
+        con.showApplicationSettings(w, r, user, data)
+        return
+    }
+
+    http.Redirect(w, r, "/applications/"+name+"/settings", http.StatusFound)
+}
+
+func (con *Console) removeHost(w http.ResponseWriter, r *http.Request) {
+    user := con.currentUser(w, r)
+    if user == nil {
+        return
+    }
+
+    name := mux.Vars(r)["name"]
+    host := r.FormValue("hostname")
+    err  := con.NewUserBroker(user).RemoveHost(name, host)
+    if !con.badRequest(w, r, err, "/applications/"+name+"/settings") {
+        http.Redirect(w, r, "/applications/"+name+"/settings", http.StatusFound)
+    }
+}
+
+func (con *Console) showApplicationSettings(w http.ResponseWriter, r *http.Request, user *userdb.BasicUser, data authboss.HTMLData) {
+    name := mux.Vars(r)["name"]
+    app  := user.Applications[name]
+
+    if app == nil {
+        con.error(w, r, http.StatusNotFound, "应用未找到", "/applications")
+        return
+    }
+
+    appData := &appData{Name: name}
+    appData.DNS = fmt.Sprintf("%s-%s.%s", name, user.Namespace, defaults.Domain())
+
+    cloneURL := conf.Get("scm.clone_url")
+    if cloneURL != "" {
+        cloneURL = strings.Replace(cloneURL, "<namespace>", user.Namespace, -1)
+        cloneURL = strings.Replace(cloneURL, "<repo>", name, -1)
+        appData.CloneURL = cloneURL
+    }
+
+    appData.Hosts = app.Hosts
+
+    data.MergeKV("app", appData)
+    con.mustRender(w, r, "application_settings", data)
 }
 
 func (con *Console) restartApplication(w http.ResponseWriter, r *http.Request) {
@@ -474,6 +560,21 @@ func (con *Console) getApplicationStatus(w http.ResponseWriter, r *http.Request)
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusOK)
     json.NewEncoder(w).Encode(&status)
+}
+
+func (con *Console) deployApplication(w http.ResponseWriter, r *http.Request) {
+    user := con.currentUser(w, r)
+    if user == nil {
+        return
+    }
+
+    name := mux.Vars(r)["name"]
+    err := con.SCM.Deploy(user.Namespace, name)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+    } else {
+        w.WriteHeader(http.StatusNoContent)
+    }
 }
 
 func (con *Console) removeApplication(w http.ResponseWriter, r *http.Request) {
