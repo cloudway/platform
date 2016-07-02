@@ -13,6 +13,7 @@ import com.atlassian.bitbucket.hook.repository.AsyncPostReceiveRepositoryHook;
 import com.atlassian.bitbucket.hook.repository.RepositoryHookContext;
 import com.atlassian.bitbucket.hook.repository.RepositoryHookService;
 import com.atlassian.bitbucket.repository.RefChange;
+import com.atlassian.bitbucket.repository.RepositoryService;
 import com.atlassian.bitbucket.scm.git.GitScmConfig;
 import com.atlassian.bitbucket.scm.git.command.GitCommandBuilderFactory;
 
@@ -23,8 +24,11 @@ public class AsyncPostReceiveDeployer implements AsyncPostReceiveRepositoryHook 
     AsyncPostReceiveDeployer(GitCommandBuilderFactory factory,
                              GitScmConfig gitScmConfig,
                              HookService hookService,
-                             RepositoryHookService repositoryHookService) {
-        deployer = new RepoDeployer(factory, gitScmConfig, hookService, repositoryHookService);
+                             RepositoryHookService repositoryHookService,
+                             RepositoryService repositoryService) {
+        deployer = new RepoDeployer(factory, gitScmConfig,
+                                    hookService, repositoryHookService,
+                                    repositoryService);
     }
 
     @Override

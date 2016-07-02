@@ -16,12 +16,14 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.zip.GZIPOutputStream;
 
 import com.atlassian.bitbucket.hook.HookRequestHandle;
 import com.atlassian.bitbucket.hook.HookService;
 import com.atlassian.bitbucket.hook.HookUtils;
 import com.atlassian.bitbucket.hook.repository.RepositoryHookService;
 import com.atlassian.bitbucket.repository.Repository;
+import com.atlassian.bitbucket.repository.RepositoryService;
 import com.atlassian.bitbucket.scm.CommandOutputHandler;
 import com.atlassian.bitbucket.scm.git.GitScmConfig;
 import com.atlassian.bitbucket.scm.git.command.GitCommand;
@@ -31,8 +33,9 @@ import com.atlassian.utils.process.ProcessException;
 import com.atlassian.utils.process.Watchdog;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
-import com.google.common.io.ByteStreams;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.io.FileUtils;
+import com.google.common.io.ByteStreams;
 
 public class RepoDeployer
 {
@@ -40,14 +43,17 @@ public class RepoDeployer
     private final GitScmConfig gitScmConfig;
     private final HookService hookService;
     private final RepositoryHookService repositoryHookService;
+    private final RepositoryService repositoryService;
 
     public RepoDeployer(GitCommandBuilderFactory gitCommandBuilderFactory,
                         GitScmConfig gitScmConfig, HookService hookService,
-                        RepositoryHookService repositoryHookService) {
+                        RepositoryHookService repositoryHookService,
+                        RepositoryService repositoryService) {
         this.gitCommandBuilderFactory = gitCommandBuilderFactory;
         this.gitScmConfig = gitScmConfig;
         this.hookService = hookService;
         this.repositoryHookService = repositoryHookService;
+        this.repositoryService = repositoryService;
     }
 
     public void deploy(Repository repository, boolean asynchronous) throws IOException {
@@ -58,23 +64,37 @@ public class RepoDeployer
         // Create a temporary directory to save the repository archive
         Path archiveDir = Files.createTempDirectory("deploy");
         Path archiveFile = archiveDir.resolve(archiveDir.getFileName() + ".tar.gz");
+        DeploymentHandler handler = new DeploymentHandler(name, namespace, archiveDir);
 
-        // Run git command to generate an archive file
-        CommandOutputHandler<Void> handler =
-            new DeploymentHandler(name, namespace, archiveDir);
-        GitCommand<Void> command = gitCommandBuilderFactory.builder(repository)
-            .command("archive")
-            .argument("--format=tar.gz")
-            .argument("-o")
-            .argument(archiveFile.toString())
-            .argument("master")
-            .build(handler);
+        if (repositoryService.isEmpty(repository)) {
+            // Create empty archive file
+            TarArchiveOutputStream tar =
+                new TarArchiveOutputStream(
+                    new GZIPOutputStream(
+                        Files.newOutputStream(archiveFile)));
+            tar.close();
 
-        // The remaining task is performed in the command handler
-        if (asynchronous) {
-            command.start();
+            try {
+                handler.complete();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
         } else {
-            command.call();
+            // Run git command to generate an archive file
+            GitCommand<Void> command = gitCommandBuilderFactory.builder(repository)
+                .command("archive")
+                .argument("--format=tar.gz")
+                .argument("-o")
+                .argument(archiveFile.toString())
+                .argument("master")
+                .build(handler);
+
+            // The remaining task is performed in the command handler
+            if (asynchronous) {
+                command.start();
+            } else {
+                command.call();
+            }
         }
     }
 
@@ -91,8 +111,6 @@ public class RepoDeployer
 
         @Override
         public void complete() throws ProcessException {
-            super.complete();
-
             try {
                 // Run cwman to deploy the archive
                 ProcessBuilder builder = new ProcessBuilder();

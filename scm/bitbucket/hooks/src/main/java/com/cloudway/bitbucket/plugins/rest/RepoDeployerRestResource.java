@@ -46,7 +46,9 @@ public class RepoDeployerRestResource {
                              RepositoryService repositoryService,
                              PermissionValidationService validator,
                              RepositoryHookService repositoryHookService) {
-        this.deployer = new RepoDeployer(cmdFactory, gitScmConfig, hookService, repositoryHookService);
+        this.deployer = new RepoDeployer(cmdFactory, gitScmConfig,
+                                         hookService, repositoryHookService,
+                                         repositoryService);
         this.repositoryService = repositoryService;
         this.validator = validator;
     }
