@@ -32,13 +32,13 @@
                 <li class="dropdown-header">框架</li>
                 {{- range .}}
                 {{- if eq .Category "Framework"}}
-                <li><a name="{{.Name}}:{{.Version}}" class="plugin-select" href="#">{{.DisplayName}}</a></li>
+                <li class="plugin-select"><a name="{{.Name}}:{{.Version}}" href="#"><img src="{{logo .Name .Logo}}"/> {{.DisplayName}}</a></li>
                 {{- end}}
                 {{- end}}
                 <li class="dropdown-header">服务</li>
                 {{- range .}}
                 {{- if eq .Category "Service"}}
-                <li><a name="{{.Name}}:{{.Version}}" class="plugin-select" href="#">{{.DisplayName}}</a></li>
+                <li class="plugin-select"><a name="{{.Name}}:{{.Version}}" href="#"><img src="{{logo .Name .Logo}}"/> {{.DisplayName}}</a></li>
                 {{- end}}
                 {{- end}}
               </ul>

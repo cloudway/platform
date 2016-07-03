@@ -1,5 +1,13 @@
+<style>
+.plugin-select img {
+  width: 20px;
+  height: 20px;
+  margin-right: 5px;
+}
+</style>
+
 <script>
-$('.plugin-select').on('click', function(e) {
+$('.plugin-select a').on('click', function(e) {
   var all = $('#plugins').val()
   if (all.trim().length == 0) {
     $('#plugins').val(this.name)

@@ -13,6 +13,8 @@ import (
     "html/template"
     "crypto/md5"
     "encoding/hex"
+    "strings"
+    "mime"
 
     "github.com/cloudway/platform/broker"
     "github.com/cloudway/platform/container"
@@ -33,6 +35,7 @@ import (
     "github.com/aarondl/tpl"
     "github.com/justinas/nosurf"
     "github.com/oxtoacart/bpool"
+    "github.com/gorilla/mux"
 )
 
 var funcs = template.FuncMap{
@@ -46,6 +49,14 @@ var funcs = template.FuncMap{
         hash := md5.Sum([]byte(email))
         id   := hex.EncodeToString(hash[:])
         return fmt.Sprintf("https://cn.gravatar.com/avatar/%s?s=%d&d=mm&r=g", id, size)
+    },
+    "logo": func(tag, url string) template.URL {
+        if url == "" {
+            url = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="
+        } else if !(strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://")) {
+            url = "/images/plugin/" + tag
+        }
+        return template.URL(url)
     },
 }
 
@@ -78,6 +89,8 @@ func (con *Console) InitRoutes(s *server.Server) {
     gets.HandleFunc("/", con.index)
     gets.HandleFunc("/password", con.password)
     posts.HandleFunc("/password", con.changePassword)
+
+    gets.HandleFunc("/images/plugin/{tag}", con.getPluginLogo)
 
     con.initSettingsRoutes(gets, posts)
     con.initApplicationsRoutes(gets, posts)
@@ -283,4 +296,32 @@ func (con *Console) changePassword(w http.ResponseWriter, r *http.Request) {
     }
 
     http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func (con *Console) getPluginLogo(w http.ResponseWriter, r *http.Request) {
+    tag := mux.Vars(r)["tag"]
+    meta, err := con.Hub.GetPluginInfo(tag)
+    if meta == nil || err != nil {
+        http.NotFound(w, r)
+        return
+    }
+
+    url := meta.Logo
+    if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+        http.Error(w, "Invalid icon path", http.StatusInternalServerError)
+        return
+    }
+
+    b, err := ioutil.ReadFile(filepath.Join(meta.Path, url))
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    ctype := mime.TypeByExtension(filepath.Ext(url))
+    if ctype != "" {
+        w.Header().Set("Content-Type", ctype)
+    }
+    w.WriteHeader(http.StatusOK)
+    w.Write(b)
 }

@@ -40,6 +40,7 @@ type Plugin struct {
     Description     string      `yaml:"Description,omitempty"`
     Version         string      `yaml:"Version"`
     Vendor          string      `yaml:"Vendor"`
+    Logo            string      `yaml:"Logo"`
     Category        Category    `yaml:"Category"`
     BaseImage       string      `yaml:"Base-Image"`
     DependsOn       []string    `yaml:"Depends-On,omitempty"`

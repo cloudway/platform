@@ -1,5 +1,13 @@
 {{define "pagetitle"}}应用控制台 - {{.app.Name}}{{end}}
 
+<style>
+.plugin-logo {
+  width: 20px;
+  height: 20px;
+  margin-right: 5px;
+}
+</style>
+
 {{$name := .app.Name}}
 <div class="panel panel-default">
   {{template "_appnav" .}}
@@ -23,7 +31,7 @@
     {{- range .app.Frameworks}}
     <tr>
       <td>{{printf "%.12s" .ID}}</td>
-      <td>{{.DisplayName}}</td>
+      <td><img class="plugin-logo" src="{{logo .PluginName .Logo}}"/> {{.DisplayName}}</td>
       <td>{{.IP}}</td>
       <td>{{.Ports}}</td>
       <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
@@ -65,7 +73,7 @@
     {{- range .}}
     <tr>
       <td>{{printf "%.12s" .ID}}</td>
-      <td>{{.DisplayName}}</td>
+      <td><img class="plugin-logo" src="{{logo .PluginName .Logo}}"/> {{.DisplayName}}</td>
       <td>{{.IP}}</td>
       <td>{{.Ports}}</td>
       <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
@@ -93,7 +101,7 @@
               <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-hasgroups="true" aria-expanded="false"><span class="caret"></span></button>
               <ul class="dropdown-menu">
                 {{- range .}}
-                <li><a name="{{.Name}}:{{.Version}}" class="plugin-select" href="#">{{.DisplayName}}</a></li>
+                <li class="plugin-select"><a name="{{.Name}}:{{.Version}}" href="#"><img src="{{logo .Name .Logo}}"/> {{.DisplayName}}</a></li>
                 {{- end}}
               </ul>
             </span>
