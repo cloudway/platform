@@ -5,6 +5,7 @@ import (
     "os"
     "os/signal"
     "syscall"
+    "strings"
     "encoding/json"
     "github.com/Sirupsen/logrus"
     "golang.org/x/net/context"
@@ -28,7 +29,7 @@ func RunUpdater(cli container.DockerClient, proxy Proxy) error {
                 if err := conf.Initialize(); err != nil {
                     logrus.Error(err)
                 }
-                if err := updateStaticMap(proxy); err != nil {
+                if err := update(proxy); err != nil {
                     logrus.Error(err)
                 }
             default:
@@ -42,7 +43,7 @@ func RunUpdater(cli container.DockerClient, proxy Proxy) error {
     if err := proxy.Reset(); err != nil {
         return err
     }
-    if err := updateStaticMap(proxy); err != nil {
+    if err := update(proxy); err != nil {
         return err
     }
     if err := rebuild(cli, proxy); err != nil {
@@ -54,7 +55,7 @@ func RunUpdater(cli container.DockerClient, proxy Proxy) error {
     return nil
 }
 
-func updateStaticMap(proxy Proxy) error {
+func update(proxy Proxy) error {
     var mappings []*manifest.ProxyMapping
     for frontend, backend := range conf.GetSection("proxy-mapping") {
         mappings = append(mappings, &manifest.ProxyMapping{
@@ -77,19 +78,28 @@ func updateStaticMap(proxy Proxy) error {
 }
 
 func rebuild(cli container.DockerClient, proxy Proxy) error {
-    ids, err := cli.IDs()
+    containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
     if err != nil {
         return err
     }
 
-    for _, id := range ids {
-        c, err := cli.Inspect(id)
-        if err == nil && c.State.Running && !c.State.Paused {
-            err = handleStart(proxy, c)
-        }
-        if err != nil {
-            logrus.Error(err)
-            continue
+    for _, item := range containers {
+        if item.Labels[container.APP_NAME_KEY] != "" && item.Labels[container.APP_NAMESPACE_KEY] != "" {
+            c, err := cli.Inspect(item.ID)
+            if err == nil {
+                err = handleStart(proxy, c)
+            }
+            if err != nil {
+                logrus.Error(err)
+            }
+        } else {
+            info, err := cli.ContainerInspect(context.Background(), item.ID)
+            if err == nil {
+                err = handleVirtualHost(proxy, info)
+            }
+            if err != nil {
+                logrus.Error(err)
+            }
         }
     }
     return nil
@@ -99,12 +109,10 @@ func listen(cli container.DockerClient, proxy Proxy) error {
     var err error
 
     filters := filters.NewArgs()
-    filters.Add("type", "container")
+    filters.Add("type",  "container")
     filters.Add("event", "start")
     filters.Add("event", "die")
     filters.Add("event", "destroy")
-    filters.Add("label", container.APP_NAME_KEY)
-    filters.Add("label", container.APP_NAMESPACE_KEY)
 
     resp, err := cli.Events(context.Background(), types.EventsOptions{Filters: filters})
     if err != nil {
@@ -125,10 +133,19 @@ func listen(cli container.DockerClient, proxy Proxy) error {
 
         switch event.Action {
         case "start":
-            logrus.Debugf("container started: %s", event.Actor.ID)
-            c, err := cli.Inspect(event.Actor.ID)
-            if err == nil {
-                err = handleStart(proxy, c)
+            _, ok1 := event.Actor.Attributes[container.APP_NAME_KEY]
+            _, ok2 := event.Actor.Attributes[container.APP_NAMESPACE_KEY]
+            if ok1 && ok2 {
+                logrus.Debugf("container started: %s", event.Actor.ID)
+                c, err := cli.Inspect(event.Actor.ID)
+                if err == nil {
+                    err = handleStart(proxy, c)
+                }
+            } else {
+                info, err := cli.ContainerInspect(context.Background(), event.Actor.ID)
+                if err == nil {
+                    err = handleVirtualHost(proxy, info)
+                }
             }
 
         case "die", "destroy":
@@ -157,6 +174,52 @@ func handleStart(proxy Proxy, c *container.Container) error {
     }
 
     return nil
+}
+
+func handleVirtualHost(proxy Proxy, info types.ContainerJSON) error {
+    var vhost, vport string
+    for _, env := range info.Config.Env {
+        if strings.HasPrefix(env, "VIRTUAL_HOST=") {
+            vhost = env[13:]
+        }
+        if strings.HasPrefix(env, "VIRTUAL_PORT=") {
+            vport = env[13:]
+        }
+    }
+    if vhost == "" {
+        return nil
+    }
+
+    if vport == "" {
+        ports := info.Config.ExposedPorts
+        if len(ports) == 0 {
+            return nil
+        } else if len(ports) == 1 {
+            for p := range ports {
+                vport = p.Port()
+            }
+        } else {
+            for p := range ports {
+                if p.Port() == "80" || p.Port() == "8080" {
+                    vport = p.Port()
+                    break
+                }
+            }
+        }
+        if vport == "" {
+            return nil
+        }
+    }
+
+    ip  := info.NetworkSettings.IPAddress
+    eps := []*manifest.Endpoint{&manifest.Endpoint{
+        ProxyMappings: []*manifest.ProxyMapping{&manifest.ProxyMapping{
+            Frontend:  vhost,
+            Backend:  "http://" + ip + ":" + vport,
+            Protocol: "http",
+        }},
+    }}
+    return proxy.AddEndpoints(info.ID, eps)
 }
 
 func handleStop(proxy Proxy, id string) error {
