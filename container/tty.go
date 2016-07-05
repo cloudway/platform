@@ -2,11 +2,7 @@ package container
 
 import (
     "io"
-    "runtime"
     "os"
-    "os/signal"
-    "time"
-    "syscall"
     "golang.org/x/crypto/ssh/terminal"
 )
 
@@ -82,32 +78,6 @@ func (t *Tty) getSize() (int, int, error) {
         return 0, 0, nil
     } else {
         return terminal.GetSize(t.outFd)
-    }
-}
-
-func (t *Tty) monitorResize(fn func (width, height int) error) {
-    t.resize(fn)
-
-    if runtime.GOOS == "windows" {
-        go func() {
-            prevW, prevH, _ := t.getSize()
-            for {
-                time.Sleep(time.Millisecond * 250)
-                w, h, _ := t.getSize()
-                if prevW != w || prevH != h {
-                    t.resize(fn)
-                }
-                prevW, prevH = w, h
-            }
-        }()
-    } else {
-        sigchan := make(chan os.Signal, 1)
-        signal.Notify(sigchan, syscall.SIGWINCH)
-        go func() {
-            for range sigchan {
-                t.resize(fn)
-            }
-        }()
     }
 }
 

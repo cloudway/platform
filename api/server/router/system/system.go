@@ -40,6 +40,8 @@ func (s *systemRouter) getVersion(ctx context.Context, w http.ResponseWriter, r 
 
     v := types.Version{
         Version:        api.Version,
+        GitCommit:      api.GitCommit,
+        BuildTime:      api.BuildTime,
         DockerVersion:  info.Version,
         Os:             osruntime.GOOS,
         Arch:           osruntime.GOARCH,

@@ -248,8 +248,8 @@ func buildImage(cli DockerClient, t *template.Template, cfg *createConfig) (imag
     }
 
     // copy application support files
-    support := filepath.Join(conf.RootDir, "support")
-    if err = archive.CopyFileTree(tw, "support", support, true); err != nil {
+    sandbox := filepath.Join(conf.RootDir, "sandbox")
+    if err = archive.CopyFileTree(tw, "sandbox", sandbox, true); err != nil {
         return
     }
 

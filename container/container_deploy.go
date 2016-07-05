@@ -3,7 +3,7 @@ package container
 import (
     "io"
     "archive/tar"
-    "github.com/docker/distribution/context"
+    "golang.org/x/net/context"
     "github.com/docker/engine-api/types"
     "github.com/cloudway/platform/pkg/archive"
 )

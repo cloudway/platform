@@ -1,0 +1,14 @@
+*.exe
+*.exe~
+*.orig
+*.test
+.*.swp
+*.ipr
+*.iws
+*.iml
+.DS_Store
+.gopath/
+autogen/
+bundles/
+api/version_autogen.go
+vendor/

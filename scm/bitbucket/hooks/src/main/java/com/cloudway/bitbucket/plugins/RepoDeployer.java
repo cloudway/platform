@@ -115,6 +115,8 @@ public class RepoDeployer
                 // Run cwman to deploy the archive
                 ProcessBuilder builder = new ProcessBuilder();
                 builder.command("/usr/bin/cwman", "deploy", name, namespace, archiveDir.toString());
+                builder.redirectError(ProcessBuilder.Redirect.INHERIT);
+                builder.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                 builder.start().waitFor();
             } catch (Exception ex) {
                 throw new ProcessException(ex);

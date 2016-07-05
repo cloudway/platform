@@ -1,0 +1,7 @@
+bundles
+.gopath
+vendor/pkg
+scm/bitbucket/hooks/target
+*.ipr
+*.iws
+*.iml

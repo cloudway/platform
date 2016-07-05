@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+
+(
+    DEST="${DEST}-server"
+    ABS_DEST="${ABS_DEST}-server"
+    . build/make/binary-server
+)
+(
+    DEST="${DEST}-sandbox"
+    ABS_DEST="${ABS_DEST}-sandbox"
+    . build/make/binary-sandbox
+)

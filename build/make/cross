@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+
+# explicit list of os/arch combos that support being a sandbox
+declare -A sandboxSupporting
+sandboxSupporting=(
+    [linux/amd64]=1
+)
+
+# if we have our linux/amd64 version compiled, let's symlink it in
+if [ -x "$DEST/../binary-sandbox/cwctl-$VERSION" ]; then
+    mkdir -p "$DEST/linux/amd64"
+    (
+        cd "$DEST/linux/amd64"
+        ln -s ../../../binary-sandbox/* ./
+        ln -s ../../../binary-server/* ./
+    )
+    echo "Created symlinks:" "$DEST/linux/amd64/"*
+fi
+
+for platform in $CLOUDWAY_CROSSPLATFORMS; do
+    (
+        export DEST="$DEST/$platform" # bundles/VERSION/cross/GOOS/GOARCH/cwcli-VERSION
+        mkdir -p "$DEST"
+        ABS_DEST="$(cd "$DEST" && pwd -P)"
+        export GOOS=${platform%/*}
+        export GOARCH=${platform##*/}
+
+        if [ -z "${sandboxSupporting[$platform]}" ]; then
+            # we just need a simple client for these platform
+            export LDFLAGS_STATIC_CLOUDWAY=""
+            source "${MAKEDIR}/binary-server"
+        else
+            source "${MAKEDIR}/binary-server"
+            source "${MAKEDIR}/binary-sandbox"
+        fi
+    )
+done

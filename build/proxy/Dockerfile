@@ -9,9 +9,9 @@ RUN sed -i 's/"http-proxy": "1.0.2"/"http-proxy": "1.11.1"/' /hipache/package.js
 RUN sed -i 's/daemonize yes/daemonize no/' /etc/redis/redis.conf
 
 # add proxy updater service
-ADD cwman add-mapping /usr/bin/
-ADD cloudway.conf /usr/local/cloudway/conf/cloudway.conf
-ADD config.json /hipache/config/config.json
-ADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY cwman add-mapping /usr/bin/
+COPY cloudway.conf /usr/local/cloudway/conf/cloudway.conf
+COPY config.json /hipache/config/config.json
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 ENTRYPOINT ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]

@@ -10,7 +10,7 @@ func (cli *CWMan) CmdUpdateProxy(args ...string) (err error) {
     var prx proxy.Proxy
 
     for i := 0; i < 3; i++ {
-        prx, err = proxy.New(conf.Get("proxy-url"))
+        prx, err = proxy.New(conf.Get("proxy.url"))
         if err == nil {
             break
         }

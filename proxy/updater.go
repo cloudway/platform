@@ -211,7 +211,16 @@ func handleVirtualHost(proxy Proxy, info types.ContainerJSON) error {
         }
     }
 
-    ip  := info.NetworkSettings.IPAddress
+    ip := info.NetworkSettings.IPAddress
+    if ip == "" {
+        for _, net := range info.NetworkSettings.Networks {
+            if net.IPAddress != "" {
+                ip = net.IPAddress
+                break
+            }
+        }
+    }
+
     eps := []*manifest.Endpoint{&manifest.Endpoint{
         ProxyMappings: []*manifest.ProxyMapping{&manifest.ProxyMapping{
             Frontend:  vhost,

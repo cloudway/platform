@@ -9,6 +9,7 @@ FROM {{.BaseImage}}
 RUN echo '{{.InstallScript}}' | /bin/sh
 {{- end }}
 
+USER root
 {{ if eq .User "root" -}}
 RUN mkdir -p {{.Home}}/.env {{.Home}}/repo {{.Home}}/deploy {{.Home}}/data {{.Home}}/logs
 {{- else -}}
@@ -21,7 +22,7 @@ RUN groupadd {{.User}} && useradd -g {{.User}} -d {{.Home}} -m -s /usr/bin/cwsh 
 WORKDIR {{.Home}}
 ENV{{range $key, $value := .Env}}{{printf " %s=%q" $key $value}}{{end}}
 
-COPY support /
+COPY sandbox /
 ADD {{.PluginInstallPath}} /tmp/install_{{.Plugin.Name}}
 
 RUN echo 0 > {{.Home}}/.env/.state \
