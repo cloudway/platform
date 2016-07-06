@@ -94,19 +94,23 @@
   <div class="panel-footer">
     <div class="row">
       <div class="col-md-3">
-        <form action="/applications/{{$name}}/services" method="POST">
+        <form action="/applications/{{$name}}/services" method="post">
           <div class="input-group">
             {{- with .available_plugins}}
-            <span class="input-group-btn">
-              <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-hasgroups="true" aria-expanded="false"><span class="caret"></span></button>
+            <div class="input-group-btn dropup">
+              <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <span class="caret"></span>
+              </button>
               <ul class="dropdown-menu">
                 {{- range .}}
-                <li class="plugin-select"><a name="{{.Name}}:{{.Version}}" href="#"><img src="{{logo .Name .Logo}}"/> {{.DisplayName}}</a></li>
+                <li class="plugin-select" data-input="#services">
+                  <a name="{{.Name}}:{{.Version}}" href="#"><img src="{{logo .Name .Logo}}"/> {{.DisplayName}}</a>
+                </li>
                 {{- end}}
               </ul>
-            </span>
+            </div>
             {{- end}}
-            <input type="text" id="plugins" name="plugins" class="form-control input-sm" value="{{.plugins}}" placeholder="增加服务...">
+            <input type="text" id="services" name="services" class="form-control input-sm" value="{{.plugins}}" placeholder="增加服务...">
             <span class="input-group-btn">
               <button class="btn btn-primary btn-sm" type="submit"><i class="fa fa-plus"></i></button>
             </span>

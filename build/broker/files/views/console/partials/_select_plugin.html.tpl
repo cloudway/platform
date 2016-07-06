@@ -8,9 +8,11 @@
 
 <script>
 $('.plugin-select a').on('click', function(e) {
-  var all = $('#plugins').val()
-  if (all.trim().length == 0) {
-    $('#plugins').val(this.name)
+  var select = $(this).parent()
+  var input = $(select.data('input'))
+  var all = input.val()
+  if (select.data('single-select') || all.trim().length == 0) {
+    input.val(this.name)
     return
   }
 
@@ -28,6 +30,6 @@ $('.plugin-select a').on('click', function(e) {
   if (!found) {
     tags.push(new_tag)
   }
-  $('#plugins').val(tags.join(' '))
+  input.val(tags.join(' '))
 })
 </script>

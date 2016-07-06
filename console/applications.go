@@ -122,7 +122,8 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
         data := con.layoutUserData(w, r, user)
         data.MergeKV("error", err)
         data.MergeKV("name", r.PostForm.Get("name"))
-        data.MergeKV("plugins", r.PostForm.Get("plugins"))
+        data.MergeKV("framework", r.PostForm.Get("framework"))
+        data.MergeKV("services", r.PostForm.Get("services"))
         data.MergeKV("repo", r.PostForm.Get("repo"))
         data.MergeKV("domain", defaults.Domain())
         data.MergeKV("available_plugins", con.Hub.ListPlugins("", ""))
@@ -159,12 +160,13 @@ func parseCreateOptions(r *http.Request) (opts container.CreateOptions, tags []s
         return
     }
 
-    tags = strings.Fields(r.PostForm.Get("plugins"))
-    if len(tags) == 0 {
+    framework := r.PostForm.Get("framework")
+    services := strings.Fields(r.PostForm.Get("services"))
+    if framework == "" {
         err = errors.New("应用框架不能为空")
         return
     }
-
+    tags = append([]string{framework}, services...)
     return
 }
 
@@ -204,7 +206,7 @@ func (con *Console) parseServiceCreateOptions(r *http.Request) (opts container.C
     }
 
     opts = container.CreateOptions{Name: mux.Vars(r)["name"]}
-    tags = strings.Fields(r.PostForm.Get("plugins"))
+    tags = strings.Fields(r.PostForm.Get("services"))
 
     if len(tags) == 0 {
         err = errors.New("服务插件不能为空")
