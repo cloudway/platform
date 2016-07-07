@@ -51,21 +51,20 @@ bundles:
 cross: build ## cross build the binaries for darwin, freebsd and windows
 	$(DOCKER_RUN_DOCKER) build/make.sh binary cross
 
-tgz: build ## build the archive (.zip on windows and .tgz otherwise) containing the binaries
-	$(DOCKER_RUN_DOCKER) build/make.sh binary cross tgz
+tgz: build ## build the archive containing the binaries
+	$(DOCKER_RUN_DOCKER) build/make.sh binary tgz
 
-images: proxy broker ## build the docker images
+images: proxy-image broker-image ## build the docker images
 
-proxy: binary
-	cp bundles/latest/binary-server/cwman build/proxy
+proxy-image: binary
+	cp -L bundles/latest/binary-server/cwman build/proxy
 	docker build -t icloudway/proxy -f build/proxy/Dockerfile build/proxy
 	rm -f build/proxy/cwman
 
-broker: binary
-	cp bundles/latest/binary-server/cwman build/broker/
-	cp bundles/latest/binary-sandbox/cwctl build/broker/files/sandbox/usr/bin/
+broker-image: tgz
+	cp bundles/latest/tgz/cloudway-broker-*-linux-amd64.tar.gz build/broker/cloudway-broker.tar.gz
 	docker build -t icloudway/broker -f build/broker/Dockerfile build/broker
-	rm -f build/broker/cwman build/broker/files/sandbox/usr/bin/cwctl
+	rm -f build/broker/cloudway-broker.tar.gz
 
 shell: build ## start a shell inside the build env
 	$(DOCKER_RUN_DOCKER) bash

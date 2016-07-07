@@ -1,69 +1,39 @@
 #!/bin/bash
 set -e
 
-CROSS="$DEST/../cross"
+SERVER_BINARY="$DEST/../binary-server/cwman-$VERSION"
+SANDBOX_BINARY="$DEST/../binary-sandbox/cwctl-$VERSION"
 
-if [ ! -d "$CROSS/linux/amd64" ]; then
-    echo >&2 'error: binary and cross must be run before tgz'
+if ! [ -x "$SERVER_BINARY" -a -x "$SANDBOX_BINARY" ]; then
+    echo >&2 'error: binary must be run before broker-tgz'
     false
 fi
 
 (
-for d in "$CROSS/"*/*; do
-    export GOARCH="$(basename "$d")"
-    export GOOS="$(basename "$(dirname "$d")")"
-    BINARY_NAME="cwman-$VERSION"
-    SANDBOX_BINARY_NAME="cwctl-$VERSION"
-    BINARY_EXTENSION="$(export GOOS && binary_extension)"
-    if [ "$GOOS" = 'windows' ]; then
-        # if windows use a zip, not tgz
-        BUNDLE_EXTENSION=".zip"
-        IS_TAR="false"
-    else
-        BUNDLE_EXTENSION=".tgz"
-        IS_TAR="true"
-    fi
-    BINARY_FULLNAME="$BINARY_NAME$BINARY_EXTENSION"
-    SANDBOX_BINARY_FULLNAME="$SANDBOX_BINARY_NAME$BINARY_EXTENSION"
-    TGZ="$DEST/cloudway-$VERSION-${GOOS}-${GOARCH}${BUNDLE_EXTENSION}"
+# The staging directory for the files in the tgz
+BUILD_PATH="$DEST/build"
 
-    # The staging directory for the files in the tgz
-    BUILD_PATH="$DEST/build"
+# The directory that is at the root of the tar file
+TAR_BASE_DIRECTORY="cloudway"
 
-    # The directory that is at the root of the tar file
-    TAR_BASE_DIRECTORY="cloudway"
+# $DEST/build/cloudway-broker
+TAR_PATH="$BUILD_PATH/$TAR_BASE_DIRECTORY"
 
-    # $DEST/build/cloudway
-    TAR_PATH="$BUILD_PATH/$TAR_BASE_DIRECTORY"
+TGZ="$DEST/cloudway-broker-$VERSION-linux-amd64.tar.gz"
 
-    # Copy the correct cloudway binary
-    mkdir -p $TAR_PATH
-    cp -L "$d/$BINARY_FULLNAME" "$TAR_PATH/cwman$BINARY_EXTENSION"
-    if [ -f "$d/$SANDBOX_BINARY_FULLNAME" ]; then
-        cp -L "$d/$SANDBOX_BINARY_FULLNAME" "$TAR_PATH/cwctl$BINARY_EXTENSION"
-    fi
+# Copy the cloudway binary
+mkdir -p $TAR_PATH/usr/bin
+mkdir -p $TAR_PATH/usr/local/cloudway
+cp -L $SERVER_BINARY $TAR_PATH/usr/bin/cwman
+cp -R $SCRIPTDIR/broker/files/* $TAR_PATH/usr/local/cloudway/
+cp -L $SANDBOX_BINARY $TAR_PATH/usr/local/cloudway/sandbox/usr/bin/cwctl
 
-    if [ "$IS_TAR" == "true" ]; then
-        echo "Creating tgz from $BUILD_PATH and naming it $TGZ"
-        tar --numeric-owner --owner 0 -C "$BUILD_PATH" -czf "$TGZ" $TAR_BASE_DIRECTORY
-    else
-        # ZIP needs to full absolute dir path, not the absolute path
-        ZIP=`pwd`"/$TGZ"
-        # keep track of where we are, for later
-        pushd . >/dev/null
-        # go into the BUILD_PATH since zip does not have a -C equivalent
-        cd $BUILD_PATH
-        echo "Creating zip from $BUILD_PATH and naming it $ZIP"
-        zip -q -r $ZIP $TAR_BASE_DIRECTORY
-        # go back to where we started
-        popd >/dev/null
-    fi
+echo "Creating tgz from $BUILD_PATH and naming it $TGZ"
+tar --numeric-owner --owner 0 -C "$BUILD_PATH" -czf "$TGZ" $TAR_BASE_DIRECTORY
+hash_files "$TGZ"
 
-    hash_files "$TGZ"
+# cleanup after ourselves
+rm -rf "$BUILD_PATH"
 
-    # cleanup after ourselves
-    rm -rf "$BUILD_PATH"
-
-    echo "Created tgz: $TGZ"
-done
+echo "Created tgz: $TGZ"
 )

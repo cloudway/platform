@@ -11,3 +11,4 @@ set -e
     ABS_DEST="${ABS_DEST}-sandbox"
     . build/make/binary-sandbox
 )
+rmdir $DEST
