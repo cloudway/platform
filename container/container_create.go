@@ -72,9 +72,7 @@ func (cli DockerClient) Create(scm SCM, opts CreateOptions) ([]*Container, error
             cfg.User = defaults.AppUser()
         }
     }
-    if cfg.User == "root" {
-        cfg.Home = "/root"
-    } else {
+    if cfg.Home == "" {
         cfg.Home = defaults.AppHome()
     }
 
