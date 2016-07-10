@@ -58,6 +58,14 @@ func (a appList) Len() int { return len(a) }
 func (a appList) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a appList) Less(i, j int) bool { return a[i].CreatedAt.After(a[j].CreatedAt) }
 
+func appDNS(name, namespace string) string {
+    port := conf.Get("proxy.port")
+    if port != "" {
+        port = ":" + port
+    }
+    return fmt.Sprintf("%s-%s.%s%s", name, namespace, defaults.Domain(), port)
+}
+
 func (con *Console) getApplications(w http.ResponseWriter, r *http.Request) {
     user := con.currentUser(w, r)
     if user == nil {
@@ -81,7 +89,7 @@ func (con *Console) getApplications(w http.ResponseWriter, r *http.Request) {
 
         apps = append(apps, &appListData{
             Name:       name,
-            URL:        fmt.Sprintf("http://%s-%s.%s", name, user.Namespace, defaults.Domain()),
+            URL:        "http://" + appDNS(name, user.Namespace),
             CreatedAt:  a.CreatedAt,
             Framework:  framework,
             Plugins:    plugins,
@@ -273,8 +281,10 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
         return
     }
 
-    appData := &appData{Name: name}
-    appData.DNS = fmt.Sprintf("%s-%s.%s", name, user.Namespace, defaults.Domain())
+    appData := &appData{
+        Name: name,
+        DNS:  appDNS(name, user.Namespace),
+    }
 
     cloneURL := conf.Get("scm.clone_url")
     if cloneURL != "" {
@@ -418,8 +428,10 @@ func (con *Console) showApplicationSettings(w http.ResponseWriter, r *http.Reque
         return
     }
 
-    appData := &appData{Name: name}
-    appData.DNS = fmt.Sprintf("%s-%s.%s", name, user.Namespace, defaults.Domain())
+    appData := &appData{
+        Name: name,
+        DNS:  appDNS(name, user.Namespace),
+    }
 
     cloneURL := conf.Get("scm.clone_url")
     if cloneURL != "" {
