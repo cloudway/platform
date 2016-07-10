@@ -10,6 +10,7 @@ import (
     "github.com/docker/engine-api/types/filters"
     "github.com/cloudway/platform/pkg/manifest"
     "github.com/cloudway/platform/container/conf/defaults"
+    "github.com/cloudway/platform/container/conf"
 )
 
 const (
@@ -191,8 +192,16 @@ func (c *Container) FQDN() string {
 }
 
 // Returns the IP address of the container
-func (c *Container) IP() string {
-    return c.NetworkSettings.IPAddress
+func (c *Container) IP() (ip string) {
+    if network := conf.Get("network"); network != "" {
+        if net := c.NetworkSettings.Networks[network]; net != nil {
+            ip = net.IPAddress
+        }
+    }
+    if ip == "" {
+        ip = c.NetworkSettings.IPAddress
+    }
+    return ip
 }
 
 // Returns the container's operating system user that running the application.

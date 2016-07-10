@@ -2,6 +2,7 @@ package container
 
 import (
     "io"
+    "os"
     "fmt"
     "bytes"
     "strings"
@@ -22,6 +23,13 @@ func (e StatusError) Error() string {
 
 // Execute command in application container.
 func (c *Container) Exec(user string, stdin io.Reader, stdout, stderr io.Writer, cmd ...string) error {
+    // FIXME: Output may be closed if no stdin attached at sometimes.
+    // To workaround this problem always attach the stdin. This problem
+    // just occurres in docker swarm cluster, so it may be a docker bug.
+    if stdin == nil {
+        stdin = os.Stdin
+    }
+
     execConfig := types.ExecConfig{
         User:           user,
         Tty:            false,

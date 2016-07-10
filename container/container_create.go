@@ -6,6 +6,7 @@ import (
     "io"
     "errors"
     "strings"
+    "strconv"
     "bytes"
     "path/filepath"
     "io/ioutil"
@@ -35,6 +36,7 @@ type CreateOptions struct {
     Plugin            *manifest.Plugin
     Home              string
     User              string
+    Network           string
     Capacity          string
     Scaling           int
     Hosts             []string
@@ -74,6 +76,9 @@ func (cli DockerClient) Create(scm SCM, opts CreateOptions) ([]*Container, error
     }
     if cfg.Home == "" {
         cfg.Home = defaults.AppHome()
+    }
+    if cfg.Network == "" {
+        cfg.Network = conf.Get("network")
     }
 
     cfg.Category   = meta.Category
@@ -225,7 +230,7 @@ func createServiceContainer(cli DockerClient, cfg *createConfig) ([]*Container, 
     }
 }
 
-func buildImage(cli DockerClient, t *template.Template, cfg *createConfig) (image string, err error) {
+func buildImage(cli DockerClient, t *template.Template, cfg *createConfig) (imageId string, err error) {
     // Create temporary tar archive to create build context
     tarFile, err := ioutil.TempFile("", "docker");
     if err != nil {
@@ -265,10 +270,21 @@ func buildImage(cli DockerClient, t *template.Template, cfg *createConfig) (imag
     // build the image from context
     options := types.ImageBuildOptions{Dockerfile: "Dockerfile", Remove: true, ForceRemove: true}
     response, err := cli.ImageBuild(context.Background(), tarFile, options);
+
+    // read image ID from build response
     if err == nil {
         defer response.Body.Close()
-        image, err = readBuildImageId(response.Body)
+        imageId, err = readBuildImageId(response.Body)
     }
+
+    // get actual image ID
+    if err == nil {
+        info, _, err := cli.ImageInspectWithRaw(context.Background(), imageId, false)
+        if err == nil {
+            imageId = info.ID
+        }
+    }
+
     return
 }
 
@@ -361,8 +377,27 @@ func createContainer(cli DockerClient, imageId string, cfg *createConfig) (*Cont
     hostConfig := &container.HostConfig{}
     netConfig := &network.NetworkingConfig{}
 
-    resp, err := cli.ContainerCreate(context.Background(), config, hostConfig, netConfig, "")
+    if cfg.Network != "" {
+        hostConfig.NetworkMode = container.NetworkMode(cfg.Network)
+    }
+
+    var baseName = cfg.Name + "-" + cfg.Namespace + "-"
+    if cfg.ServiceName != "" {
+        baseName = cfg.ServiceName + "." + baseName
+    }
+
+    var containerName string
+    for i := 1; ; i++ {
+        containerName = baseName + strconv.Itoa(i)
+        _, err := cli.ContainerInspect(context.Background(), containerName)
+        if err != nil {
+            break
+        }
+    }
+
+    resp, err := cli.ContainerCreate(context.Background(), config, hostConfig, netConfig, containerName)
     if err != nil {
+        logrus.WithError(err).Error("failed to create container")
         return nil, err
     }
     c, err := cli.Inspect(resp.ID)
