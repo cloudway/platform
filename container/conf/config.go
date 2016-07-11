@@ -2,7 +2,10 @@ package conf
 
 import (
     "os"
+    "io"
+    "bytes"
     "strings"
+    "errors"
     "path/filepath"
     "github.com/cloudway/platform/pkg/conf"
 )
@@ -33,6 +36,47 @@ func Initialize() (err error) {
         return err
     }
     return nil
+}
+
+// Save configurations to file.
+func Save() (err error) {
+    if cfg == nil || RootDir == "" {
+        return errors.New("the configuration was not initialized")
+    }
+
+    var file *os.File
+    fname := filepath.Join(RootDir, "conf", "cloudway.conf")
+    if file, err = os.Create(fname); err != nil {
+        return err
+    }
+    defer file.Close()
+
+    if err = writeSection(file, conf.DefaultSection); err != nil {
+        return err
+    }
+    for _, section := range cfg.GetSections() {
+        if section != conf.DefaultSection {
+            if err = writeSection(file, section); err != nil {
+                return err
+            }
+        }
+    }
+    return nil
+}
+
+func writeSection(w io.Writer, section string) (err error) {
+    buf := bytes.Buffer{}
+
+    if section != conf.DefaultSection {
+        buf.WriteString("[" + section + "]\n")
+    }
+    for key, value := range GetSection(section) {
+        buf.WriteString(key + " = " + value + "\n")
+    }
+    buf.WriteString("\n")
+
+    _, err = buf.WriteTo(w)
+    return err
 }
 
 // Get a configuration value as string.
@@ -87,4 +131,39 @@ func GetSection(section string) map[string]string {
     }
 
     return result
+}
+
+// Set a configuration of the given key to the given value.
+func Set(key, value string) {
+    if cfg == nil {
+        cfg = conf.NewConfigFile()
+    }
+
+    section := conf.DefaultSection
+    parts := strings.SplitN(key, ".", 2)
+    if len(parts) == 2 {
+        section, key = parts[0], parts[1]
+    }
+    cfg.AddOption(section, key, value)
+}
+
+// Remove a key from configuration.
+func Remove(key string) {
+    if cfg == nil {
+        return
+    }
+
+    section := conf.DefaultSection
+    parts := strings.SplitN(key, ".", 2)
+    if len(parts) == 2 {
+        section, key = parts[0], parts[1]
+    }
+    cfg.RemoveOption(section, key)
+}
+
+// Remove a section from configuration.
+func RemoveSection(section string) {
+    if cfg != nil {
+        cfg.RemoveSection(section)
+    }
 }
