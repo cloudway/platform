@@ -6,6 +6,10 @@ import (
     errs "errors"
     "strings"
     "sync"
+    "io"
+    "encoding/hex"
+    "crypto/rand"
+    "crypto/sha1"
     "github.com/cloudway/platform/container"
     "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/pkg/errors"
@@ -46,6 +50,14 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
     }
     if framework == nil {
         return nil, fmt.Errorf("No framework plugin specified")
+    }
+
+    // Generate shared secret for application. The shared secret is a simple
+    // mechanism for a scalable application to communicate securely between
+    // containers, or used as a randomize seed to generate shared tokens.
+    opts.Secret, err = generateSharedSecret()
+    if err != nil {
+        return nil, err
     }
 
     // cleanup on failure
@@ -94,7 +106,11 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
     }
 
     // add application to the user database
-    apps[opts.Name] = &userdb.Application{CreatedAt: time.Now(), Plugins: tags}
+    apps[opts.Name] = &userdb.Application{
+        CreatedAt:  time.Now(),
+        Plugins:    tags,
+        Secret:     opts.Secret,
+    }
     err = br.Users.Update(user.Name, userdb.Args{"applications": apps})
     if err != nil {
         return
@@ -102,6 +118,15 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 
     success = true
     return
+}
+
+func generateSharedSecret() (string, error) {
+    hash := sha1.New()
+    _, err := io.CopyN(hash, rand.Reader, 256*1024)
+    if err != nil {
+        return "", err
+    }
+    return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string) (containers []*container.Container, err error) {
@@ -127,7 +152,9 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
     }
 
     opts.Namespace = user.Namespace
-    opts.Hosts = app.Hosts
+    opts.Secret    = app.Secret
+    opts.Hosts     = app.Hosts
+
     containers, err = br.createContainers(opts, plugins)
     if err != nil {
         return nil, err
@@ -235,7 +262,7 @@ func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Conta
     }
 
     if len(cs) < num {
-        return br.scaleUp(cs[0], num, app.Hosts)
+        return br.scaleUp(cs[0], num, app.Secret, app.Hosts)
     } else if len(cs) > num {
         return nil, br.scaleDown(cs, len(cs)-num)
     } else {
@@ -243,7 +270,7 @@ func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Conta
     }
 }
 
-func (br *UserBroker) scaleUp(replica *container.Container, num int, hosts []string) ([]*container.Container, error) {
+func (br *UserBroker) scaleUp(replica *container.Container, num int, secret string, hosts []string) ([]*container.Container, error) {
     meta, err := br.Hub.GetPluginInfo(replica.PluginTag())
     if err != nil {
         return nil, err
@@ -256,6 +283,7 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int, hosts []str
         Plugin:     meta,
         Home:       replica.Home(),
         User:       replica.User(),
+        Secret:     secret,
         Scaling:    num,
         Repo:       "empty",
     }

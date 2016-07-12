@@ -24,6 +24,7 @@ type Application struct {
     CreatedAt   time.Time
     Plugins     []string
     Hosts       []string `bson:",omitempty"`
+    Secret      string
 }
 
 func (user *BasicUser) Basic() *BasicUser {

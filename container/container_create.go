@@ -34,6 +34,7 @@ type CreateOptions struct {
     Namespace         string
     ServiceName       string
     Plugin            *manifest.Plugin
+    Secret            string
     Home              string
     User              string
     Network           string
@@ -89,6 +90,7 @@ func (cli DockerClient) Create(scm SCM, opts CreateOptions) ([]*Container, error
 
     cfg.Env["CLOUDWAY_APP_NAME"] = cfg.Name
     cfg.Env["CLOUDWAY_APP_NAMESPACE"] = cfg.Namespace
+    cfg.Env["CLOUDWAY_SHARED_SECRET"] = cfg.Secret
     cfg.Env["CLOUDWAY_APP_USER"] = cfg.User
     cfg.Env["CLOUDWAY_HOME_DIR"] = cfg.Home
     cfg.Env["CLOUDWAY_REPO_DIR"] = cfg.Home + "/repo"
