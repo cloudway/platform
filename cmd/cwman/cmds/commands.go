@@ -45,6 +45,7 @@ func Init(docker container.DockerClient) *CWMan {
     cli.handlers = map[string]func(...string)error {
         "api-server":   cli.CmdAPIServer,
         "update-proxy": cli.CmdUpdateProxy,
+        "sshd":         cli.CmdSshd,
         "config":       cli.CmdConfig,
         "install":      cli.CmdInstallPlugin,
         "deploy":       cli.CmdDeploy,
