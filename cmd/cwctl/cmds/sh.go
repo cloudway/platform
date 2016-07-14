@@ -5,19 +5,24 @@ import (
     "strings"
     "syscall"
     "github.com/cloudway/platform/sandbox"
+    "github.com/cloudway/platform/pkg/opts"
 )
 
 func (cli *CWCtl) CmdSh(args ...string) error {
-    if len(args) == 0 {
+    env := make(map[string]string)
+    cmd := cli.Subcmd("sh", "Run shell command")
+    cmd.Var(opts.NewMapOptsRef(&env, opts.ValidateEnv), []string{"e"}, "Set environment variables")
+    cmd.ParseFlags(args, true)
+
+    if cmd.NArg() == 0 {
         return os.ErrInvalid
     }
 
-    runShell(args)
+    runShell(cmd.Args(), env)
     return nil
 }
 
-func runShell(args[]string) {
-    env   := sandbox.New().Environ()
+func runShell(args[]string, env map[string]string) {
     prog  := args[0]
     cmd   := []string{"/bin/bash"}
     cmd_i := []string{"/bin/bash", "--init-file", "/etc/cloudway/bashrc", "-i"}
@@ -43,8 +48,7 @@ func runShell(args[]string) {
                 // avoid recursion, drop to shell
                 cmd = cmd_i
             } else {
-                cmd = append(cmd, "-c")
-                cmd = append(cmd, args[2:]...)
+                cmd = append(cmd, "-c", strings.Join(args[2:], " "))
             }
         } else {
             if len(args) == 1 {
@@ -60,13 +64,14 @@ func runShell(args[]string) {
 }
 
 func makeExecEnv(env map[string]string) []string {
-    if env != nil {
-        eenv := make([]string, 0, len(env))
-        for k, v := range env {
-            eenv = append(eenv, k+"="+v)
-        }
-        return eenv
-    } else {
-        return nil
+    myenv := sandbox.New().Environ()
+    for k, v := range env {
+        myenv[k] = v
     }
+
+    eenv := make([]string, 0, len(myenv))
+    for k, v := range myenv {
+        eenv = append(eenv, k+"="+v)
+    }
+    return eenv
 }

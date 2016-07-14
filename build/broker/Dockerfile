@@ -1,13 +1,14 @@
 FROM mongo:3.2.6
 
-RUN apt-get update && apt-get install -y --no-install-recommends supervisor git
+RUN apt-get update && apt-get install -y --no-install-recommends supervisor git openssh-client
 
 ENV CLOUDWAY_ROOT /usr/local/cloudway
 ENV CLOUDWAY_DOMAIN example.com
 
 COPY cloudway-broker.tar.gz cloudway-broker.tar.gz
 RUN tar -xf cloudway-broker.tar.gz --strip-components=1 -C / \
- && rm cloudway-broker.tar.gz
+ && rm cloudway-broker.tar.gz \
+ && cp -f /usr/bin/scp /usr/local/cloudway/sandbox/usr/bin/scp
 
 RUN git clone git://github.com/cloudway/plugins.git \
  && ( cd plugins && ./install.sh ) \

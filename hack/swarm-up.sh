@@ -7,6 +7,7 @@ network=${CLOUDWAY_NETWORK:-cw-net}
 proxy_node=master
 broker_node=master
 bitbucket_node=master
+sshd_node=master
 
 cd "$(dirname "$BASH_SOURCE")/.."
 
@@ -72,3 +73,16 @@ docker run -d --name=cloudway-broker --restart=always \
            -e "constraint:node==${broker_node}" \
            icloudway/broker
 
+# start SSH server
+docker run -d --name=cloudway-sshd --restart=always \
+           --net=$network \
+           -p 2200:2200 \
+           -e DOCKER_HOST \
+           -v $DOCKER_CERT_PATH:/certs:ro \
+           -e DOCKER_CERT_PATH=/certs \
+           -e DOCKER_TLS_VERIFY \
+           -e CLOUDWAY_SCM_TYPE=bitbucket \
+           -e CLOUDWAY_SCM_URL=http://admin:${bitbucket_password}@bitbucket.local:7990 \
+           --link cloudway-bitbucket:bitbucket.local \
+           -e "constraint:node==${sshd_node}" \
+           icloudway/sshd

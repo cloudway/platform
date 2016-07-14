@@ -1,5 +1,3 @@
-// +build !windows
-
 package sshd
 
 import (
@@ -7,28 +5,42 @@ import (
     "io"
     "io/ioutil"
     "os"
-    "os/exec"
     "net"
-    "sync"
-    "syscall"
-    "unsafe"
+    "errors"
+    "bytes"
     "encoding/binary"
     "path/filepath"
 
     "github.com/Sirupsen/logrus"
-    _pty "github.com/kr/pty"
     "golang.org/x/crypto/ssh"
     "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/container"
+    "github.com/cloudway/platform/scm"
+    "github.com/docker/engine-api/types"
+    "golang.org/x/net/context"
 )
 
-func Serve(addr string) error {
-    // TODO: find and use user's public key
-    config := &ssh.ServerConfig{
-        NoClientAuth: true,
+func Serve(cli container.DockerClient, addr string) error {
+    scm, err := scm.New()
+    if err != nil {
+        return err
     }
 
-    // a keypair should be generated with 'ssh-key-gen -t rsa -f ssh/host_rsa_key'
-    keyPath := filepath.Join(conf.RootDir, "ssh", "host_rsa_key")
+    config := &ssh.ServerConfig{
+        PublicKeyCallback: func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+            return nil, checkPublicKey(cli, scm, c.User(), key)
+        },
+    }
+
+    // generate SSH host key
+    keyPath := filepath.Join(conf.RootDir, "conf", "host_rsa_key")
+    if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+        os.MkdirAll(filepath.Dir(keyPath), 0750)
+        if err = MakeSSHKeyPair(keyPath); err != nil {
+            return err
+        }
+    }
+
     privateBytes, err := ioutil.ReadFile(keyPath)
     if err != nil {
         return fmt.Errorf("Failed to load private key: %s", err)
@@ -57,7 +69,7 @@ func Serve(addr string) error {
         // before use, a handshake must be performed on the incoming net.Conn
         sshConn, chans, reqs, err := ssh.NewServerConn(tcpConn, config)
         if err != nil {
-            logrus.WithError(err).Error("Failed to handshake")
+            logrus.WithError(err).Debug("Failed to handshake")
             continue
         }
 
@@ -65,19 +77,70 @@ func Serve(addr string) error {
         // discard all global out-of-band requests
         go ssh.DiscardRequests(reqs)
         // accept all channels
-        go handleChannels(chans)
+        go handleChannels(cli, sshConn, chans)
     }
 }
 
-func handleChannels(chans <-chan ssh.NewChannel) {
+func findContainer(cli container.DockerClient, userInfo string) (*container.Container, error) {
+    service, name, namespace := container.SplitNames(userInfo)
+    if name == "" || namespace == "" {
+        return cli.Inspect(userInfo)
+    }
+
+    var cs []*container.Container
+    if service == "" || service == "*" {
+        cs, _ = cli.FindApplications(name, namespace)
+    } else {
+        cs, _ = cli.FindService(name, namespace, service)
+    }
+
+    if len(cs) == 0 {
+        return nil, fmt.Errorf("Container not found: %s", userInfo)
+    } else {
+        return cs[0], nil
+    }
+}
+
+func checkPublicKey(cli container.DockerClient, scm scm.SCM, userInfo string, key ssh.PublicKey) error {
+    c, err := findContainer(cli, userInfo)
+    if err != nil {
+        return err
+    }
+
+    keys, err := scm.ListKeys(c.Namespace)
+    if err != nil {
+        return err
+    }
+
+    keyBytes := key.Marshal()
+    for _, mykey := range keys {
+        authKey, _, _, _, keyerr := ssh.ParseAuthorizedKey([]byte(mykey.Text))
+        if keyerr == nil && bytes.Compare(keyBytes, authKey.Marshal()) == 0 {
+            return nil
+        }
+    }
+
+    return errors.New("Permission denied")
+}
+
+func handleChannels(cli container.DockerClient, conn *ssh.ServerConn, chans <-chan ssh.NewChannel) {
+    // use the user name to coordinate the container
+    container, err := findContainer(cli, conn.User())
+    if err != nil {
+        logrus.WithError(err).Errorf("Cannot find the container %q", conn.User())
+        conn.Close()
+        return
+    }
+
     // service the incoming Channel in goroutine
     for newChannel := range chans {
-        go handleChannel(newChannel)
+        go handleChannel(newChannel, container)
     }
+
     logrus.Debug("Channel closed")
 }
 
-func handleChannel(newChannel ssh.NewChannel) {
+func handleChannel(newChannel ssh.NewChannel, container *container.Container) {
     if newChannel.ChannelType() != "session" {
         newChannel.Reject(ssh.Prohibited, "")
         return
@@ -94,179 +157,177 @@ func handleChannel(newChannel ssh.NewChannel) {
     // session have out-of-band requests such as "shell", "pty-req" and "env"
     go func() {
         var (
-            pty *os.File
-            pty_req, env []byte
-            err error
+            pty     *pty_req
+            execId  string
+            err     error
         )
         for req := range requests {
             logrus.Debugf("Received request %q", req.Type)
             switch req.Type {
             case "pty-req":
-                pty_req = req.Payload
+                pty = decodePtyReq(req.Payload)
                 // responding true (OK) here will let the client know we have
                 // a pty ready for input
                 req.Reply(true, nil)
-            case "env":
-                env = req.Payload
             case "shell":
-                pty, err = execShell(channel, pty_req, env)
+                execId, err = execShell(channel, container, pty)
                 req.Reply(err == nil, nil)
             case "exec":
-                args := string(req.Payload[4:])
-                err = execCmd(channel, env, args)
-                req.Reply(err == nil, nil)
-            case "window-change":
-                if pty != nil {
-                    w, h := parseDims(req.Payload)
-                    setWinsize(pty.Fd(), w, h)
-                }
-            default:
-                if req.WantReply {
+                if cmd, _, ok := decodeString(req.Payload); ok {
+                    go execCmd(channel, container, string(cmd))
+                } else {
                     req.Reply(false, nil)
                 }
+            case "window-change":
+                if execId != "" {
+                    if dims := decodeWindowChange(req.Payload); dims != nil {
+                        resize := types.ResizeOptions{Width: int(dims.Width), Height: int(dims.Height)}
+                        container.ContainerExecResize(context.Background(), execId, resize)
+                    }
+                }
+            default:
+                req.Reply(false, nil)
             }
         }
     }()
 }
 
-func execShell(channel ssh.Channel, pty_req, env []byte) (pty *os.File, err error) {
-    // fire up bash for this session
-    c := exec.Command("bash")
-    c.Env = parseEnv(env)
+func execShell(channel ssh.Channel, c *container.Container, pty *pty_req) (execId string, err error) {
+    // construct command to run in sandbox, passing TERM environment variable
+    cmd := []string{"/usr/bin/cwctl", "sh"}
+    if pty != nil {
+        cmd = append(cmd, "-e", "TERM="+pty.Term)
+    }
+    cmd = append(cmd, "cwsh")
 
-    // allocate a terminal for this channel
-    pty, err = _pty.Start(c)
+    execConfig := types.ExecConfig{
+        Tty:          true,
+        AttachStdin:  true,
+        AttachStdout: true,
+        AttachStderr: true,
+        Cmd:          cmd,
+    }
+
+    ctx := context.Background()
+
+    execResp, err := c.ContainerExecCreate(ctx, c.ID, execConfig)
     if err != nil {
-        fmt.Fprintf(channel.Stderr(), "exec failed: %s\r\n", err)
-        channel.SendRequest("exit-status", false, []byte{0, 0, 0, 127})
-        channel.Close()
+        return
+    }
+    execId = execResp.ID
+
+    resp, err := c.ContainerExecAttach(ctx, execId, execConfig)
+    if err != nil {
         return
     }
 
-    // prepare teardown function
-    close := func() {
-        err := c.Wait()
-        sendExitStatus(channel, err)
-        channel.Close()
+    if pty != nil {
+        resize := types.ResizeOptions{Width: int(pty.Width), Height: int(pty.Height)}
+        c.ContainerExecResize(ctx, execId, resize)
+    }
+
+    go func() {
+        defer channel.Close()
+        defer resp.Close()
+
+        // pipe session to container and vice-versa
+        go func() {
+            io.Copy(resp.Conn, channel)
+            resp.CloseWrite()
+            logrus.Debug("[hijack] End of stdin")
+        }()
+
+        io.Copy(channel, resp.Reader)
+        logrus.Debug("[hijack] End of stdout")
+
+        // send exit code to ssh client
+        exitCode := 0
+        inspectResp, err := c.ContainerExecInspect(ctx, execId)
+        if err != nil {
+            logrus.WithError(err).Error("Could not inspect exec")
+            exitCode = 127
+        } else {
+            exitCode = inspectResp.ExitCode
+        }
+
+        sendExitStatus(channel, exitCode)
         logrus.Debug("Session closed")
-    }
-
-    // TODO: handle other pty-req request
-    if len(pty_req) != 0 {
-        termLen := binary.BigEndian.Uint32(pty_req)
-        w, h := parseDims(pty_req[4+termLen:])
-        setWinsize(pty.Fd(), w, h)
-    }
-
-    // pipe session to bash and vice-versa
-    var once sync.Once
-    go func() {
-        io.Copy(channel, pty)
-        once.Do(close)
-    }()
-    go func() {
-        io.Copy(pty, channel)
-        once.Do(close)
     }()
 
     return
 }
 
-func execCmd(channel ssh.Channel, env []byte, args string) (err error) {
+func execCmd(channel ssh.Channel, c *container.Container, args string) {
+    defer channel.Close()
+
     logrus.Debugf("exec: %s", args)
-    c := exec.Command("bash", "-c", args)
-    c.Env = parseEnv(env)
+    err := c.Exec("", channel, channel, channel.Stderr(), "/usr/bin/cwsh", "-c", args)
 
-    stdout, err := c.StdoutPipe()
-    if err != nil {
-        logrus.WithError(err).Error("cannot open standard output pipe")
-        return err
+    var exitCode int
+    if se, ok := err.(container.StatusError); ok {
+        exitCode = se.Code
+    } else if err != nil {
+        fmt.Fprintln(channel.Stderr(), err)
+        exitCode = 127
+    } else {
+        exitCode = 0
     }
 
-    stderr, err := c.StderrPipe()
-    if err != nil {
-        logrus.WithError(err).Error("cannot open standard error pipe")
-        return err
-    }
-
-    stdin, err := c.StdinPipe()
-    if err != nil {
-        logrus.WithError(err).Error("cannot open starndard input pipe")
-        return err
-    }
-
-    if err := c.Start(); err != nil {
-        fmt.Fprintf(channel.Stderr(), "exec failed: %s\n", err)
-        channel.SendRequest("exit-status", false, []byte{0, 0, 0, 127})
-        channel.Close()
-        return err
-    }
-
-    go func() {
-        io.Copy(stdin, channel)
-        stdin.Close()
-        logrus.Debug("Stdin closed")
-    }()
-
-    go io.Copy(channel, stdout)
-    go io.Copy(channel.Stderr(), stderr)
-
-    go func() {
-        err := c.Wait()
-        sendExitStatus(channel, err)
-        channel.Close()
-        logrus.Debug("Session closed")
-    }()
-
-    return nil
+    sendExitStatus(channel, exitCode)
+    logrus.Debug("Session closed")
 }
 
-func sendExitStatus(channel ssh.Channel, err error) {
+func sendExitStatus(channel ssh.Channel, code int) {
     payload := make([]byte, 4)
-    if exiterr, ok := err.(*exec.ExitError); ok {
-        if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-            var code int
-            if status.Exited() {
-                code = status.ExitStatus()
-            } else if status.Signaled() {
-                code = -int(status.Signal())
-            }
-            binary.BigEndian.PutUint32(payload, uint32(code))
-        }
-    }
+    binary.BigEndian.PutUint32(payload, uint32(code))
     channel.SendRequest("exit-status", false, payload)
 }
 
-func parseEnv(b []byte) []string {
-    env := os.Environ()
-    for len(b) != 0 {
-        keyLen := binary.BigEndian.Uint32(b)
-        key    := string(b[4 : 4+keyLen])
-        valLen := binary.BigEndian.Uint32(b[4+keyLen:])
-        val    := string(b[8+keyLen : 8+keyLen+valLen])
-        env     = append(env, key+"="+val)
-        b       = b[8+keyLen+valLen:]
+func decodeString(in []byte) (out, rest []byte, ok bool) {
+    if len(in) < 4 {
+        return
     }
-    return env
+    length := binary.BigEndian.Uint32(in)
+    in = in[4:]
+    if uint32(len(in)) < length {
+        return
+    }
+    out = in[:length]
+    rest = in[length:]
+    ok = true
+    return
 }
 
-// parseDims extracts terminal dimensions (with x height) from the provided buffer.
-func parseDims(b []byte) (uint32, uint32) {
-    w := binary.BigEndian.Uint32(b)
-    h := binary.BigEndian.Uint32(b[4:])
-    return w, h
+type pty_req struct {
+    Term            string
+    Width           uint32
+    Height          uint32
+    WidthInPixel    uint32
+    HeightInPixel   uint32
+    TerminalModes   []byte
 }
 
-// winsize stores the height and width of a terminal
-type winsize struct {
-    height uint16
-    width  uint16
-    x      uint16
-    y      uint16
+func decodePtyReq(data []byte) *pty_req {
+    var req pty_req
+    if ssh.Unmarshal(data, &req) == nil {
+        return &req
+    } else {
+        return nil
+    }
 }
 
-// setWinsize sets the size of the given pty.
-func setWinsize(fd uintptr, w, h uint32) {
-    ws := &winsize{width: uint16(w), height: uint16(h)}
-    syscall.Syscall(syscall.SYS_IOCTL, fd, uintptr(syscall.TIOCSWINSZ), uintptr(unsafe.Pointer(ws)))
+type window_change struct {
+    Width           uint32
+    Height          uint32
+    WidthInPixel    uint32
+    HeightInPixel   uint32
+}
+
+func decodeWindowChange(data []byte) *window_change {
+    var req window_change
+    if ssh.Unmarshal(data, &req) == nil {
+        return &req
+    } else {
+        return nil
+    }
 }

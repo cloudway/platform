@@ -44,8 +44,12 @@ func Save() (err error) {
         return errors.New("the configuration was not initialized")
     }
 
-    var file *os.File
     fname := filepath.Join(RootDir, "conf", "cloudway.conf")
+    if err := os.MkdirAll(filepath.Dir(fname), 0750); err != nil {
+        return err
+    }
+
+    var file *os.File
     if file, err = os.Create(fname); err != nil {
         return err
     }

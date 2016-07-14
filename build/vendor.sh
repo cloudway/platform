@@ -20,7 +20,7 @@ source 'build/.vendor-helpers.sh'
 
 case $# in
 0)
-    rm -rf vendor/
+    rm -rf vendor/*
     ;;
 # If user passed arguments to the script
 1)
@@ -58,7 +58,6 @@ clone git github.com/gorilla/mux 9fa818a44c2bf1396a17f9d5a3c0f6dd39d2ff8e
 clone git github.com/gorilla/securecookie ff356348f74133a59d3e93aa24b5b4551b6fe90d
 clone git github.com/gorilla/sessions 56ba4b0a11da87516629a57408a5f7e4c8ea7b0b
 clone git github.com/justinas/nosurf 2e708f28095ba17463e41438bbfd53abae8b6794
-clone git github.com/kr/pty a6bad5ee6fc60cad43d219214dd2449bf077f3f5
 clone git github.com/opencontainers/runc 8e22b1d36b2ec794e16fb47cf662c50e2553cb9f
 clone git github.com/oxtoacart/bpool 4e1c5567d7c2dd59fa4c7c83d34c2f3528b025d6
 clone git github.com/Sirupsen/logrus v0.10.0

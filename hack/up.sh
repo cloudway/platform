@@ -62,3 +62,10 @@ docker run -d --name=cloudway-broker --restart=always \
            -e CLOUDWAY_DOMAIN=$domain \
            --link cloudway-bitbucket:bitbucket \
            icloudway/broker
+
+# start SSH server
+docker run -d --name=cloudway-sshd --restart=always \
+           -p 2200:2200 \
+           -v /var/run/docker.sock:/var/run/docker.sock \
+           --link cloudway-bitbucket:bitbucket \
+           icloudway/sshd

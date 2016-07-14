@@ -1,5 +1,5 @@
 [ -f /etc/bashrc ] && source /etc/bashrc
-[ -f ~/data/.bash_profile ] && source ~/data/.bash_profile
+[ -f ~/.bashrc ] && source ~/.bashrc
 
 # are we an interactive shell?
 if [ "$PS1" ]; then

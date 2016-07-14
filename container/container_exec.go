@@ -86,10 +86,7 @@ func pumpStreams(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer,
             io.Copy(resp.Conn, stdin)
             logrus.Debugf("[hijack] End of stdin")
         }
-
-        if err := resp.CloseWrite(); err != nil {
-            logrus.WithError(err).Debugf("Couldn't send EOF")
-        }
+        resp.CloseWrite()
         close(stdinDone)
     }()
 

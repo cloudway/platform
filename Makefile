@@ -1,4 +1,4 @@
-.PHONY: all binary build cross default shell help
+.PHONY: all binary build vendor cross default shell help
 
 # get OS/Arch of docker engine
 DOCKER_OSARCH := $(shell bash -c 'source build/make/.detect-daemon-osarch && echo $${DOCKER_ENGINE_OSARCH:-$$DOCKER_CLIENT_OSARCH}')
@@ -17,6 +17,7 @@ DOCKER_ENVS := \
 # (default to no bind mount if DOCKER_HOST is set)
 BIND_DIR := $(if $(BINDDIR),$(BINDDIR),bundles)
 DOCKER_MOUNT := $(if $(BIND_DIR),-v "$(CURDIR)/$(BIND_DIR):/go/src/github.com/cloudway/platform/$(BIND_DIR)")
+VENDOR_MOUNT := -v "$(CURDIR)/vendor:/go/src/github.com/cloudway/platform/vendor"
 
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 GIT_BRANCH_CLEAN := $(shell echo $(GIT_BRANCH) | sed -e "s/[^[:alnum:]]/-/g")
@@ -33,6 +34,7 @@ ifeq ($(INTERACTIVE), 1)
 endif
 
 DOCKER_RUN_DOCKER := $(DOCKER_FLAGS) "$(DOCKER_IMAGE)"
+DOCKER_RUN_VENDOR := $(DOCKER_FLAGS) $(VENDOR_MOUNT) "$(DOCKER_IMAGE)"
 
 default: binary
 
@@ -44,6 +46,9 @@ binary: build ## build the linux binaries
 
 build: bundles
 	docker build ${DOCKER_BUILD_ARGS} -t "$(DOCKER_IMAGE)" -f "$(DOCKERFILE)" .
+
+vendor: build ## update vendored dependencies
+	$(DOCKER_RUN_VENDOR) build/vendor.sh
 
 bundles:
 	mkdir bundles
