@@ -1,0 +1,41 @@
+language: go
+go: 1.6
+sudo: required
+services:
+  - docker
+
+env:
+  global:
+    - RELEASE_VERSION=$(< VERSION)
+
+cache:
+  directories:
+    - $HOME/.m2
+
+install:
+  - docker version
+  - build/vendor.sh
+
+script:
+  - make tgz
+  - sudo chown -R ${USER}:${USER} bundles
+  - ( cd scm/bitbucket/hooks; mvn clean package )
+
+deploy:
+  provider: releases
+  api_key: ${RELEASE_API_KEY}
+  file: 
+    - bundles/${RELEASE_VERSION}/tgz/cloudway-broker-${RELEASE_VERSION}-linux-amd64.tar.gz
+    - bundles/${RELEASE_VERSION}/tgz/cloudway-broker-${RELEASE_VERSION}-linux-amd64.tar.gz.md5
+    - bundles/${RELEASE_VERSION}/tgz/cloudway-broker-${RELEASE_VERSION}-linux-amd64.tar.gz.sha256
+    - bundles/${RELEASE_VERSION}/tgz/cwman-${RELEASE_VERSION}-linux-amd64.tar.gz
+    - bundles/${RELEASE_VERSION}/tgz/cwman-${RELEASE_VERSION}-linux-amd64.tar.gz.md5
+    - bundles/${RELEASE_VERSION}/tgz/cwman-${RELEASE_VERSION}-linux-amd64.tar.gz.sha256
+    - scm/bitbucket/hooks/target/repo-deployer-1.0.jar
+  skip_cleanup: true
+  overwrite: true
+  on:
+    tags: true
+
+after_deploy:
+  - build/.trigger-docker-build.sh
