@@ -168,10 +168,12 @@ public class RepoDeployer
 
         @Override
         public void complete() throws ProcessException {
-            try {
-                out.close();
-            } catch (IOException ex) {
-                throw new ProcessException(ex);
+            if (out != System.out && out != System.err) {
+                try {
+                    out.close();
+                } catch (IOException ex) {
+                    throw new ProcessException(ex);
+                }
             }
         }
 
