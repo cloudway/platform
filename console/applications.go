@@ -359,7 +359,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 
 func getPrivatePorts(meta *manifest.Plugin) string {
     var ports []string
-    for _, ep := range meta.GetEndpoints("", "") {
+    for _, ep := range meta.GetEndpoints("", "", "") {
         port := strconv.FormatInt(int64(ep.PrivatePort), 10)
         exists := false
         for _, p := range ports {

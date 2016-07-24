@@ -52,6 +52,7 @@ type Endpoint struct {
     PrivateHostName string `yaml:"Private-Host-Name"`
     PrivatePortName string `yaml:"Private-Port-Name"`
     PublicHost      string `yaml:"-"`
+    ServiceName     string `yaml:"-"`
     PrivateHost     string `yaml:"-"`
     PrivatePort     int32  `yaml:"Private-Port"`
     ProxyMappings   []*ProxyMapping `yaml:"Proxy-Mappings,omitempty"`
@@ -106,7 +107,7 @@ func Read(f io.Reader) (*Plugin, error) {
     return plugin, err
 }
 
-func (p *Plugin) GetEndpoints(publicHost, privateHost string) []*Endpoint {
+func (p *Plugin) GetEndpoints(publicHost, serviceName, privateHost string) []*Endpoint {
     endpoints := make([]*Endpoint, 0, len(p.Endpoints))
 
     for _, ep := range p.Endpoints {
@@ -118,6 +119,7 @@ func (p *Plugin) GetEndpoints(publicHost, privateHost string) []*Endpoint {
             PrivateHostName: host_name,
             PrivatePortName: port_name,
             PublicHost:      publicHost,
+            ServiceName:     serviceName,
             PrivateHost:     privateHost,
             PrivatePort:     ep.PrivatePort,
         }
@@ -137,7 +139,7 @@ func proxyMappings(ep *Endpoint, mappings []*ProxyMapping) []*ProxyMapping {
         }
         for _, prot := range protocols {
             m2 := ProxyMapping{
-                Frontend: ep.PublicHost + getFrontendUri(m.Frontend),
+                Frontend: getFrontendUri(ep, m.Frontend),
                 Backend:  getBackendUri(ep, m.Backend, prot),
                 Protocol: prot,
             }
@@ -147,14 +149,19 @@ func proxyMappings(ep *Endpoint, mappings []*ProxyMapping) []*ProxyMapping {
     return res
 }
 
-func getFrontendUri(uri string) string {
+func getFrontendUri(ep *Endpoint, uri string) string {
     if strings.HasSuffix(uri, "/") {
         uri = uri[0 : len(uri)-1]
     }
     if len(uri) != 0 && !strings.HasPrefix(uri, "/") {
         uri = "/" + uri
     }
-    return uri
+
+    host := ep.PublicHost
+    if uri != "" && ep.ServiceName != "" && strings.HasPrefix(host, ep.ServiceName+".") {
+        host = host[len(ep.ServiceName)+1:]
+    }
+    return host + uri
 }
 
 func getBackendUri(ep *Endpoint, uri, protocol string) string {

@@ -86,6 +86,10 @@ func (box *Sandbox) Namespace() string {
     return box.namespace
 }
 
+func (box *Sandbox) ServiceName() string {
+    return os.Getenv("CLOUDWAY_SERVICE_NAME")
+}
+
 func (box *Sandbox) FQDN() string {
     return os.Getenv("CLOUDWAY_APP_DNS")
 }
@@ -164,13 +168,14 @@ func (box *Sandbox) GetEndpoints(ip string) ([]*manifest.Endpoint, error) {
     }
 
     fqdn := box.FQDN()
+    service := box.ServiceName()
     extra := box.ExtraHosts()
 
     var endpoints []*manifest.Endpoint
     for _, p := range plugins {
-        endpoints = append(endpoints, p.GetEndpoints(fqdn, ip)...)
+        endpoints = append(endpoints, p.GetEndpoints(fqdn, service, ip)...)
         for _, host := range extra {
-            endpoints = append(endpoints, p.GetEndpoints(host, ip)...)
+            endpoints = append(endpoints, p.GetEndpoints(host, service, ip)...)
         }
     }
     return endpoints, nil
@@ -190,7 +195,7 @@ func (box *Sandbox) CreatePrivateEndpoints(ip string) error {
     }
 
     for _, p := range plugins {
-        for _, ep := range p.GetEndpoints(box.FQDN(), ip) {
+        for _, ep := range p.GetEndpoints(box.FQDN(), box.ServiceName(), ip) {
             box.SetPluginEnv(p, ep.PrivateHostName, ip, true)
             box.SetPluginEnv(p, ep.PrivatePortName, strconv.Itoa(int(ep.PrivatePort)), true)
         }

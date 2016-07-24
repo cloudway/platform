@@ -35,8 +35,13 @@ func (px *hipacheProxy) AddEndpoints(id string, endpoints []*manifest.Endpoint) 
     // add new endpoints
     for _, ep := range endpoints {
         for _, m := range ep.ProxyMappings {
-            if m.Protocol == "http" && !strings.ContainsRune(m.Frontend, '/') { // FIXME
-                if err := addEndpoint(px.conn, id, m.Frontend, m.Backend); err != nil {
+            if m.Protocol == "http" {
+                frontend, backend := m.Frontend, m.Backend
+                if i := strings.IndexRune(frontend, '/'); i != -1 {
+                    backend = backend + "#" + frontend[i:]
+                    frontend = frontend[0:i]
+                }
+                if err := addEndpoint(px.conn, id, frontend, backend); err != nil {
                     return err
                 }
             }

@@ -210,6 +210,7 @@ func createServiceContainer(cli DockerClient, cfg *createConfig) ([]*Container, 
     cfg.Hostname = service + "." + name + "-" + namespace
     cfg.FQDN = cfg.Hostname + "." + defaults.Domain()
     cfg.Env["CLOUDWAY_APP_DNS"] = cfg.FQDN
+    cfg.Env["CLOUDWAY_SERVICE_NAME"] = cfg.ServiceName
 
     cs, err := cli.FindService(name, namespace, service)
     if err != nil {
