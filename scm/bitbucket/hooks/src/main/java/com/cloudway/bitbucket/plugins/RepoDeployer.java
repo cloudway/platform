@@ -16,6 +16,8 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.zip.GZIPOutputStream;
 
 import com.atlassian.bitbucket.hook.HookRequestHandle;
@@ -45,6 +47,13 @@ public class RepoDeployer
     private final RepositoryHookService repositoryHookService;
     private final RepositoryService repositoryService;
 
+    private static final Logger logger = Logger.getLogger(RepoDeployer.class.getName());
+    static {
+        if (System.getenv("CLOUDWAY_DEBUG_HOOK") != null) {
+            logger.setLevel(Level.FINE);
+        }
+    }
+
     public RepoDeployer(GitCommandBuilderFactory gitCommandBuilderFactory,
                         GitScmConfig gitScmConfig, HookService hookService,
                         RepositoryHookService repositoryHookService,
@@ -56,10 +65,11 @@ public class RepoDeployer
         this.repositoryService = repositoryService;
     }
 
-    public void deploy(Repository repository, boolean asynchronous) throws IOException {
+    public void deploy(Repository repository) throws IOException {
         // Retrieve namespace and name from repository
         String namespace = repository.getProject().getKey().toLowerCase();
         String name = repository.getSlug().toLowerCase();
+        logger.fine("Deploy the repository " + name + "-" + namespace);
 
         // Create a temporary directory to save the repository archive
         Path archiveDir = Files.createTempDirectory("deploy");
@@ -75,9 +85,11 @@ public class RepoDeployer
             tar.close();
 
             try {
+                logger.fine("Deploy an empty repository");
                 handler.complete();
+                logger.fine("Deployment successed");
             } catch (Exception ex) {
-                ex.printStackTrace();
+                // error already logged
             }
         } else {
             // Run git command to generate an archive file
@@ -90,11 +102,7 @@ public class RepoDeployer
                 .build(handler);
 
             // The remaining task is performed in the command handler
-            if (asynchronous) {
-                command.start();
-            } else {
-                command.call();
-            }
+            command.call();
         }
     }
 
@@ -117,8 +125,15 @@ public class RepoDeployer
                 builder.command("/usr/bin/cwman", "deploy", name, namespace, archiveDir.toString());
                 builder.redirectError(ProcessBuilder.Redirect.INHERIT);
                 builder.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-                builder.start().waitFor();
+
+                int status = builder.start().waitFor();
+                if (status != 0) {
+                    logger.severe("Deployer exited with status code " + status);
+                } else {
+                    logger.fine("Deployer exited successful");
+                }
             } catch (Exception ex) {
+                logger.log(Level.SEVERE, "Deployment failed", ex);
                 throw new ProcessException(ex);
             } finally {
                 cleanup();

@@ -73,7 +73,7 @@ public class RepoDeployerRestResource {
         validator.validateForRepository(repository, Permission.REPO_READ);
 
         try {
-            deployer.deploy(repository, false);
+            deployer.deploy(repository);
             return Response.ok().build();
         } catch (Exception ex) {
             return Response.serverError().build();

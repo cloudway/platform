@@ -7,12 +7,15 @@
 package com.cloudway.bitbucket.plugins;
 
 import java.util.Collection;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import com.atlassian.bitbucket.hook.HookService;
 import com.atlassian.bitbucket.hook.repository.AsyncPostReceiveRepositoryHook;
 import com.atlassian.bitbucket.hook.repository.RepositoryHookContext;
 import com.atlassian.bitbucket.hook.repository.RepositoryHookService;
 import com.atlassian.bitbucket.repository.RefChange;
+import com.atlassian.bitbucket.repository.Repository;
 import com.atlassian.bitbucket.repository.RepositoryService;
 import com.atlassian.bitbucket.scm.git.GitScmConfig;
 import com.atlassian.bitbucket.scm.git.command.GitCommandBuilderFactory;
@@ -20,6 +23,13 @@ import com.atlassian.bitbucket.scm.git.command.GitCommandBuilderFactory;
 @SuppressWarnings("unused")
 public class AsyncPostReceiveDeployer implements AsyncPostReceiveRepositoryHook {
     private final RepoDeployer deployer;
+
+    private static final Logger logger = Logger.getLogger(RepoDeployer.class.getName());
+    static {
+        if (System.getenv("CLOUDWAY_DEBUG_HOOK") != null) {
+            logger.setLevel(Level.FINE);
+        }
+    }
 
     AsyncPostReceiveDeployer(GitCommandBuilderFactory factory,
                              GitScmConfig gitScmConfig,
@@ -35,9 +45,13 @@ public class AsyncPostReceiveDeployer implements AsyncPostReceiveRepositoryHook 
     public void postReceive(RepositoryHookContext context, Collection<RefChange> refChanges) {
         if (masterBranchChanged(refChanges)) {
             try {
-                deployer.deploy(context.getRepository(), true);
+                Repository repo = context.getRepository();
+                logger.fine("Push to deploy the repository " +
+                            repo.getSlug().toLowerCase() + "-" +
+                            repo.getProject().getKey().toLowerCase());
+                deployer.deploy(context.getRepository());
             } catch (Exception ex) {
-                ex.printStackTrace();
+                logger.log(Level.SEVERE, "Push to deploy failed", ex);
             }
         }
     }
