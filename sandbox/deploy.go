@@ -110,6 +110,9 @@ func (box *Sandbox) deploy() (err error) {
     if err != nil {
         return err
     }
+    if err := processTemplates(primary.Path, box.Environ()); err != nil {
+        return err
+    }
 
     state := box.ActiveState()
     box.SetActiveState(manifest.StateBuilding)
