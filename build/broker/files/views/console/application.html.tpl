@@ -145,10 +145,10 @@ $('#scaledown').on('click', function(e) {
 })
 
 function setStateLabelClass() {
-  $('.state').addClass('label-default')
   $('.state-running').addClass('label-success')
   $('.state-building').addClass('label-info')
-  $('.state-failed').addClass('label-danger')
+  $('.state-starting, .state-restarting, .state-stopping').addClass('label-warning')
+  $('.state-stopped, .state-failed, .state-unknown').addClass('label-danger')
 }
 setStateLabelClass()
 

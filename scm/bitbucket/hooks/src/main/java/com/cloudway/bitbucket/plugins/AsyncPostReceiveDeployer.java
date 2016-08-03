@@ -14,7 +14,9 @@ import com.atlassian.bitbucket.hook.HookService;
 import com.atlassian.bitbucket.hook.repository.AsyncPostReceiveRepositoryHook;
 import com.atlassian.bitbucket.hook.repository.RepositoryHookContext;
 import com.atlassian.bitbucket.hook.repository.RepositoryHookService;
+import com.atlassian.bitbucket.repository.Ref;
 import com.atlassian.bitbucket.repository.RefChange;
+import com.atlassian.bitbucket.repository.RefService;
 import com.atlassian.bitbucket.repository.Repository;
 import com.atlassian.bitbucket.repository.RepositoryService;
 import com.atlassian.bitbucket.scm.git.GitScmConfig;
@@ -34,31 +36,34 @@ public class AsyncPostReceiveDeployer implements AsyncPostReceiveRepositoryHook 
     AsyncPostReceiveDeployer(GitCommandBuilderFactory factory,
                              GitScmConfig gitScmConfig,
                              HookService hookService,
-                             RepositoryHookService repositoryHookService,
-                             RepositoryService repositoryService) {
+                             RepositoryHookService repoHookService,
+                             RepositoryService repoService,
+                             RefService refService) {
         deployer = new RepoDeployer(factory, gitScmConfig,
-                                    hookService, repositoryHookService,
-                                    repositoryService);
+                                    hookService, repoHookService,
+                                    repoService, refService);
     }
 
     @Override
     public void postReceive(RepositoryHookContext context, Collection<RefChange> refChanges) {
-        if (masterBranchChanged(refChanges)) {
+        Ref ref = deployer.getDeploymentBranch(context.getRepository(), context.getSettings());
+
+        if (refChanged(refChanges, ref)) {
             try {
                 Repository repo = context.getRepository();
                 logger.fine("Push to deploy the repository " +
                             repo.getSlug().toLowerCase() + "-" +
                             repo.getProject().getKey().toLowerCase());
-                deployer.deploy(context.getRepository());
+                deployer.deploy(context.getRepository(), ref);
             } catch (Exception ex) {
                 logger.log(Level.SEVERE, "Push to deploy failed", ex);
             }
         }
     }
 
-    private static boolean masterBranchChanged(Collection<RefChange> refChanges) {
+    private static boolean refChanged(Collection<RefChange> refChanges, Ref ref) {
         for (RefChange change : refChanges) {
-            if ("refs/heads/master".equals(change.getRef().getId())) {
+            if (change.getRef().getId().equals(ref.getId())) {
                 return true;
             }
         }

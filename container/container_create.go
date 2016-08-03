@@ -138,7 +138,7 @@ func createApplicationContainer(cli DockerClient, scm SCM, cfg *createConfig) ([
     // populate repository if needed
     err = populateRepo(scm, cfg)
     if err == nil {
-        err = scm.Deploy(cfg.Namespace, cfg.Name)
+        err = scm.Deploy(cfg.Namespace, cfg.Name, "")
     }
 
     return containers, err

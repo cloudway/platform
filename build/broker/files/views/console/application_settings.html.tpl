@@ -52,11 +52,53 @@
        <pre>$ git add .
 $ git commit -am "make change"
 $ git push origin master</pre>
+
+        {{- if .app.Branches }}
+        <p>此外，如有必要，也可以点击以下按钮主动触发应用部署，并且可以选择当前分支以实现快速版本切换。</p>
+        <form id="deploy-form" class="form-inline" action="/applications/{{$name}}/deploy" method="post">
+          <div class="form-group">
+            <label for="branch">当前分支：</label>
+            <div class="input-group">
+              <input type="text" id="branch" name="branch" class="form-control input-sm" value="{{.app.Branch.Id}}"></input>
+              <div class="input-group-btn dropdown">
+                <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                  <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-right">
+                  <li class="dropdown-header">分支</li>
+                  {{- range .app.Branches }}
+                  {{- if eq .Type "BRANCH" }}
+                  <li class="branch-select" data-input="#branch">
+                    <a name="{{.Id}}" href="#">{{.DisplayId}}</a>
+                  </li>
+                  {{- end }}
+                  {{- end }}
+                  <li class="dropdown-header">标签</li>
+                  {{- range .app.Branches }}
+                  {{- if eq .Type "TAG" }}
+                  <li class="branch-select" data-input="#branch">
+                    <a name="{{.Id}}" href="#">{{.DisplayId}}</a>
+                  </li>
+                  {{- end }}
+                  {{- end }}
+                </ul>
+              </div>
+            </div>
+            <button id="deploy-btn" class="btn btn-success btn-sm" type="submit">
+              <i class="fa fa-cloud-upload"></i> 立即部署
+            </button>
+            <span id="deploy-spinner" class="hidden"><i class="fa fa-spinner fa-spin"></i></span>
+          </div>
+        </form>
+        {{- else }}
         <p>此外，如有必要，也可以点击以下按钮主动触发应用部署。</p>
-        <button id="deploy-btn" class="btn btn-success btn-sm" type="button">
-          <i class="fa fa-cloud-upload"></i> 立即部署
-        </button>
-        <span id="deploy-spinner" class="hidden"><i class="fa fa-spinner fa-spin"></i></span>
+        <form id="deploy-form" class="form-inline" action="/applications/{{$name}}/deploy" method="post">
+          <button id="deploy-btn" class="btn btn-success btn-sm" type="submit">
+            <i class="fa fa-cloud-upload"></i> 立即部署
+          </button>
+          <span id="deploy-spinner" class="hidden"><i class="fa fa-spinner fa-spin"></i></span>
+        </form>
+        {{- end }}
       </div>
     </div>
 
@@ -65,7 +107,7 @@ $ git push origin master</pre>
       <div class="col-md-2">删除应用</div>
       <div class="col-md-6">
         <p>此操作无法恢复，请确定已做好备份</p>
-        <form action="/applications/{{$name}}/delete" method="POST">
+        <form action="/applications/{{$name}}/delete" method="post">
           <button class="btn btn-danger" type="button" data-toggle="modal"
                   data-target="#confirm-modal" data-message="与应用相关的所有数据都将被删除，并且无法恢复，是否继续？">
             <i class="fa fa-trash-o fa-lg"></i> 删除应用...
@@ -86,8 +128,8 @@ $ git push origin master</pre>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label for="host-name" class="control-label">域名</label>
-            <input type="text" class="form-control" name="hostname"/>
+            <label for="hostname" class="control-label">域名</label>
+            <input type="text" class="form-control" id="hostname" name="hostname"/>
           </div>
         </div>
         <div class="modal-footer">
@@ -119,11 +161,20 @@ $ git push origin master</pre>
 {{template "_danger_modal"}}
 
 <script>
-$('#deploy-btn').on('click', function(e) {
-  $('#deploy-spinner').removeClass("hidden")
-  $.post("/applications/{{$name}}/deploy", null, function(resp) {
-    $('#deploy-spinner').addClass("hidden")
-    $('#deploy-confirm-modal').modal({})
-  })
-})
+$('#deploy-form').submit(function(e) {
+  $('#deploy-spinner').removeClass("hidden");
+  $.post(this.action, $(this).serialize(), function(resp) {
+    $('#deploy-spinner').addClass("hidden");
+    $('#deploy-confirm-modal').modal({});
+  });
+  e.preventDefault();
+});
+</script>
+
+<script>
+$('.branch-select a').on('click', function(e) {
+  var select = $(this).parent();
+  var input = $(select.data('input'));
+  input.val(this.name);
+});
 </script>

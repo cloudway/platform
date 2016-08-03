@@ -32,7 +32,13 @@ type SCM interface {
     PopulateURL(namespace, name string, url string) error
 
     // Deploy application with new commit.
-    Deploy(namespace, name string) error
+    Deploy(namespace, name string, branch string) error
+
+    // Get the current deployment branch.
+    GetDeploymentBranch(namespace, name string) (*Branch, error)
+
+    // Get all deployment branches.
+    GetDeploymentBranches(namespace, name string) ([]Branch, error)
 
     // Add an SSH key to the given namespace.
     AddKey(namespace string, key string) error
@@ -42,6 +48,18 @@ type SCM interface {
 
     // List all SSH keys in the given namespace.
     ListKeys(namespace string) ([]SSHKey, error)
+}
+
+// A branch of deployment.
+type Branch struct {
+    // The branch identifier, this is a ref-id for git SCM.
+    Id string `json:"id"`
+
+    // The display identifier.
+    DisplayId string `json:"displayId,omitempty"`
+
+    // The branch type, such as "BRANCH" or "TAG"
+    Type string `json:"type,omitempty"`
 }
 
 type SSHKey struct {

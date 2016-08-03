@@ -24,6 +24,7 @@ import (
     "github.com/cloudway/platform/pkg/manifest"
     "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/scm"
 )
 
 func (con *Console) initApplicationsRoutes(gets *mux.Router, posts *mux.Router) {
@@ -244,6 +245,8 @@ type appData struct {
     Name        string
     DNS         string
     CloneURL    string
+    Branch      *scm.Branch
+    Branches    []scm.Branch
     Frameworks  []serviceData
     Services    []serviceData
     Hosts       []string
@@ -440,6 +443,20 @@ func (con *Console) showApplicationSettings(w http.ResponseWriter, r *http.Reque
         appData.CloneURL = cloneURL
     }
 
+    branch, err := con.SCM.GetDeploymentBranch(user.Namespace, name)
+    if err != nil {
+        logrus.Error(err)
+    } else {
+        appData.Branch = branch
+    }
+
+    branches, err := con.SCM.GetDeploymentBranches(user.Namespace, name)
+    if err != nil {
+        logrus.Error(err)
+    } else {
+        appData.Branches = branches
+    }
+
     appData.Hosts = app.Hosts
 
     data.MergeKV("app", appData)
@@ -557,7 +574,8 @@ func (con *Console) deployApplication(w http.ResponseWriter, r *http.Request) {
     }
 
     name := mux.Vars(r)["name"]
-    err := con.SCM.Deploy(user.Namespace, name)
+    branch := r.FormValue("branch")
+    err := con.SCM.Deploy(user.Namespace, name, branch)
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)
     } else {

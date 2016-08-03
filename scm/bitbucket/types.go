@@ -3,6 +3,7 @@ package bitbucket
 import (
     "bytes"
     "fmt"
+    "github.com/cloudway/platform/scm"
 )
 
 type Page struct {
@@ -42,6 +43,11 @@ type SSHKey struct {
 type SSHKeyPage struct {
     Page
     Values []SSHKey `json:"values"`
+}
+
+type BranchPage struct {
+    Page
+    Values []scm.Branch `json:"values"`
 }
 
 type ServerErrors struct {

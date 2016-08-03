@@ -6,6 +6,8 @@
 
 package com.cloudway.bitbucket.plugins;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -24,13 +26,20 @@ import com.atlassian.bitbucket.hook.HookRequestHandle;
 import com.atlassian.bitbucket.hook.HookService;
 import com.atlassian.bitbucket.hook.HookUtils;
 import com.atlassian.bitbucket.hook.repository.RepositoryHookService;
+import com.atlassian.bitbucket.repository.Branch;
+import com.atlassian.bitbucket.repository.Ref;
+import com.atlassian.bitbucket.repository.RefService;
+import com.atlassian.bitbucket.repository.RefType;
 import com.atlassian.bitbucket.repository.Repository;
 import com.atlassian.bitbucket.repository.RepositoryService;
+import com.atlassian.bitbucket.repository.StandardRefType;
 import com.atlassian.bitbucket.scm.CommandOutputHandler;
 import com.atlassian.bitbucket.scm.git.GitScmConfig;
 import com.atlassian.bitbucket.scm.git.command.GitCommand;
 import com.atlassian.bitbucket.scm.git.command.GitCommandBuilderFactory;
 import com.atlassian.bitbucket.scm.git.command.GitScmCommandBuilder;
+import com.atlassian.bitbucket.setting.Settings;
+import com.atlassian.bitbucket.setting.SettingsBuilder;
 import com.atlassian.utils.process.ProcessException;
 import com.atlassian.utils.process.Watchdog;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
@@ -44,8 +53,11 @@ public class RepoDeployer
     private final GitCommandBuilderFactory gitCommandBuilderFactory;
     private final GitScmConfig gitScmConfig;
     private final HookService hookService;
-    private final RepositoryHookService repositoryHookService;
-    private final RepositoryService repositoryService;
+    private final RepositoryHookService repoHookService;
+    private final RepositoryService repoService;
+    private final RefService refService;
+
+    public static final String HOOK_KEY = "com.cloudway.bitbucket.plugins.repo-deployer:repo-deployer";
 
     private static final Logger logger = Logger.getLogger(RepoDeployer.class.getName());
     static {
@@ -54,29 +66,85 @@ public class RepoDeployer
         }
     }
 
+    @SuppressWarnings("override")
+    private static final Ref defaultRef = new Branch() {
+        public boolean getIsDefault()    { return true; }
+        public String  getLatestCommit() { return null; }
+        public String  getDisplayId()    { return "master"; }
+        public String  getId()           { return "refs/heads/master"; }
+        public RefType getType()         { return StandardRefType.BRANCH; }
+    };
+
     public RepoDeployer(GitCommandBuilderFactory gitCommandBuilderFactory,
                         GitScmConfig gitScmConfig, HookService hookService,
-                        RepositoryHookService repositoryHookService,
-                        RepositoryService repositoryService) {
+                        RepositoryHookService repoHookService,
+                        RepositoryService repoService,
+                        RefService refService) {
         this.gitCommandBuilderFactory = gitCommandBuilderFactory;
-        this.gitScmConfig = gitScmConfig;
-        this.hookService = hookService;
-        this.repositoryHookService = repositoryHookService;
-        this.repositoryService = repositoryService;
+        this.gitScmConfig    = gitScmConfig;
+        this.hookService     = hookService;
+        this.repoHookService = repoHookService;
+        this.repoService     = repoService;
+        this.refService      = refService;
     }
 
-    public void deploy(Repository repository) throws IOException {
+    public Ref getDeploymentBranch(Repository repository) {
+        Settings settings = repoHookService.getSettings(repository, HOOK_KEY);
+        return getDeploymentBranch(repository, settings);
+    }
+
+    public Ref getDeploymentBranch(Repository repository, Settings settings) {
+        if (repoService.isEmpty(repository)) {
+            return defaultRef;
+        }
+
+        String refId = null;
+        Ref ref = null;
+
+        if (settings != null) {
+            refId = settings.getString("branch");
+        }
+        if (refId != null && !refId.isEmpty()) {
+            ref = refService.resolveRef(repository, refId);
+        }
+        if (ref == null) {
+            ref = refService.getDefaultBranch(repository);
+        }
+        return ref;
+    }
+
+    public Ref setDeploymentBranch(Repository repository, String refId) {
+        if (repoService.isEmpty(repository)) {
+            return defaultRef;
+        }
+
+        Ref ref = null;
+
+        if (refId != null && !refId.isEmpty()) {
+            ref = refService.resolveRef(repository, refId);
+        }
+        if (ref == null) {
+            ref = refService.getDefaultBranch(repository);
+        }
+
+        SettingsBuilder builder = repoHookService.createSettingsBuilder();
+        builder.add("branch", ref.getId());
+        repoHookService.setSettings(repository, HOOK_KEY, builder.build());
+        return ref;
+    }
+
+    public void deploy(Repository repository, Ref ref) throws IOException {
         // Retrieve namespace and name from repository
         String namespace = repository.getProject().getKey().toLowerCase();
         String name = repository.getSlug().toLowerCase();
-        logger.fine("Deploy the repository " + name + "-" + namespace);
+        logger.fine("Deploy the repository " + name + "-" + namespace + " from branch " + ref.getDisplayId());
 
         // Create a temporary directory to save the repository archive
         Path archiveDir = Files.createTempDirectory("deploy");
         Path archiveFile = archiveDir.resolve(archiveDir.getFileName() + ".tar.gz");
         DeploymentHandler handler = new DeploymentHandler(name, namespace, archiveDir);
 
-        if (repositoryService.isEmpty(repository)) {
+        if (repoService.isEmpty(repository)) {
             // Create empty archive file
             TarArchiveOutputStream tar =
                 new TarArchiveOutputStream(
@@ -98,7 +166,7 @@ public class RepoDeployer
                 .argument("--format=tar.gz")
                 .argument("-o")
                 .argument(archiveFile.toString())
-                .argument("master")
+                .argument(ref.getId())
                 .build(handler);
 
             // The remaining task is performed in the command handler
@@ -149,20 +217,27 @@ public class RepoDeployer
         }
     }
 
-    public InputStream archive(Repository repository) throws IOException {
-        Pipe pipe = Pipe.open();
-        InputStream pipeIn = Channels.newInputStream(pipe.source());
-        OutputStream pipeOut = Channels.newOutputStream(pipe.sink());
+    public InputStream archive(Repository repository, Ref ref) throws IOException {
+        if (repoService.isEmpty(repository)) {
+            // create empty archive file
+            ByteArrayOutputStream bout = new ByteArrayOutputStream();
+            new TarArchiveOutputStream(bout).close();
+            return new ByteArrayInputStream(bout.toByteArray());
+        } else {
+            Pipe pipe = Pipe.open();
+            InputStream pipeIn = Channels.newInputStream(pipe.source());
+            OutputStream pipeOut = Channels.newOutputStream(pipe.sink());
 
-        CommandOutputHandler<Void> handler = new LoggingHandler(pipeOut);
-        GitCommand<Void> command = gitCommandBuilderFactory.builder(repository)
-            .command("archive")
-            .argument("--format=tar")
-            .argument("master")
-            .build(handler);
-        command.start();
+            CommandOutputHandler<Void> handler = new LoggingHandler(pipeOut);
+            GitCommand<Void> command = gitCommandBuilderFactory.builder(repository)
+                .command("archive")
+                .argument("--format=tar")
+                .argument(ref.getId())
+                .build(handler);
+            command.start();
 
-        return pipeIn;
+            return pipeIn;
+        }
     }
 
     static class LoggingHandler implements CommandOutputHandler<Void> {
@@ -307,11 +382,9 @@ public class RepoDeployer
             .call();
     }
 
-    private static final String HOOK_KEY = "com.cloudway.bitbucket.plugins.repo-deployer:repo-deployer";
-
     private void pushTemplateToNewRepo(Path tempRepoDir, Repository newRepo) {
         // temprarily disable post-receive hook
-        repositoryHookService.disable(newRepo, HOOK_KEY);
+        repoHookService.disable(newRepo, HOOK_KEY);
         try {
             GitScmCommandBuilder builder = gitCommandBuilderFactory.builder()
                 .workingDirectory(tempRepoDir.toString())
@@ -324,7 +397,7 @@ public class RepoDeployer
 
             builder.build(new LoggingHandler(System.err)).call();
         } finally {
-            repositoryHookService.enable(newRepo, HOOK_KEY);
+            repoHookService.enable(newRepo, HOOK_KEY);
         }
     }
 }

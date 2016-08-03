@@ -201,10 +201,68 @@ func (cli *bitbucketClient) PopulateURL(namespace, name, remote string) error {
     return checkNamespaceError(namespace, resp, err)
 }
 
-func (cli *bitbucketClient) Deploy(namespace, name string) error {
+func (cli *bitbucketClient) Deploy(namespace, name string, branch string) error {
     path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/deploy", namespace, name)
-    resp, err := cli.Post(context.Background(), path, nil, nil, nil)
+    query := url.Values{"branch": []string{branch}}
+    resp, err := cli.Post(context.Background(), path, query, nil, nil)
     return checkNamespaceError(namespace, resp, err)
+}
+
+func (cli *bitbucketClient) GetDeploymentBranch(namespace, name string) (*scm.Branch, error) {
+    path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/settings", namespace, name)
+    resp, err := cli.Get(context.Background(), path, nil, nil)
+    if err = checkNamespaceError(namespace, resp, err); err != nil {
+        return nil, err
+    }
+
+    var branch scm.Branch
+    err = json.NewDecoder(resp.Body).Decode(&branch)
+    return &branch, err
+}
+
+func (cli *bitbucketClient) GetDeploymentBranches(namespace, name string) ([]scm.Branch, error) {
+    branches, err := cli.getRefs(namespace, name, "branches")
+    if err != nil {
+        return nil, err
+    }
+
+    tags, err := cli.getRefs(namespace, name, "tags")
+    if err != nil {
+        return nil, err
+    }
+
+    return append(branches, tags...), nil
+}
+
+func (cli *bitbucketClient) getRefs(namespace, name, typ string) ([]scm.Branch, error) {
+    path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s/%s", namespace, name, typ)
+    ctx := context.Background()
+
+    refs := make([]scm.Branch, 0)
+    start := 0
+
+    for {
+        params := url.Values{"start": []string{strconv.Itoa(start)}}
+        resp, err := cli.Get(ctx, path, params, nil)
+        err = checkNamespaceError(namespace, resp, err)
+        if err != nil {
+            return refs, err
+        }
+
+        var page BranchPage
+        err = json.NewDecoder(resp.Body).Decode(&page)
+        if err != nil {
+            return refs, err
+        }
+        refs = append(refs, page.Values...)
+
+        if page.IsLastPage {
+            break
+        }
+        start = page.NextPageStart
+    }
+
+    return refs, nil
 }
 
 func (cli *bitbucketClient) AddKey(namespace string, key string) error {
