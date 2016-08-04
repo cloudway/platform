@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# configure bitbucket
+if [ -z "$CLOUDWAY_SCM_URL" -a -n "$BITBUCKET_ENV_BITBUCKET_URL" ]; then
+    BITBUCKET_HOST=$BITBUCKET_PORT_7990_TCP_ADDR
+    BITBUCKET_PORT=$BITBUCKET_PORT_7990_TCP_PORT
+    BITBUCKET_USER=${BITBUCKET_ENV_BITBUCKET_USER:-admin}
+    BITBUCKET_PASS=$BITBUCKET_ENV_BITBUCKET_PASSWORD
+    BITBUCKET_URL="http://${BITBUCKET_USER}:${BITBUCKET_PASS}@${BITBUCKET_HOST}:${BITBUCKET_PORT}"
+
+    cwman config "scm.type" "bitbucket"
+    cwman config "scm.url" "$BITBUCKET_URL"
+fi
+
+exec /usr/bin/cwman sshd

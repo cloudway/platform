@@ -1,6 +1,8 @@
-FROM mongo:3.2.6
+FROM mongo:3.3
 
-RUN apt-get update && apt-get install -y --no-install-recommends supervisor git openssh-client
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    supervisor git curl ca-certificates postfix sasl2-bin libsasl2-modules rsyslog openssh-client \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV CLOUDWAY_ROOT /usr/local/cloudway
 ENV CLOUDWAY_DOMAIN example.com
