@@ -59,12 +59,16 @@ func (a appList) Len() int { return len(a) }
 func (a appList) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a appList) Less(i, j int) bool { return a[i].CreatedAt.After(a[j].CreatedAt) }
 
-func appDNS(name, namespace string) string {
-    port := conf.Get("proxy.port")
-    if port != "" {
-        port = ":" + port
+func (con *Console) appDNS(name, namespace string) string {
+    return fmt.Sprintf("%s-%s.%s", name, namespace, defaults.Domain())
+}
+
+func (con *Console) appURL(name, namespace string) string {
+    host, port := con.baseURL.Host, ""
+    if i := strings.IndexRune(host, ':'); i != -1 {
+        port = host[i:]
     }
-    return fmt.Sprintf("%s-%s.%s%s", name, namespace, defaults.Domain(), port)
+    return fmt.Sprintf("%s://%s-%s.%s%s", con.baseURL.Scheme, name, namespace, defaults.Domain(), port)
 }
 
 func (con *Console) getApplications(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +94,7 @@ func (con *Console) getApplications(w http.ResponseWriter, r *http.Request) {
 
         apps = append(apps, &appListData{
             Name:       name,
-            URL:        "http://" + appDNS(name, user.Namespace),
+            URL:        con.appURL(name, user.Namespace),
             CreatedAt:  a.CreatedAt,
             Framework:  framework,
             Plugins:    plugins,
@@ -244,6 +248,7 @@ func (con *Console) startContainers(containers []*container.Container) error {
 type appData struct {
     Name        string
     DNS         string
+    URL         string
     CloneURL    string
     Branch      *scm.Branch
     Branches    []scm.Branch
@@ -286,7 +291,8 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 
     appData := &appData{
         Name: name,
-        DNS:  appDNS(name, user.Namespace),
+        DNS:  con.appDNS(name, user.Namespace),
+        URL:  con.appURL(name, user.Namespace),
     }
 
     cloneURL := conf.Get("scm.clone_url")
@@ -433,7 +439,8 @@ func (con *Console) showApplicationSettings(w http.ResponseWriter, r *http.Reque
 
     appData := &appData{
         Name: name,
-        DNS:  appDNS(name, user.Namespace),
+        DNS:  con.appDNS(name, user.Namespace),
+        URL:  con.appURL(name, user.Namespace),
     }
 
     cloneURL := conf.Get("scm.clone_url")

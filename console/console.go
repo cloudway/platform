@@ -9,6 +9,7 @@ import (
     "io/ioutil"
     "net/http"
     "net/smtp"
+    "net/url"
     "path/filepath"
     "html/template"
     "crypto/md5"
@@ -64,10 +65,17 @@ type Console struct {
                 *broker.Broker
     ab          *authboss.Authboss
     templates   tpl.Templates
+    baseURL     *url.URL
 }
 
 func NewConsole(br *broker.Broker) (con *Console, err error) {
     con = &Console{Broker: br}
+
+    rawurl := conf.GetOrDefault("console.url", "http://api." + defaults.Domain())
+    con.baseURL, err = url.Parse(rawurl)
+    if err != nil {
+        return nil, err
+    }
 
     err = con.setupAuthboss(br)
     if err != nil {
@@ -106,7 +114,7 @@ func (con *Console) setupAuthboss(br *broker.Broker) error {
     ab.Storer    = auth.NewStorer(br)
     ab.MountPath = "/auth"
     ab.ViewsPath = filepath.Join(viewRoot, "auth")
-    ab.RootURL   = conf.GetOrDefault("console.url", "http://localhost:6616")
+    ab.RootURL   = con.baseURL.String()
     ab.EmailFrom = conf.GetOrDefault("smtp.from", "Cloudway <daemon@" + defaults.Domain() + ">")
 
     b, err := ioutil.ReadFile(filepath.Join(viewRoot, "console", "layout.html.tpl"))

@@ -3,6 +3,12 @@
 domain=${CLOUDWAY_DOMAIN:-example.com}
 network=${CLOUDWAY_NETWORK:-cw-net}
 
+console_dns=api.$domain
+console_url=http://$console_dns
+
+bitbucket_dns=git.$domain
+bitbucket_url=http://$bitbucket_dns
+
 # change these to satisfy your environment
 proxy_node=master
 broker_node=master
@@ -36,23 +42,17 @@ docker run -d --name=cloudway-bitbucket --restart=always \
            --net=$network \
            -p 7999:7999 \
            -v bitbucket:$bitbucket_mount \
-           -e VIRTUAL_HOST=git.$domain \
+           -e VIRTUAL_HOST=$bitbucket_dns \
            -e VIRTUAL_PORT=7990 \
            -e DOCKER_HOST \
-           -e DOCKER_CERT_PATH=${bitbucket_mount}/certs \
+           -v $DOCKER_CERT_PATH:/certs:ro \
+           -e DOCKER_CERT_PATH=/certs \
            -e DOCKER_TLS_VERIFY \
-           -e BITBUCKET_URL=http://git.$domain \
+           -e BITBUCKET_URL=$bitbucket_url \
            -e BITBUCKET_PASSWORD=$bitbucket_password \
            -e BITBUCKET_LICENSE="$(< hack/bitbucket-license)" \
            -e "constraint:node==${bitbucket_node}" \
            icloudway/bitbucket-server
-
-# install docker certificates into bitbucket for triggering deployment
-docker exec cloudway-bitbucket mkdir -p "$bitbucket_mount/certs"
-for pem in ca.pem cert.pem key.pem; do
-    docker cp "${DOCKER_CERT_PATH}/$pem" "cloudway-bitbucket:$bitbucket_mount/certs/$pem"
-done
-docker exec -u root cloudway-bitbucket chown -R daemon:daemon "$bitbucket_mount/certs"
 
 # start broker
 docker run -d --name=cloudway-broker --restart=always \
@@ -63,12 +63,13 @@ docker run -d --name=cloudway-broker --restart=always \
            -v $DOCKER_CERT_PATH:/certs:ro \
            -e DOCKER_CERT_PATH=/certs \
            -e DOCKER_TLS_VERIFY \
-           -e VIRTUAL_HOST=api.$domain \
+           -e VIRTUAL_HOST=$console_dns \
            -e VIRTUAL_PORT=6616 \
            -e CLOUDWAY_DOMAIN=$domain \
+           -e CONSOLE_URL=$console_url \
            -e CLOUDWAY_SCM_TYPE=bitbucket \
            -e CLOUDWAY_SCM_URL=http://admin:${bitbucket_password}@bitbucket.local:7990 \
-           -e CLOUDWAY_SCM_CLONE_URL="git clone ssh://git.${domain}:7999/<namespace>/<repo>.git" \
+           -e CLOUDWAY_SCM_CLONE_URL="git clone ssh://${bitbucket_dns}:7999/<namespace>/<repo>.git" \
            --link cloudway-bitbucket:bitbucket.local \
            -e "constraint:node==${broker_node}" \
            icloudway/broker

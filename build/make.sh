@@ -99,12 +99,6 @@ if [ ! "$GOPATH" ]; then
     exit 1
 fi
 
-if pkg-config 'libsystemd >= 209' 2> /dev/null ; then
-    CLOUDWAY_BUILDTAGS+=" journald"
-elif pkg-config 'libsystemd-journal' 2> /dev/null ; then
-    CLOUDWAY_BUILDTAGS+=" journald journald_compat"
-fi
-
 # Use these flags when compiling the tests and final binary
 
 IAMSTATIC='true'
@@ -113,8 +107,9 @@ if [ -z "$CLOUDWAY_DEBUG" ]; then
     LDFLAGS='-w'
 fi
 
-LDFLAGS_STATIC=''
 EXTLDFLAGS_STATIC='-static'
+LDFLAGS_STATIC="-extldflags \"$EXTLDFLAGS_STATIC\""
+
 # ORIG_BUILDFLAGS is necessary for the cross target which cannot always build
 # with options link -race
 ORIG_BUILDFLAGS=( -tags "autogen netgo static_build $CLOUDWAY_BUILDTAGS" -installsuffix netgo )
@@ -129,11 +124,6 @@ fi
 ORIG_BUILDFLAGS+=( $REBUILD_FLAG )
 
 BUILDFLAGS=( $BUILDFLAGS "${ORIG_BUILDFLAGS[@]}" )
-
-LDFLAGS_STATIC_DOCKER="
-    $LDFLAGS_STATIC
-    -extldflags \"EXTLDFLAGS_STATIC\"
-"
 
 # a helper to provide ".exe" when it's appropriate
 binary_extension() {

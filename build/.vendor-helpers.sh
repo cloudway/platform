@@ -105,17 +105,17 @@ clean() {
     local prune=( $($find vendor -depth -type d -not '(' "${findArgs[@]}" ')') )
     unset IFS
     for dir in "${prune[@]}"; do
-        $find "$dir" -maxdepth 1 -not -type d -not -name 'LICENSE*' -not -name 'COPYING*' -exec rm -v -f '{}' ';'
+        $find "$dir" -maxdepth 1 -not -type d -not -name 'LICENSE*' -not -name 'COPYING*' -exec rm -f '{}' ';'
         rmdir "$dir" 2>/dev/null || true
     done
 
     echo -n 'pruning unused files, '
-    $find vendor -type f -name '*_test.go' -exec rm -v '{}' ';'
-    $find vendor -type f -name 'Vagrantfile' -exec rm -v '{}' ';'
+    $find vendor -type f -name '*_test.go' -exec rm '{}' ';'
+    $find vendor -type f -name 'Vagrantfile' -exec rm '{}' ';'
 
     # These are the files that are left over after fix_rewritten_imports is run
     echo -n 'pruning .orig files, '
-    $find vendor -type f -name '*.orig' -exec rm -v '{}' ';'
+    $find vendor -type f -name '*.orig' -exec rm '{}' ';'
 
     echo done
 }

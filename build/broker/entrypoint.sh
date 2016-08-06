@@ -1,12 +1,12 @@
 #!/bin/bash
 
 : ${CLOUDWAY_DOMAIN:=example.com}
-export CLOUDWAY_DOMAIN
+: ${CONSOLE_URL:=http://api.$CLOUDWAY_DOMAIN}
 
-chmod 0640 /usr/local/cloudway/conf/cloudway.conf
-if [ "$CLOUDWAY_DOMAIN" != 'example.com' ]; then
-    sed -i "s/example\\.com/$CLOUDWAY_DOMAIN/g" /usr/local/cloudway/conf/cloudway.conf
-fi
+cwman config "domain" ${CLOUDWAY_DOMAIN}
+cwman config "console.url" ${CONSOLE_URL}
+
+export CLOUDWAY_DOMAIN
 
 # configure bitbucket
 if [ -z "$CLOUDWAY_SCM_URL" -a -n "$BITBUCKET_ENV_BITBUCKET_URL" ]; then

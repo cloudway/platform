@@ -21,10 +21,9 @@ RUN apt-get update -qq \
     && apt-get autoremove --yes \
     && rm -rf /var/lib/{apt,dpkg,cache,log}/
 
-# Use the default unprivileged account. This could be considered bad practice
-# on systems where multiple processes end up being executed by 'daemon' but
-# here we only ever run one process anyway.
-ENV RUN_USER=daemon RUN_GROUP=daemon
+# The default installation recommends an unprivileged account. We use the root
+# user to allow bitbucket to access docker socket.
+ENV RUN_USER=root RUN_GROUP=root
 
 # https://confluence.atlassian.com/display/BitbucketServer/Bitbucket+Server+home+directory
 ENV BITBUCKET_HOME /var/atlassian/application-data/bitbucket

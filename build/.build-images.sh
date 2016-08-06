@@ -37,3 +37,8 @@ docker push icloudway/bitbucket-server:4.6.3
 cp -L bundles/latest/binary-server/cwman build/sshd/cwman
 docker build -t icloudway/sshd:$DOCKER_TAG -f build/sshd/Dockerfile build/sshd
 docker push icloudway/sshd:$DOCKER_TAG
+
+cp bundles/latest/tgz/cloudway-broker-*-linux-amd64.tar.gz build/platform/cloudway-broker.tar.gz
+cp scm/bitbucket/hooks/target/repo-deployer-*.jar build/platform/repo-deployer.jar
+docker build -t icloudway/platform:$DOCKER_TAG -f build/platform/Dockerfile build/platform
+docker push icloudway/platform:$DOCKER_TAG

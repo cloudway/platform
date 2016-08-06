@@ -36,7 +36,11 @@ fi
 
 if [ "$1" = 'bitbucket-server' ]; then
     ./install-plugin.sh &
-    exec gosu daemon $BITBUCKET_INSTALL_DIR/bin/start-webapp.sh -fg
+    if [ "$RUN_USER" = "root" ]; then
+        exec $BITBUCKET_INSTALL_DIR/bin/start-webapp.sh -fg
+    else
+        exec gosu $RUN_USER $BITBUCKET_INSTALL_DIR/bin/start-webapp.sh -fg
+    fi
 else
     exec "$@"
 fi
