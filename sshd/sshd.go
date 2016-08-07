@@ -13,7 +13,7 @@ import (
 
     "github.com/Sirupsen/logrus"
     "golang.org/x/crypto/ssh"
-    "github.com/cloudway/platform/container/conf"
+    conf "github.com/cloudway/platform/config"
     "github.com/cloudway/platform/container"
     "github.com/cloudway/platform/scm"
     "github.com/docker/engine-api/types"

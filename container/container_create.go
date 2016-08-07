@@ -21,8 +21,8 @@ import (
     "github.com/docker/engine-api/types/network"
     "github.com/docker/engine-api/types/strslice"
 
-    "github.com/cloudway/platform/container/conf"
-    "github.com/cloudway/platform/container/conf/defaults"
+    "github.com/cloudway/platform/config"
+    "github.com/cloudway/platform/config/defaults"
     . "github.com/cloudway/platform/scm"
     "github.com/cloudway/platform/pkg/manifest"
     "github.com/cloudway/platform/pkg/archive"
@@ -79,7 +79,7 @@ func (cli DockerClient) Create(scm SCM, opts CreateOptions) ([]*Container, error
         cfg.Home = defaults.AppHome()
     }
     if cfg.Network == "" {
-        cfg.Network = conf.Get("network")
+        cfg.Network = config.Get("network")
     }
 
     cfg.Category   = meta.Category
@@ -254,7 +254,7 @@ func buildImage(cli DockerClient, t *template.Template, cfg *createConfig) (imag
     }
 
     // copy application support files
-    sandbox := filepath.Join(conf.RootDir, "sandbox")
+    sandbox := filepath.Join(config.RootDir, "sandbox")
     if err = archive.CopyFileTree(tw, "sandbox", sandbox, true); err != nil {
         return
     }
@@ -365,7 +365,7 @@ func createContainer(cli DockerClient, imageId string, cfg *createConfig) (*Cont
             APP_HOME_KEY:      cfg.Home,
         },
         User: cfg.User,
-        Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "run"},
+        Entrypoint: strslice.StrSlice([]string{"/usr/bin/cwctl", "run"}),
     }
 
     if cfg.Category.IsService() {

@@ -2,6 +2,11 @@
 set -e
 
 (
+    DEST="${DEST}-client"
+    ABS_DEST="${ABS_DEST}-client"
+    . build/make/binary-client
+)
+(
     DEST="${DEST}-server"
     ABS_DEST="${ABS_DEST}-server"
     . build/make/binary-server

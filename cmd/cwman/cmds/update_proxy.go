@@ -3,14 +3,14 @@ package cmds
 import (
     "time"
     "github.com/cloudway/platform/proxy"
-    "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/config"
 )
 
 func (cli *CWMan) CmdUpdateProxy(args ...string) (err error) {
     var prx proxy.Proxy
 
     for i := 0; i < 3; i++ {
-        prx, err = proxy.New(conf.Get("proxy.url"))
+        prx, err = proxy.New(config.Get("proxy.url"))
         if err == nil {
             break
         }

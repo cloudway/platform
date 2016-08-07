@@ -6,7 +6,7 @@ import (
     "strings"
     "sort"
     "path/filepath"
-    "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/config"
     "github.com/cloudway/platform/pkg/archive"
     "github.com/cloudway/platform/pkg/manifest"
     "github.com/cloudway/platform/pkg/files"
@@ -17,7 +17,7 @@ type PluginHub struct {
 }
 
 func New() (*PluginHub, error) {
-    dir := conf.GetOrDefault("hub.dir", "/var/lib/cloudway/plugins")
+    dir := config.GetOrDefault("hub.dir", "/var/lib/cloudway/plugins")
     if err := os.MkdirAll(dir, 0755); err != nil {
         return nil, err
     }

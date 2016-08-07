@@ -19,11 +19,11 @@ import (
     "github.com/gorilla/mux"
     "gopkg.in/authboss.v0"
 
-    "github.com/cloudway/platform/container/conf/defaults"
+    "github.com/cloudway/platform/config"
+    "github.com/cloudway/platform/config/defaults"
     "github.com/cloudway/platform/container"
     "github.com/cloudway/platform/pkg/manifest"
     "github.com/cloudway/platform/auth/userdb"
-    "github.com/cloudway/platform/container/conf"
     "github.com/cloudway/platform/scm"
 )
 
@@ -295,7 +295,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
         URL:  con.appURL(name, user.Namespace),
     }
 
-    cloneURL := conf.Get("scm.clone_url")
+    cloneURL := config.Get("scm.clone_url")
     if cloneURL != "" {
         cloneURL = strings.Replace(cloneURL, "<namespace>", user.Namespace, -1)
         cloneURL = strings.Replace(cloneURL, "<repo>", name, -1)
@@ -443,7 +443,7 @@ func (con *Console) showApplicationSettings(w http.ResponseWriter, r *http.Reque
         URL:  con.appURL(name, user.Namespace),
     }
 
-    cloneURL := conf.Get("scm.clone_url")
+    cloneURL := config.Get("scm.clone_url")
     if cloneURL != "" {
         cloneURL = strings.Replace(cloneURL, "<namespace>", user.Namespace, -1)
         cloneURL = strings.Replace(cloneURL, "<repo>", name, -1)

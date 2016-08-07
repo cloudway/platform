@@ -13,7 +13,7 @@ import (
     "github.com/docker/engine-api/types/filters"
     "github.com/docker/engine-api/types/events"
     "github.com/cloudway/platform/container"
-    "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/config"
     "github.com/cloudway/platform/pkg/manifest"
 )
 
@@ -26,7 +26,7 @@ func RunUpdater(cli container.DockerClient, proxy Proxy) error {
             switch <- sigchan {
             case syscall.SIGHUP:
                 logrus.Info("Reload mappings")
-                if err := conf.Initialize(); err != nil {
+                if err := config.Initialize(); err != nil {
                     logrus.Error(err)
                 }
                 if err := update(proxy); err != nil {
@@ -57,7 +57,7 @@ func RunUpdater(cli container.DockerClient, proxy Proxy) error {
 
 func update(proxy Proxy) error {
     var mappings []*manifest.ProxyMapping
-    for frontend, backend := range conf.GetSection("proxy-mapping") {
+    for frontend, backend := range config.GetSection("proxy-mapping") {
         mappings = append(mappings, &manifest.ProxyMapping{
             Frontend: frontend,
             Backend:  backend,

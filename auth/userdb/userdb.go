@@ -6,7 +6,7 @@ import (
     "net/url"
     "strings"
     "golang.org/x/crypto/bcrypt"
-    "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/config"
 )
 
 // The Plugin interface represents a user database plugin. This interface
@@ -36,8 +36,8 @@ type Plugin interface {
 }
 
 var NewPlugin = func() (Plugin, error) {
-    dbtype := conf.Get("userdb.type")
-    dburl  := conf.Get("userdb.url")
+    dbtype := config.Get("userdb.type")
+    dburl  := config.Get("userdb.url")
 
     if dbtype == "" && dburl != "" {
         u, err := url.Parse(dburl)

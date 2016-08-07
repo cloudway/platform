@@ -13,7 +13,7 @@ import (
     "golang.org/x/net/context"
     "github.com/cloudway/platform/pkg/rest"
     "github.com/cloudway/platform/scm"
-    "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/config"
 )
 
 type bitbucketClient struct {
@@ -23,12 +23,12 @@ type bitbucketClient struct {
 func init() {
     old := scm.New
     scm.New = func() (scm.SCM, error) {
-        scmtype := conf.Get("scm.type")
+        scmtype := config.Get("scm.type")
         if scmtype != "bitbucket" {
             return old()
         }
 
-        scmurl := conf.Get("scm.url")
+        scmurl := config.Get("scm.url")
         if scmurl == "" {
             return nil, errors.New("Bitbucket URL not configured")
         }

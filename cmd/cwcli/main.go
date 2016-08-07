@@ -3,26 +3,23 @@ package main
 import (
     "os"
     "fmt"
-    flag "github.com/cloudway/platform/pkg/mflag"
-    "github.com/cloudway/platform/cmd/cwman/cmds"
     "github.com/cloudway/platform/config"
-    "github.com/cloudway/platform/container"
-    "github.com/Sirupsen/logrus"
+    flag "github.com/cloudway/platform/pkg/mflag"
+    "github.com/cloudway/platform/cmd/cwcli/cmds"
 )
 
 func main() {
     stdout := os.Stdout
 
-    err := config.Initialize()
+    err := config.InitializeClient()
     if err != nil {
         fmt.Fprintln(os.Stderr, err)
-        os.Exit(1)
     }
 
     flag.Usage = func() {
         flag.CommandLine.SetOutput(stdout)
 
-        fmt.Fprint(stdout, "Usage: cwman [OPTIONS] COMMAND [arg...]\n       cwman [ --help ]\n")
+        fmt.Fprint(stdout, "Usage: cwcli [OPTIONS] COMMAND [arg...]\n       cwcli [ --help ]\n")
         help := "\nCommands:\n\n"
 
         commands := cmds.CommandUsage
@@ -33,11 +30,10 @@ func main() {
 
         fmt.Fprint(stdout, "Options:\n")
         flag.PrintDefaults()
-        fmt.Fprint(stdout, "\nRun 'cwman COMMAND --help' for more information on a command.\n")
+        fmt.Fprint(stdout, "\nRun 'cwcli COMMAND --help' for more information on a command.\n")
     }
 
     flgHelp := flag.Bool([]string{"h", "-help"}, false, "Print usage")
-    flgDebug := flag.Bool([]string{"D", "-debug"}, false, "Debugging mode")
 
     flag.Parse()
 
@@ -48,18 +44,7 @@ func main() {
         return
     }
 
-    if *flgDebug {
-        container.DEBUG = true
-        logrus.SetLevel(logrus.DebugLevel)
-    }
-
-    docker, err := container.NewEnvClient()
-    if err != nil {
-        fmt.Fprintln(os.Stderr, err)
-        os.Exit(1)
-    }
-
-    c := cmds.Init(docker)
+    c := cmds.Init()
     if err := c.Run(flag.Args()...); err != nil {
         fmt.Fprintln(os.Stderr, err)
         os.Exit(1)

@@ -3,7 +3,7 @@ package scm
 import (
     "io"
     "fmt"
-    "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/config"
 )
 
 // Source Code Management interface.
@@ -68,7 +68,7 @@ type SSHKey struct {
 }
 
 var New = func() (SCM, error) {
-    scmtype := conf.Get("scm.type")
+    scmtype := config.Get("scm.type")
     if scmtype == "" {
         return nil, fmt.Errorf("The SCM plugin does not configured")
     }

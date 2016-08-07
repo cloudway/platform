@@ -14,7 +14,7 @@ import (
     "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/pkg/errors"
     "github.com/cloudway/platform/pkg/manifest"
-    "github.com/cloudway/platform/container/conf/defaults"
+    "github.com/cloudway/platform/config/defaults"
 )
 
 func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []string) (containers []*container.Container, err error) {

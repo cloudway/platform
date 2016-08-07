@@ -51,6 +51,7 @@ fi
 # List of bundles to create when no argument is passed
 DEFAULT_BUNDLES=(
     validate-vet
+    binary-client
     binary-server
     binary-sandbox
     test-unit
@@ -116,7 +117,6 @@ LDFLAGS_STATIC="-extldflags \"$EXTLDFLAGS_STATIC\""
 # ORIG_BUILDFLAGS is necessary for the cross target which cannot always build
 # with options link -race
 ORIG_BUILDFLAGS=( -tags "autogen netgo static_build $CLOUDWAY_BUILDTAGS" )
-# see https://github.com/golang/go/issues/9369#issuecomment-69864440 for why -installsuffix is necessary here
 
 # When $CLOUDWAY_INCREMENTAL_BINARY is set in the environment, enable incremental
 # builds by installing dependent packages to the GOPATH

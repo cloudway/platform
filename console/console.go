@@ -17,12 +17,12 @@ import (
     "strings"
     "mime"
 
+    "github.com/cloudway/platform/config"
+    "github.com/cloudway/platform/config/defaults"
     "github.com/cloudway/platform/broker"
     "github.com/cloudway/platform/container"
-    "github.com/cloudway/platform/container/conf"
     "github.com/cloudway/platform/console/auth"
     "github.com/cloudway/platform/api/server"
-    "github.com/cloudway/platform/container/conf/defaults"
     "github.com/cloudway/platform/auth/userdb"
 
     "gopkg.in/authboss.v0"
@@ -71,7 +71,7 @@ type Console struct {
 func NewConsole(br *broker.Broker) (con *Console, err error) {
     con = &Console{Broker: br}
 
-    rawurl := conf.GetOrDefault("console.url", "http://api." + defaults.Domain())
+    rawurl := config.GetOrDefault("console.url", "http://api." + defaults.Domain())
     con.baseURL, err = url.Parse(rawurl)
     if err != nil {
         return nil, err
@@ -82,7 +82,7 @@ func NewConsole(br *broker.Broker) (con *Console, err error) {
         return nil, err
     }
 
-    viewRoot := filepath.Join(conf.RootDir, "views", "console")
+    viewRoot := filepath.Join(config.RootDir, "views", "console")
     con.templates = tpl.Must(tpl.Load(viewRoot, filepath.Join(viewRoot, "partials"), "layout.html.tpl", funcs))
 
     return con, nil
@@ -108,14 +108,14 @@ func (con *Console) InitRoutes(s *server.Server) {
 const _EMAIL_RE = `(?:[a-z0-9!#$%&'*+/=?^_`+"`"+`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`+"`"+`{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])`
 
 func (con *Console) setupAuthboss(br *broker.Broker) error {
-    viewRoot := filepath.Join(conf.RootDir, "views")
+    viewRoot := filepath.Join(config.RootDir, "views")
 
     ab := authboss.New()
     ab.Storer    = auth.NewStorer(br)
     ab.MountPath = "/auth"
     ab.ViewsPath = filepath.Join(viewRoot, "auth")
     ab.RootURL   = con.baseURL.String()
-    ab.EmailFrom = conf.GetOrDefault("smtp.from", "Cloudway <daemon@" + defaults.Domain() + ">")
+    ab.EmailFrom = config.GetOrDefault("smtp.from", "Cloudway <daemon@" + defaults.Domain() + ">")
 
     b, err := ioutil.ReadFile(filepath.Join(viewRoot, "console", "layout.html.tpl"))
     if err != nil {
@@ -159,10 +159,10 @@ func (con *Console) setupAuthboss(br *broker.Broker) error {
 }
 
 func initMailer() authboss.Mailer {
-    host     := conf.Get("smtp.host")
-    port     := conf.Get("smtp.port")
-    username := conf.Get("smtp.username")
-    password := conf.Get("smtp.password")
+    host     := config.Get("smtp.host")
+    port     := config.Get("smtp.port")
+    username := config.Get("smtp.username")
+    password := config.Get("smtp.password")
 
     if host == "" || username == "" || password == "" {
         logrus.Warn("No SMTP server configured")

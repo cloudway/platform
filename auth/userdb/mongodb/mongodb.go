@@ -7,7 +7,7 @@ import (
     "reflect"
     "gopkg.in/mgo.v2"
     "gopkg.in/mgo.v2/bson"
-    "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/config"
     "github.com/cloudway/platform/auth/userdb"
 )
 
@@ -19,8 +19,8 @@ type mongodb struct {
 func init() {
     prev := userdb.NewPlugin
     userdb.NewPlugin = func() (userdb.Plugin, error) {
-        dbtype := conf.Get("userdb.type")
-        dburl  := conf.Get("userdb.url")
+        dbtype := config.Get("userdb.type")
+        dburl  := config.Get("userdb.url")
 
         if dbtype != "" && dbtype != "mongodb" {
             return prev()

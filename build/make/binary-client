@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+(
+    export BINARY_SHORT_NAME='cwcli'
+    export SOURCE_PATH='./cmd/cwcli'
+    source "${MAKEDIR}/.binary"
+)

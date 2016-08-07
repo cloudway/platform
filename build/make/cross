@@ -12,8 +12,9 @@ if [ -x "$DEST/../binary-sandbox/cwctl-$VERSION" ]; then
     mkdir -p "$DEST/linux/amd64"
     (
         cd "$DEST/linux/amd64"
-        ln -s ../../../binary-sandbox/* ./
+        ln -s ../../../binary-client/* ./
         ln -s ../../../binary-server/* ./
+        ln -s ../../../binary-sandbox/* ./
     )
     echo "Created symlinks:" "$DEST/linux/amd64/"*
 fi
@@ -29,9 +30,9 @@ for platform in $CLOUDWAY_CROSSPLATFORMS; do
         if [ -z "${sandboxSupporting[$platform]}" ]; then
             # we just need a simple client for these platform
             export LDFLAGS_STATIC=""
-            #source "${MAKEDIR}/binary-client"
+            source "${MAKEDIR}/binary-client"
         else
-            #source "${MAKEDiR}/binary-client"
+            source "${MAKEDiR}/binary-client"
             source "${MAKEDIR}/binary-server"
             source "${MAKEDIR}/binary-sandbox"
         fi

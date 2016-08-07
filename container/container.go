@@ -9,8 +9,8 @@ import (
     "github.com/docker/engine-api/types"
     "github.com/docker/engine-api/types/filters"
     "github.com/cloudway/platform/pkg/manifest"
-    "github.com/cloudway/platform/container/conf/defaults"
-    "github.com/cloudway/platform/container/conf"
+    "github.com/cloudway/platform/config"
+    "github.com/cloudway/platform/config/defaults"
 )
 
 const (
@@ -193,7 +193,7 @@ func (c *Container) FQDN() string {
 
 // Returns the IP address of the container
 func (c *Container) IP() (ip string) {
-    if network := conf.Get("network"); network != "" {
+    if network := config.Get("network"); network != "" {
         if net := c.NetworkSettings.Networks[network]; net != nil {
             ip = net.IPAddress
         }

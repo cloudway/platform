@@ -1,4 +1,4 @@
-package conf
+package config
 
 import (
     "os"
@@ -6,6 +6,7 @@ import (
     "bytes"
     "strings"
     "errors"
+    "runtime"
     "path/filepath"
     "github.com/cloudway/platform/pkg/conf"
 )
@@ -15,6 +16,9 @@ var RootDir string
 
 // The global configuration file
 var cfg *conf.ConfigFile
+
+// The configuration file name
+var cfgFile string
 
 // Initializes the global configuration file.
 func Initialize() (err error) {
@@ -27,30 +31,51 @@ func Initialize() (err error) {
     if err != nil {
         return err
     }
-    RootDir = root
 
     // Load configuration file
-    cfgFile := filepath.Join(RootDir, "conf", "cloudway.conf")
-    cfg, err = conf.ReadConfigFile(cfgFile)
+    path := filepath.Join(RootDir, "conf", "cloudway.conf")
+    cfg, err = conf.ReadConfigFile(path)
     if err != nil && !os.IsNotExist(err) { // Use defaults if configuration file is missing
         return err
     }
+
+    RootDir = root
+    cfgFile = path
+    return nil
+}
+
+// Initialize the client configuration file.
+func InitializeClient() (err error) {
+    home := os.Getenv("HOME")
+    if home == "" && runtime.GOOS == "windows" {
+        home = os.Getenv("USERPROFILE")
+    }
+    if home == "" {
+        return errors.New("Cannot locate home directory")
+    }
+
+    path := filepath.Join(home, ".cloudway")
+    cfg, err = conf.ReadConfigFile(path)
+    if err != nil && !os.IsNotExist(err) {
+        return err
+    }
+
+    cfgFile = path
     return nil
 }
 
 // Save configurations to file.
 func Save() (err error) {
-    if cfg == nil || RootDir == "" {
+    if cfg == nil && cfgFile == "" {
         return errors.New("the configuration was not initialized")
     }
 
-    fname := filepath.Join(RootDir, "conf", "cloudway.conf")
-    if err := os.MkdirAll(filepath.Dir(fname), 0750); err != nil {
+    if err := os.MkdirAll(filepath.Dir(cfgFile), 0750); err != nil {
         return err
     }
 
     var file *os.File
-    if file, err = os.Create(fname); err != nil {
+    if file, err = os.Create(cfgFile); err != nil {
         return err
     }
     defer file.Close()

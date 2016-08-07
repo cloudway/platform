@@ -4,7 +4,7 @@ import (
     "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/broker"
-    "github.com/cloudway/platform/container/conf/defaults"
+    "github.com/cloudway/platform/config/defaults"
 )
 
 type CustomUser struct {
