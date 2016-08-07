@@ -1,0 +1,53 @@
+#!/bin/bash
+set -e
+
+# Run unit test suite, and store their output as a bundle. If $TESTFLAGS
+# is set in the environment, it is passed as extra arguments to 'go test'.
+# You can use this to select certain tests to run, eg.
+#
+#    TESTFLAGS='-test.run ^TestBuild$' ./build/make.sh test-unit
+#
+bundle_test_unit() {
+    TESTFLAGS+=" -test.timeout=${TIMEOUT}"
+    date
+    if [ -z "$TESTDIRS" ]; then
+        TEST_PATH=./...
+    else
+        TEST_PATH=./${TESTDIRS}
+    fi
+
+    pkg_list=$(go list -e \
+        -f '{{if ne .Name "github.com/cloudway/platform"}}
+            {{.ImportPath}}
+            {{end}}' \
+        "${BUILDFLAGS[@]}" $TEST_PATH \
+        | grep github.com/cloudway/platform \
+        | grep -v github.com/cloudway/platform/vendor)
+
+    test_pkg_list=()
+    for pkg in $pkg_list; do
+        if [ -n "$(find ../../../$pkg -name "*_test.go")" ]; then
+            test_pkg_list+=( $pkg )
+        fi
+    done
+
+    if [ -n "$COVER" ]; then
+        mkdir -p "$DEST/coverprofiles"
+        errors=0
+        for pkg in ${test_pkg_list[@]}; do
+            coverprofile="-coverprofile $ABS_DEST/coverprofiles/${pkg//\//-}"
+            go test $coverprofile -ldflags "$LDFLAGS" "${BUILDFLAGS[@]}" $TESTFLAGS $pkg || ((++errors))
+        done
+        if ((errors != 0)); then
+            echo >&2 'Test Failed!'
+            return 1
+        fi
+    else
+        go test $GCCGOFLAGS -ldflags "$LDFLAGS" "${BUILDFLAGS[@]}" $TESTFLAGS "${test_pkg_list[@]}"
+    fi
+}
+
+if [[ "$(go version)" == *"gccgo"* ]]; then
+    GCCGOFLAGS=-gccgoflags="-lpthread"
+fi
+bundle_test_unit 2>&1 | tee -a "$DEST/test.log"

@@ -53,6 +53,8 @@ DEFAULT_BUNDLES=(
     validate-vet
     binary-server
     binary-sandbox
+    test-unit
+    cover
     cross
     tgz
 )
@@ -113,7 +115,7 @@ LDFLAGS_STATIC="-extldflags \"$EXTLDFLAGS_STATIC\""
 
 # ORIG_BUILDFLAGS is necessary for the cross target which cannot always build
 # with options link -race
-ORIG_BUILDFLAGS=( -tags "autogen netgo static_build $CLOUDWAY_BUILDTAGS" -installsuffix netgo )
+ORIG_BUILDFLAGS=( -tags "autogen netgo static_build $CLOUDWAY_BUILDTAGS" )
 # see https://github.com/golang/go/issues/9369#issuecomment-69864440 for why -installsuffix is necessary here
 
 # When $CLOUDWAY_INCREMENTAL_BINARY is set in the environment, enable incremental
@@ -125,6 +127,26 @@ fi
 ORIG_BUILDFLAGS+=( $REBUILD_FLAG )
 
 BUILDFLAGS=( $BUILDFLAGS "${ORIG_BUILDFLAGS[@]}" )
+
+# Test timeout.
+if [ "${DOCKER_ENGINE_GOARCH}" == "arm" ]; then
+    : ${TIMEOUT:=10m}
+elif [ "${DOCKER_ENGINE_GOARCH}" == "windows" ]; then
+    : ${TIMEOUT:=8m}
+else
+    : ${TIMEOUT:=5m}
+fi
+
+# Test coverage
+HAVE_GO_TEST_COVER=
+if \
+    go help testflag | grep -- -cover > /dev/null \
+    && go tool -n cover &> /dev/null \
+; then
+    HAVE_GO_TEST_COVER=1
+else
+    unset COVER
+fi
 
 # a helper to provide ".exe" when it's appropriate
 binary_extension() {

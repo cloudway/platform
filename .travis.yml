@@ -13,7 +13,7 @@ install:
   - docker version
   - build/vendor.sh
 script:
-  - make tgz
+  - make all
   - sudo chown -R ${USER}:${USER} bundles
   - ( cd scm/bitbucket/hooks; mvn clean package )
 after_success:

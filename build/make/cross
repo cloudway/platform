@@ -29,8 +29,9 @@ for platform in $CLOUDWAY_CROSSPLATFORMS; do
         if [ -z "${sandboxSupporting[$platform]}" ]; then
             # we just need a simple client for these platform
             export LDFLAGS_STATIC=""
-            source "${MAKEDIR}/binary-server"
+            #source "${MAKEDIR}/binary-client"
         else
+            #source "${MAKEDiR}/binary-client"
             source "${MAKEDIR}/binary-server"
             source "${MAKEDIR}/binary-sandbox"
         fi

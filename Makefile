@@ -1,4 +1,4 @@
-.PHONY: all binary build vendor cross default shell validate help
+.PHONY: all binary build vendor cross default shell test validate help
 
 # get OS/Arch of docker engine
 DOCKER_OSARCH := $(shell bash -c 'source build/make/.detect-daemon-osarch && echo $${DOCKER_ENGINE_OSARCH:-$$DOCKER_CLIENT_OSARCH}')
@@ -11,7 +11,11 @@ DOCKER_ENVS := \
     -e KEEPBUNDLE \
     -e CLOUDWAY_DEBUG \
     -e CLOUDWAY_GITCOMMIT \
-    -e CLOUDWAY_INCREMENTAL_BINARY
+    -e CLOUDWAY_INCREMENTAL_BINARY \
+    -e TESTDIRS \
+    -e TESTFLAGS \
+    -e COVER \
+    -e TIMEOUT
 
 # to allow `make BIND_DIR=. shell` or `make BIND_DIR= test`
 # (default to no bind mount if DOCKER_HOST is set)
@@ -61,6 +65,9 @@ tgz: build ## build the archive containing the binaries
 
 shell: build ## start a shell inside the build env
 	$(DOCKER_RUN_DOCKER) bash
+
+test: build ## run the tests
+	$(DOCKER_RUN_DOCKER) build/make.sh test-unit cover
 
 validate: build ## validate golint and go vet
 	$(DOCKER_RUN_DOCKER) build/make.sh validate-lint validate-vet

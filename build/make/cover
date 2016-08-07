@@ -1,0 +1,21 @@
+#!/bin/bash
+set -e
+
+bundle_cover() {
+    for p in "$DEST/../"*"/coverprofiles/"*; do
+        if [ -e $p ]; then
+            pkg=$(basename $p)
+            pkg=${pkg//-/\/}
+            pkg=${pkg#github.com/cloudway/platform/}
+            mkdir -p "$DEST/$pkg"
+            go tool cover -html="$p" -o "$DEST/$pkg/coverage.html"
+        fi
+    done
+}
+
+if [ "$HAVE_GO_TEST_COVER" ]; then
+    bundle_cover
+else
+    echo >&2 'warning: the current version of go does not support -cover'
+    echo >&2 '   skipping test coverage report'
+fi
