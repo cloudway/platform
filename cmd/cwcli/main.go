@@ -3,8 +3,10 @@ package main
 import (
     "os"
     "fmt"
-    "github.com/cloudway/platform/config"
+    "strings"
+    "net/url"
     flag "github.com/cloudway/platform/pkg/mflag"
+    "github.com/cloudway/platform/config"
     "github.com/cloudway/platform/cmd/cwcli/cmds"
 )
 
@@ -14,6 +16,7 @@ func main() {
     err := config.InitializeClient()
     if err != nil {
         fmt.Fprintln(os.Stderr, err)
+        os.Exit(1)
     }
 
     flag.Usage = func() {
@@ -34,6 +37,7 @@ func main() {
     }
 
     flgHelp := flag.Bool([]string{"h", "-help"}, false, "Print usage")
+    flgHost := flag.String([]string{"H", "-host"}, "", "Connect to remote host")
 
     flag.Parse()
 
@@ -44,9 +48,33 @@ func main() {
         return
     }
 
-    c := cmds.Init()
+    host := *flgHost
+    if host == "" {
+        host = config.Get("host")
+    } else if host, err = parseHost(host); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(1)
+    } else {
+        config.Set("host", host)
+        config.Save()
+    }
+
+    c := cmds.Init(host)
     if err := c.Run(flag.Args()...); err != nil {
         fmt.Fprintln(os.Stderr, err)
         os.Exit(1)
+    }
+}
+
+func parseHost(host string) (string, error) {
+    if strings.Contains(host, "://") {
+        if u, err := url.Parse(host); err != nil {
+            return "", err
+        } else {
+            u.Path = ""
+            return u.String(), nil
+        }
+    } else {
+        return "http://" + host, nil
     }
 }

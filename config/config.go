@@ -33,7 +33,7 @@ func Initialize() (err error) {
     }
 
     // Load configuration file
-    path := filepath.Join(RootDir, "conf", "cloudway.conf")
+    path := filepath.Join(root, "conf", "cloudway.conf")
     cfg, err = conf.ReadConfigFile(path)
     if err != nil && !os.IsNotExist(err) { // Use defaults if configuration file is missing
         return err

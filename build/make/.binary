@@ -50,7 +50,6 @@ go build \
     $SOURCE_PATH
 )
 
-echo "Created binary: $DEST/$BINARY_FULLNAME"
 ln -sf "$BINARY_FULLNAME" "$DEST/$BINARY_SHORT_NAME$BINARY_EXTENSION"
 
 hash_files "$DEST/$BINARY_FULLNAME"

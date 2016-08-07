@@ -1,8 +1,10 @@
 package cmds
 
 import (
-    "github.com/cloudway/platform/pkg/cli"
+    "errors"
     flag "github.com/cloudway/platform/pkg/mflag"
+    "github.com/cloudway/platform/pkg/cli"
+    "github.com/cloudway/platform/api/client"
 )
 
 // Command is the struct containing the command name and description
@@ -13,6 +15,8 @@ type Command struct {
 
 type CWCli struct {
     *cli.Cli
+    host string
+    *client.APIClient
     handlers map[string]func(...string)error
 }
 
@@ -29,10 +33,11 @@ func init() {
     }
 }
 
-func Init() *CWCli {
+func Init(host string) *CWCli {
     c := new(CWCli)
     c.Cli = cli.New("cwcli", c)
     c.Description = "Cloudway client interface"
+    c.host = host
 
     c.handlers = map[string]func(...string)error {
         "version": c.CmdVersion,
@@ -51,4 +56,21 @@ func (c *CWCli) Subcmd(name string, synopses ...string) *flag.FlagSet {
         description = cmd.Description
     }
     return c.Cli.Subcmd(name, synopses, description, true)
+}
+
+func (c *CWCli) Connect() (err error) {
+    if c.APIClient != nil {
+        return nil
+    }
+
+    if c.host == "" {
+        return errors.New("No remote host specified, please run cwcli with -H option")
+    }
+
+    headers := map[string]string {
+        "Accept": "application/json",
+    }
+
+    c.APIClient, err = client.NewAPIClient(c.host+"/api", "", nil, headers)
+    return err
 }

@@ -14,6 +14,7 @@ DOCKER_ENVS := \
     -e CLOUDWAY_INCREMENTAL_BINARY \
     -e TESTDIRS \
     -e TESTFLAGS \
+    -e CROSS \
     -e COVER \
     -e TIMEOUT
 
