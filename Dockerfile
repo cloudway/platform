@@ -22,7 +22,6 @@ ENV CLOUDWAY_CROSSPLATFORMS \
     freebsd/amd64 freebsd/386 freebsd/arm \
     windows/amd64 windows/386
 
-VOLUME /var/lib/docker
 WORKDIR /go/src/github.com/cloudway/platform
 
 # Wrap all commands in the "docker-in-docker" script to allow nested containers

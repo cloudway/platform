@@ -1,4 +1,4 @@
-.PHONY: all binary build vendor cross default shell help
+.PHONY: all binary build vendor cross default shell validate help
 
 # get OS/Arch of docker engine
 DOCKER_OSARCH := $(shell bash -c 'source build/make/.detect-daemon-osarch && echo $${DOCKER_ENGINE_OSARCH:-$$DOCKER_CLIENT_OSARCH}')
@@ -61,6 +61,9 @@ tgz: build ## build the archive containing the binaries
 
 shell: build ## start a shell inside the build env
 	$(DOCKER_RUN_DOCKER) bash
+
+validate: build ## validate golint and go vet
+	$(DOCKER_RUN_DOCKER) build/make.sh validate-lint validate-vet
 
 help: ## this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {sub("\\\\n",sprintf("\n%21c"," "), $$2);printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)

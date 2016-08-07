@@ -50,6 +50,7 @@ fi
 
 # List of bundles to create when no argument is passed
 DEFAULT_BUNDLES=(
+    validate-vet
     binary-server
     binary-sandbox
     cross
