@@ -30,7 +30,9 @@ func main() {
 
         commands := cmds.CommandUsage
         for _, cmd := range commands {
-            help += fmt.Sprintf("  %-12.12s%s\n", cmd.Name, cmd.Description)
+            if !strings.ContainsRune(cmd.Name, ':') {
+                help += fmt.Sprintf("  %-12.12s%s\n", cmd.Name, cmd.Description)
+            }
         }
         fmt.Fprintf(stdout, "%s\n", help)
 

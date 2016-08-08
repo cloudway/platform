@@ -23,9 +23,14 @@ type CWCli struct {
 
 // Commands lists the top level commands and their short usage
 var CommandUsage = []Command {
-    {"login",   "Login to a Cloudway server"},
-    {"logout",  "Log out from a Cloudway server"},
-    {"version", "Show the version information"},
+    {"login",       "Login to a Cloudway server"},
+    {"logout",      "Log out from a Cloudway server"},
+    {"app",         "Manage applications (create destroy)"},
+    {"app:info",    "Show application information"},
+    {"app:open",    "Open the application in a web brower"},
+    {"app:clone",   "Clone application source code"},
+    {"app:ssh",     "Log into application console via SSH"},
+    {"version",     "Show the version information"},
 }
 
 var Commands = make(map[string]Command)
@@ -43,9 +48,14 @@ func Init(host string) *CWCli {
     c.host = host
 
     c.handlers = map[string]func(...string)error {
-        "login":    c.CmdLogin,
-        "logout":   c.CmdLogout,
-        "version":  c.CmdVersion,
+        "login":        c.CmdLogin,
+        "logout":       c.CmdLogout,
+        "app":          c.CmdApps,
+        "app:info":     c.CmdAppInfo,
+        "app:open":     c.CmdAppOpen,
+        "app:clone":    c.CmdAppClone,
+        "app:ssh":      c.CmdAppSSH,
+        "version":      c.CmdVersion,
     }
 
     return c

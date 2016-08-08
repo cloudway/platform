@@ -43,19 +43,19 @@ type Plugin struct {
     Logo            string      `yaml:"Logo"`
     Category        Category    `yaml:"Category"`
     BaseImage       string      `yaml:"Base-Image"`
-    DependsOn       []string    `yaml:"Depends-On,omitempty"`
-    User            string      `yaml:"User,omitempty"`
-    Endpoints       []*Endpoint `yaml:"Endpoints,omitempty"`
+    DependsOn       []string    `yaml:"Depends-On,omitempty" json:",omitempty"`
+    User            string      `yaml:"User,omitempty" json:",omitempty"`
+    Endpoints       []*Endpoint `yaml:"Endpoints,omitempty" json:",omitempty"`
 }
 
 type Endpoint struct {
     PrivateHostName string `yaml:"Private-Host-Name"`
     PrivatePortName string `yaml:"Private-Port-Name"`
-    PublicHost      string `yaml:"-"`
-    ServiceName     string `yaml:"-"`
-    PrivateHost     string `yaml:"-"`
+    PublicHost      string `yaml:"-" json:"-"`
+    ServiceName     string `yaml:"-" json:"-"`
+    PrivateHost     string `yaml:"-" json:"-"`
     PrivatePort     int32  `yaml:"Private-Port"`
-    ProxyMappings   []*ProxyMapping `yaml:"Proxy-Mappings,omitempty"`
+    ProxyMappings   []*ProxyMapping `yaml:"Proxy-Mappings,omitempty" json:",omitempty"`
 }
 
 type ProxyMapping struct {
