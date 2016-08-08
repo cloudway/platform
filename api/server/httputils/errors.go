@@ -20,6 +20,21 @@ type inputValidationError interface {
     IsValidationError() bool
 }
 
+type statusError int
+
+func (se statusError) Error() string {
+    return http.StatusText(int(se))
+}
+
+func (se statusError) HTTPErrorStatusCode() int {
+    return int(se)
+}
+
+// NewStatusError returns a error object with HTTP status code.
+func NewStatusError(code int) error {
+    return statusError(code)
+}
+
 // GetHTTPErrorStatusCode retrieve status code from error message
 func GetHTTPErrorStatusCode(err error) int {
     if err == nil {
