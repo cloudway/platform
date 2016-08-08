@@ -31,6 +31,11 @@ type Plugin interface {
     // Update user with the new data.
     Update(name string, fields interface{}) error
 
+    // GetSecret returns a secret key used to sign the JWT token. If the
+    // secret key does not exist in the database, a new key is generated
+    // and saved to the database.
+    GetSecret(key string, gen func()[]byte) ([]byte, error)
+
     // Close the user database.
     Close() error
 }
@@ -210,6 +215,13 @@ func (db *UserDatabase) ChangePassword(name string, oldPassword, newPassword str
     }
 
     return db.plugin.Update(name, Args{"password": hashedPassword})
+}
+
+// GetSecret returns a secret key used to sign the JWT token. If the
+// secret key does not exist in the database, a new key is generated
+// and saved to the database.
+func (db *UserDatabase) GetSecret(key string, gen func()[]byte) ([]byte, error) {
+    return db.plugin.GetSecret(key, gen)
 }
 
 func (db *UserDatabase) Close() error {
