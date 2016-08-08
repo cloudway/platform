@@ -5,6 +5,7 @@ import (
     "os"
     "strings"
     "errors"
+    "runtime"
     "os/exec"
     "net/url"
     "encoding/json"
@@ -22,6 +23,7 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:destroy        Permanently destroy an application
   app:info           Show application information
   app:log            Show application logs
+  app:open           Open the application in a web brower
   app:clone          Clone application source code
   app:ssh            Log into application console via SSH
 `
@@ -87,6 +89,38 @@ func (cli *CWCli) CmdAppInfo(args ...string) error {
     }
 
     return nil
+}
+
+func (cli *CWCli) CmdAppOpen(args ...string) error {
+    if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
+        return nil
+    }
+
+    cmd := cli.Subcmd("app:open", "NAME")
+    cmd.Require(mflag.Exact, 1)
+    cmd.ParseFlags(args, true)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+
+    app, err := cli.GetApplicationInfo(context.Background(), cmd.Arg(0))
+    if err != nil {
+        return err
+    }
+
+    var cmdArgs []string
+    switch runtime.GOOS {
+    case "windows":
+        cmdArgs = []string{"cmd.exe", "/c",  "start "+app.URL}
+    case "darwin":
+        cmdArgs = []string{"open", app.URL}
+    default:
+        return nil
+    }
+
+    openCmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+    return openCmd.Run()
 }
 
 func (cli *CWCli) CmdAppClone(args ...string) error {
