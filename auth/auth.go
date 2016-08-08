@@ -10,7 +10,7 @@ import (
     "github.com/cloudway/platform/auth/userdb"
 )
 
-const _TOKEN_EXPIRE_TIME = time.Hour * 8
+const _TOKEN_EXPIRE_TIME = time.Hour * 24 * 30 // 30 days
 
 // The authenticator authenticate user via http protocol.
 type Authenticator struct {
@@ -19,8 +19,14 @@ type Authenticator struct {
 }
 
 func NewAuthenticator(userdb *userdb.UserDatabase) (*Authenticator, error) {
-    secret := make([]byte, 64)
-    rand.Read(secret)
+    secret, err := userdb.GetSecret("jwt", func()[]byte {
+        secret := make([]byte, 64)
+        rand.Read(secret)
+        return secret
+    })
+    if err != nil {
+        return nil, err
+    }
 
     return &Authenticator{userdb, secret}, nil
 }

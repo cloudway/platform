@@ -163,6 +163,23 @@ func (db *mongodb) Update(name string, fields interface{}) error {
     return err
 }
 
+func (db *mongodb) GetSecret(key string, gen func()[]byte) ([]byte, error) {
+    session := db.session.Copy()
+    c := session.DB("").C("secret")
+    defer session.Close()
+
+    var record struct {
+        Secret []byte
+    }
+
+    err := c.FindId(key).One(&record)
+    if err == mgo.ErrNotFound {
+        record.Secret = gen()
+        err = c.Insert(bson.M{"_id": key, "secret": record.Secret})
+    }
+    return record.Secret, err
+}
+
 func (db *mongodb) Close() error {
     db.session.Close()
     return nil
