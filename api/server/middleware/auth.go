@@ -25,7 +25,7 @@ func (m authMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc
             return handler(ctx, w, r, vars)
         }
 
-        user, namespace, err := m.Authz.Verify(w, r)
+        user, err := m.Authz.Verify(w, r)
         if err != nil {
             w.WriteHeader(http.StatusUnauthorized)
             return nil
@@ -33,7 +33,6 @@ func (m authMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc
 
         logrus.Debugf("Logged in user: %s", user)
         vars["user"] = user
-        vars["namespace"] = namespace
         return handler(ctx, w, r, vars)
     }
 }
