@@ -133,11 +133,12 @@ func (cli *Client) sendClientRequest(ctx context.Context, method, path string, q
             return serverResp, err
         }
         if len(body) == 0 {
-            return serverResp, fmt.Errorf("Error: request returned %s for API route and version %s, " +
-                                          "check if the server supports the requested API version",
-                                          http.StatusText(serverResp.StatusCode), req.URL)
+            message := fmt.Sprintf("Error: request returned %s for API route and version %s, " +
+                "check if the server supports the requested API version",
+                http.StatusText(serverResp.StatusCode), req.URL)
+            return serverResp, ServerError{serverResp.StatusCode, []byte(message)}
         }
-        return serverResp, ServerError(bytes.TrimSpace(body))
+        return serverResp, ServerError{serverResp.StatusCode, bytes.TrimSpace(body)}
     }
 
     serverResp.Body = resp.Body

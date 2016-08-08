@@ -94,12 +94,17 @@ func Save() (err error) {
 }
 
 func writeSection(w io.Writer, section string) (err error) {
+    options := GetSection(section)
+    if len(options) == 0 {
+        return
+    }
+
     buf := bytes.Buffer{}
 
     if section != conf.DefaultSection {
         buf.WriteString("[" + section + "]\n")
     }
-    for key, value := range GetSection(section) {
+    for key, value := range options {
         buf.WriteString(key + " = " + value + "\n")
     }
     buf.WriteString("\n")
@@ -113,7 +118,8 @@ func Get(key string) string {
     return GetOrDefault(key, "")
 }
 
-// Get a configuration value, if no such value configured then the default value is returned.
+// GetOrDefault get a configuration value, if no such value configured then
+// the default value is returned.
 func GetOrDefault(key, deflt string) string {
     // get value from environment
     envKey := "CLOUDWAY_" + strings.ToUpper(key)
@@ -137,29 +143,6 @@ func GetOrDefault(key, deflt string) string {
 
     // return the default value
     return deflt
-}
-
-// Get a section in the configuration file.
-func GetSection(section string) map[string]string {
-    result := make(map[string]string)
-
-    if cfg == nil {
-        return result
-    }
-
-    options, err := cfg.GetOptions(section)
-    if err != nil {
-        return result
-    }
-
-    for _, opt := range options {
-        value, err := cfg.GetString(section, opt)
-        if err == nil {
-            result[opt] = value
-        }
-    }
-
-    return result
 }
 
 // Set a configuration of the given key to the given value.
@@ -190,9 +173,55 @@ func Remove(key string) {
     cfg.RemoveOption(section, key)
 }
 
-// Remove a section from configuration.
+// GetSection get a section in the configuration file.
+func GetSection(section string) map[string]string {
+    result := make(map[string]string)
+
+    if cfg == nil {
+        return result
+    }
+
+    options, err := cfg.GetOptions(section)
+    if err != nil {
+        return result
+    }
+
+    for _, opt := range options {
+        value, err := cfg.GetString(section, opt)
+        if err == nil {
+            result[opt] = value
+        }
+    }
+
+    return result
+}
+
+// RemoveSection remove a section from configuration.
 func RemoveSection(section string) {
     if cfg != nil {
         cfg.RemoveSection(section)
+    }
+}
+
+// GetFrom get a configuration value from the given section.
+func GetOption(section, key string) (value string) {
+    if cfg != nil {
+        value, _ = cfg.GetString(section, key)
+    }
+    return value
+}
+
+// AddTo add a configuration value into the given section.
+func AddOption(section, key, value string) {
+    if cfg == nil {
+        cfg = conf.NewConfigFile()
+    }
+    cfg.AddOption(section, key, value)
+}
+
+// RemoveFrom removes a configuration value from the given section.
+func RemoveOption(section, key string) {
+    if cfg != nil {
+        cfg.RemoveOption(section, key)
     }
 }

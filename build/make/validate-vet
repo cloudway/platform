@@ -8,9 +8,11 @@ unset IFS
 
 errors=()
 for f in "${files[@]}"; do
-    failedVet=$(go vet "$f")
-    if [ "$failedVet" ]; then
-        errors+=( "$failedVet" )
+    if [ -e "$f" ]; then
+        failedVet=$(go vet "$f")
+        if [ "$failedVet" ]; then
+            errors+=( "$failedVet" )
+        fi
     fi
 done
 

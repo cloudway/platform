@@ -5,6 +5,7 @@ import (
     flag "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/pkg/cli"
     "github.com/cloudway/platform/api/client"
+    "github.com/cloudway/platform/config"
 )
 
 // Command is the struct containing the command name and description
@@ -22,6 +23,8 @@ type CWCli struct {
 
 // Commands lists the top level commands and their short usage
 var CommandUsage = []Command {
+    {"login",   "Login to a Cloudway server"},
+    {"logout",  "Log out from a Cloudway server"},
     {"version", "Show the version information"},
 }
 
@@ -40,7 +43,9 @@ func Init(host string) *CWCli {
     c.host = host
 
     c.handlers = map[string]func(...string)error {
-        "version": c.CmdVersion,
+        "login":    c.CmdLogin,
+        "logout":   c.CmdLogout,
+        "version":  c.CmdVersion,
     }
 
     return c
@@ -72,5 +77,19 @@ func (c *CWCli) Connect() (err error) {
     }
 
     c.APIClient, err = client.NewAPIClient(c.host+"/api", "", nil, headers)
+    return err
+}
+
+func (c *CWCli) ConnectAndLogin() (err error) {
+    if err = c.Connect(); err != nil {
+        return err
+    }
+
+    token := config.GetOption(c.host, "token")
+    if token != "" {
+        c.SetToken(token)
+    } else {
+        err = c.authenticate("You must login.", "", "")
+    }
     return err
 }

@@ -5,9 +5,12 @@ import (
     "fmt"
     "strings"
     "net/url"
+    "net/http"
+
     flag "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/config"
     "github.com/cloudway/platform/cmd/cwcli/cmds"
+    "github.com/cloudway/platform/pkg/rest"
 )
 
 func main() {
@@ -61,7 +64,11 @@ func main() {
 
     c := cmds.Init(host)
     if err := c.Run(flag.Args()...); err != nil {
-        fmt.Fprintln(os.Stderr, err)
+        if se, ok := err.(rest.ServerError); ok && se.StatusCode() == http.StatusUnauthorized {
+            fmt.Fprintln(os.Stderr, "Your access token has been expired, please login again.")
+        } else {
+            fmt.Fprintln(os.Stderr, err)
+        }
         os.Exit(1)
     }
 }

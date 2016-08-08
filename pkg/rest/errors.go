@@ -9,12 +9,19 @@ import (
 var ErrConnectionFailed = errors.New("Cannot connect to the server.")
 
 // A error that contains error messages returned from API server.
-type ServerError []byte
+type ServerError struct {
+    status int
+    body   []byte
+}
 
 func (se ServerError) Error() string {
-    return fmt.Sprintf("Error response from server: %s", string(se))
+    return fmt.Sprintf("Error response from server: %s", string(se.body))
+}
+
+func (se ServerError) StatusCode() int {
+    return se.status
 }
 
 func (se ServerError) RawError() []byte {
-    return []byte(se)
+    return se.body
 }

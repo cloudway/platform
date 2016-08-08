@@ -45,10 +45,6 @@ func (c *ConfigFile) GetOptions(section string) (options []string, err error) {
 
 	options = make([]string, len(c.data[DefaultSection])+len(c.data[section]))
 	i := 0
-	for s, _ := range c.data[DefaultSection] {
-		options[i] = s
-		i++
-	}
 	for s, _ := range c.data[section] {
 		options[i] = s
 		i++
@@ -70,10 +66,8 @@ func (c *ConfigFile) HasOption(section string, option string) bool {
 		return false
 	}
 
-	_, okd := c.data[DefaultSection][option]
-	_, oknd := c.data[section][option]
-
-	return okd || oknd
+	_, ok := c.data[section][option]
+	return ok
 }
 
 // GetRawString gets the (raw) string value for the given option in the section.
