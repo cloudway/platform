@@ -150,7 +150,8 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
 
 func (cli *CWCli) CmdAppSSH(args ...string) error {
     var identity string
-    cmd := cli.Subcmd("app:ssh", "NAME")
+
+    cmd := cli.Subcmd("app:ssh", "[SERVICE.]NAME")
     cmd.Require(mflag.Exact, 1)
     cmd.StringVar(&identity, []string{"i"}, "", "Identity file")
     cmd.ParseFlags(args, true)
@@ -159,7 +160,12 @@ func (cli *CWCli) CmdAppSSH(args ...string) error {
         return err
     }
 
-    app, err := cli.GetApplicationInfo(context.Background(), cmd.Arg(0))
+    name, service := cmd.Arg(0), ""
+    if i := strings.IndexRune(name, '.'); i != -1 {
+        name, service = name[i+1:], name[:i]
+    }
+
+    app, err := cli.GetApplicationInfo(context.Background(), name)
     if err != nil {
         return err
     }
@@ -183,7 +189,12 @@ func (cli *CWCli) CmdAppSSH(args ...string) error {
     if identity != "" {
         sshCmdArgs = append(sshCmdArgs, "-i", identity)
     }
-    sshCmdArgs = append(sshCmdArgs, sshurl.User.Username()+"@"+host)
+
+    container := sshurl.User.Username()
+    if service != "" {
+        container = service + "." + container
+    }
+    sshCmdArgs = append(sshCmdArgs, container+"@"+host)
 
     sshCmd := exec.Command("ssh", sshCmdArgs...)
     sshCmd.Stdin = os.Stdin
