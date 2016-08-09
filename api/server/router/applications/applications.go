@@ -17,6 +17,7 @@ import (
     "github.com/cloudway/platform/config"
     "github.com/cloudway/platform/config/defaults"
     "github.com/cloudway/platform/container"
+    "github.com/cloudway/platform/scm"
 )
 
 type applicationsRouter struct {
@@ -29,12 +30,14 @@ func NewRouter(broker *broker.Broker) router.Router {
 
     r.routes = []router.Route{
         router.NewGetRoute("/applications/", r.list),
-        router.NewGetRoute("/applications/{name:.*}", r.info),
+        router.NewGetRoute("/applications/{name:.*}/info", r.info),
         router.NewPostRoute("/applications/", r.create),
         router.NewDeleteRoute("/applications/{name:.*}", r.delete),
         router.NewPostRoute("/applications/{name:.*}/start", r.start),
         router.NewPostRoute("/applications/{name:.*}/stop", r.stop),
         router.NewPostRoute("/applications/{name:.*}/restart", r.restart),
+        router.NewPostRoute("/applications/{name:.*}/deploy", r.deploy),
+        router.NewGetRoute("/applications/{name:.*}/deploy", r.getDeployments),
     }
 
     return r
@@ -207,4 +210,61 @@ func (ar *applicationsRouter) restart(ctx context.Context, w http.ResponseWriter
         return err
     }
     return ar.NewUserBroker(user).RestartApplication(vars["name"])
+}
+
+func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+
+    name, branch := vars["name"], r.FormValue("branch")
+    err = ar.SCM.Deploy(user.Namespace, name, branch)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+    } else {
+        w.WriteHeader(http.StatusNoContent)
+    }
+    return nil
+}
+
+func (ar *applicationsRouter) getDeployments(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+
+    name := vars["name"]
+
+    current, err := ar.SCM.GetDeploymentBranch(user.Namespace, name)
+    if err != nil {
+        return err
+    }
+    branches, err := ar.SCM.GetDeploymentBranches(user.Namespace, name)
+    if err != nil {
+        return err
+    }
+
+    resp := manifest.ApplicationDeployments{
+        Current:    convertBranchJson(current),
+        Branches:   convertBranchesJson(branches),
+    }
+
+    return httputils.WriteJSON(w, http.StatusOK, &resp)
+}
+
+func convertBranchJson(br *scm.Branch) *manifest.DeploymentBranch {
+    return &manifest.DeploymentBranch{
+        Id:         br.Id,
+        DisplayId:  br.DisplayId,
+        Type:       br.Type,
+    }
+}
+
+func convertBranchesJson(branches []scm.Branch) []manifest.DeploymentBranch {
+    result := make([]manifest.DeploymentBranch, len(branches))
+    for i := range branches {
+        result[i] = *convertBranchJson(&branches[i])
+    }
+    return result
 }
