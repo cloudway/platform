@@ -11,9 +11,9 @@ import (
     "golang.org/x/net/context"
     "github.com/cloudway/platform/broker"
     "github.com/cloudway/platform/api/server/router"
-    "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/api/server/httputils"
-    "github.com/cloudway/platform/pkg/manifest"
+    "github.com/cloudway/platform/api/types"
+    "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/config"
     "github.com/cloudway/platform/config/defaults"
     "github.com/cloudway/platform/container"
@@ -79,7 +79,7 @@ func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r
         return httputils.NewStatusError(http.StatusNotFound)
     }
 
-    info := manifest.ApplicationInfo{
+    info := types.ApplicationInfo{
         Name:       name,
         Namespace:  user.Namespace,
         CreatedAt:  app.CreatedAt,
@@ -134,7 +134,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
         return err
     }
 
-    var req manifest.CreateApplication
+    var req types.CreateApplication
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         return err
     }
@@ -245,7 +245,7 @@ func (ar *applicationsRouter) getDeployments(ctx context.Context, w http.Respons
         return err
     }
 
-    resp := manifest.ApplicationDeployments{
+    resp := types.Deployments{
         Current:    convertBranchJson(current),
         Branches:   convertBranchesJson(branches),
     }
@@ -253,16 +253,16 @@ func (ar *applicationsRouter) getDeployments(ctx context.Context, w http.Respons
     return httputils.WriteJSON(w, http.StatusOK, &resp)
 }
 
-func convertBranchJson(br *scm.Branch) *manifest.DeploymentBranch {
-    return &manifest.DeploymentBranch{
+func convertBranchJson(br *scm.Branch) *types.Branch {
+    return &types.Branch{
         Id:         br.Id,
         DisplayId:  br.DisplayId,
         Type:       br.Type,
     }
 }
 
-func convertBranchesJson(branches []scm.Branch) []manifest.DeploymentBranch {
-    result := make([]manifest.DeploymentBranch, len(branches))
+func convertBranchesJson(branches []scm.Branch) []types.Branch {
+    result := make([]types.Branch, len(branches))
     for i := range branches {
         result[i] = *convertBranchJson(&branches[i])
     }

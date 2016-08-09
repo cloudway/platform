@@ -13,7 +13,7 @@ import (
     "golang.org/x/net/context"
     "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/pkg/opts"
-    "github.com/cloudway/platform/pkg/manifest"
+    "github.com/cloudway/platform/api/types"
 )
 
 const appCmdUsage = `Usage: cwcli app
@@ -36,6 +36,7 @@ Additional commands, type "cwcli help COMMAND" for more details:
 
 func (cli *CWCli) CmdApps(args ...string) error {
     var help bool
+
     cmd := cli.Subcmd("app", "")
     cmd.Require(mflag.Exact, 0)
     cmd.BoolVar(&help, []string{"-help"}, false, "Print usage")
@@ -63,6 +64,7 @@ func (cli *CWCli) CmdApps(args ...string) error {
 
 func (cli *CWCli) CmdAppInfo(args ...string) error {
     var js bool
+
     cmd := cli.Subcmd("app:info", "NAME")
     cmd.Require(mflag.Exact, 1)
     cmd.BoolVar(&js, []string{"-json"}, false, "Display as JSON")
@@ -126,7 +128,6 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
     if err != nil {
         return err
     }
-
     if app.CloneURL == "" {
         return errors.New("Cannot determine the clone command")
     }
@@ -159,7 +160,6 @@ func (cli *CWCli) CmdAppSSH(args ...string) error {
     if err != nil {
         return err
     }
-
     if app.SSHURL == "" {
         return errors.New("Cannot determine the SSH URL")
     }
@@ -194,7 +194,7 @@ func (cli *CWCli) CmdAppSSH(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppCreate(args ...string) error {
-    var req manifest.CreateApplication
+    var req types.CreateApplication
 
     cmd := cli.Subcmd("app:create", "[OPTIONS] NAME")
     cmd.Require(mflag.Exact, 1)
@@ -207,7 +207,6 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
-
     return cli.CreateApplication(context.Background(), req)
 }
 
@@ -245,7 +244,6 @@ func (cli *CWCli) CmdAppRemove(args ...string) error {
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
-
     return cli.RemoveApplication(context.Background(), cmd.Arg(0))
 }
 
@@ -306,7 +304,7 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
             return err
         }
 
-        var display = func(ref manifest.DeploymentBranch) {
+        var display = func(ref types.Branch) {
             display := ref.DisplayId
             if ref.Id == deployments.Current.Id {
                 display = hilite("*"+display)

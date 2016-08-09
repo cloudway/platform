@@ -4,7 +4,7 @@ import (
     "net/url"
     "encoding/json"
     "golang.org/x/net/context"
-    "github.com/cloudway/platform/pkg/manifest"
+    "github.com/cloudway/platform/api/types"
 )
 
 func (api *APIClient) GetApplications(ctx context.Context) ([]string, error) {
@@ -17,8 +17,8 @@ func (api *APIClient) GetApplications(ctx context.Context) ([]string, error) {
     return apps, err
 }
 
-func (api *APIClient) GetApplicationInfo(ctx context.Context, name string) (*manifest.ApplicationInfo, error) {
-    var info manifest.ApplicationInfo
+func (api *APIClient) GetApplicationInfo(ctx context.Context, name string) (*types.ApplicationInfo, error) {
+    var info types.ApplicationInfo
     resp, err := api.cli.Get(ctx, "/applications/"+name+"/info", nil, nil)
     if err == nil {
         err = json.NewDecoder(resp.Body).Decode(&info)
@@ -27,7 +27,7 @@ func (api *APIClient) GetApplicationInfo(ctx context.Context, name string) (*man
     return &info, err
 }
 
-func (api *APIClient) CreateApplication(ctx context.Context, opts manifest.CreateApplication) error {
+func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateApplication) error {
     resp, err := api.cli.Post(ctx, "/applications/", nil, &opts, nil)
     resp.EnsureClosed()
     return err
@@ -68,8 +68,8 @@ func (api *APIClient) DeployApplication(ctx context.Context, name, branch string
     return err
 }
 
-func (api *APIClient) GetApplicationDeployments(ctx context.Context, name string) (*manifest.ApplicationDeployments, error) {
-    var deployments manifest.ApplicationDeployments
+func (api *APIClient) GetApplicationDeployments(ctx context.Context, name string) (*types.Deployments, error) {
+    var deployments types.Deployments
     resp, err := api.cli.Get(ctx, "/applications/"+name+"/deploy", nil, nil)
     if err == nil {
         err = json.NewDecoder(resp.Body).Decode(&deployments)
