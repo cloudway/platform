@@ -32,6 +32,9 @@ func NewRouter(broker *broker.Broker) router.Router {
         router.NewGetRoute("/applications/{name:.*}", r.info),
         router.NewPostRoute("/applications/", r.create),
         router.NewDeleteRoute("/applications/{name:.*}", r.delete),
+        router.NewPostRoute("/applications/{name:.*}/start", r.start),
+        router.NewPostRoute("/applications/{name:.*}/stop", r.stop),
+        router.NewPostRoute("/applications/{name:.*}/restart", r.restart),
     }
 
     return r
@@ -180,4 +183,28 @@ func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter,
 
     w.WriteHeader(http.StatusNoContent)
     return nil
+}
+
+func (ar *applicationsRouter) start(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+    return ar.NewUserBroker(user).StartApplication(vars["name"])
+}
+
+func (ar *applicationsRouter) stop(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+    return ar.NewUserBroker(user).StopApplication(vars["name"])
+}
+
+func (ar *applicationsRouter) restart(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+    return ar.NewUserBroker(user).RestartApplication(vars["name"])
 }

@@ -37,3 +37,21 @@ func (api *APIClient) RemoveApplication(ctx context.Context, name string) error 
     resp.EnsureClosed()
     return err
 }
+
+func (api *APIClient) StartApplication(ctx context.Context, name string) error {
+    resp, err := api.cli.Post(ctx, "/applications/"+name+"/start", nil, nil, nil)
+    resp.EnsureClosed()
+    return err
+}
+
+func (api *APIClient) StopApplication(ctx context.Context, name string) error {
+    resp, err := api.cli.Post(ctx, "/applications/"+name+"/stop", nil, nil, nil)
+    resp.EnsureClosed()
+    return err
+}
+
+func (api *APIClient) RestartApplication(ctx context.Context, name string) error {
+    resp, err := api.cli.Post(ctx, "/applications/"+name+"/restart", nil, nil, nil)
+    resp.EnsureClosed()
+    return err
+}

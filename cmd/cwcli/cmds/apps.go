@@ -2,6 +2,7 @@ package cmds
 
 import (
     "fmt"
+    "io"
     "os"
     "strings"
     "errors"
@@ -24,6 +25,9 @@ Additional commands, type "cwcli help COMMAND" for more details:
 
   app:create         Create a new application
   app:remove         Permanently remove an application
+  app:start          Start an application
+  app:stop           Stop an application
+  app:restart        Restart an application
   app:info           Show application information
   app:open           Open the application in a web brower
   app:clone          Clone application source code
@@ -237,6 +241,9 @@ func (cli *CWCli) CmdAppRemove(args ...string) error {
         for {
             fmt.Print(hilite("WARNING")+": You will lost all your application data, continue (yes/no)? ")
             answer, err := reader.ReadString('\n')
+            if err == io.EOF {
+                return nil
+            }
             if err != nil {
                 return err
             }
@@ -264,4 +271,37 @@ func hilite(text string) string {
     } else {
         return "\033[31;1m" + text + "\033[0m"
     }
+}
+
+func (cli *CWCli) CmdAppStart(args ...string) error {
+    cmd := cli.Subcmd("app:start", "NAME")
+    cmd.Require(mflag.Exact, 1)
+    cmd.ParseFlags(args, true)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+    return cli.StartApplication(context.Background(), cmd.Arg(0))
+}
+
+func (cli *CWCli) CmdAppStop(args ...string) error {
+    cmd := cli.Subcmd("app:stop", "NAME")
+    cmd.Require(mflag.Exact, 1)
+    cmd.ParseFlags(args, true)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+    return cli.StopApplication(context.Background(), cmd.Arg(0))
+}
+
+func (cli *CWCli) CmdAppRestart(args ...string) error {
+    cmd := cli.Subcmd("app:restart", "NAME")
+    cmd.Require(mflag.Exact, 1)
+    cmd.ParseFlags(args, true)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+    return cli.RestartApplication(context.Background(), cmd.Arg(0))
 }
