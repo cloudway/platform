@@ -25,3 +25,15 @@ func (api *APIClient) GetApplicationInfo(ctx context.Context, name string) (*man
     }
     return &info, err
 }
+
+func (api *APIClient) CreateApplication(ctx context.Context, opts manifest.CreateApplication) error {
+    resp, err := api.cli.Post(ctx, "/applications/", nil, &opts, nil)
+    resp.EnsureClosed()
+    return err
+}
+
+func (api *APIClient) RemoveApplication(ctx context.Context, name string) error {
+    resp, err := api.cli.Delete(ctx, "/applications/"+name, nil, nil)
+    resp.EnsureClosed()
+    return err
+}
