@@ -2,6 +2,7 @@ package auth
 
 import (
     "time"
+    "strings"
     "gopkg.in/authboss.v0"
     "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/broker"
@@ -60,6 +61,8 @@ func NewStorer(br *broker.Broker) Storer {
 }
 
 func (s Storer) Create(key string, attr authboss.Attributes) error {
+    key = strings.ToLower(key)
+
     var user storeUser
     if err := attr.Bind(&user.Authboss, true); err != nil {
         return err
@@ -71,6 +74,8 @@ func (s Storer) Create(key string, attr authboss.Attributes) error {
 }
 
 func (s Storer) Put(key string, attr authboss.Attributes) error {
+    key = strings.ToLower(key)
+
     var user AuthbossUser
     if err := attr.Bind(&user, true); err != nil {
         return err
@@ -89,6 +94,8 @@ func (s Storer) Put(key string, attr authboss.Attributes) error {
 }
 
 func (s Storer) Get(key string) (result interface{}, err error) {
+    key = strings.ToLower(key)
+
     var user storeUser
     if err := s.Users.Find(key, &user); err != nil {
         if userdb.IsUserNotFound(err) {

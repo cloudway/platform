@@ -339,18 +339,20 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
     }
 }
 
+var colorable = runtime.GOOS != "windows" && terminal.IsTerminal(int(os.Stdout.Fd()))
+
 func alert(text string) string {
-    if runtime.GOOS == "windows" || !terminal.IsTerminal(int(os.Stdout.Fd())){
-        return text
-    } else {
+    if colorable {
         return "\033[31;1m" + text + "\033[0m"
+    } else {
+        return text
     }
 }
 
 func hilite(text string) string {
-    if runtime.GOOS == "windows" || !terminal.IsTerminal(int(os.Stdout.Fd())){
-        return text
-    } else {
+    if colorable {
         return "\033[1m" + text + "\033[0m"
+    } else {
+        return text
     }
 }

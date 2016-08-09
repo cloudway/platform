@@ -7,7 +7,7 @@ import (
     "crypto/rand"
     "crypto/x509"
     "encoding/pem"
-    "src/golang.org/x/crypto/ssh"
+    "golang.org/x/crypto/ssh"
 )
 
 func MakeSSHKeyPair(keyPath string) error {
