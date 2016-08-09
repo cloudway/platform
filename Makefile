@@ -1,5 +1,7 @@
 .PHONY: all binary build vendor cross default shell test validate help
 
+HOST_OSARCH := $(shell go env GOOS)/$(shell go env GOARCH)
+
 # get OS/Arch of docker engine
 DOCKER_OSARCH := $(shell bash -c 'source build/make/.detect-daemon-osarch && echo $${DOCKER_ENGINE_OSARCH:-$$DOCKER_CLIENT_OSARCH}')
 DOCKERFILE := $(shell bash -c 'source build/make/.detect-daemon-osarch && echo $${DOCKERFILE}')
@@ -41,7 +43,8 @@ endif
 DOCKER_RUN_DOCKER := $(DOCKER_FLAGS) "$(DOCKER_IMAGE)"
 DOCKER_RUN_VENDOR := $(DOCKER_FLAGS) $(VENDOR_MOUNT) "$(DOCKER_IMAGE)"
 
-default: binary
+default: build
+	CROSS=$(HOST_OSARCH) $(DOCKER_RUN_DOCKER) build/make.sh validate-vet binary cross
 
 all: build ## validate all checks, build linux binaries, run all test\ncross build non-linux binaries and generate archives
 	$(DOCKER_RUN_DOCKER) build/make.sh
@@ -70,7 +73,7 @@ shell: build ## start a shell inside the build env
 test: build ## run the tests
 	$(DOCKER_RUN_DOCKER) build/make.sh test-unit cover
 
-validate: build ## validate golint and go vet
+validate: build ## validate go vet
 	$(DOCKER_RUN_DOCKER) build/make.sh validate-lint validate-vet
 
 help: ## this help

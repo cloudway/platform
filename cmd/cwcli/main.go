@@ -11,14 +11,16 @@ import (
     "github.com/cloudway/platform/config"
     "github.com/cloudway/platform/cmd/cwcli/cmds"
     "github.com/cloudway/platform/pkg/rest"
+    "github.com/cloudway/platform/pkg/colorable"
 )
 
 func main() {
-    stdout := os.Stdout
+    stdout := colorable.NewColorableStdout()
+    stderr := colorable.NewColorableStderr()
 
     err := config.InitializeClient()
     if err != nil {
-        fmt.Fprintln(os.Stderr, err)
+        fmt.Fprintln(stderr, err)
         os.Exit(1)
     }
 
@@ -30,7 +32,9 @@ func main() {
 
         commands := cmds.CommandUsage
         for _, cmd := range commands {
-            help += fmt.Sprintf("  %-12.12s%s\n", cmd.Name, cmd.Description)
+            if !strings.ContainsRune(cmd.Name, ':') {
+                help += fmt.Sprintf("  %-12.12s%s\n", cmd.Name, cmd.Description)
+            }
         }
         fmt.Fprintf(stdout, "%s\n", help)
 
@@ -55,19 +59,19 @@ func main() {
     if host == "" {
         host = config.Get("host")
     } else if host, err = parseHost(host); err != nil {
-        fmt.Fprintln(os.Stderr, err)
+        fmt.Fprintln(stderr, err)
         os.Exit(1)
     } else {
         config.Set("host", host)
         config.Save()
     }
 
-    c := cmds.Init(host)
+    c := cmds.Init(host, stdout, stderr)
     if err := c.Run(flag.Args()...); err != nil {
         if se, ok := err.(rest.ServerError); ok && se.StatusCode() == http.StatusUnauthorized {
-            fmt.Fprintln(os.Stderr, "Your access token has been expired, please login again.")
+            fmt.Fprintln(stderr, "Your access token has been expired, please login again.")
         } else {
-            fmt.Fprintln(os.Stderr, err)
+            fmt.Fprintln(stderr, err)
         }
         os.Exit(1)
     }

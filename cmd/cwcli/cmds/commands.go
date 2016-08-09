@@ -1,6 +1,7 @@
 package cmds
 
 import (
+    "io"
     "errors"
     flag "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/pkg/cli"
@@ -18,14 +19,26 @@ type CWCli struct {
     *cli.Cli
     host string
     *client.APIClient
+    stdout, stderr io.Writer
     handlers map[string]func(...string)error
 }
 
 // Commands lists the top level commands and their short usage
 var CommandUsage = []Command {
-    {"login",   "Login to a Cloudway server"},
-    {"logout",  "Log out from a Cloudway server"},
-    {"version", "Show the version information"},
+    {"login",       "Login to a Cloudway server"},
+    {"logout",      "Log out from a Cloudway server"},
+    {"app",         "Manage applications (create destroy)"},
+    {"app:create",  "Create application"},
+    {"app:remove",  "Permanently remove an application"},
+    {"app:start",   "Start an application"},
+    {"app:stop",    "Stop an application"},
+    {"app:restart", "Restart an application"},
+    {"app:deploy",  "Deploy an application"},
+    {"app:info",    "Show application information"},
+    {"app:open",    "Open the application in a web brower"},
+    {"app:clone",   "Clone application source code"},
+    {"app:ssh",     "Log into application console via SSH"},
+    {"version",     "Show the version information"},
 }
 
 var Commands = make(map[string]Command)
@@ -36,16 +49,29 @@ func init() {
     }
 }
 
-func Init(host string) *CWCli {
+func Init(host string, stdout, stderr io.Writer) *CWCli {
     c := new(CWCli)
     c.Cli = cli.New("cwcli", c)
     c.Description = "Cloudway client interface"
     c.host = host
+    c.stdout = stdout
+    c.stderr = stderr
 
     c.handlers = map[string]func(...string)error {
-        "login":    c.CmdLogin,
-        "logout":   c.CmdLogout,
-        "version":  c.CmdVersion,
+        "login":        c.CmdLogin,
+        "logout":       c.CmdLogout,
+        "app":          c.CmdApps,
+        "app:create":   c.CmdAppCreate,
+        "app:remove":   c.CmdAppRemove,
+        "app:start":    c.CmdAppStart,
+        "app:stop":     c.CmdAppStop,
+        "app:restart":  c.CmdAppRestart,
+        "app:deploy":   c.CmdAppDeploy,
+        "app:info":     c.CmdAppInfo,
+        "app:open":     c.CmdAppOpen,
+        "app:clone":    c.CmdAppClone,
+        "app:ssh":      c.CmdAppSSH,
+        "version":      c.CmdVersion,
     }
 
     return c
