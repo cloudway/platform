@@ -1,6 +1,7 @@
 package cmds
 
 import (
+    "io"
     "errors"
     flag "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/pkg/cli"
@@ -18,6 +19,7 @@ type CWCli struct {
     *cli.Cli
     host string
     *client.APIClient
+    stdout, stderr io.Writer
     handlers map[string]func(...string)error
 }
 
@@ -47,11 +49,13 @@ func init() {
     }
 }
 
-func Init(host string) *CWCli {
+func Init(host string, stdout, stderr io.Writer) *CWCli {
     c := new(CWCli)
     c.Cli = cli.New("cwcli", c)
     c.Description = "Cloudway client interface"
     c.host = host
+    c.stdout = stdout
+    c.stderr = stderr
 
     c.handlers = map[string]func(...string)error {
         "login":        c.CmdLogin,

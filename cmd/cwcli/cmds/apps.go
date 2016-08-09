@@ -6,19 +6,17 @@ import (
     "os"
     "strings"
     "errors"
-    "runtime"
     "bufio"
     "os/exec"
     "net/url"
     "encoding/json"
     "golang.org/x/net/context"
-    "golang.org/x/crypto/ssh/terminal"
     "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/pkg/opts"
     "github.com/cloudway/platform/pkg/manifest"
 )
 
-const usage = `Usage: cwcli apps
+const appCmdUsage = `Usage: cwcli app
 
 list applications
 
@@ -44,7 +42,7 @@ func (cli *CWCli) CmdApps(args ...string) error {
     cmd.ParseFlags(args, false)
 
     if help {
-        fmt.Fprintln(os.Stdout, usage)
+        fmt.Fprintln(cli.stdout, appCmdUsage)
         os.Exit(0)
     }
 
@@ -56,7 +54,7 @@ func (cli *CWCli) CmdApps(args ...string) error {
         return err
     } else {
         for _, name := range apps {
-            fmt.Println(name)
+            fmt.Fprintln(cli.stdout, name)
         }
     }
 
@@ -81,18 +79,18 @@ func (cli *CWCli) CmdAppInfo(args ...string) error {
 
     if js {
         b, _ := json.MarshalIndent(&app, "", "   ")
-        fmt.Println(string(b))
+        fmt.Fprintln(cli.stdout, string(b))
     } else {
-        fmt.Printf("Name:       %s\n", app.Name)
-        fmt.Printf("Namespace:  %s\n", app.Namespace)
-        fmt.Printf("Created:    %v\n", app.CreatedAt)
-        fmt.Printf("URL:        %s\n", app.URL)
-        fmt.Printf("Clone URL:  %s\n", app.CloneURL)
-        fmt.Printf("SSH URL:    %s\n", app.SSHURL)
-        fmt.Printf("Framework:  %s\n", app.Framework.DisplayName)
-        fmt.Println("Services:")
+        fmt.Fprintf(cli.stdout, "Name:       %s\n", app.Name)
+        fmt.Fprintf(cli.stdout, "Namespace:  %s\n", app.Namespace)
+        fmt.Fprintf(cli.stdout, "Created:    %v\n", app.CreatedAt)
+        fmt.Fprintf(cli.stdout, "URL:        %s\n", app.URL)
+        fmt.Fprintf(cli.stdout, "Clone URL:  %s\n", app.CloneURL)
+        fmt.Fprintf(cli.stdout, "SSH URL:    %s\n", app.SSHURL)
+        fmt.Fprintf(cli.stdout, "Framework:  %s\n", app.Framework.DisplayName)
+        fmt.Fprintf(cli.stdout, "Services:")
         for _, p := range app.Services {
-            fmt.Printf(" - %s\n", p.DisplayName)
+            fmt.Fprintf(cli.stdout, " - %s\n", p.DisplayName)
         }
     }
 
@@ -225,7 +223,7 @@ func (cli *CWCli) CmdAppRemove(args ...string) error {
     if !yes {
         reader := bufio.NewReader(os.Stdin)
         for {
-            fmt.Print(alert("WARNING")+": You will lost all your application data, continue (yes/no)? ")
+            fmt.Fprintf(cli.stdout, alert("WARNING")+": You will lost all your application data, continue (yes/no)? ")
             answer, err := reader.ReadString('\n')
             if err == io.EOF {
                 return nil
@@ -240,7 +238,7 @@ func (cli *CWCli) CmdAppRemove(args ...string) error {
             if answer == "yes" {
                 break
             }
-            fmt.Println("Please answer yes or no.")
+            fmt.Fprintln(cli.stdout, "Please answer yes or no.")
         }
     }
 
@@ -315,18 +313,18 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
             } else {
                 display = " "+display
             }
-            fmt.Printf(" %s\n", display)
+            fmt.Fprintf(cli.stdout, " %s\n", display)
         }
 
-        fmt.Println("Branches:")
+        fmt.Fprintln(cli.stdout, "Branches:")
         for _, ref := range deployments.Branches {
             if ref.Type == "BRANCH" {
                 display(ref)
             }
         }
-        fmt.Println()
+        fmt.Fprintln(cli.stdout)
 
-        fmt.Println("Tags:")
+        fmt.Fprintln(cli.stdout, "Tags:")
         for _, ref := range deployments.Branches {
             if ref.Type == "TAG" {
                 display(ref)
@@ -336,23 +334,5 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
         return nil
     } else {
         return cli.DeployApplication(context.Background(), name, branch)
-    }
-}
-
-var colorable = runtime.GOOS != "windows" && terminal.IsTerminal(int(os.Stdout.Fd()))
-
-func alert(text string) string {
-    if colorable {
-        return "\033[31;1m" + text + "\033[0m"
-    } else {
-        return text
-    }
-}
-
-func hilite(text string) string {
-    if colorable {
-        return "\033[1m" + text + "\033[0m"
-    } else {
-        return text
     }
 }

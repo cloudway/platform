@@ -48,11 +48,11 @@ func (cli *CWCli) CmdLogout(args ...string) error {
 
 func (c *CWCli) authenticate(prompt, username, password string) (err error) {
     if username == "" || password == "" {
-        fmt.Println(prompt)
+        fmt.Fprintln(c.stdout, prompt)
     }
 
     if username == "" {
-        fmt.Printf("Email: ")
+        fmt.Fprintf(c.stdout, "Email: ")
         reader := bufio.NewReader(os.Stdin)
         username, err = reader.ReadString('\n')
         if err != nil {
@@ -63,7 +63,7 @@ func (c *CWCli) authenticate(prompt, username, password string) (err error) {
     }
 
     if password == "" {
-        fmt.Printf("Password: ")
+        fmt.Fprintf(c.stdout, "Password: ")
         pass, err := gopass.GetPasswdMasked()
         if err != nil {
             return err
