@@ -1,6 +1,7 @@
 package client
 
 import (
+    "net/url"
     "encoding/json"
     "golang.org/x/net/context"
     "github.com/cloudway/platform/pkg/manifest"
@@ -52,6 +53,17 @@ func (api *APIClient) StopApplication(ctx context.Context, name string) error {
 
 func (api *APIClient) RestartApplication(ctx context.Context, name string) error {
     resp, err := api.cli.Post(ctx, "/applications/"+name+"/restart", nil, nil, nil)
+    resp.EnsureClosed()
+    return err
+}
+
+func (api *APIClient) DeployApplication(ctx context.Context, name, branch string) error {
+    var query url.Values
+    if branch != "" {
+        query = url.Values{"branch": []string{branch}}
+    }
+
+    resp, err := api.cli.Post(ctx, "/applications/"+name+"/deploy", query, nil, nil)
     resp.EnsureClosed()
     return err
 }

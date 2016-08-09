@@ -28,6 +28,7 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:start          Start an application
   app:stop           Stop an application
   app:restart        Restart an application
+  app:deploy         Deploy an application
   app:info           Show application information
   app:open           Open the application in a web brower
   app:clone          Clone application source code
@@ -304,4 +305,21 @@ func (cli *CWCli) CmdAppRestart(args ...string) error {
         return err
     }
     return cli.RestartApplication(context.Background(), cmd.Arg(0))
+}
+
+func (cli *CWCli) CmdAppDeploy(args ...string) error {
+    cmd := cli.Subcmd("app:deploy", "NAME [BRANCH]")
+    cmd.Require(mflag.Min, 1)
+    cmd.Require(mflag.Max, 2)
+    cmd.ParseFlags(args, true)
+
+    name, branch := cmd.Arg(0), ""
+    if cmd.NArg() == 2 {
+        branch = cmd.Arg(1)
+    }
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+    return cli.DeployApplication(context.Background(), name, branch)
 }

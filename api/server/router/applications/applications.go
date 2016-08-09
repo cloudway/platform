@@ -35,6 +35,7 @@ func NewRouter(broker *broker.Broker) router.Router {
         router.NewPostRoute("/applications/{name:.*}/start", r.start),
         router.NewPostRoute("/applications/{name:.*}/stop", r.stop),
         router.NewPostRoute("/applications/{name:.*}/restart", r.restart),
+        router.NewPostRoute("/applications/{name:.*}/deploy", r.deploy),
     }
 
     return r
@@ -207,4 +208,20 @@ func (ar *applicationsRouter) restart(ctx context.Context, w http.ResponseWriter
         return err
     }
     return ar.NewUserBroker(user).RestartApplication(vars["name"])
+}
+
+func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+
+    name, branch := vars["name"], r.FormValue("branch")
+    err = ar.SCM.Deploy(user.Namespace, name, branch)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+    } else {
+        w.WriteHeader(http.StatusNoContent)
+    }
+    return nil
 }
