@@ -2,15 +2,19 @@ package cmds
 
 import (
     "fmt"
+    "io"
     "os"
     "strings"
     "errors"
     "runtime"
+    "bufio"
     "os/exec"
     "net/url"
     "encoding/json"
     "golang.org/x/net/context"
     "github.com/cloudway/platform/pkg/mflag"
+    "github.com/cloudway/platform/pkg/opts"
+    "github.com/cloudway/platform/pkg/manifest"
 )
 
 const usage = `Usage: cwcli apps
@@ -20,9 +24,11 @@ list applications
 Additional commands, type "cwcli help COMMAND" for more details:
 
   app:create         Create a new application
-  app:destroy        Permanently destroy an application
+  app:remove         Permanently remove an application
+  app:start          Start an application
+  app:stop           Stop an application
+  app:restart        Restart an application
   app:info           Show application information
-  app:log            Show application logs
   app:open           Open the application in a web brower
   app:clone          Clone application source code
   app:ssh            Log into application console via SSH
@@ -150,7 +156,8 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
 
 func (cli *CWCli) CmdAppSSH(args ...string) error {
     var identity string
-    cmd := cli.Subcmd("app:ssh", "NAME")
+
+    cmd := cli.Subcmd("app:ssh", "[SERVICE.]NAME")
     cmd.Require(mflag.Exact, 1)
     cmd.StringVar(&identity, []string{"i"}, "", "Identity file")
     cmd.ParseFlags(args, true)
@@ -159,7 +166,12 @@ func (cli *CWCli) CmdAppSSH(args ...string) error {
         return err
     }
 
-    app, err := cli.GetApplicationInfo(context.Background(), cmd.Arg(0))
+    name, service := cmd.Arg(0), ""
+    if i := strings.IndexRune(name, '.'); i != -1 {
+        name, service = name[i+1:], name[:i]
+    }
+
+    app, err := cli.GetApplicationInfo(context.Background(), name)
     if err != nil {
         return err
     }
@@ -183,11 +195,113 @@ func (cli *CWCli) CmdAppSSH(args ...string) error {
     if identity != "" {
         sshCmdArgs = append(sshCmdArgs, "-i", identity)
     }
-    sshCmdArgs = append(sshCmdArgs, sshurl.User.Username()+"@"+host)
+
+    container := sshurl.User.Username()
+    if service != "" {
+        container = service + "." + container
+    }
+    sshCmdArgs = append(sshCmdArgs, container+"@"+host)
 
     sshCmd := exec.Command("ssh", sshCmdArgs...)
     sshCmd.Stdin = os.Stdin
     sshCmd.Stdout = os.Stdout
     sshCmd.Stderr = os.Stderr
     return sshCmd.Run()
+}
+
+func (cli *CWCli) CmdAppCreate(args ...string) error {
+    var req manifest.CreateApplication
+
+    cmd := cli.Subcmd("app:create", "[OPTIONS] NAME")
+    cmd.Require(mflag.Exact, 1)
+    cmd.StringVar(&req.Framework, []string{"F", "-framework"}, "", "Application framework")
+    cmd.Var(opts.NewListOptsRef(&req.Services, nil), []string{"s", "-service"}, "Service plugins")
+    cmd.StringVar(&req.Repo, []string{"-repo"}, "", "Populate from a repository")
+    cmd.ParseFlags(args, true)
+    req.Name = cmd.Arg(0)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+
+    return cli.CreateApplication(context.Background(), req)
+}
+
+
+func (cli *CWCli) CmdAppRemove(args ...string) error {
+    var yes bool
+
+    cmd := cli.Subcmd("app:remove", "NAME")
+    cmd.Require(mflag.Exact, 1)
+    cmd.BoolVar(&yes, []string{"y"}, false, "Confirm 'yes' to remove the application")
+    cmd.ParseFlags(args, true)
+
+    if !yes {
+        reader := bufio.NewReader(os.Stdin)
+        for {
+            fmt.Print(hilite("WARNING")+": You will lost all your application data, continue (yes/no)? ")
+            answer, err := reader.ReadString('\n')
+            if err == io.EOF {
+                return nil
+            }
+            if err != nil {
+                return err
+            }
+            answer = strings.TrimSpace(answer)
+            if answer == "no" || answer == "" {
+                return nil
+            }
+            if answer == "yes" {
+                break
+            }
+            fmt.Println("Please answer yes or no.")
+        }
+    }
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+
+    return cli.RemoveApplication(context.Background(), cmd.Arg(0))
+}
+
+func hilite(text string) string {
+    if runtime.GOOS == "windows" {
+        return text
+    } else {
+        return "\033[31;1m" + text + "\033[0m"
+    }
+}
+
+func (cli *CWCli) CmdAppStart(args ...string) error {
+    cmd := cli.Subcmd("app:start", "NAME")
+    cmd.Require(mflag.Exact, 1)
+    cmd.ParseFlags(args, true)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+    return cli.StartApplication(context.Background(), cmd.Arg(0))
+}
+
+func (cli *CWCli) CmdAppStop(args ...string) error {
+    cmd := cli.Subcmd("app:stop", "NAME")
+    cmd.Require(mflag.Exact, 1)
+    cmd.ParseFlags(args, true)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+    return cli.StopApplication(context.Background(), cmd.Arg(0))
+}
+
+func (cli *CWCli) CmdAppRestart(args ...string) error {
+    cmd := cli.Subcmd("app:restart", "NAME")
+    cmd.Require(mflag.Exact, 1)
+    cmd.ParseFlags(args, true)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+    return cli.RestartApplication(context.Background(), cmd.Arg(0))
 }

@@ -12,3 +12,10 @@ type ApplicationInfo struct {
     Framework   *Plugin
     Services    []*Plugin
 }
+
+type CreateApplication struct {
+    Name        string
+    Framework   string
+    Services    []string
+    Repo        string
+}
