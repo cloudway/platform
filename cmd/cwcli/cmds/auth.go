@@ -5,13 +5,13 @@ import (
     "bufio"
     "os"
     "strings"
+    "net/http"
+    "errors"
     "golang.org/x/net/context"
     "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/config"
     "github.com/cloudway/platform/pkg/gopass"
     "github.com/cloudway/platform/pkg/rest"
-    "net/http"
-    "errors"
 )
 
 func (cli *CWCli) CmdLogin(args ...string) error {
@@ -48,22 +48,22 @@ func (cli *CWCli) CmdLogout(args ...string) error {
 
 func (c *CWCli) authenticate(prompt, username, password string) (err error) {
     if username == "" || password == "" {
-        fmt.Println(prompt)
+        fmt.Fprintln(c.stdout, prompt)
     }
 
     if username == "" {
-        fmt.Printf("Email: ")
+        fmt.Fprintf(c.stdout, "Email: ")
         reader := bufio.NewReader(os.Stdin)
         username, err = reader.ReadString('\n')
         if err != nil {
             return err
         } else {
-            username = strings.ToLower(strings.TrimSpace(username))
+            username = strings.TrimSpace(username)
         }
     }
 
     if password == "" {
-        fmt.Printf("Password: ")
+        fmt.Fprintf(c.stdout, "Password: ")
         pass, err := gopass.GetPasswdMasked()
         if err != nil {
             return err
@@ -72,7 +72,7 @@ func (c *CWCli) authenticate(prompt, username, password string) (err error) {
         }
     }
 
-    token, err := c.Authenticate(context.Background(), username, password)
+    token, err := c.Authenticate(context.Background(), strings.ToLower(username), password)
     if err != nil {
         if se, ok := err.(rest.ServerError); ok && se.StatusCode() == http.StatusUnauthorized {
             err = errors.New("Login failed. Please enter valid user name and password.")

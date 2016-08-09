@@ -5,7 +5,7 @@ import (
     "io"
     "errors"
     "fmt"
-    "src/golang.org/x/crypto/ssh/terminal"
+    "golang.org/x/crypto/ssh/terminal"
 )
 
 var defaultGetCh = func() (byte, error) {

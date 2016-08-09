@@ -21,17 +21,17 @@ func (cli *CWCli) CmdVersion(args ...string) error {
         return err
     }
 
-    fmt.Println("Client:")
-    fmt.Printf(" Version:        %s\n", api.Version)
-    fmt.Printf(" Git commit:     %s\n", api.GitCommit)
-    fmt.Printf(" Build time:     %s\n", api.BuildTime)
+    fmt.Fprintln(cli.stdout, "Client:")
+    fmt.Fprintf(cli.stdout, " Version:        %s\n", api.Version)
+    fmt.Fprintf(cli.stdout, " Git commit:     %s\n", api.GitCommit)
+    fmt.Fprintf(cli.stdout, " Build time:     %s\n", api.BuildTime)
 
-    fmt.Printf("\nServer: %s\n", cli.host)
-    fmt.Printf(" Version:        %s\n", v.Version)
-    fmt.Printf(" Git commit:     %s\n", v.GitCommit)
-    fmt.Printf(" Build Time:     %s\n", v.BuildTime)
-    fmt.Printf(" Docker version: %s\n", v.DockerVersion)
-    fmt.Printf(" OS/Arch:        %s/%s\n", v.Os, v.Arch)
+    fmt.Fprintf(cli.stdout, "\nServer: %s\n", cli.host)
+    fmt.Fprintf(cli.stdout, " Version:        %s\n", v.Version)
+    fmt.Fprintf(cli.stdout, " Git commit:     %s\n", v.GitCommit)
+    fmt.Fprintf(cli.stdout, " Build Time:     %s\n", v.BuildTime)
+    fmt.Fprintf(cli.stdout, " Docker version: %s\n", v.DockerVersion)
+    fmt.Fprintf(cli.stdout, " OS/Arch:        %s/%s\n", v.Os, v.Arch)
 
     return nil
 }
