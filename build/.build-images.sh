@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 if [[ "$TRAVIS_TAG" =~ ^v[0-9.]+$ ]]; then
     DOCKER_TAG=${TRAVIS_TAG:1}
@@ -29,12 +30,8 @@ docker push icloudway/proxy:$DOCKER_TAG
 
 cp -L bundles/latest/binary-server/cwman build/bitbucket/cwman
 cp scm/bitbucket/hooks/target/repo-deployer-*.jar build/bitbucket
-docker build -t icloudway/bitbucket-server -f build/bitbucket/Dockerfile build/bitbucket
-docker tag icloudway/bitbucket-server icloudway/bitbucket-server:4.6
-docker tag icloudway/bitbucket-server icloudway/bitbucket-server:4.6.3
-docker push icloudway/bitbucket-server:latest
-docker push icloudway/bitbucket-server:4.6
-docker push icloudway/bitbucket-server:4.6.3
+docker build -t icloudway/bitbucket-server:$DOCKER_TAG -f build/bitbucket/Dockerfile build/bitbucket
+docker push icloudway/bitbucket-server:$DOCKER_TAG
 
 cp -L bundles/latest/binary-server/cwman build/sshd/cwman
 docker build -t icloudway/sshd:$DOCKER_TAG -f build/sshd/Dockerfile build/sshd
