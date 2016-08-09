@@ -12,6 +12,7 @@ import (
     "net/url"
     "encoding/json"
     "golang.org/x/net/context"
+    "golang.org/x/crypto/ssh/terminal"
     "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/pkg/opts"
     "github.com/cloudway/platform/pkg/manifest"
@@ -240,7 +241,7 @@ func (cli *CWCli) CmdAppRemove(args ...string) error {
     if !yes {
         reader := bufio.NewReader(os.Stdin)
         for {
-            fmt.Print(hilite("WARNING")+": You will lost all your application data, continue (yes/no)? ")
+            fmt.Print(alert("WARNING")+": You will lost all your application data, continue (yes/no)? ")
             answer, err := reader.ReadString('\n')
             if err == io.EOF {
                 return nil
@@ -264,14 +265,6 @@ func (cli *CWCli) CmdAppRemove(args ...string) error {
     }
 
     return cli.RemoveApplication(context.Background(), cmd.Arg(0))
-}
-
-func hilite(text string) string {
-    if runtime.GOOS == "windows" {
-        return text
-    } else {
-        return "\033[31;1m" + text + "\033[0m"
-    }
 }
 
 func (cli *CWCli) CmdAppStart(args ...string) error {
@@ -308,9 +301,12 @@ func (cli *CWCli) CmdAppRestart(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppDeploy(args ...string) error {
+    var show bool
+
     cmd := cli.Subcmd("app:deploy", "NAME [BRANCH]")
     cmd.Require(mflag.Min, 1)
     cmd.Require(mflag.Max, 2)
+    cmd.BoolVar(&show, []string{"-show"}, false, "Show application deployments")
     cmd.ParseFlags(args, true)
 
     name, branch := cmd.Arg(0), ""
@@ -321,5 +317,56 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
-    return cli.DeployApplication(context.Background(), name, branch)
+
+    if show {
+        deployments, err := cli.GetApplicationDeployments(context.Background(), name)
+        if err != nil {
+            return err
+        }
+
+        var display = func(ref manifest.DeploymentBranch) {
+            display := ref.DisplayId
+            if ref.Id == deployments.Current.Id {
+                display = hilite("*"+display)
+            } else {
+                display = " "+display
+            }
+            fmt.Printf(" %s\n", display)
+        }
+
+        fmt.Println("Branches:")
+        for _, ref := range deployments.Branches {
+            if ref.Type == "BRANCH" {
+                display(ref)
+            }
+        }
+        fmt.Println()
+
+        fmt.Println("Tags:")
+        for _, ref := range deployments.Branches {
+            if ref.Type == "TAG" {
+                display(ref)
+            }
+        }
+
+        return nil
+    } else {
+        return cli.DeployApplication(context.Background(), name, branch)
+    }
+}
+
+func alert(text string) string {
+    if runtime.GOOS == "windows" || !terminal.IsTerminal(int(os.Stdout.Fd())){
+        return text
+    } else {
+        return "\033[31;1m" + text + "\033[0m"
+    }
+}
+
+func hilite(text string) string {
+    if runtime.GOOS == "windows" || !terminal.IsTerminal(int(os.Stdout.Fd())){
+        return text
+    } else {
+        return "\033[1m" + text + "\033[0m"
+    }
 }

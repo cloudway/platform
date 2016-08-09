@@ -19,7 +19,7 @@ func (api *APIClient) GetApplications(ctx context.Context) ([]string, error) {
 
 func (api *APIClient) GetApplicationInfo(ctx context.Context, name string) (*manifest.ApplicationInfo, error) {
     var info manifest.ApplicationInfo
-    resp, err := api.cli.Get(ctx, "/applications/"+name, nil, nil)
+    resp, err := api.cli.Get(ctx, "/applications/"+name+"/info", nil, nil)
     if err == nil {
         err = json.NewDecoder(resp.Body).Decode(&info)
         resp.EnsureClosed()
@@ -66,4 +66,14 @@ func (api *APIClient) DeployApplication(ctx context.Context, name, branch string
     resp, err := api.cli.Post(ctx, "/applications/"+name+"/deploy", query, nil, nil)
     resp.EnsureClosed()
     return err
+}
+
+func (api *APIClient) GetApplicationDeployments(ctx context.Context, name string) (*manifest.ApplicationDeployments, error) {
+    var deployments manifest.ApplicationDeployments
+    resp, err := api.cli.Get(ctx, "/applications/"+name+"/deploy", nil, nil)
+    if err == nil {
+        err = json.NewDecoder(resp.Body).Decode(&deployments)
+        resp.EnsureClosed()
+    }
+    return &deployments, err
 }
