@@ -100,10 +100,6 @@ func (cli *CWCli) CmdAppInfo(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppOpen(args ...string) error {
-    if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
-        return nil
-    }
-
     cmd := cli.Subcmd("app:open", "NAME")
     cmd.Require(mflag.Exact, 1)
     cmd.ParseFlags(args, true)
@@ -116,19 +112,7 @@ func (cli *CWCli) CmdAppOpen(args ...string) error {
     if err != nil {
         return err
     }
-
-    var cmdArgs []string
-    switch runtime.GOOS {
-    case "windows":
-        cmdArgs = []string{"cmd.exe", "/c",  "start "+app.URL}
-    case "darwin":
-        cmdArgs = []string{"open", app.URL}
-    default:
-        return nil
-    }
-
-    openCmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-    return openCmd.Run()
+    return openurl(app.URL)
 }
 
 func (cli *CWCli) CmdAppClone(args ...string) error {
