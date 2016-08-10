@@ -77,3 +77,55 @@ func (api *APIClient) GetApplicationDeployments(ctx context.Context, name string
     }
     return &deployments, err
 }
+
+func (api *APIClient) ScaleApplication(ctx context.Context, name, scaling string) error {
+    query := url.Values{"scale": []string{scaling}}
+    resp, err := api.cli.Post(ctx, "/applications/"+name+"/scale", query, nil, nil)
+    resp.EnsureClosed()
+    return err
+}
+
+func envpath(name, service string) string {
+    if service == "" {
+        service = "_"
+    }
+    return "/applications/"+name+"/services/"+service+"/env/"
+}
+
+func (api *APIClient) ApplicationEnviron(ctx context.Context, name, service string) (map[string]string, error) {
+    var env map[string]string
+    resp, err := api.cli.Get(ctx, envpath(name, service), nil, nil)
+    if err == nil {
+        err = json.NewDecoder(resp.Body).Decode(&env)
+        resp.EnsureClosed()
+    }
+    return env, err
+}
+
+func (api *APIClient) ApplicationGetenv(ctx context.Context, name, service, key string) (string, error) {
+    var env map[string]string
+    resp, err := api.cli.Get(ctx, envpath(name, service) + key, nil, nil)
+    if err == nil {
+        err = json.NewDecoder(resp.Body).Decode(&env)
+        resp.EnsureClosed()
+    }
+    return env[key], err
+}
+
+func (api *APIClient) ApplicationSetenv(ctx context.Context, name, service string, env map[string]string) error {
+    resp, err := api.cli.Post(ctx, envpath(name, service), nil, env, nil)
+    resp.EnsureClosed()
+    return err
+}
+
+func (api *APIClient) ApplicationUnsetenv(ctx context.Context, name, service string, keys ...string) error {
+    env := make(map[string]string)
+    for _, k := range keys {
+        env[k] = ""
+    }
+
+    query := url.Values{"remove": []string{""}}
+    resp, err := api.cli.Post(ctx, envpath(name, service), query, env, nil)
+    resp.EnsureClosed()
+    return err
+}

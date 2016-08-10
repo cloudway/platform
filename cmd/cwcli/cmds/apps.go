@@ -28,7 +28,9 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:stop           Stop an application
   app:restart        Restart an application
   app:deploy         Deploy an application
+  app:scale          Scale an application
   app:info           Show application information
+  app:env            Get or set application environment variables
   app:open           Open the application in a web brower
   app:clone          Clone application source code
   app:ssh            Log into application console via SSH
@@ -86,11 +88,12 @@ func (cli *CWCli) CmdAppInfo(args ...string) error {
         fmt.Fprintf(cli.stdout, "Name:       %s\n", app.Name)
         fmt.Fprintf(cli.stdout, "Namespace:  %s\n", app.Namespace)
         fmt.Fprintf(cli.stdout, "Created:    %v\n", app.CreatedAt)
+        fmt.Fprintf(cli.stdout, "Framework:  %s\n", app.Framework.DisplayName)
+        fmt.Fprintf(cli.stdout, "Scaling:    %v\n", app.Scaling)
         fmt.Fprintf(cli.stdout, "URL:        %s\n", app.URL)
         fmt.Fprintf(cli.stdout, "Clone URL:  %s\n", app.CloneURL)
         fmt.Fprintf(cli.stdout, "SSH URL:    %s\n", app.SSHURL)
-        fmt.Fprintf(cli.stdout, "Framework:  %s\n", app.Framework.DisplayName)
-        fmt.Fprintf(cli.stdout, "Services:")
+        fmt.Fprintf(cli.stdout, "Services:\n")
         for _, p := range app.Services {
             fmt.Fprintf(cli.stdout, " - %s\n", p.DisplayName)
         }
@@ -333,4 +336,72 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
     } else {
         return cli.DeployApplication(context.Background(), name, branch)
     }
+}
+
+func (cli *CWCli) CmdAppScale(args ...string) error {
+    cmd := cli.Subcmd("app:scale", "NAME [+|-]SCALING")
+    cmd.Require(mflag.Exact, 2)
+    cmd.ParseFlags(args, true)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+    return cli.ScaleApplication(context.Background(), cmd.Arg(0), cmd.Arg(1))
+}
+
+func (cli *CWCli) CmdAppEnv(args ...string) error {
+    var name, service string
+    var del bool
+
+    cmd := cli.Subcmd("app:env", "NAME", "NAME KEY", "NAME KEY=VALUE...", "-d KEY...")
+    cmd.Require(mflag.Min, 1)
+    cmd.StringVar(&service, []string{"s", "-service"}, "", "Service name")
+    cmd.BoolVar(&del, []string{"d"}, false, "Remove the environment variable")
+    cmd.ParseFlags(args, true)
+    name = cmd.Arg(0)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+
+    if del {
+        // cwcli app:env myapp key1 key2 ...
+        return cli.ApplicationUnsetenv(context.Background(), name, service, cmd.Args()[1:]...)
+    }
+
+    switch {
+    case cmd.NArg() == 1:
+        // cwcli app:env myapp
+        env, err := cli.ApplicationEnviron(context.Background(), name, service)
+        if err != nil {
+            return err
+        }
+        for k, v := range env {
+            fmt.Fprintf(cli.stdout, "%s=%s\n", k, v)
+        }
+
+    case cmd.NArg() == 2 && !strings.ContainsRune(cmd.Arg(1), '='):
+        // cwcli app:env myapp key
+        val, err := cli.ApplicationGetenv(context.Background(), name, service, cmd.Arg(1))
+        if err != nil {
+            return err
+        }
+        fmt.Fprintln(cli.stdout, val)
+
+    default:
+        // cwcli app:env myapp key1=val1 key2=val2 ...
+        env := make(map[string]string)
+        for i := 1; i < cmd.NArg(); i++ {
+            kv := cmd.Arg(i)
+            if sep := strings.IndexRune(kv, '='); sep > 1 {
+                env[kv[:sep]] = kv[sep+1:]
+            } else {
+                cmd.Usage()
+                os.Exit(1)
+            }
+        }
+        return cli.ApplicationSetenv(context.Background(), name, service, env)
+    }
+
+    return nil
 }

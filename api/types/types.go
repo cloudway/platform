@@ -27,6 +27,7 @@ type ApplicationInfo struct {
     SSHURL      string
     Framework   *manifest.Plugin
     Services    []*manifest.Plugin
+    Scaling     int
 }
 
 // CreateApplication struct contains post options of remote API:
