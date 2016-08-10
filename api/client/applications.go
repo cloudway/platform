@@ -85,13 +85,16 @@ func (api *APIClient) ScaleApplication(ctx context.Context, name, scaling string
     return err
 }
 
-func (api *APIClient) ApplicationEnviron(ctx context.Context, name, service string) (map[string]string, error) {
+func envpath(name, service string) string {
     if service == "" {
         service = "_"
     }
+    return "/applications/"+name+"/services/"+service+"/env/"
+}
 
+func (api *APIClient) ApplicationEnviron(ctx context.Context, name, service string) (map[string]string, error) {
     var env map[string]string
-    resp, err := api.cli.Get(ctx, "/applications/"+name+"/services/"+service+"/env/", nil, nil)
+    resp, err := api.cli.Get(ctx, envpath(name, service), nil, nil)
     if err == nil {
         err = json.NewDecoder(resp.Body).Decode(&env)
         resp.EnsureClosed()
@@ -100,12 +103,8 @@ func (api *APIClient) ApplicationEnviron(ctx context.Context, name, service stri
 }
 
 func (api *APIClient) ApplicationGetenv(ctx context.Context, name, service, key string) (string, error) {
-    if service == "" {
-        service = "_"
-    }
-
     var env map[string]string
-    resp, err := api.cli.Get(ctx, "/applications/"+name+"/services/"+service+"/env/"+key, nil, nil)
+    resp, err := api.cli.Get(ctx, envpath(name, service) + key, nil, nil)
     if err == nil {
         err = json.NewDecoder(resp.Body).Decode(&env)
         resp.EnsureClosed()
@@ -113,13 +112,20 @@ func (api *APIClient) ApplicationGetenv(ctx context.Context, name, service, key 
     return env[key], err
 }
 
-func (api *APIClient) ApplicationSetenv(ctx context.Context, name, service, key, value string) error {
-    if service == "" {
-        service = "_"
+func (api *APIClient) ApplicationSetenv(ctx context.Context, name, service string, env map[string]string) error {
+    resp, err := api.cli.Post(ctx, envpath(name, service), nil, env, nil)
+    resp.EnsureClosed()
+    return err
+}
+
+func (api *APIClient) ApplicationUnsetenv(ctx context.Context, name, service string, keys ...string) error {
+    env := make(map[string]string)
+    for _, k := range keys {
+        env[k] = ""
     }
 
-    env := map[string]string{key: value}
-    resp, err := api.cli.Post(ctx, "/applications/"+name+"/services/"+service+"/env/", nil, env, nil)
+    query := url.Values{"remove": []string{""}}
+    resp, err := api.cli.Post(ctx, envpath(name, service), query, env, nil)
     resp.EnsureClosed()
     return err
 }

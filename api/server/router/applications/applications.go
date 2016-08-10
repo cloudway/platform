@@ -375,11 +375,19 @@ func (ar *applicationsRouter) getenv(ctx context.Context, w http.ResponseWriter,
     }
 }
 
+var validEnvKey = regexp.MustCompile(`^[a-zA-Z_0-9]+$`)
+
 func (ar *applicationsRouter) setenv(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
     if err := httputils.ParseForm(r); err != nil {
         return err
     }
     if err := httputils.CheckForJSON(r); err != nil {
+        return err
+    }
+
+    _, rm := r.Form["remove"]
+    var env map[string]string
+    if err := json.NewDecoder(r.Body).Decode(&env); err != nil {
         return err
     }
 
@@ -393,18 +401,26 @@ func (ar *applicationsRouter) setenv(ctx context.Context, w http.ResponseWriter,
         return err
     }
 
-    var env map[string]string
-    if err := json.NewDecoder(r.Body).Decode(&env); err != nil {
-        return err
+    args := []string{"/usr/bin/cwctl", "setenv"}
+    if rm {
+        args = append(args, "-d")
+        for k, _ := range env {
+            args = append(args, k)
+        }
+    } else {
+        args = append(args, "--export")
+        for k, v := range env {
+            if !validEnvKey.MatchString(k) {
+                http.Error(w, k+": Invalid environment variable key", http.StatusBadRequest)
+                return nil
+            }
+            args = append(args, k+"="+v)
+        }
     }
 
     for _, container := range cs {
-        // FIXME: run cwctl in one round
-        for k, v := range env {
-            err = container.ExecE("root", nil, nil, "/usr/bin/cwctl", "setenv", "--export", k, v)
-            if err != nil {
-                return err
-            }
+        if err = container.ExecE("root", nil, nil, args...); err != nil {
+            return err
         }
     }
 

@@ -351,11 +351,12 @@ func (cli *CWCli) CmdAppScale(args ...string) error {
 
 func (cli *CWCli) CmdAppEnv(args ...string) error {
     var name, service string
+    var del bool
 
-    cmd := cli.Subcmd("app:env", "APP-NAME [NAME [VALUE]]")
+    cmd := cli.Subcmd("app:env", "NAME", "NAME KEY", "NAME KEY=VALUE...", "-d KEY...")
     cmd.Require(mflag.Min, 1)
-    cmd.Require(mflag.Max, 3)
     cmd.StringVar(&service, []string{"s", "-service"}, "", "Service name")
+    cmd.BoolVar(&del, []string{"d"}, false, "Remove the environment variable")
     cmd.ParseFlags(args, true)
     name = cmd.Arg(0)
 
@@ -363,8 +364,14 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
         return err
     }
 
-    switch cmd.NArg() {
-    case 1:
+    if del {
+        // cwcli app:env myapp key1 key2 ...
+        return cli.ApplicationUnsetenv(context.Background(), name, service, cmd.Args()[1:]...)
+    }
+
+    switch {
+    case cmd.NArg() == 1:
+        // cwcli app:env myapp
         env, err := cli.ApplicationEnviron(context.Background(), name, service)
         if err != nil {
             return err
@@ -373,15 +380,27 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
             fmt.Fprintf(cli.stdout, "%s=%s\n", k, v)
         }
 
-    case 2:
+    case cmd.NArg() == 2 && !strings.ContainsRune(cmd.Arg(1), '='):
+        // cwcli app:env myapp key
         val, err := cli.ApplicationGetenv(context.Background(), name, service, cmd.Arg(1))
         if err != nil {
             return err
         }
         fmt.Fprintln(cli.stdout, val)
 
-    case 3:
-        return cli.ApplicationSetenv(context.Background(), name, service, cmd.Arg(1), cmd.Arg(2))
+    default:
+        // cwcli app:env myapp key1=val1 key2=val2 ...
+        env := make(map[string]string)
+        for i := 1; i < cmd.NArg(); i++ {
+            kv := cmd.Arg(i)
+            if sep := strings.IndexRune(kv, '='); sep > 1 {
+                env[kv[:sep]] = kv[sep+1:]
+            } else {
+                cmd.Usage()
+                os.Exit(1)
+            }
+        }
+        return cli.ApplicationSetenv(context.Background(), name, service, env)
     }
 
     return nil
