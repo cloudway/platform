@@ -7,6 +7,7 @@ import (
     "strings"
     "sync"
     "io"
+    "net/http"
     "encoding/hex"
     "crypto/rand"
     "crypto/sha1"
@@ -241,10 +242,20 @@ func (br *UserBroker) RemoveService(name, service string) (err error) {
     return errors.Err()
 }
 
+type ScalingError int
+
+func (e ScalingError) Error() string {
+    return fmt.Sprintf("The scaling number must be between 1 and 10, but given %d", int(e))
+}
+
+func (e ScalingError) HTTPErrorStatusCode() int {
+    return http.StatusBadRequest
+}
+
 // Scale application by adding or removing containers in the application.
 func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Container, error) {
     if num <= 0 || num > 10 {
-        return nil, errs.New("The scaling number must be between 1 and 10")
+        return nil, ScalingError(num)
     }
 
     user := br.User.Basic()

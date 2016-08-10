@@ -78,6 +78,13 @@ func (api *APIClient) GetApplicationDeployments(ctx context.Context, name string
     return &deployments, err
 }
 
+func (api *APIClient) ScaleApplication(ctx context.Context, name, scaling string) error {
+    query := url.Values{"scale": []string{scaling}}
+    resp, err := api.cli.Post(ctx, "/applications/"+name+"/scale", query, nil, nil)
+    resp.EnsureClosed()
+    return err
+}
+
 func (api *APIClient) ApplicationEnviron(ctx context.Context, name, service string) (map[string]string, error) {
     if service == "" {
         service = "_"

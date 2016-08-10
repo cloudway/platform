@@ -3,6 +3,7 @@ package applications
 import (
     "fmt"
     "strings"
+    "strconv"
     "net/url"
     "net/http"
     "regexp"
@@ -38,6 +39,7 @@ func NewRouter(broker *broker.Broker) router.Router {
         router.NewPostRoute("/applications/{name:.*}/restart", r.restart),
         router.NewPostRoute("/applications/{name:.*}/deploy", r.deploy),
         router.NewGetRoute("/applications/{name:.*}/deploy", r.getDeployments),
+        router.NewPostRoute("/applications/{name:.*}/scale", r.scale),
         router.NewGetRoute("/applications/{name:.*}/services/{service:.*}/env/", r.environ),
         router.NewPostRoute("/applications/{name:.*}/services/{service:.*}/env/", r.setenv),
         router.NewGetRoute("/applications/{name:.*}/services/{service:.*}/env/{key:.*}", r.getenv),
@@ -118,6 +120,9 @@ func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r
             }
         }
     }
+
+    cs, _ := ar.FindApplications(name, user.Namespace)
+    info.Scaling = len(cs)
 
     return httputils.WriteJSON(w, http.StatusOK, &info)
 }
@@ -270,6 +275,50 @@ func convertBranchesJson(branches []scm.Branch) []types.Branch {
         result[i] = *convertBranchJson(&branches[i])
     }
     return result
+}
+
+func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+
+    name := vars["name"]
+    scaling := r.FormValue("scale")
+
+    var up, down bool
+    if strings.HasPrefix(scaling, "+") {
+        up = true
+        scaling = scaling[1:]
+    } else if strings.HasPrefix(scaling, "-") {
+        down = true
+        scaling = scaling[1:]
+    }
+
+    num, err := strconv.Atoi(scaling)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return nil
+    }
+
+    if up || down {
+        cs, err := ar.FindApplications(name, user.Namespace)
+        if err != nil {
+            return err
+        }
+        if up {
+            num = len(cs) + num
+        } else {
+            num = len(cs) - num
+        }
+    }
+
+    br := ar.NewUserBroker(user)
+    cs, err := br.ScaleApplication(name, num)
+    if err == nil {
+        err = br.StartContainers(cs)
+    }
+    return err
 }
 
 func (ar *applicationsRouter) getContainers(namespace string, vars map[string]string) ([]*container.Container, error) {
