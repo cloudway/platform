@@ -134,9 +134,13 @@ func find(cli DockerClient, category manifest.Category, service, name, namespace
     }
     if name != "" {
         args.Add("label", APP_NAME_KEY + "=" + name)
+    } else {
+        args.Add("label", APP_NAME_KEY)
     }
     if namespace != "" {
         args.Add("label", APP_NAMESPACE_KEY + "=" + namespace)
+    } else {
+        args.Add("label", APP_NAMESPACE_KEY)
     }
 
     options := types.ContainerListOptions{All: true, Filter: args}
