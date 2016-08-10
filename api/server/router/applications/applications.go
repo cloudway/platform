@@ -38,6 +38,9 @@ func NewRouter(broker *broker.Broker) router.Router {
         router.NewPostRoute("/applications/{name:.*}/restart", r.restart),
         router.NewPostRoute("/applications/{name:.*}/deploy", r.deploy),
         router.NewGetRoute("/applications/{name:.*}/deploy", r.getDeployments),
+        router.NewGetRoute("/applications/{name:.*}/services/{service:.*}/env/", r.environ),
+        router.NewPostRoute("/applications/{name:.*}/services/{service:.*}/env/", r.setenv),
+        router.NewGetRoute("/applications/{name:.*}/services/{service:.*}/env/{key:.*}", r.getenv),
     }
 
     return r
@@ -267,4 +270,94 @@ func convertBranchesJson(branches []scm.Branch) []types.Branch {
         result[i] = *convertBranchJson(&branches[i])
     }
     return result
+}
+
+func (ar *applicationsRouter) getContainers(namespace string, vars map[string]string) ([]*container.Container, error) {
+    name, service := vars["name"], vars["service"]
+    if service == "" || service == "*" || service == "_" {
+        return ar.FindApplications(name, namespace)
+    } else {
+        return ar.FindService(name, namespace, service)
+    }
+}
+
+func (ar *applicationsRouter) getContainer(namespace string, vars map[string]string) (*container.Container, error) {
+    cs, err := ar.getContainers(namespace, vars)
+    if err == nil {
+        return cs[0], nil
+    } else {
+        return nil, err
+    }
+}
+
+func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+
+    container, err := ar.getContainer(user.Namespace, vars)
+    if err != nil {
+        return err
+    }
+    if info, err := container.GetInfo(); err != nil {
+        return err
+    } else {
+        return httputils.WriteJSON(w, http.StatusOK, info.Env)
+    }
+}
+
+func (ar *applicationsRouter) getenv(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+
+    container, err := ar.getContainer(user.Namespace, vars)
+    if err != nil {
+        return err
+    }
+    if info, err := container.GetInfo(); err != nil {
+        return err
+    } else {
+        key := vars["key"]
+        val := info.Env[key]
+        return httputils.WriteJSON(w, http.StatusOK, map[string]string{key: val})
+    }
+}
+
+func (ar *applicationsRouter) setenv(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    if err := httputils.ParseForm(r); err != nil {
+        return err
+    }
+    if err := httputils.CheckForJSON(r); err != nil {
+        return err
+    }
+
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+
+    cs, err := ar.getContainers(user.Namespace, vars)
+    if err != nil {
+        return err
+    }
+
+    var env map[string]string
+    if err := json.NewDecoder(r.Body).Decode(&env); err != nil {
+        return err
+    }
+
+    for _, container := range cs {
+        // FIXME: run cwctl in one round
+        for k, v := range env {
+            err = container.ExecE("root", nil, nil, "/usr/bin/cwctl", "setenv", "--export", k, v)
+            if err != nil {
+                return err
+            }
+        }
+    }
+
+    return nil
 }

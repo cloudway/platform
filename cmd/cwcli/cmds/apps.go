@@ -29,6 +29,7 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:restart        Restart an application
   app:deploy         Deploy an application
   app:info           Show application information
+  app:env            Get or set application environment variables
   app:open           Open the application in a web brower
   app:clone          Clone application source code
   app:ssh            Log into application console via SSH
@@ -333,4 +334,42 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
     } else {
         return cli.DeployApplication(context.Background(), name, branch)
     }
+}
+
+func (cli *CWCli) CmdAppEnv(args ...string) error {
+    var name, service string
+
+    cmd := cli.Subcmd("app:env", "APP-NAME [NAME [VALUE]]")
+    cmd.Require(mflag.Min, 1)
+    cmd.Require(mflag.Max, 3)
+    cmd.StringVar(&service, []string{"s", "-service"}, "", "Service name")
+    cmd.ParseFlags(args, true)
+    name = cmd.Arg(0)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+
+    switch cmd.NArg() {
+    case 1:
+        env, err := cli.ApplicationEnviron(context.Background(), name, service)
+        if err != nil {
+            return err
+        }
+        for k, v := range env {
+            fmt.Fprintf(cli.stdout, "%s=%s\n", k, v)
+        }
+
+    case 2:
+        val, err := cli.ApplicationGetenv(context.Background(), name, service, cmd.Arg(1))
+        if err != nil {
+            return err
+        }
+        fmt.Fprintln(cli.stdout, val)
+
+    case 3:
+        return cli.ApplicationSetenv(context.Background(), name, service, cmd.Arg(1), cmd.Arg(2))
+    }
+
+    return nil
 }

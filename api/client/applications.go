@@ -77,3 +77,42 @@ func (api *APIClient) GetApplicationDeployments(ctx context.Context, name string
     }
     return &deployments, err
 }
+
+func (api *APIClient) ApplicationEnviron(ctx context.Context, name, service string) (map[string]string, error) {
+    if service == "" {
+        service = "_"
+    }
+
+    var env map[string]string
+    resp, err := api.cli.Get(ctx, "/applications/"+name+"/services/"+service+"/env/", nil, nil)
+    if err == nil {
+        err = json.NewDecoder(resp.Body).Decode(&env)
+        resp.EnsureClosed()
+    }
+    return env, err
+}
+
+func (api *APIClient) ApplicationGetenv(ctx context.Context, name, service, key string) (string, error) {
+    if service == "" {
+        service = "_"
+    }
+
+    var env map[string]string
+    resp, err := api.cli.Get(ctx, "/applications/"+name+"/services/"+service+"/env/"+key, nil, nil)
+    if err == nil {
+        err = json.NewDecoder(resp.Body).Decode(&env)
+        resp.EnsureClosed()
+    }
+    return env[key], err
+}
+
+func (api *APIClient) ApplicationSetenv(ctx context.Context, name, service, key, value string) error {
+    if service == "" {
+        service = "_"
+    }
+
+    env := map[string]string{key: value}
+    resp, err := api.cli.Post(ctx, "/applications/"+name+"/services/"+service+"/env/", nil, env, nil)
+    resp.EnsureClosed()
+    return err
+}
