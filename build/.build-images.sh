@@ -28,14 +28,19 @@ cp -L bundles/latest/binary-server/cwman build/proxy/cwman
 docker build -t icloudway/proxy:$DOCKER_TAG -f build/proxy/Dockerfile build/proxy
 docker push icloudway/proxy:$DOCKER_TAG
 
+cp -L bundles/latest/binary-server/cwman build/sshd/cwman
+docker build -t icloudway/sshd:$DOCKER_TAG -f build/sshd/Dockerfile build/sshd
+docker push icloudway/sshd:$DOCKER_TAG
+
+empty_dir=$(mktemp -d)
+cp build/bitbucket/Dockerfile.deps $empty_dir
+docker build -t bitbucket-server:deps -f $empty_dir/Dockerfile.deps $empty_dir
+rm -rf $empty_dir
+
 cp -L bundles/latest/binary-server/cwman build/bitbucket/cwman
 cp scm/bitbucket/hooks/target/repo-deployer-*.jar build/bitbucket
 docker build -t icloudway/bitbucket-server:$DOCKER_TAG -f build/bitbucket/Dockerfile build/bitbucket
 docker push icloudway/bitbucket-server:$DOCKER_TAG
-
-cp -L bundles/latest/binary-server/cwman build/sshd/cwman
-docker build -t icloudway/sshd:$DOCKER_TAG -f build/sshd/Dockerfile build/sshd
-docker push icloudway/sshd:$DOCKER_TAG
 
 cp bundles/latest/tgz/cloudway-broker-*-linux-amd64.tar.gz build/platform/cloudway-broker.tar.gz
 cp scm/bitbucket/hooks/target/repo-deployer-*.jar build/platform/repo-deployer.jar

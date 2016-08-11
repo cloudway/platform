@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # configure bitbucket
 if [ -z "$CLOUDWAY_SCM_URL" -a -n "$BITBUCKET_ENV_BITBUCKET_URL" ]; then

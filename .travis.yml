@@ -13,5 +13,4 @@ script:
   - make all
   - sudo chown -R ${USER}:${USER} bundles
   - ( cd scm/bitbucket/hooks; mvn clean package )
-after_success:
   - build/.build-images.sh
