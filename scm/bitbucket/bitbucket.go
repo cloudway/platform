@@ -55,6 +55,10 @@ func init() {
     }
 }
 
+func (cli *bitbucketClient) Type() string {
+    return "git"
+}
+
 func (cli *bitbucketClient) CreateNamespace(namespace string) error {
     opts := CreateProjectOpts{
         Key:  namespace,

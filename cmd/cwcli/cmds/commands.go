@@ -99,7 +99,9 @@ func (c *CWCli) Connect() (err error) {
     }
 
     if c.host == "" {
-        return errors.New("No remote host specified, please run cwcli with -H option")
+        if c.host = gitGetConfig("cloudway.host"); c.host == "" {
+            return errors.New("No remote host specified, please run cwcli with -H option")
+        }
     }
 
     headers := map[string]string {

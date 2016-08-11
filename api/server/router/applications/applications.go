@@ -100,8 +100,9 @@ func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r
         host, port = host[:i], host[i:]
     }
     info.URL = fmt.Sprintf("%s://%s-%s.%s%s", base.Scheme, name, user.Namespace, defaults.Domain(), port)
-    info.SSHURL = "ssh://"+name+"-"+user.Namespace+"@"+host+":2200" // FIXME port
+    info.SSHURL = fmt.Sprintf("ssh://%s-%s@%s%s", name, user.Namespace, host, ":2200") // FIXME
 
+    info.SCMType = ar.SCM.Type()
     cloneURL := config.Get("scm.clone_url")
     if cloneURL != "" {
         cloneURL = strings.Replace(cloneURL, "<namespace>", user.Namespace, -1)
@@ -177,8 +178,8 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
         return err
     }
 
-    w.WriteHeader(http.StatusCreated)
-    return nil
+    vars["name"] = req.Name
+    return ar.info(ctx, w, r, vars)
 }
 
 func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -321,13 +322,21 @@ func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, 
     return err
 }
 
-func (ar *applicationsRouter) getContainers(namespace string, vars map[string]string) ([]*container.Container, error) {
+func (ar *applicationsRouter) getContainers(namespace string, vars map[string]string) (cs []*container.Container, err error) {
     name, service := vars["name"], vars["service"]
     if service == "" || service == "*" || service == "_" {
-        return ar.FindApplications(name, namespace)
+        cs, err = ar.FindApplications(name, namespace)
     } else {
-        return ar.FindService(name, namespace, service)
+        cs, err = ar.FindService(name, namespace, service)
     }
+    if err == nil && len(cs) == 0 {
+        if service != "" {
+            err = fmt.Errorf("Service '%s' not found in application '%s'", service, name)
+        } else {
+            err = broker.ApplicationNotFoundError(name)
+        }
+    }
+    return cs, err
 }
 
 func (ar *applicationsRouter) getContainer(namespace string, vars map[string]string) (*container.Container, error) {

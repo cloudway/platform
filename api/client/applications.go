@@ -27,10 +27,14 @@ func (api *APIClient) GetApplicationInfo(ctx context.Context, name string) (*typ
     return &info, err
 }
 
-func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateApplication) error {
+func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateApplication) (*types.ApplicationInfo, error) {
+    var info types.ApplicationInfo
     resp, err := api.cli.Post(ctx, "/applications/", nil, &opts, nil)
-    resp.EnsureClosed()
-    return err
+    if err == nil {
+        err = json.NewDecoder(resp.Body).Decode(&info)
+        resp.EnsureClosed()
+    }
+    return &info, err
 }
 
 func (api *APIClient) RemoveApplication(ctx context.Context, name string) error {

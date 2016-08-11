@@ -23,6 +23,7 @@ type ApplicationInfo struct {
     Namespace   string
     CreatedAt   time.Time
     URL         string
+    SCMType     string
     CloneURL    string
     SSHURL      string
     Framework   *manifest.Plugin
