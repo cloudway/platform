@@ -8,6 +8,9 @@ import (
 
 // Source Code Management interface.
 type SCM interface {
+    // Type returns the SCM type, such as "git", "hg", etc.
+    Type() string
+
     // Create a namespace in the SCM.
     // For user based SCM, a new user is created.
     // For project based SCM, a new project is created.

@@ -100,8 +100,9 @@ func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r
         host, port = host[:i], host[i:]
     }
     info.URL = fmt.Sprintf("%s://%s-%s.%s%s", base.Scheme, name, user.Namespace, defaults.Domain(), port)
-    info.SSHURL = "ssh://"+name+"-"+user.Namespace+"@"+host+":2200" // FIXME port
+    info.SSHURL = fmt.Sprintf("ssh://%s-%s@%s%s", name, user.Namespace, host, ":2200") // FIXME
 
+    info.SCMType = ar.SCM.Type()
     cloneURL := config.Get("scm.clone_url")
     if cloneURL != "" {
         cloneURL = strings.Replace(cloneURL, "<namespace>", user.Namespace, -1)
