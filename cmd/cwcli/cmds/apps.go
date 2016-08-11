@@ -210,7 +210,9 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
-    return cli.CreateApplication(context.Background(), req)
+
+    _, err := cli.CreateApplication(context.Background(), req)
+    return err
 }
 
 

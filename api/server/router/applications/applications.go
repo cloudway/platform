@@ -178,8 +178,8 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
         return err
     }
 
-    w.WriteHeader(http.StatusCreated)
-    return nil
+    vars["name"] = req.Name
+    return ar.info(ctx, w, r, vars)
 }
 
 func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
