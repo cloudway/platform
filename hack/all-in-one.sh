@@ -4,6 +4,8 @@ domain=example.com
 console_url=http://api.$domain
 bitbucket_url=http://git.$domain
 
+: ${CLOUDWAY_TAG:=latest}
+
 cd "$(dirname "$BASH_SOURCE")/.."
 
 # generate random password
@@ -21,4 +23,4 @@ docker run -d --name cloudway-platform --restart=always \
            -v /var/run/docker.sock:/var/run/docker.sock:ro \
            -v cloudway-data:/data \
            -p 80:80 -p 7999:7999 -p 2200:2200 \
-           icloudway/platform
+           icloudway/platform:${CLOUDWAY_TAG}

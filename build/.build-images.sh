@@ -3,12 +3,13 @@ set -e
 
 if [[ "$TRAVIS_TAG" =~ ^v[0-9.]+$ ]]; then
     DOCKER_TAG=${TRAVIS_TAG:1}
-elif [ "$TRAVIS_BRANCH" = "master" ]; then
-    DOCKER_TAG=latest
-elif [ "$TRAVIS_BRANCH" = "develop" ]; then
-    DOCKER_TAG=unstable
 else
-    exit 0
+    case "$TRAVIS_BRANCH" in
+    master)      DOCKER_TAG=latest ;;
+    develop)     DOCKER_TAG=unstable ;;
+    expermental) DOCKER_TAG=expermental ;;
+    *) exit 0
+    esac
 fi
 
 cat > ~/.dockercfg <<EOF
