@@ -322,13 +322,21 @@ func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, 
     return err
 }
 
-func (ar *applicationsRouter) getContainers(namespace string, vars map[string]string) ([]*container.Container, error) {
+func (ar *applicationsRouter) getContainers(namespace string, vars map[string]string) (cs []*container.Container, err error) {
     name, service := vars["name"], vars["service"]
     if service == "" || service == "*" || service == "_" {
-        return ar.FindApplications(name, namespace)
+        cs, err = ar.FindApplications(name, namespace)
     } else {
-        return ar.FindService(name, namespace, service)
+        cs, err = ar.FindService(name, namespace, service)
     }
+    if err == nil && len(cs) == 0 {
+        if service != "" {
+            err = fmt.Errorf("Service '%s' not found in application '%s'", service, name)
+        } else {
+            err = broker.ApplicationNotFoundError(name)
+        }
+    }
+    return cs, err
 }
 
 func (ar *applicationsRouter) getContainer(namespace string, vars map[string]string) (*container.Container, error) {

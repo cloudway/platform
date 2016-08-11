@@ -9,16 +9,25 @@ import (
     "github.com/cloudway/platform/api/types"
 )
 
-func gitClone(host string, app *types.ApplicationInfo) error {
+func gitClone(host string, app *types.ApplicationInfo, must bool) (err error) {
     if app.CloneURL == "" {
         return errors.New("Cannot determine the clone command")
     }
 
     args := strings.Fields(app.CloneURL)
-    cmd := exec.Command(args[0], args[1:]...)
+    command, err := exec.LookPath(args[0])
+    if err != nil {
+        if must {
+            return err
+        } else {
+            return nil
+        }
+    }
+
+    cmd := exec.Command(command, args[1:]...)
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
-    if err := cmd.Run(); err != nil {
+    if err = cmd.Run(); err != nil {
         return err
     }
 

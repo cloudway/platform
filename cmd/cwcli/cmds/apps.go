@@ -64,19 +64,34 @@ func (cli *CWCli) CmdApps(args ...string) error {
     return nil
 }
 
+func (cli *CWCli) getAppName(cmd *mflag.FlagSet) string {
+    if cmd != nil && cmd.NArg() > 0 && cmd.Arg(0) != "." {
+        return cmd.Arg(0)
+    }
+    if name := gitGetConfig("cloudway.app"); name != "" {
+        return name
+    } else {
+        fmt.Fprintf(cli.stdout, "Missing application name in command line arguments.\n\n")
+        cmd.Usage()
+        os.Exit(1)
+        return ""
+    }
+}
+
 func (cli *CWCli) CmdAppInfo(args ...string) error {
     var js bool
 
-    cmd := cli.Subcmd("app:info", "NAME")
-    cmd.Require(mflag.Exact, 1)
+    cmd := cli.Subcmd("app:info", "[NAME]")
+    cmd.Require(mflag.Max, 1)
     cmd.BoolVar(&js, []string{"-json"}, false, "Display as JSON")
     cmd.ParseFlags(args, true)
+    name := cli.getAppName(cmd)
 
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
 
-    app, err := cli.GetApplicationInfo(context.Background(), cmd.Arg(0))
+    app, err := cli.GetApplicationInfo(context.Background(), name)
     if err != nil {
         return err
     }
@@ -103,15 +118,16 @@ func (cli *CWCli) CmdAppInfo(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppOpen(args ...string) error {
-    cmd := cli.Subcmd("app:open", "NAME")
-    cmd.Require(mflag.Exact, 1)
+    cmd := cli.Subcmd("app:open", "[NAME]")
+    cmd.Require(mflag.Max, 1)
     cmd.ParseFlags(args, true)
+    name := cli.getAppName(cmd)
 
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
 
-    app, err := cli.GetApplicationInfo(context.Background(), cmd.Arg(0))
+    app, err := cli.GetApplicationInfo(context.Background(), name)
     if err != nil {
         return err
     }
@@ -131,24 +147,21 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
     if err != nil {
         return err
     }
-    return gitClone(cli.host, app)
+    return gitClone(cli.host, app, true)
 }
 
 func (cli *CWCli) CmdAppSSH(args ...string) error {
-    var identity string
+    var name, service, identity string
 
-    cmd := cli.Subcmd("app:ssh", "[SERVICE.]NAME")
-    cmd.Require(mflag.Exact, 1)
+    cmd := cli.Subcmd("app:ssh", "[NAME]")
+    cmd.Require(mflag.Max, 1)
+    cmd.StringVar(&service, []string{"s", "-service"}, "", "Service name")
     cmd.StringVar(&identity, []string{"i"}, "", "Identity file")
     cmd.ParseFlags(args, true)
+    name = cli.getAppName(cmd)
 
     if err := cli.ConnectAndLogin(); err != nil {
         return err
-    }
-
-    name, service := cmd.Arg(0), ""
-    if i := strings.IndexRune(name, '.'); i != -1 {
-        name, service = name[i+1:], name[:i]
     }
 
     app, err := cli.GetApplicationInfo(context.Background(), name)
@@ -207,7 +220,7 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
 
     app, err := cli.CreateApplication(context.Background(), req)
     if err == nil && !noclone && app.CloneURL != "" {
-        err = gitClone(cli.host, app)
+        err = gitClone(cli.host, app, false)
     }
     return err
 }
@@ -249,51 +262,51 @@ func (cli *CWCli) CmdAppRemove(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppStart(args ...string) error {
-    cmd := cli.Subcmd("app:start", "NAME")
-    cmd.Require(mflag.Exact, 1)
+    cmd := cli.Subcmd("app:start", "[NAME]")
+    cmd.Require(mflag.Max, 1)
     cmd.ParseFlags(args, true)
+    name := cli.getAppName(cmd)
 
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
-    return cli.StartApplication(context.Background(), cmd.Arg(0))
+    return cli.StartApplication(context.Background(), name)
 }
 
 func (cli *CWCli) CmdAppStop(args ...string) error {
-    cmd := cli.Subcmd("app:stop", "NAME")
-    cmd.Require(mflag.Exact, 1)
+    cmd := cli.Subcmd("app:stop", "[NAME]")
+    cmd.Require(mflag.Max, 1)
     cmd.ParseFlags(args, true)
+    name := cli.getAppName(cmd)
 
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
-    return cli.StopApplication(context.Background(), cmd.Arg(0))
+    return cli.StopApplication(context.Background(), name)
 }
 
 func (cli *CWCli) CmdAppRestart(args ...string) error {
-    cmd := cli.Subcmd("app:restart", "NAME")
-    cmd.Require(mflag.Exact, 1)
+    cmd := cli.Subcmd("app:restart", "[NAME]")
+    cmd.Require(mflag.Max, 1)
     cmd.ParseFlags(args, true)
+    name := cli.getAppName(cmd)
 
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
-    return cli.RestartApplication(context.Background(), cmd.Arg(0))
+    return cli.RestartApplication(context.Background(), name)
 }
 
 func (cli *CWCli) CmdAppDeploy(args ...string) error {
+    var branch string
     var show bool
 
-    cmd := cli.Subcmd("app:deploy", "NAME [BRANCH]")
-    cmd.Require(mflag.Min, 1)
-    cmd.Require(mflag.Max, 2)
+    cmd := cli.Subcmd("app:deploy", "[NAME]")
+    cmd.Require(mflag.Max, 1)
+    cmd.StringVar(&branch, []string{"b", "-branch"}, "", "The branch to deploy")
     cmd.BoolVar(&show, []string{"-show"}, false, "Show application deployments")
     cmd.ParseFlags(args, true)
-
-    name, branch := cmd.Arg(0), ""
-    if cmd.NArg() == 2 {
-        branch = cmd.Arg(1)
-    }
+    name := cli.getAppName(cmd)
 
     if err := cli.ConnectAndLogin(); err != nil {
         return err
@@ -308,11 +321,11 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
         var display = func(ref types.Branch) {
             display := ref.DisplayId
             if ref.Id == deployments.Current.Id {
-                display = hilite("*"+display)
+                display = "* " + hilite(display)
             } else {
-                display = " "+display
+                display = "  " + display
             }
-            fmt.Fprintf(cli.stdout, " %s\n", display)
+            fmt.Fprintf(cli.stdout, "%s\n", display)
         }
 
         fmt.Fprintln(cli.stdout, "Branches:")
@@ -341,22 +354,29 @@ func (cli *CWCli) CmdAppScale(args ...string) error {
     cmd.Require(mflag.Exact, 2)
     cmd.ParseFlags(args, true)
 
+    name, scale := cmd.Arg(0), cmd.Arg(1)
+    if name == "." {
+        name = cli.getAppName(nil)
+    }
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
-    return cli.ScaleApplication(context.Background(), cmd.Arg(0), cmd.Arg(1))
+    return cli.ScaleApplication(context.Background(), name, scale)
 }
 
 func (cli *CWCli) CmdAppEnv(args ...string) error {
     var name, service string
     var del bool
 
-    cmd := cli.Subcmd("app:env", "NAME", "NAME KEY", "NAME KEY=VALUE...", "-d KEY...")
-    cmd.Require(mflag.Min, 1)
+    cmd := cli.Subcmd("app:env", "", "KEY", "KEY=VALUE...", "-d KEY...")
+    cmd.StringVar(&name, []string{"a", "-app"}, "", "Application name")
     cmd.StringVar(&service, []string{"s", "-service"}, "", "Service name")
     cmd.BoolVar(&del, []string{"d"}, false, "Remove the environment variable")
     cmd.ParseFlags(args, true)
-    name = cmd.Arg(0)
+
+    if name == "" {
+        name = cli.getAppName(nil)
+    }
 
     if err := cli.ConnectAndLogin(); err != nil {
         return err
@@ -364,11 +384,11 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 
     if del {
         // cwcli app:env myapp key1 key2 ...
-        return cli.ApplicationUnsetenv(context.Background(), name, service, cmd.Args()[1:]...)
+        return cli.ApplicationUnsetenv(context.Background(), name, service, cmd.Args()...)
     }
 
     switch {
-    case cmd.NArg() == 1:
+    case cmd.NArg() == 0:
         // cwcli app:env myapp
         env, err := cli.ApplicationEnviron(context.Background(), name, service)
         if err != nil {
@@ -378,9 +398,9 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
             fmt.Fprintf(cli.stdout, "%s=%s\n", k, v)
         }
 
-    case cmd.NArg() == 2 && !strings.ContainsRune(cmd.Arg(1), '='):
+    case cmd.NArg() == 1 && !strings.ContainsRune(cmd.Arg(0), '='):
         // cwcli app:env myapp key
-        val, err := cli.ApplicationGetenv(context.Background(), name, service, cmd.Arg(1))
+        val, err := cli.ApplicationGetenv(context.Background(), name, service, cmd.Arg(0))
         if err != nil {
             return err
         }
@@ -389,7 +409,7 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
     default:
         // cwcli app:env myapp key1=val1 key2=val2 ...
         env := make(map[string]string)
-        for i := 1; i < cmd.NArg(); i++ {
+        for i := 0; i < cmd.NArg(); i++ {
             kv := cmd.Arg(i)
             if sep := strings.IndexRune(kv, '='); sep > 1 {
                 env[kv[:sep]] = kv[sep+1:]
