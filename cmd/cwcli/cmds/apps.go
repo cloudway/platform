@@ -131,19 +131,7 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
     if err != nil {
         return err
     }
-    return cli.clone(app)
-}
-
-func (cli *CWCli) clone(app *types.ApplicationInfo) error {
-    if app.CloneURL == "" {
-        return errors.New("Cannot determine the clone command")
-    }
-
-    cloneCmdArgs := strings.Fields(app.CloneURL)
-    cloneCmd := exec.Command(cloneCmdArgs[0], cloneCmdArgs[1:]...)
-    cloneCmd.Stdout = os.Stdout
-    cloneCmd.Stderr = os.Stderr
-    return cloneCmd.Run()
+    return gitClone(cli.host, app)
 }
 
 func (cli *CWCli) CmdAppSSH(args ...string) error {
@@ -219,7 +207,7 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
 
     app, err := cli.CreateApplication(context.Background(), req)
     if err == nil && !noclone && app.CloneURL != "" {
-        err = cli.clone(app)
+        err = gitClone(cli.host, app)
     }
     return err
 }
