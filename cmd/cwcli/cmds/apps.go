@@ -131,6 +131,10 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
     if err != nil {
         return err
     }
+    return cli.clone(app)
+}
+
+func (cli *CWCli) clone(app *types.ApplicationInfo) error {
     if app.CloneURL == "" {
         return errors.New("Cannot determine the clone command")
     }
@@ -198,12 +202,14 @@ func (cli *CWCli) CmdAppSSH(args ...string) error {
 
 func (cli *CWCli) CmdAppCreate(args ...string) error {
     var req types.CreateApplication
+    var noclone bool
 
     cmd := cli.Subcmd("app:create", "[OPTIONS] NAME")
     cmd.Require(mflag.Exact, 1)
     cmd.StringVar(&req.Framework, []string{"F", "-framework"}, "", "Application framework")
     cmd.Var(opts.NewListOptsRef(&req.Services, nil), []string{"s", "-service"}, "Service plugins")
     cmd.StringVar(&req.Repo, []string{"-repo"}, "", "Populate from a repository")
+    cmd.BoolVar(&noclone, []string{"n", "-no-clone"}, false, "Do not clone source code")
     cmd.ParseFlags(args, true)
     req.Name = cmd.Arg(0)
 
@@ -211,10 +217,12 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
         return err
     }
 
-    _, err := cli.CreateApplication(context.Background(), req)
+    app, err := cli.CreateApplication(context.Background(), req)
+    if err == nil && !noclone && app.CloneURL != "" {
+        err = cli.clone(app)
+    }
     return err
 }
-
 
 func (cli *CWCli) CmdAppRemove(args ...string) error {
     var yes bool
