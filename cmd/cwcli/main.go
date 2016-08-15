@@ -12,6 +12,7 @@ import (
     "github.com/cloudway/platform/cmd/cwcli/cmds"
     "github.com/cloudway/platform/pkg/rest"
     "github.com/cloudway/platform/pkg/colorable"
+    "github.com/Sirupsen/logrus"
 )
 
 func main() {
@@ -44,6 +45,7 @@ func main() {
     }
 
     flgHelp := flag.Bool([]string{"h", "-help"}, false, "Print usage")
+    flgDebug := flag.Bool([]string{"D", "-debug"}, false, "Debugging mode")
     flgHost := flag.String([]string{"H", "-host"}, "", "Connect to remote host")
 
     flag.Parse()
@@ -53,6 +55,10 @@ func main() {
         // and commands there are, just print the usage.
         flag.Usage()
         return
+    }
+
+    if *flgDebug {
+        logrus.SetLevel(logrus.DebugLevel)
     }
 
     var host string

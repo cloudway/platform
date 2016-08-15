@@ -42,6 +42,7 @@ func NewRouter(broker *broker.Broker) router.Router {
         router.NewPostRoute("/applications/{name:.*}/deploy", r.deploy),
         router.NewGetRoute("/applications/{name:.*}/deploy", r.getDeployments),
         router.NewGetRoute("/applications/{name:.*}/repo", r.download),
+        router.NewPutRoute("/applications/{name:.*}/repo", r.upload),
         router.NewPostRoute("/applications/{name:.*}/scale", r.scale),
         router.NewGetRoute("/applications/{name:.*}/services/{service:.*}/env/", r.environ),
         router.NewPostRoute("/applications/{name:.*}/services/{service:.*}/env/", r.setenv),
@@ -301,6 +302,14 @@ func (ar *applicationsRouter) download(ctx context.Context, w http.ResponseWrite
         err = zw.Close()
     }
     return err
+}
+
+func (ar *applicationsRouter) upload(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+    return ar.NewUserBroker(user).Upload(vars["name"], r.Body)
 }
 
 func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {

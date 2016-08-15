@@ -89,6 +89,13 @@ func (api *APIClient) Download(ctx context.Context, name string) (io.ReadCloser,
     return resp.Body, err
 }
 
+func (api *APIClient) Upload(ctx context.Context, name string, content io.Reader) error {
+    headers := map[string][]string{"Content-Type": []string{"application/tar+gzip"}}
+    resp, err := api.cli.PutRaw(ctx, "/applications/"+name+"/repo", nil, content, headers)
+    resp.EnsureClosed()
+    return err
+}
+
 func (api *APIClient) ScaleApplication(ctx context.Context, name, scaling string) error {
     query := url.Values{"scale": []string{scaling}}
     resp, err := api.cli.Post(ctx, "/applications/"+name+"/scale", query, nil, nil)

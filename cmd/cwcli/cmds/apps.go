@@ -8,6 +8,8 @@ import (
     "errors"
     "bufio"
     "os/exec"
+    "io/ioutil"
+    "archive/tar"
     "net/url"
     "path/filepath"
     "encoding/json"
@@ -80,21 +82,40 @@ func (cli *CWCli) getAppName(cmd *mflag.FlagSet) string {
         return name
     }
 
-    fmt.Fprintf(cli.stdout, "Missing application name in command line arguments.\n\n")
-    cmd.Usage()
+    fmt.Fprintln(cli.stdout, "Missing application name in command line arguments.")
     os.Exit(1)
     return ""
 }
 
+func (cli *CWCli) getAppConfig(key string) string {
+    root, err := searchFile(".cwapp")
+    if err != nil {
+        return ""
+    }
+    cfg, err := config.Open(filepath.Join(root, ".cwapp"))
+    if err != nil {
+        return ""
+    }
+    return cfg.Get(key)
+}
+
 func (cli *CWCli) getAppRoot() (string, error) {
+    root, err := searchFile(".cwapp")
+    if err != nil {
+        root, err = searchFile(".git")
+    }
+    return root, err
+}
+
+func searchFile(name string) (string, error) {
     pwd, err := os.Getwd()
     if err != nil {
         return "", err
     }
 
     for {
-        cfgfile := filepath.Join(pwd, ".cwapp")
-        _, err := os.Lstat(cfgfile)
+        file := filepath.Join(pwd, name)
+        _, err := os.Lstat(file)
         if err == nil {
             return pwd, nil
         }
@@ -107,18 +128,6 @@ func (cli *CWCli) getAppRoot() (string, error) {
             return "", errors.New("The current directory is not a valid cloudway application")
         }
     }
-}
-
-func (cli *CWCli) getAppConfig(key string) string {
-    root, err := cli.getAppRoot()
-    if err != nil {
-        return ""
-    }
-    cfg, err := config.Open(filepath.Join(root, ".cwapp"))
-    if err != nil {
-        return ""
-    }
-    return cfg.Get(key)
 }
 
 func (cli *CWCli) CmdAppInfo(args ...string) error {
@@ -200,6 +209,24 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
     }
 }
 
+func (cli *CWCli) CmdAppUpload(args ...string) error {
+    cmd := cli.Subcmd("app:upload", "[NAME]")
+    cmd.Require(mflag.Max, 1)
+    cmd.ParseFlags(args, true)
+
+    name := cli.getAppName(cmd)
+    path, err := cli.getAppRoot()
+    if err != nil {
+        return err
+    }
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+
+    return cli.upload(name, path)
+}
+
 func (cli *CWCli) download(name string) error {
     r, err := cli.Download(context.Background(), name)
     if err != nil {
@@ -227,6 +254,34 @@ func (cli *CWCli) download(name string) error {
     cfg.Set("host", cli.host)
     cfg.Set("app", name)
     return cfg.Save()
+}
+
+func (cli *CWCli) upload(name, path string) error {
+    // create temporary archive file containing upload files
+    tempfile, err := ioutil.TempFile("", "deploy")
+    if err != nil {
+        return err
+    }
+    defer func() {
+        tempfile.Close()
+        os.Remove(tempfile.Name())
+    }()
+
+    zw := gzip.NewWriter(tempfile)
+    tw := tar.NewWriter(zw)
+    excludes := []string{".git", ".cwapp"}
+    if err = archive.CopyFileTree(tw, "", path, excludes, false); err != nil {
+        return err
+    }
+    tw.Close()
+    zw.Close()
+
+    // rewind for read
+    if _, err = tempfile.Seek(0, os.SEEK_SET); err != nil {
+        return err
+    }
+
+    return cli.Upload(context.Background(), name, tempfile)
 }
 
 func (cli *CWCli) CmdAppSSH(args ...string) error {
