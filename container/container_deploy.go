@@ -13,7 +13,7 @@ func (c *Container) Deploy(path string) error {
     r, w := io.Pipe()
     go func() {
         tw := tar.NewWriter(w)
-        err := archive.CopyFileTree(tw, "", path, false)
+        err := archive.CopyFileTree(tw, "", path, nil, false)
         tw.Close()
         w.CloseWithError(err)
     }()
