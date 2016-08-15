@@ -55,15 +55,15 @@ func main() {
         return
     }
 
-    host := *flgHost
-    if host == "" {
-        host = config.Get("host")
-    } else if host, err = parseHost(host); err != nil {
-        fmt.Fprintln(stderr, err)
-        os.Exit(1)
-    } else {
-        config.Set("host", host)
-        config.Save()
+    var host string
+    if *flgHost != "" {
+        if host, err := parseHost(*flgHost); err != nil {
+            fmt.Fprintln(stderr, err)
+            os.Exit(1)
+        } else {
+            config.Set("host", host)
+            config.Save()
+        }
     }
 
     c := cmds.Init(host, stdout, stderr)

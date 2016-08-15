@@ -17,6 +17,7 @@ import (
     "github.com/cloudway/platform/pkg/opts"
     "github.com/cloudway/platform/api/types"
     "github.com/cloudway/platform/pkg/archive"
+    "github.com/cloudway/platform/config"
 )
 
 const appCmdUsage = `Usage: cwcli app
@@ -71,14 +72,53 @@ func (cli *CWCli) getAppName(cmd *mflag.FlagSet) string {
     if cmd != nil && cmd.NArg() > 0 && cmd.Arg(0) != "." {
         return cmd.Arg(0)
     }
+
+    if name := cli.getAppConfig("app"); name != "" {
+        return name
+    }
     if name := gitGetConfig("cloudway.app"); name != "" {
         return name
-    } else {
-        fmt.Fprintf(cli.stdout, "Missing application name in command line arguments.\n\n")
-        cmd.Usage()
-        os.Exit(1)
+    }
+
+    fmt.Fprintf(cli.stdout, "Missing application name in command line arguments.\n\n")
+    cmd.Usage()
+    os.Exit(1)
+    return ""
+}
+
+func (cli *CWCli) getAppRoot() (string, error) {
+    pwd, err := os.Getwd()
+    if err != nil {
+        return "", err
+    }
+
+    for {
+        cfgfile := filepath.Join(pwd, ".cwapp")
+        _, err := os.Lstat(cfgfile)
+        if err == nil {
+            return pwd, nil
+        }
+        if !os.IsNotExist(err) {
+            return "", err
+        }
+        if parent := filepath.Dir(pwd); parent != pwd {
+            pwd = parent
+        } else {
+            return "", errors.New("The current directory is not a valid cloudway application")
+        }
+    }
+}
+
+func (cli *CWCli) getAppConfig(key string) string {
+    root, err := cli.getAppRoot()
+    if err != nil {
         return ""
     }
+    cfg, err := config.Open(filepath.Join(root, ".cwapp"))
+    if err != nil {
+        return ""
+    }
+    return cfg.Get(key)
 }
 
 func (cli *CWCli) CmdAppInfo(args ...string) error {
@@ -153,7 +193,7 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
         return cli.download(cmd.Arg(0))
     } else {
         app, err := cli.GetApplicationInfo(context.Background(), cmd.Arg(0))
-        if err != nil {
+        if err == nil {
             err = gitClone(cli.host, app, true)
         }
         return err
@@ -174,11 +214,19 @@ func (cli *CWCli) download(name string) error {
     if err = os.Mkdir(dir, 0755); err != nil {
         return err
     }
+
     zr, err := gzip.NewReader(r)
     if err != nil {
         return err
     }
-    return archive.ExtractFiles(dir, zr)
+    if err = archive.ExtractFiles(dir, zr); err != nil {
+        return err
+    }
+
+    cfg := config.New(filepath.Join(dir, ".cwapp"))
+    cfg.Set("host", cli.host)
+    cfg.Set("app", name)
+    return cfg.Save()
 }
 
 func (cli *CWCli) CmdAppSSH(args ...string) error {
