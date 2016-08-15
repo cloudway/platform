@@ -9,11 +9,14 @@ import (
     "bufio"
     "os/exec"
     "net/url"
+    "path/filepath"
     "encoding/json"
+    "compress/gzip"
     "golang.org/x/net/context"
     "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/pkg/opts"
     "github.com/cloudway/platform/api/types"
+    "github.com/cloudway/platform/pkg/archive"
 )
 
 const appCmdUsage = `Usage: cwcli app
@@ -135,19 +138,47 @@ func (cli *CWCli) CmdAppOpen(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppClone(args ...string) error {
+    var binary bool
+
     cmd := cli.Subcmd("app:clone", "NAME")
     cmd.Require(mflag.Exact, 1)
+    cmd.BoolVar(&binary, []string{"-binary"}, false, "Download binary repository")
     cmd.ParseFlags(args, true)
 
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
 
-    app, err := cli.GetApplicationInfo(context.Background(), cmd.Arg(0))
+    if binary {
+        return cli.download(cmd.Arg(0))
+    } else {
+        app, err := cli.GetApplicationInfo(context.Background(), cmd.Arg(0))
+        if err != nil {
+            err = gitClone(cli.host, app, true)
+        }
+        return err
+    }
+}
+
+func (cli *CWCli) download(name string) error {
+    r, err := cli.Download(context.Background(), name)
     if err != nil {
         return err
     }
-    return gitClone(cli.host, app, true)
+    defer r.Close()
+
+    dir, err := filepath.Abs(name)
+    if err != nil {
+        return err
+    }
+    if err = os.Mkdir(dir, 0755); err != nil {
+        return err
+    }
+    zr, err := gzip.NewReader(r)
+    if err != nil {
+        return err
+    }
+    return archive.ExtractFiles(dir, zr)
 }
 
 func (cli *CWCli) CmdAppSSH(args ...string) error {
@@ -203,7 +234,7 @@ func (cli *CWCli) CmdAppSSH(args ...string) error {
 
 func (cli *CWCli) CmdAppCreate(args ...string) error {
     var req types.CreateApplication
-    var noclone bool
+    var noclone, binary bool
 
     cmd := cli.Subcmd("app:create", "[OPTIONS] NAME")
     cmd.Require(mflag.Exact, 1)
@@ -211,6 +242,7 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
     cmd.Var(opts.NewListOptsRef(&req.Services, nil), []string{"s", "-service"}, "Service plugins")
     cmd.StringVar(&req.Repo, []string{"-repo"}, "", "Populate from a repository")
     cmd.BoolVar(&noclone, []string{"n", "-no-clone"}, false, "Do not clone source code")
+    cmd.BoolVar(&binary, []string{"-binary"}, false, "Download binary repository")
     cmd.ParseFlags(args, true)
     req.Name = cmd.Arg(0)
 
@@ -219,10 +251,17 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
     }
 
     app, err := cli.CreateApplication(context.Background(), req)
-    if err == nil && !noclone && app.CloneURL != "" {
-        err = gitClone(cli.host, app, false)
+    if err != nil {
+        return err
     }
-    return err
+    if !noclone {
+        if binary {
+            return cli.download(req.Name)
+        } else if app.CloneURL != "" {
+            return gitClone(cli.host, app, false)
+        }
+    }
+    return nil
 }
 
 func (cli *CWCli) CmdAppRemove(args ...string) error {
