@@ -33,12 +33,15 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:start          Start an application
   app:stop           Stop an application
   app:restart        Restart an application
+  app:clone          Clone application source code
   app:deploy         Deploy an application
+  app:upload         Upload an application repository
+  app:dump           Dump application data
+  app:restore        Restore application data
   app:scale          Scale an application
   app:info           Show application information
   app:env            Get or set application environment variables
   app:open           Open the application in a web brower
-  app:clone          Clone application source code
   app:ssh            Log into application console via SSH
 `
 
@@ -282,6 +285,67 @@ func (cli *CWCli) upload(name, path string) error {
     }
 
     return cli.Upload(context.Background(), name, tempfile)
+}
+
+func (cli *CWCli) CmdAppDump(args ...string) (err error) {
+    var output string
+
+    cmd := cli.Subcmd("app:dump", "[NAME]")
+    cmd.Require(mflag.Max, 1)
+    cmd.StringVar(&output, []string{"o"}, "", "Specify the output file")
+    cmd.ParseFlags(args, true)
+    name := cli.getAppName(cmd)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+
+    var out *os.File
+    if output == "" {
+        out = os.Stdout
+    } else {
+        out, err = os.Create(output)
+        if err != nil {
+            return err
+        }
+        defer out.Close()
+    }
+
+    r, err := cli.Dump(context.Background(), name)
+    if err != nil {
+        return err
+    }
+    defer r.Close()
+
+    _, err = io.Copy(out, r)
+    return err
+}
+
+func (cli *CWCli) CmdAppRestore(args ...string) (err error) {
+    var input string
+
+    cmd := cli.Subcmd("app:restore", "[NAME]")
+    cmd.Require(mflag.Max, 1)
+    cmd.StringVar(&input, []string{"i"}, "", "Specify the input file")
+    cmd.ParseFlags(args, true)
+    name := cli.getAppName(cmd)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+
+    var in *os.File
+    if input == "" {
+        in = os.Stdin
+    } else {
+        in, err = os.Open(input)
+        if err != nil {
+            return err
+        }
+        defer in.Close()
+    }
+
+    return cli.Restore(context.Background(), name, in)
 }
 
 func (cli *CWCli) CmdAppSSH(args ...string) error {

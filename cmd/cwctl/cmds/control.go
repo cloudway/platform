@@ -1,6 +1,7 @@
 package cmds
 
 import (
+    "os"
     "github.com/cloudway/platform/sandbox"
     "github.com/cloudway/platform/pkg/mflag"
 )
@@ -31,4 +32,18 @@ func (cli *CWCtl) CmdStatus(args ...string) error {
     cmd.Require(mflag.Exact, 0)
     cmd.ParseFlags(args, true)
     return sandbox.New().Control("status", false, false)
+}
+
+func (cli *CWCtl) CmdDump(args ...string) error {
+    cmd := cli.Subcmd("dump")
+    cmd.Require(mflag.Exact, 0)
+    cmd.ParseFlags(args, true)
+    return sandbox.New().Dump(os.Stdout)
+}
+
+func (cli *CWCtl) CmdRestore(args ...string) error {
+    cmd := cli.Subcmd("restore")
+    cmd.Require(mflag.Exact, 0)
+    cmd.ParseFlags(args, true)
+    return sandbox.New().Restore(os.Stdin)
 }
