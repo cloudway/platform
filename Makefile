@@ -65,7 +65,7 @@ cross: build ## cross build the binaries for darwin, freebsd and windows
 	$(DOCKER_RUN_DOCKER) build/make.sh binary cross
 
 tgz: build ## build the archive containing the binaries
-	$(DOCKER_RUN_DOCKER) build/make.sh binary tgz
+	$(DOCKER_RUN_DOCKER) build/make.sh binary cross tgz
 
 shell: build ## start a shell inside the build env
 	$(DOCKER_RUN_DOCKER) bash
