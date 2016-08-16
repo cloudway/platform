@@ -33,9 +33,12 @@ cp -L bundles/latest/binary-server/cwman build/sshd/cwman
 docker build -t icloudway/sshd:$DOCKER_TAG -f build/sshd/Dockerfile build/sshd
 docker push icloudway/sshd:$DOCKER_TAG
 
+if [ -n $APT_MIRROR ]; then
+    APT_MIRROR_ARG="--build-arg APT_MIRROR=$APT_MIRROR"
+fi
 empty_dir=$(mktemp -d)
 cp build/bitbucket/Dockerfile.deps $empty_dir
-docker build -t bitbucket-server:deps -f $empty_dir/Dockerfile.deps $empty_dir
+docker build $APT_MIRROR_ARG -t bitbucket-server:deps -f $empty_dir/Dockerfile.deps $empty_dir
 rm -rf $empty_dir
 
 cp -L bundles/latest/binary-server/cwman build/bitbucket/cwman
