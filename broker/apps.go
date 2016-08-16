@@ -6,11 +6,15 @@ import (
     errs "errors"
     "strings"
     "sync"
+    "os"
     "io"
+    "io/ioutil"
+    "path/filepath"
     "net/http"
     "encoding/hex"
     "crypto/rand"
     "crypto/sha1"
+    "golang.org/x/net/context"
     "github.com/cloudway/platform/container"
     "github.com/cloudway/platform/auth/userdb"
     "github.com/cloudway/platform/pkg/errors"
@@ -492,4 +496,56 @@ func startSerial(err error, cs []*container.Container, fn func(*container.Contai
         }
     }
     return err
+}
+
+// Download application repository as a archive file.
+func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
+    user := br.User.Basic()
+    containers, err := br.FindApplications(name, user.Namespace)
+    if err != nil {
+        return nil, err
+    }
+    if len(containers) == 0 {
+        return nil, ApplicationNotFoundError(name)
+    }
+    c := containers[0]
+    r, _, err := c.CopyFromContainer(context.Background(), c.ID, c.RepoDir()+"/.")
+    return r, err
+}
+
+// Upload application repository from a archive file.
+func (br *UserBroker) Upload(name string, content io.Reader) error {
+    // create a temporary directory to hold deployment archive
+    tempdir, err := ioutil.TempDir("", "deploy")
+    if err != nil {
+        return err
+    }
+    defer os.RemoveAll(tempdir)
+
+    // save archive to a temporary file
+    tempfilename := filepath.Base(tempdir) + ".tar.gz"
+    tempfile, err := os.Create(filepath.Join(tempdir, tempfilename))
+    if err != nil {
+        return err
+    }
+
+    _, err = io.Copy(tempfile, content)
+    tempfile.Close()
+    if err  != nil {
+        return err
+    }
+
+    // deploy to containers
+    namespace := br.User.Basic().Namespace
+    containers, err := br.FindApplications(name, namespace)
+    if err != nil {
+        return err
+    }
+    for _, c := range containers {
+        err = c.Deploy(tempdir)
+        if err != nil {
+            return err
+        }
+    }
+    return nil
 }

@@ -1,6 +1,7 @@
 package client
 
 import (
+    "io"
     "net/url"
     "encoding/json"
     "golang.org/x/net/context"
@@ -80,6 +81,19 @@ func (api *APIClient) GetApplicationDeployments(ctx context.Context, name string
         resp.EnsureClosed()
     }
     return &deployments, err
+}
+
+func (api *APIClient) Download(ctx context.Context, name string) (io.ReadCloser, error) {
+    headers := map[string][]string{"Accept": []string{"application/tar+gzip"}}
+    resp, err := api.cli.Get(ctx, "/applications/"+name+"/repo", nil, headers)
+    return resp.Body, err
+}
+
+func (api *APIClient) Upload(ctx context.Context, name string, content io.Reader) error {
+    headers := map[string][]string{"Content-Type": []string{"application/tar+gzip"}}
+    resp, err := api.cli.PutRaw(ctx, "/applications/"+name+"/repo", nil, content, headers)
+    resp.EnsureClosed()
+    return err
 }
 
 func (api *APIClient) ScaleApplication(ctx context.Context, name, scaling string) error {

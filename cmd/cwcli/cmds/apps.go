@@ -8,12 +8,18 @@ import (
     "errors"
     "bufio"
     "os/exec"
+    "io/ioutil"
+    "archive/tar"
     "net/url"
+    "path/filepath"
     "encoding/json"
+    "compress/gzip"
     "golang.org/x/net/context"
     "github.com/cloudway/platform/pkg/mflag"
     "github.com/cloudway/platform/pkg/opts"
     "github.com/cloudway/platform/api/types"
+    "github.com/cloudway/platform/pkg/archive"
+    "github.com/cloudway/platform/config"
 )
 
 const appCmdUsage = `Usage: cwcli app
@@ -68,13 +74,59 @@ func (cli *CWCli) getAppName(cmd *mflag.FlagSet) string {
     if cmd != nil && cmd.NArg() > 0 && cmd.Arg(0) != "." {
         return cmd.Arg(0)
     }
+
+    if name := cli.getAppConfig("app"); name != "" {
+        return name
+    }
     if name := gitGetConfig("cloudway.app"); name != "" {
         return name
-    } else {
-        fmt.Fprintf(cli.stdout, "Missing application name in command line arguments.\n\n")
-        cmd.Usage()
-        os.Exit(1)
+    }
+
+    fmt.Fprintln(cli.stdout, "Missing application name in command line arguments.")
+    os.Exit(1)
+    return ""
+}
+
+func (cli *CWCli) getAppConfig(key string) string {
+    root, err := searchFile(".cwapp")
+    if err != nil {
         return ""
+    }
+    cfg, err := config.Open(filepath.Join(root, ".cwapp"))
+    if err != nil {
+        return ""
+    }
+    return cfg.Get(key)
+}
+
+func (cli *CWCli) getAppRoot() (string, error) {
+    root, err := searchFile(".cwapp")
+    if err != nil {
+        root, err = searchFile(".git")
+    }
+    return root, err
+}
+
+func searchFile(name string) (string, error) {
+    pwd, err := os.Getwd()
+    if err != nil {
+        return "", err
+    }
+
+    for {
+        file := filepath.Join(pwd, name)
+        _, err := os.Lstat(file)
+        if err == nil {
+            return pwd, nil
+        }
+        if !os.IsNotExist(err) {
+            return "", err
+        }
+        if parent := filepath.Dir(pwd); parent != pwd {
+            pwd = parent
+        } else {
+            return "", errors.New("The current directory is not a valid cloudway application")
+        }
     }
 }
 
@@ -135,19 +187,101 @@ func (cli *CWCli) CmdAppOpen(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppClone(args ...string) error {
+    var binary bool
+
     cmd := cli.Subcmd("app:clone", "NAME")
     cmd.Require(mflag.Exact, 1)
+    cmd.BoolVar(&binary, []string{"-binary"}, false, "Download binary repository")
     cmd.ParseFlags(args, true)
 
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
 
-    app, err := cli.GetApplicationInfo(context.Background(), cmd.Arg(0))
+    if binary {
+        return cli.download(cmd.Arg(0))
+    } else {
+        app, err := cli.GetApplicationInfo(context.Background(), cmd.Arg(0))
+        if err == nil {
+            err = gitClone(cli.host, app, true)
+        }
+        return err
+    }
+}
+
+func (cli *CWCli) CmdAppUpload(args ...string) error {
+    cmd := cli.Subcmd("app:upload", "[NAME]")
+    cmd.Require(mflag.Max, 1)
+    cmd.ParseFlags(args, true)
+
+    name := cli.getAppName(cmd)
+    path, err := cli.getAppRoot()
     if err != nil {
         return err
     }
-    return gitClone(cli.host, app, true)
+
+    if err := cli.ConnectAndLogin(); err != nil {
+        return err
+    }
+
+    return cli.upload(name, path)
+}
+
+func (cli *CWCli) download(name string) error {
+    r, err := cli.Download(context.Background(), name)
+    if err != nil {
+        return err
+    }
+    defer r.Close()
+
+    dir, err := filepath.Abs(name)
+    if err != nil {
+        return err
+    }
+    if err = os.Mkdir(dir, 0755); err != nil {
+        return err
+    }
+
+    zr, err := gzip.NewReader(r)
+    if err != nil {
+        return err
+    }
+    if err = archive.ExtractFiles(dir, zr); err != nil {
+        return err
+    }
+
+    cfg := config.New(filepath.Join(dir, ".cwapp"))
+    cfg.Set("host", cli.host)
+    cfg.Set("app", name)
+    return cfg.Save()
+}
+
+func (cli *CWCli) upload(name, path string) error {
+    // create temporary archive file containing upload files
+    tempfile, err := ioutil.TempFile("", "deploy")
+    if err != nil {
+        return err
+    }
+    defer func() {
+        tempfile.Close()
+        os.Remove(tempfile.Name())
+    }()
+
+    zw := gzip.NewWriter(tempfile)
+    tw := tar.NewWriter(zw)
+    excludes := []string{".git", ".cwapp"}
+    if err = archive.CopyFileTree(tw, "", path, excludes, false); err != nil {
+        return err
+    }
+    tw.Close()
+    zw.Close()
+
+    // rewind for read
+    if _, err = tempfile.Seek(0, os.SEEK_SET); err != nil {
+        return err
+    }
+
+    return cli.Upload(context.Background(), name, tempfile)
 }
 
 func (cli *CWCli) CmdAppSSH(args ...string) error {
@@ -203,7 +337,7 @@ func (cli *CWCli) CmdAppSSH(args ...string) error {
 
 func (cli *CWCli) CmdAppCreate(args ...string) error {
     var req types.CreateApplication
-    var noclone bool
+    var noclone, binary bool
 
     cmd := cli.Subcmd("app:create", "[OPTIONS] NAME")
     cmd.Require(mflag.Exact, 1)
@@ -211,6 +345,7 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
     cmd.Var(opts.NewListOptsRef(&req.Services, nil), []string{"s", "-service"}, "Service plugins")
     cmd.StringVar(&req.Repo, []string{"-repo"}, "", "Populate from a repository")
     cmd.BoolVar(&noclone, []string{"n", "-no-clone"}, false, "Do not clone source code")
+    cmd.BoolVar(&binary, []string{"-binary"}, false, "Download binary repository")
     cmd.ParseFlags(args, true)
     req.Name = cmd.Arg(0)
 
@@ -219,10 +354,17 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
     }
 
     app, err := cli.CreateApplication(context.Background(), req)
-    if err == nil && !noclone && app.CloneURL != "" {
-        err = gitClone(cli.host, app, false)
+    if err != nil {
+        return err
     }
-    return err
+    if !noclone {
+        if binary {
+            return cli.download(req.Name)
+        } else if app.CloneURL != "" {
+            return gitClone(cli.host, app, false)
+        }
+    }
+    return nil
 }
 
 func (cli *CWCli) CmdAppRemove(args ...string) error {

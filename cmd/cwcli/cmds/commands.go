@@ -34,6 +34,7 @@ var CommandUsage = []Command {
     {"app:stop",    "Stop an application"},
     {"app:restart", "Restart an application"},
     {"app:deploy",  "Deploy an application"},
+    {"app:upload",  "Upload an application repository"},
     {"app:scale",   "Scale an application"},
     {"app:info",    "Show application information"},
     {"app:env",     "Get or set application environment variables"},
@@ -69,6 +70,7 @@ func Init(host string, stdout, stderr io.Writer) *CWCli {
         "app:stop":     c.CmdAppStop,
         "app:restart":  c.CmdAppRestart,
         "app:deploy":   c.CmdAppDeploy,
+        "app:upload":   c.CmdAppUpload,
         "app:scale":    c.CmdAppScale,
         "app:info":     c.CmdAppInfo,
         "app:env":      c.CmdAppEnv,
@@ -99,7 +101,14 @@ func (c *CWCli) Connect() (err error) {
     }
 
     if c.host == "" {
-        if c.host = gitGetConfig("cloudway.host"); c.host == "" {
+        c.host = c.getAppConfig("host")
+        if c.host == "" {
+            c.host = gitGetConfig("cloudway.host")
+        }
+        if c.host == "" {
+            c.host = config.Get("host")
+        }
+        if c.host == "" {
             return errors.New("No remote host specified, please run cwcli with -H option")
         }
     }

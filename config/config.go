@@ -14,6 +14,11 @@ type Config struct {
     cfg *conf.ConfigFile
 }
 
+// Create a new configuration.
+func New(filename string) *Config {
+    return &Config{filename: filename, cfg: conf.NewConfigFile()}
+}
+
 // Open Configuration file from the give file name.
 func Open(filename string) (*Config, error) {
     cfg, err := conf.ReadConfigFile(filename)

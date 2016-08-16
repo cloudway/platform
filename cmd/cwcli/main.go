@@ -12,6 +12,7 @@ import (
     "github.com/cloudway/platform/cmd/cwcli/cmds"
     "github.com/cloudway/platform/pkg/rest"
     "github.com/cloudway/platform/pkg/colorable"
+    "github.com/Sirupsen/logrus"
 )
 
 func main() {
@@ -44,6 +45,7 @@ func main() {
     }
 
     flgHelp := flag.Bool([]string{"h", "-help"}, false, "Print usage")
+    flgDebug := flag.Bool([]string{"D", "-debug"}, false, "Debugging mode")
     flgHost := flag.String([]string{"H", "-host"}, "", "Connect to remote host")
 
     flag.Parse()
@@ -55,15 +57,19 @@ func main() {
         return
     }
 
-    host := *flgHost
-    if host == "" {
-        host = config.Get("host")
-    } else if host, err = parseHost(host); err != nil {
-        fmt.Fprintln(stderr, err)
-        os.Exit(1)
-    } else {
-        config.Set("host", host)
-        config.Save()
+    if *flgDebug {
+        logrus.SetLevel(logrus.DebugLevel)
+    }
+
+    var host string
+    if *flgHost != "" {
+        if host, err := parseHost(*flgHost); err != nil {
+            fmt.Fprintln(stderr, err)
+            os.Exit(1)
+        } else {
+            config.Set("host", host)
+            config.Save()
+        }
     }
 
     c := cmds.Init(host, stdout, stderr)

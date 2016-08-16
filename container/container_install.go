@@ -44,7 +44,7 @@ func (c *Container) Install(source string) error {
         }()
 
         tw := tar.NewWriter(f)
-        if err = archive.CopyFileTree(tw, "", source, false); err != nil {
+        if err = archive.CopyFileTree(tw, "", source, nil, false); err != nil {
             return err
         }
         tw.Close()

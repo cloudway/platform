@@ -2,12 +2,14 @@ package applications
 
 import (
     "fmt"
+    "io"
     "strings"
     "strconv"
     "net/url"
     "net/http"
     "regexp"
     "encoding/json"
+    "compress/gzip"
 
     "golang.org/x/net/context"
     "github.com/cloudway/platform/broker"
@@ -39,6 +41,8 @@ func NewRouter(broker *broker.Broker) router.Router {
         router.NewPostRoute("/applications/{name:.*}/restart", r.restart),
         router.NewPostRoute("/applications/{name:.*}/deploy", r.deploy),
         router.NewGetRoute("/applications/{name:.*}/deploy", r.getDeployments),
+        router.NewGetRoute("/applications/{name:.*}/repo", r.download),
+        router.NewPutRoute("/applications/{name:.*}/repo", r.upload),
         router.NewPostRoute("/applications/{name:.*}/scale", r.scale),
         router.NewGetRoute("/applications/{name:.*}/services/{service:.*}/env/", r.environ),
         router.NewPostRoute("/applications/{name:.*}/services/{service:.*}/env/", r.setenv),
@@ -276,6 +280,36 @@ func convertBranchesJson(branches []scm.Branch) []types.Branch {
         result[i] = *convertBranchJson(&branches[i])
     }
     return result
+}
+
+func (ar *applicationsRouter) download(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+
+    tr, err := ar.NewUserBroker(user).Download(vars["name"])
+    if err != nil {
+        return err
+    }
+    defer tr.Close()
+
+    w.Header().Set("Content-Type", "application/tar+gzip") // TODO: parse Accept header
+    w.WriteHeader(http.StatusOK)
+
+    zw := gzip.NewWriter(w)
+    if _, err = io.Copy(zw, tr); err == nil {
+        err = zw.Close()
+    }
+    return err
+}
+
+func (ar *applicationsRouter) upload(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+    return ar.NewUserBroker(user).Upload(vars["name"], r.Body)
 }
 
 func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {

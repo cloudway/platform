@@ -69,7 +69,7 @@ func makeSupportArchive() (string, error) {
 
     tw := tar.NewWriter(file)
     src := filepath.Join(config.RootDir, "sandbox")
-    err = archive.CopyFileTree(tw, "", src, false)
+    err = archive.CopyFileTree(tw, "", src, nil, false)
 
     if err != nil {
         file.Close()
