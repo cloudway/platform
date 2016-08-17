@@ -9,13 +9,15 @@ console_url=http://$console_dns
 bitbucket_dns=git.$domain
 bitbucket_url=http://$bitbucket_dns
 
+: ${CLOUDWAY_TAG:=latest}
+
 cd "$(dirname "$BASH_SOURCE")/.."
 
 # start reverse proxy
 docker run -d --name cloudway-proxy --restart=always \
            -p 80:80 \
            -v /var/run/docker.sock:/var/run/docker.sock:ro \
-           icloudway/proxy
+           icloudway/proxy:$CLOUDWAY_TAG
 
 # generate random password
 if ! [ -e hack/bitbucket-password ]; then
@@ -33,7 +35,7 @@ docker run -d --name=cloudway-bitbucket --restart=always \
            -e BITBUCKET_URL=$bitbucket_url \
            -e BITBUCKET_PASSWORD="$(< hack/bitbucket-password)" \
            -e BITBUCKET_LICENSE="$(< hack/bitbucket-license)" \
-           icloudway/bitbucket-server
+           icloudway/bitbucket-server:$CLOUDWAY_TAG
 
 # start broker
 docker run -d --name=cloudway-broker --restart=always \
@@ -44,11 +46,11 @@ docker run -d --name=cloudway-broker --restart=always \
            -e CLOUDWAY_DOMAIN=$domain \
            -e CONSOLE_URL=$console_url \
            --link cloudway-bitbucket:bitbucket \
-           icloudway/broker
+           icloudway/broker:$CLOUDWAY_TAG
 
 # start SSH server
 docker run -d --name=cloudway-sshd --restart=always \
            -p 2200:2200 \
            -v /var/run/docker.sock:/var/run/docker.sock:ro \
            --link cloudway-bitbucket:bitbucket \
-           icloudway/sshd
+           icloudway/sshd:$CLOUDWAY_TAG

@@ -3,12 +3,14 @@ set -e
 
 SERVER_BINARY="$DEST/../binary-server/cwman-$VERSION"
 SANDBOX_BINARY="$DEST/../binary-sandbox/cwctl-$VERSION"
+CROSS="$DEST/../cross"
 
 if ! [ -x "$SERVER_BINARY" -a -x "$SANDBOX_BINARY" ]; then
     echo >&2 'error: binary must be run before broker-tgz'
     false
 fi
 
+(
 # The staging directory for the files in the tgz
 BUILD_PATH="$DEST/build"
 
@@ -18,7 +20,6 @@ TAR_BASE_DIRECTORY="cloudway"
 # $DEST/build/cloudway-broker
 TAR_PATH="$BUILD_PATH/$TAR_BASE_DIRECTORY"
 
-(
 TGZ="$DEST/cloudway-broker-$VERSION-linux-amd64.tar.gz"
 
 # Copy the cloudway binary
@@ -28,22 +29,16 @@ cp -L $SERVER_BINARY $TAR_PATH/usr/bin/cwman
 cp -R $SCRIPTDIR/broker/files/* $TAR_PATH/usr/local/cloudway/
 cp -L $SANDBOX_BINARY $TAR_PATH/usr/local/cloudway/sandbox/usr/bin/cwctl
 
-echo "Creating tgz from $BUILD_PATH and naming it $TGZ"
-tar --numeric-owner --owner 0 -C "$BUILD_PATH" -czf "$TGZ" $TAR_BASE_DIRECTORY
-hash_files "$TGZ"
-
-# cleanup after ourselves
-rm -rf "$BUILD_PATH"
-
-echo "Created tgz: $TGZ"
-)
-
-(
-TGZ="$DEST/cwman-$VERSION-linux-amd64.tar.gz"
-
-# Copy the cloudway binary
-mkdir -p $TAR_PATH
-cp -L $SERVER_BINARY $TAR_PATH/cwman
+for d in "$CROSS"/*/*; do
+  (
+    export GOARCH="$(basename "$d")"
+    export GOOS="$(basename "$(dirname "$d")")"
+    BINARY_EXTENSION="$(export GOOS && binary_extension)"
+    DIST="$TAR_PATH/usr/local/cloudway/dist/$GOOS/$GOARCH"
+    mkdir -p $DIST
+    cp -L "$d/cwcli-$VERSION$BINARY_EXTENSION" "$DIST/cwcli$BINARY_EXTENSION"
+  )
+done
 
 echo "Creating tgz from $BUILD_PATH and naming it $TGZ"
 tar --numeric-owner --owner 0 -C "$BUILD_PATH" -czf "$TGZ" $TAR_BASE_DIRECTORY

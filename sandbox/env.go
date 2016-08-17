@@ -15,7 +15,7 @@ import (
     "github.com/cloudway/platform/pkg/manifest"
 )
 
-var validEnvKey = regexp.MustCompile(`^[A-Z_0-9]+(\.export)?$`)
+var validEnvKey = regexp.MustCompile(`^[a-zA-Z_0-9]+(\.export)?$`)
 const exportSuffix = ".export"
 
 func (box *Sandbox) Environ() map[string]string {

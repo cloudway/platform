@@ -189,7 +189,7 @@ func populateFromTemplate(scm SCM, cfg *createConfig) error {
     }()
 
     tw := tar.NewWriter(f)
-    if err = archive.CopyFileTree(tw, "", tpl, false); err != nil {
+    if err = archive.CopyFileTree(tw, "", tpl, nil, false); err != nil {
         return err
     }
     tw.Close()
@@ -255,7 +255,7 @@ func buildImage(cli DockerClient, t *template.Template, cfg *createConfig) (imag
 
     // copy application support files
     sandbox := filepath.Join(config.RootDir, "sandbox")
-    if err = archive.CopyFileTree(tw, "sandbox", sandbox, true); err != nil {
+    if err = archive.CopyFileTree(tw, "sandbox", sandbox, nil, true); err != nil {
         return
     }
 
@@ -348,7 +348,7 @@ func addPluginFiles(tw *tar.Writer, dst, path string) error {
         return err
     }
     if stat.IsDir() {
-        return archive.CopyFileTree(tw, dst, path, false)
+        return archive.CopyFileTree(tw, dst, path, nil, false)
     } else {
         return archive.CopyFile(tw, path, dst, 0)
     }

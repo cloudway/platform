@@ -27,14 +27,17 @@ type CWCli struct {
 var CommandUsage = []Command {
     {"login",       "Login to a Cloudway server"},
     {"logout",      "Log out from a Cloudway server"},
-    {"app",         "Manage applications (create destroy)"},
+    {"app",         "Manage applications"},
     {"app:create",  "Create application"},
     {"app:remove",  "Permanently remove an application"},
     {"app:start",   "Start an application"},
     {"app:stop",    "Stop an application"},
     {"app:restart", "Restart an application"},
     {"app:deploy",  "Deploy an application"},
+    {"app:upload",  "Upload an application repository"},
+    {"app:scale",   "Scale an application"},
     {"app:info",    "Show application information"},
+    {"app:env",     "Get or set application environment variables"},
     {"app:open",    "Open the application in a web brower"},
     {"app:clone",   "Clone application source code"},
     {"app:ssh",     "Log into application console via SSH"},
@@ -67,7 +70,10 @@ func Init(host string, stdout, stderr io.Writer) *CWCli {
         "app:stop":     c.CmdAppStop,
         "app:restart":  c.CmdAppRestart,
         "app:deploy":   c.CmdAppDeploy,
+        "app:upload":   c.CmdAppUpload,
+        "app:scale":    c.CmdAppScale,
         "app:info":     c.CmdAppInfo,
+        "app:env":      c.CmdAppEnv,
         "app:open":     c.CmdAppOpen,
         "app:clone":    c.CmdAppClone,
         "app:ssh":      c.CmdAppSSH,
@@ -95,7 +101,16 @@ func (c *CWCli) Connect() (err error) {
     }
 
     if c.host == "" {
-        return errors.New("No remote host specified, please run cwcli with -H option")
+        c.host = c.getAppConfig("host")
+        if c.host == "" {
+            c.host = gitGetConfig("cloudway.host")
+        }
+        if c.host == "" {
+            c.host = config.Get("host")
+        }
+        if c.host == "" {
+            return errors.New("No remote host specified, please run cwcli with -H option")
+        }
     }
 
     headers := map[string]string {

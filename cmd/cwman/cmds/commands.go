@@ -24,6 +24,7 @@ var CommandUsage = []Command {
     {"config",    "Get or set a configuration value"},
     {"install",   "Install one or more plugins"},
     {"run",       "Run one-off command in a running container"},
+    {"upgrade",   "Upgrade application containers"},
     {"useradd",   "Add a user"},
     {"userdel",   "Remove a user"},
 }
@@ -50,6 +51,7 @@ func Init(docker container.DockerClient) *CWMan {
         "install":      cli.CmdInstallPlugin,
         "deploy":       cli.CmdDeploy,
         "run":          cli.CmdRun,
+        "upgrade":      cli.CmdUpgrade,
         "useradd":      cli.CmdUserAdd,
         "userdel":      cli.CmdUserDel,
     }

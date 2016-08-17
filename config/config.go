@@ -5,87 +5,47 @@ import (
     "io"
     "bytes"
     "strings"
-    "errors"
-    "runtime"
     "path/filepath"
     "github.com/cloudway/platform/pkg/conf"
 )
 
-// The root directory of cloudway installation.
-var RootDir string
-
-// The global configuration file
-var cfg *conf.ConfigFile
-
-// The configuration file name
-var cfgFile string
-
-// Initializes the global configuration file.
-func Initialize() (err error) {
-    // Determine the root installation directory
-    root := os.Getenv("CLOUDWAY_ROOT")
-    if root == "" {
-        root = "/usr/local/cloudway" // the default root
-    }
-    root, err = filepath.Abs(root)
-    if err != nil {
-        return err
-    }
-
-    // Load configuration file
-    path := filepath.Join(root, "conf", "cloudway.conf")
-    cfg, err = conf.ReadConfigFile(path)
-    if err != nil && !os.IsNotExist(err) { // Use defaults if configuration file is missing
-        return err
-    }
-
-    RootDir = root
-    cfgFile = path
-    return nil
+type Config struct {
+    filename string
+    cfg *conf.ConfigFile
 }
 
-// Initialize the client configuration file.
-func InitializeClient() (err error) {
-    home := os.Getenv("HOME")
-    if home == "" && runtime.GOOS == "windows" {
-        home = os.Getenv("USERPROFILE")
-    }
-    if home == "" {
-        return errors.New("Cannot locate home directory")
-    }
+// Create a new configuration.
+func New(filename string) *Config {
+    return &Config{filename: filename, cfg: conf.NewConfigFile()}
+}
 
-    path := filepath.Join(home, ".cloudway")
-    cfg, err = conf.ReadConfigFile(path)
-    if err != nil && !os.IsNotExist(err) {
-        return err
-    }
-
-    cfgFile = path
-    return nil
+// Open Configuration file from the give file name.
+func Open(filename string) (*Config, error) {
+    cfg, err := conf.ReadConfigFile(filename)
+    return &Config{
+        filename: filename,
+        cfg:      cfg,
+    }, err
 }
 
 // Save configurations to file.
-func Save() (err error) {
-    if cfg == nil && cfgFile == "" {
-        return errors.New("the configuration was not initialized")
-    }
-
-    if err := os.MkdirAll(filepath.Dir(cfgFile), 0750); err != nil {
+func (c *Config) Save() (err error) {
+    if err := os.MkdirAll(filepath.Dir(c.filename), 0750); err != nil {
         return err
     }
 
     var file *os.File
-    if file, err = os.Create(cfgFile); err != nil {
+    if file, err = os.Create(c.filename); err != nil {
         return err
     }
     defer file.Close()
 
-    if err = writeSection(file, conf.DefaultSection); err != nil {
+    if err = c.writeSection(file, conf.DefaultSection); err != nil {
         return err
     }
-    for _, section := range cfg.GetSections() {
+    for _, section := range c.GetSections() {
         if section != conf.DefaultSection {
-            if err = writeSection(file, section); err != nil {
+            if err = c.writeSection(file, section); err != nil {
                 return err
             }
         }
@@ -93,8 +53,8 @@ func Save() (err error) {
     return nil
 }
 
-func writeSection(w io.Writer, section string) (err error) {
-    options := GetSection(section)
+func (c *Config) writeSection(w io.Writer, section string) (err error) {
+    options := c.GetSection(section)
     if len(options) == 0 {
         return
     }
@@ -114,41 +74,30 @@ func writeSection(w io.Writer, section string) (err error) {
 }
 
 // Get a configuration value as string.
-func Get(key string) string {
-    return GetOrDefault(key, "")
+func (c *Config) Get(key string) string {
+    return c.GetOrDefault(key, "")
 }
 
 // GetOrDefault get a configuration value, if no such value configured then
 // the default value is returned.
-func GetOrDefault(key, deflt string) string {
-    // get value from environment
-    envKey := "CLOUDWAY_" + strings.ToUpper(key)
-    envKey  = strings.Replace(envKey, "-", "_", -1)
-    envKey  = strings.Replace(envKey, ".", "_", -1)
-    if envValue, ok := os.LookupEnv(envKey); ok {
-        return envValue
-    }
-
-    // get value from configuration file
-    if cfg != nil {
+func (c *Config) GetOrDefault(key, deflt string) string {
+    if c.cfg != nil {
         section := conf.DefaultSection
         parts := strings.SplitN(key, ".", 2)
         if len(parts) == 2 {
             section, key = parts[0], parts[1]
         }
-        if value, err := cfg.GetString(section, key); err == nil {
+        if value, err := c.cfg.GetString(section, key); err == nil {
             return value
         }
     }
-
-    // return the default value
     return deflt
 }
 
 // Set a configuration of the given key to the given value.
-func Set(key, value string) {
-    if cfg == nil {
-        cfg = conf.NewConfigFile()
+func (c *Config) Set(key, value string) {
+    if c.cfg == nil {
+        c.cfg = conf.NewConfigFile()
     }
 
     section := conf.DefaultSection
@@ -156,12 +105,12 @@ func Set(key, value string) {
     if len(parts) == 2 {
         section, key = parts[0], parts[1]
     }
-    cfg.AddOption(section, key, value)
+    c.cfg.AddOption(section, key, value)
 }
 
 // Remove a key from configuration.
-func Remove(key string) {
-    if cfg == nil {
+func (c *Config) Remove(key string) {
+    if c.cfg == nil {
         return
     }
 
@@ -170,24 +119,33 @@ func Remove(key string) {
     if len(parts) == 2 {
         section, key = parts[0], parts[1]
     }
-    cfg.RemoveOption(section, key)
+    c.cfg.RemoveOption(section, key)
+}
+
+// GetSections returns the list of sections in the configuration.
+func (c *Config) GetSections() []string {
+    if c.cfg == nil {
+        return make([]string, 0)
+    } else {
+        return c.cfg.GetSections()
+    }
 }
 
 // GetSection get a section in the configuration file.
-func GetSection(section string) map[string]string {
+func (c *Config) GetSection(section string) map[string]string {
     result := make(map[string]string)
 
-    if cfg == nil {
+    if c.cfg == nil {
         return result
     }
 
-    options, err := cfg.GetOptions(section)
+    options, err := c.cfg.GetOptions(section)
     if err != nil {
         return result
     }
 
     for _, opt := range options {
-        value, err := cfg.GetString(section, opt)
+        value, err := c.cfg.GetString(section, opt)
         if err == nil {
             result[opt] = value
         }
@@ -197,31 +155,31 @@ func GetSection(section string) map[string]string {
 }
 
 // RemoveSection remove a section from configuration.
-func RemoveSection(section string) {
-    if cfg != nil {
-        cfg.RemoveSection(section)
+func (c *Config) RemoveSection(section string) {
+    if c.cfg != nil {
+        c.cfg.RemoveSection(section)
     }
 }
 
 // GetFrom get a configuration value from the given section.
-func GetOption(section, key string) (value string) {
-    if cfg != nil {
-        value, _ = cfg.GetString(section, key)
+func (c *Config) GetOption(section, key string) (value string) {
+    if c.cfg != nil {
+        value, _ = c.cfg.GetString(section, key)
     }
     return value
 }
 
-// AddTo add a configuration value into the given section.
-func AddOption(section, key, value string) {
-    if cfg == nil {
-        cfg = conf.NewConfigFile()
+// AddOption add a configuration value into the given section.
+func (c *Config) AddOption(section, key, value string) {
+    if c.cfg == nil {
+        c.cfg = conf.NewConfigFile()
     }
-    cfg.AddOption(section, key, value)
+    c.cfg.AddOption(section, key, value)
 }
 
 // RemoveFrom removes a configuration value from the given section.
-func RemoveOption(section, key string) {
-    if cfg != nil {
-        cfg.RemoveOption(section, key)
+func (c *Config) RemoveOption(section, key string) {
+    if c.cfg != nil {
+        c.cfg.RemoveOption(section, key)
     }
 }

@@ -149,7 +149,7 @@ func CopyFile(tw *tar.Writer, path, filename string, filemode int64) error {
     return err
 }
 
-func CopyFileTree(tw* tar.Writer, dst, src string, followLinks bool) error {
+func CopyFileTree(tw* tar.Writer, dst, src string, excludes []string, followLinks bool) error {
     fi, err := os.Lstat(src)
     if err != nil {
         return err
@@ -163,7 +163,7 @@ func CopyFileTree(tw* tar.Writer, dst, src string, followLinks bool) error {
     }
 
     return filepath.Walk(src, func (path string, info os.FileInfo, err error) error {
-        if err != nil || info.IsDir() {
+        if err != nil {
             return err
         }
 
@@ -173,6 +173,20 @@ func CopyFileTree(tw* tar.Writer, dst, src string, followLinks bool) error {
             return nil
         }
         if len(relpath) == 0 {
+            return nil
+        }
+        for _, exc := range excludes {
+            if relpath == exc || strings.HasPrefix(filepath.ToSlash(relpath), exc+"/") {
+                if info.IsDir() {
+                    logrus.Debugf("Excluded directory %s", relpath)
+                    return filepath.SkipDir
+                } else {
+                    logrus.Debugf("Excluded file %s", relpath)
+                    return nil
+                }
+            }
+        }
+        if info.IsDir() {
             return nil
         }
         if len(dst) != 0 {
@@ -234,6 +248,7 @@ func ExtractFiles(extractDir string, r io.Reader) error {
 
         case tar.TypeReg, tar.TypeRegA:
             logrus.Debugf("Extracting %s", dst)
+            os.MkdirAll(filepath.Dir(dst), 0755)
             w, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, hdrInfo.Mode())
             if err != nil {
                 return err
@@ -250,6 +265,7 @@ func ExtractFiles(extractDir string, r io.Reader) error {
             if !strings.HasPrefix(targetPath, extractDir) {
                 return fmt.Errorf("invalid hardlink %q -> %q", dst, hdr.Linkname)
             }
+            os.MkdirAll(filepath.Dir(dst), 0755)
             if err := os.Link(targetPath, dst); err != nil {
                 return err
             }
@@ -259,6 +275,7 @@ func ExtractFiles(extractDir string, r io.Reader) error {
             if !strings.HasPrefix(targetPath, extractDir) {
                 return fmt.Errorf("invalid symlink %q -> %q", dst, hdr.Linkname)
             }
+            os.MkdirAll(filepath.Dir(dst), 0755)
             if err := os.Symlink(hdr.Linkname, dst); err != nil {
                 return err
             }

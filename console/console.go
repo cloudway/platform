@@ -91,6 +91,9 @@ func NewConsole(br *broker.Broker) (con *Console, err error) {
 func (con *Console) InitRoutes(s *server.Server) {
     s.Mux.PathPrefix("/auth/").Handler(con.ab.NewRouter())
 
+    fs := http.FileServer(http.Dir(filepath.Join(config.RootDir, "dist")))
+    s.Mux.PathPrefix("/dist/").Handler(http.StripPrefix("/dist/", fs))
+
     gets  := s.Mux.Methods("GET").Subrouter()
     posts := s.Mux.Methods("POST").Subrouter()
 

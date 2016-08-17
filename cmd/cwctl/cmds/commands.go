@@ -39,7 +39,6 @@ func Init() *CWCtl {
         "status":   cli.CmdStatus,
         "run":      cli.CmdRun,     // HIDDEN
         "sh":       cli.CmdSh,      // HIDDEN
-        "upload":   cli.CmdUpload,  // HIDDEN
         "pwgen":    cli.CmdPwgen,   // HIDDEN
     }
 
