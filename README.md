@@ -1,7 +1,9 @@
 Cloudway: <small>The way to cloud</small>
 ==========================================
 
-[![Release](https://img.shields.io/github/release/cloudway/platform.svg)](https://github.com/cloudway/platform/releases/latest) [![Build Status](https://travis-ci.org/cloudway/platform.svg?branch=develop)](https://travis-ci.org/cloudway/platform)
+[![Release](https://img.shields.io/github/release/cloudway/platform.svg)](https://github.com/cloudway/platform/releases/latest)
+[![Build Status](https://travis-ci.org/cloudway/platform.svg?branch=develop)](https://travis-ci.org/cloudway/platform)
+[![Docker Pulls](https://img.shields.io/docker/pulls/icloudway/platform.svg)](https://hub.docker.com/r/icloudway/platform/)
 
 ## 简介
 
