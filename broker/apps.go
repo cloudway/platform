@@ -14,9 +14,14 @@ import (
     "encoding/hex"
     "crypto/rand"
     "crypto/sha1"
+    "archive/tar"
+    "compress/gzip"
+
     "golang.org/x/net/context"
+    "github.com/Sirupsen/logrus"
     "github.com/cloudway/platform/container"
     "github.com/cloudway/platform/auth/userdb"
+    "github.com/cloudway/platform/pkg/archive"
     "github.com/cloudway/platform/pkg/errors"
     "github.com/cloudway/platform/pkg/manifest"
     "github.com/cloudway/platform/config/defaults"
@@ -548,4 +553,133 @@ func (br *UserBroker) Upload(name string, content io.Reader) error {
         }
     }
     return nil
+}
+
+func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {
+    // find all containers
+    namespace := br.User.Basic().Namespace
+    containers, err := br.FindAll(name, namespace)
+    if err != nil {
+        return nil, err
+    }
+    if len(containers) == 0 {
+        return nil, ApplicationNotFoundError(name)
+    }
+    container.ResolveServiceDependencies(containers)
+
+    // create temporary directory to hold snapshot archives
+    tempdir, err := ioutil.TempDir("", "snapshot")
+    if err != nil {
+        return nil, err
+    }
+    defer os.RemoveAll(tempdir)
+
+    // save snapshot archives
+    for _, c := range containers {
+        if c.Category().IsFramework() {
+            err = saveSnapshot(c, filepath.Join(tempdir, "app", "data.tar"))
+        } else if c.Category().IsService() {
+            err = saveSnapshot(c, filepath.Join(tempdir, "services", c.ServiceName()+".tar"))
+        }
+        if err != nil {
+            return nil, err
+        }
+    }
+
+    // create final snapshot archive
+    tempfile, err := ioutil.TempFile("", "snapshot")
+    if err != nil {
+        return nil, err
+    }
+
+    tw := tar.NewWriter(tempfile)
+    err = archive.CopyFileTree(tw, "", tempdir, nil, false)
+    if err == nil {
+        err = tw.Close()
+    }
+    if err != nil {
+        tempfile.Close()
+        os.Remove(tempfile.Name())
+        return nil, err
+    }
+
+    tempfile.Seek(0, os.SEEK_SET)
+    return deleteReadCloser{tempfile}, nil
+}
+
+func (br *UserBroker) Restore(name string, source io.Reader) error {
+    // find all containers
+    namespace := br.User.Basic().Namespace
+    containers, err := br.FindAll(name, namespace)
+    if err != nil {
+        return err
+    }
+    if len(containers) == 0 {
+        return ApplicationNotFoundError(name)
+    }
+    container.ResolveServiceDependencies(containers)
+
+    // create temporary directory to hold snapshot archives
+    tempdir, err := ioutil.TempDir("", "snapshot")
+    if err != nil {
+        return err
+    }
+    defer os.RemoveAll(tempdir)
+
+    // extract snapshot archives
+    zr, err := gzip.NewReader(source)
+    if err != nil {
+        return err
+    }
+    err = archive.ExtractFiles(tempdir, zr)
+    if err != nil {
+        return err
+    }
+
+    // restore snapshot archive to containers
+    for _, c := range containers {
+        if c.Category().IsFramework() {
+            err = restoreSnapshot(c, filepath.Join(tempdir, "app", "data.tar"))
+        } else if c.Category().IsService() {
+            err = restoreSnapshot(c, filepath.Join(tempdir, "services", c.ServiceName()+".tar"))
+        }
+        if err != nil {
+            logrus.WithError(err).Warn("Failed to restore snapshot")
+        }
+    }
+
+    return nil
+}
+
+func saveSnapshot(c *container.Container, filename string) error {
+    if _, err := os.Stat(filename); err == nil {
+        return nil // file exists, don't overwrite
+    }
+    os.MkdirAll(filepath.Dir(filename), 0755)
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+    return c.ExecE("", nil, file, "cwctl", "dump")
+}
+
+func restoreSnapshot(c *container.Container, filename string) error {
+    file, err := os.Open(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+    return c.ExecE("", file, nil, "cwctl", "restore")
+}
+
+type deleteReadCloser struct {
+    *os.File
+}
+
+func (r deleteReadCloser) Close() error {
+    if err := r.File.Close(); err != nil {
+        return err
+    }
+    return os.Remove(r.File.Name())
 }

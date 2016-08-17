@@ -37,6 +37,8 @@ func Init() *CWCtl {
         "stop":     cli.CmdStop,
         "restart":  cli.CmdRestart,
         "status":   cli.CmdStatus,
+        "dump":     cli.CmdDump,    // HIDDEN
+        "restore":  cli.CmdRestore, // HIDDEN
         "run":      cli.CmdRun,     // HIDDEN
         "sh":       cli.CmdSh,      // HIDDEN
         "pwgen":    cli.CmdPwgen,   // HIDDEN

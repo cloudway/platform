@@ -43,6 +43,8 @@ func NewRouter(broker *broker.Broker) router.Router {
         router.NewGetRoute("/applications/{name:.*}/deploy", r.getDeployments),
         router.NewGetRoute("/applications/{name:.*}/repo", r.download),
         router.NewPutRoute("/applications/{name:.*}/repo", r.upload),
+        router.NewGetRoute("/applications/{name:.*}/data", r.dump),
+        router.NewPutRoute("/applications/{name:.*}/data", r.restore),
         router.NewPostRoute("/applications/{name:.*}/scale", r.scale),
         router.NewGetRoute("/applications/{name:.*}/services/{service:.*}/env/", r.environ),
         router.NewPostRoute("/applications/{name:.*}/services/{service:.*}/env/", r.setenv),
@@ -310,6 +312,36 @@ func (ar *applicationsRouter) upload(ctx context.Context, w http.ResponseWriter,
         return err
     }
     return ar.NewUserBroker(user).Upload(vars["name"], r.Body)
+}
+
+func (ar *applicationsRouter) dump(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+
+    tr, err := ar.NewUserBroker(user).Dump(vars["name"])
+    if err != nil {
+        return err
+    }
+    defer tr.Close()
+
+    w.Header().Set("Content-Type", "application/tar+gzip")
+    w.WriteHeader(http.StatusOK)
+
+    zw := gzip.NewWriter(w)
+    if _, err = io.Copy(zw, tr); err == nil {
+        err = zw.Close()
+    }
+    return err
+}
+
+func (ar *applicationsRouter) restore(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+    user, err := ar.currentUser(vars)
+    if err != nil {
+        return err
+    }
+    return ar.NewUserBroker(user).Restore(vars["name"], r.Body)
 }
 
 func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
