@@ -74,8 +74,12 @@ func (cli *CWCli) CmdApps(args ...string) error {
 }
 
 func (cli *CWCli) getAppName(cmd *mflag.FlagSet) string {
-    if cmd != nil && cmd.NArg() > 0 && cmd.Arg(0) != "." {
-        return cmd.Arg(0)
+    if cmd != nil {
+        if appf := cmd.Lookup("a"); appf != nil {
+            if name := appf.Value.String(); name != "" {
+                return name
+            }
+        }
     }
 
     if name := cli.getAppConfig("app"); name != "" {
@@ -136,8 +140,9 @@ func searchFile(name string) (string, error) {
 func (cli *CWCli) CmdAppInfo(args ...string) error {
     var js bool
 
-    cmd := cli.Subcmd("app:info", "[NAME]")
-    cmd.Require(mflag.Max, 1)
+    cmd := cli.Subcmd("app:info", "")
+    cmd.Require(mflag.Exact, 0)
+    cmd.String([]string{"a", "-app"}, "", "Specify the application name")
     cmd.BoolVar(&js, []string{"-json"}, false, "Display as JSON")
     cmd.ParseFlags(args, true)
     name := cli.getAppName(cmd)
@@ -173,8 +178,9 @@ func (cli *CWCli) CmdAppInfo(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppOpen(args ...string) error {
-    cmd := cli.Subcmd("app:open", "[NAME]")
-    cmd.Require(mflag.Max, 1)
+    cmd := cli.Subcmd("app:open", "")
+    cmd.Require(mflag.Exact, 0)
+    cmd.String([]string{"a", "-app"}, "", "Specify the application name")
     cmd.ParseFlags(args, true)
     name := cli.getAppName(cmd)
 
@@ -213,8 +219,9 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppUpload(args ...string) error {
-    cmd := cli.Subcmd("app:upload", "[NAME]")
-    cmd.Require(mflag.Max, 1)
+    cmd := cli.Subcmd("app:upload", "")
+    cmd.Require(mflag.Exact, 0)
+    cmd.String([]string{"a", "-app"}, "", "Specify the application name")
     cmd.ParseFlags(args, true)
 
     name := cli.getAppName(cmd)
@@ -290,8 +297,9 @@ func (cli *CWCli) upload(name, path string) error {
 func (cli *CWCli) CmdAppDump(args ...string) (err error) {
     var output string
 
-    cmd := cli.Subcmd("app:dump", "[NAME]")
-    cmd.Require(mflag.Max, 1)
+    cmd := cli.Subcmd("app:dump", "")
+    cmd.Require(mflag.Exact, 0)
+    cmd.String([]string{"a", "-app"}, "", "Specify the application name")
     cmd.StringVar(&output, []string{"o"}, "", "Specify the output file")
     cmd.ParseFlags(args, true)
     name := cli.getAppName(cmd)
@@ -324,8 +332,9 @@ func (cli *CWCli) CmdAppDump(args ...string) (err error) {
 func (cli *CWCli) CmdAppRestore(args ...string) (err error) {
     var input string
 
-    cmd := cli.Subcmd("app:restore", "[NAME]")
-    cmd.Require(mflag.Max, 1)
+    cmd := cli.Subcmd("app:restore", "")
+    cmd.Require(mflag.Exact, 0)
+    cmd.String([]string{"a", "-app"}, "", "Specify the application name")
     cmd.StringVar(&input, []string{"i"}, "", "Specify the input file")
     cmd.ParseFlags(args, true)
     name := cli.getAppName(cmd)
@@ -351,8 +360,9 @@ func (cli *CWCli) CmdAppRestore(args ...string) (err error) {
 func (cli *CWCli) CmdAppSSH(args ...string) error {
     var name, service, identity string
 
-    cmd := cli.Subcmd("app:ssh", "[NAME]")
-    cmd.Require(mflag.Max, 1)
+    cmd := cli.Subcmd("app:ssh", "")
+    cmd.Require(mflag.Exact, 0)
+    cmd.String([]string{"a", "-app"}, "", "Specify the application name")
     cmd.StringVar(&service, []string{"s", "-service"}, "", "Service name")
     cmd.StringVar(&identity, []string{"i"}, "", "Identity file")
     cmd.ParseFlags(args, true)
@@ -468,8 +478,9 @@ func (cli *CWCli) CmdAppRemove(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppStart(args ...string) error {
-    cmd := cli.Subcmd("app:start", "[NAME]")
-    cmd.Require(mflag.Max, 1)
+    cmd := cli.Subcmd("app:start", "")
+    cmd.Require(mflag.Exact, 0)
+    cmd.String([]string{"a", "-app"}, "", "Specify the application name")
     cmd.ParseFlags(args, true)
     name := cli.getAppName(cmd)
 
@@ -480,8 +491,9 @@ func (cli *CWCli) CmdAppStart(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppStop(args ...string) error {
-    cmd := cli.Subcmd("app:stop", "[NAME]")
-    cmd.Require(mflag.Max, 1)
+    cmd := cli.Subcmd("app:stop", "")
+    cmd.Require(mflag.Exact, 0)
+    cmd.String([]string{"a", "-app"}, "", "Specify the application name")
     cmd.ParseFlags(args, true)
     name := cli.getAppName(cmd)
 
@@ -492,8 +504,9 @@ func (cli *CWCli) CmdAppStop(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppRestart(args ...string) error {
-    cmd := cli.Subcmd("app:restart", "[NAME]")
-    cmd.Require(mflag.Max, 1)
+    cmd := cli.Subcmd("app:restart", "")
+    cmd.Require(mflag.Exact, 0)
+    cmd.String([]string{"a", "-app"}, "", "Specify the application name")
     cmd.ParseFlags(args, true)
     name := cli.getAppName(cmd)
 
@@ -507,8 +520,9 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
     var branch string
     var show bool
 
-    cmd := cli.Subcmd("app:deploy", "[NAME]")
-    cmd.Require(mflag.Max, 1)
+    cmd := cli.Subcmd("app:deploy", "")
+    cmd.Require(mflag.Exact, 0)
+    cmd.String([]string{"a", "-app"}, "", "Specify the application name")
     cmd.StringVar(&branch, []string{"b", "-branch"}, "", "The branch to deploy")
     cmd.BoolVar(&show, []string{"-show"}, false, "Show application deployments")
     cmd.ParseFlags(args, true)
@@ -571,31 +585,28 @@ func (cli *CWCli) CmdAppScale(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppEnv(args ...string) error {
-    var name, service string
+    var service string
     var del bool
 
     cmd := cli.Subcmd("app:env", "", "KEY", "KEY=VALUE...", "-d KEY...")
-    cmd.StringVar(&name, []string{"a", "-app"}, "", "Application name")
+    cmd.String([]string{"a", "-app"}, "", "Application name")
     cmd.StringVar(&service, []string{"s", "-service"}, "", "Service name")
     cmd.BoolVar(&del, []string{"d"}, false, "Remove the environment variable")
     cmd.ParseFlags(args, true)
-
-    if name == "" {
-        name = cli.getAppName(nil)
-    }
+    name := cli.getAppName(cmd)
 
     if err := cli.ConnectAndLogin(); err != nil {
         return err
     }
 
     if del {
-        // cwcli app:env myapp key1 key2 ...
+        // cwcli app:env -d key1 key2 ...
         return cli.ApplicationUnsetenv(context.Background(), name, service, cmd.Args()...)
     }
 
     switch {
     case cmd.NArg() == 0:
-        // cwcli app:env myapp
+        // cwcli app:env
         env, err := cli.ApplicationEnviron(context.Background(), name, service)
         if err != nil {
             return err
@@ -605,7 +616,7 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
         }
 
     case cmd.NArg() == 1 && !strings.ContainsRune(cmd.Arg(0), '='):
-        // cwcli app:env myapp key
+        // cwcli app:env key
         val, err := cli.ApplicationGetenv(context.Background(), name, service, cmd.Arg(0))
         if err != nil {
             return err
@@ -613,7 +624,7 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
         fmt.Fprintln(cli.stdout, val)
 
     default:
-        // cwcli app:env myapp key1=val1 key2=val2 ...
+        // cwcli app:env key1=val1 key2=val2 ...
         env := make(map[string]string)
         for i := 0; i < cmd.NArg(); i++ {
             kv := cmd.Arg(i)
