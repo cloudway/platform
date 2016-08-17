@@ -45,40 +45,46 @@ Cloudway: <small>The way to cloud</small>
 
 2. 拖拽云途最新镜像
 
-        $ docker pull icloudway/platform:latest
+    ```shell
+    $ docker pull icloudway/platform:latest
+    ```
 
 3. 运行以下脚本启动云途
 
-        #!/bin/bash -e
+    ```shell
+    #!/bin/bash -e
 
-        DOMAIN=example.com
-        CONSOLE_URL=http://api.$DOMAIN
-        GIT_URL=http://git.$DOMAIN
+    DOMAIN=example.com
+    CONSOLE_URL=http://api.$DOMAIN
+    GIT_URL=http://git.$DOMAIN
 
-        : ${CLOUDWAY_TAG:=latest}
+    : ${CLOUDWAY_TAG:=latest}
 
-        cd "$(dirname "$BASH_SOURCE")"
+    cd "$(dirname "$BASH_SOURCE")"
 
-        # generate random password
-        if [ ! -e scm-password ]; then
-            LC_CTYPE=C tr -cd '[:alnum:]' < /dev/urandom | fold -w20 | head -n1 > scm-password
-        fi
+    # generate random password
+    if [ ! -e scm-password ]; then
+        LC_CTYPE=C tr -cd '[:alnum:]' < /dev/urandom | fold -w20 | head -n1 > scm-password
+    fi
 
-        # start all-in-one container
-        docker run -d --name cloudway-platform --restart=always \
-                   -e CLOUDWAY_DOMAIN=$DOMAIN \
-                   -e CONSOLE_URL=$CONSOLE_URL \
-                   -e BITBUCKET_URL=$GIT_URL \
-                   -e BITBUCKET_PASSWORD="$(< scm-password)" \
-                   -e BITBUCKET_LICENSE="$(< scm-license)" \
-                   -v /var/run/docker.sock:/var/run/docker.sock:ro \
-                   -v cloudway-data:/data \
-                   -p 80:80 -p 7999:7999 -p 2200:2200 \
-                   icloudway/platform:${CLOUDWAY_TAG}
+    # start all-in-one container
+    docker run -d --name cloudway-platform --restart=always \
+               -e CLOUDWAY_DOMAIN=$DOMAIN \
+               -e CONSOLE_URL=$CONSOLE_URL \
+               -e BITBUCKET_URL=$GIT_URL \
+               -e BITBUCKET_PASSWORD="$(< scm-password)" \
+               -e BITBUCKET_LICENSE="$(< scm-license)" \
+               -v /var/run/docker.sock:/var/run/docker.sock:ro \
+               -v cloudway-data:/data \
+               -p 80:80 -p 7999:7999 -p 2200:2200 \
+               icloudway/platform:${CLOUDWAY_TAG}
+    ```
 
 4. 设置DNS服务器, 推荐使用`dnsmasq`, 修改`/etc/dnsmasq.conf`, 添加以下配置并重启`dnsmasq`:
 
-        address=/example.com/192.168.99.100
+    ```
+    address=/example.com/192.168.99.100
+    ```
 
    其中`example.com`是在运行脚本中设置的根域名, `192.168.99.100`是docker主机的IP地址,
    该配置将设置一个通配域名`*.example.com`。
