@@ -47,12 +47,12 @@ esac
 
 # the following lines are in sorted order, FYI
 clone git github.com/aarondl/tpl e4905e745b4e2371caa002edf3ccdaf798ffd4b4
-clone git github.com/dgrijalva/jwt-go d2709f9f1f31ebcda9651b03077758c1f3a0018c
-clone git github.com/docker/distribution 596ca8b86acd3feebedae6bc08abf2a48d403a14
-clone git github.com/docker/engine-api f90ecdb1e989f834dabbd91807e891094aa069fe
-clone git github.com/docker/go-connections c7838b258fbfa3fe88eecfb2a0e08ea0dbd6a646
-clone git github.com/docker/go-units 09dda9d4b0d748c57c14048906d3d094a58ec0c9
-clone git github.com/garyburd/redigo b8dc90050f24c1a73a52f107f3f575be67b21b7c
+clone git github.com/dgrijalva/jwt-go v3.0.0
+clone git github.com/docker/distribution v2.5.0
+clone git github.com/docker/engine-api v0.4.0
+clone git github.com/docker/go-connections v0.2.1
+clone git github.com/docker/go-units v0.3.1
+clone git github.com/garyburd/redigo v1.0.0
 clone git github.com/gorilla/context aed02d124ae4a0e94fea4541c8effd05bf0c8296
 clone git github.com/gorilla/mux 9fa818a44c2bf1396a17f9d5a3c0f6dd39d2ff8e
 clone git github.com/gorilla/securecookie ff356348f74133a59d3e93aa24b5b4551b6fe90d

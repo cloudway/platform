@@ -15,6 +15,9 @@ FROM icloudway/dev:latest
 
 ENV GOPATH /go:/go/src/github.com/cloudway/platform/vendor
 
+RUN go get -u github.com/onsi/ginkgo/ginkgo && \
+    go get -u github.com/onsi/gomega
+
 # Compile Go for cross compilation
 ENV CLOUDWAY_CROSSPLATFORMS \
     linux/386 linux/arm \

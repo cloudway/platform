@@ -1,6 +1,19 @@
 #!/bin/bash
 set -e
 
+bundle_test_setup() {
+    mkdir -p /data/db
+    chown -R mongodb /data/db
+
+    local logfile=/var/log/mongodb/mongod.log
+    gosu mongodb mongod --fork --logpath $logfile --bind_ip 127.0.0.1 >/dev/null
+    export CLOUDWAY_USERDB_URL=mongodb://127.0.0.1:27017/cloudway
+}
+
+bundle_test_teardown() {
+    gosu mongodb mongod --shutdown
+}
+
 # Run unit test suite, and store their output as a bundle. If $TESTFLAGS
 # is set in the environment, it is passed as extra arguments to 'go test'.
 # You can use this to select certain tests to run, eg.
@@ -50,4 +63,7 @@ bundle_test_unit() {
 if [[ "$(go version)" == *"gccgo"* ]]; then
     GCCGOFLAGS=-gccgoflags="-lpthread"
 fi
+
+bundle_test_setup
 bundle_test_unit 2>&1 | tee -a "$DEST/test.log"
+bundle_test_teardown

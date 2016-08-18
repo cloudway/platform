@@ -30,7 +30,11 @@ clone() {
     echo -n 'clone, '
     case "$vcs" in
       git)
-        git clone --no-checkout "$url" "$target"
+        if [ ${#rev} -ne 40 ]; then
+          git clone --depth=1 --branch="$rev" --no-checkout "$url" "$target"
+        else
+          git clone --no-checkout "$url" "$target"
+        fi
         ( cd "$target" && git checkout --quiet "$rev" && git reset --quiet --hard "$rev" )
         ;;
       hg)
@@ -70,6 +74,7 @@ clean() {
     local packages=(
         "${PROJECT}/cmd/cwman"
         "${PROJECT}/cmd/cwctl"
+        "${PROJECT}/cmd/cwcli"
     )
     local platforms=( ${CLOUDWAY_ENGINE_OSARCH:="linux/amd64"} $(_dockerfile_env CLOUDWAY_CROSSPLATFORMS) )
     local buildTags="$(_dockerfile_env CLOUDWAY_BUILDTAGS)"
