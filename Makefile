@@ -43,7 +43,7 @@ endif
 DOCKER_RUN_DOCKER := $(DOCKER_FLAGS) "$(DOCKER_IMAGE)"
 DOCKER_RUN_VENDOR := $(DOCKER_FLAGS) $(VENDOR_MOUNT) "$(DOCKER_IMAGE)"
 
-default: build
+default: build gofmt
 	CROSS=$(HOST_OSARCH) $(DOCKER_RUN_DOCKER) build/make.sh validate-vet binary cross
 
 all: build ## validate all checks, build linux binaries, run all test\ncross build non-linux binaries and generate archives
@@ -57,6 +57,9 @@ build: bundles
 
 vendor: build ## update vendored dependencies
 	$(DOCKER_RUN_VENDOR) build/vendor.sh
+
+gofmt:
+	@build/gofmt.sh
 
 bundles:
 	mkdir bundles
@@ -73,8 +76,11 @@ shell: build ## start a shell inside the build env
 test: build ## run the tests
 	$(DOCKER_RUN_DOCKER) build/make.sh test-unit cover
 
-validate: build ## validate go vet
-	$(DOCKER_RUN_DOCKER) build/make.sh validate-lint validate-vet
+validate: build ## validate gofmt, go vet
+	$(DOCKER_RUN_DOCKER) build/make.sh validate-gofmt validate-vet
+
+clean:
+	@docker images | grep '<none>' | awk '{print $3}' | xargs docker rmi 2>/dev/null || true
 
 help: ## this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {sub("\\\\n",sprintf("\n%21c"," "), $$2);printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)

@@ -1,97 +1,97 @@
 package main
 
 import (
-    "os"
-    "fmt"
-    "strings"
-    "net/url"
-    "net/http"
+	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
 
-    flag "github.com/cloudway/platform/pkg/mflag"
-    "github.com/cloudway/platform/config"
-    "github.com/cloudway/platform/cmd/cwcli/cmds"
-    "github.com/cloudway/platform/pkg/rest"
-    "github.com/cloudway/platform/pkg/colorable"
-    "github.com/Sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
+	"github.com/cloudway/platform/cmd/cwcli/cmds"
+	"github.com/cloudway/platform/config"
+	"github.com/cloudway/platform/pkg/colorable"
+	flag "github.com/cloudway/platform/pkg/mflag"
+	"github.com/cloudway/platform/pkg/rest"
 )
 
 func main() {
-    stdout := colorable.NewColorableStdout()
-    stderr := colorable.NewColorableStderr()
+	stdout := colorable.NewColorableStdout()
+	stderr := colorable.NewColorableStderr()
 
-    err := config.InitializeClient()
-    if err != nil {
-        fmt.Fprintln(stderr, err)
-        os.Exit(1)
-    }
+	err := config.InitializeClient()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		os.Exit(1)
+	}
 
-    flag.Usage = func() {
-        flag.CommandLine.SetOutput(stdout)
+	flag.Usage = func() {
+		flag.CommandLine.SetOutput(stdout)
 
-        fmt.Fprint(stdout, "Usage: cwcli [OPTIONS] COMMAND [arg...]\n       cwcli [ --help ]\n")
-        help := "\nCommands:\n\n"
+		fmt.Fprint(stdout, "Usage: cwcli [OPTIONS] COMMAND [arg...]\n       cwcli [ --help ]\n")
+		help := "\nCommands:\n\n"
 
-        commands := cmds.CommandUsage
-        for _, cmd := range commands {
-            if !strings.ContainsRune(cmd.Name, ':') {
-                help += fmt.Sprintf("  %-12.12s%s\n", cmd.Name, cmd.Description)
-            }
-        }
-        fmt.Fprintf(stdout, "%s\n", help)
+		commands := cmds.CommandUsage
+		for _, cmd := range commands {
+			if !strings.ContainsRune(cmd.Name, ':') {
+				help += fmt.Sprintf("  %-12.12s%s\n", cmd.Name, cmd.Description)
+			}
+		}
+		fmt.Fprintf(stdout, "%s\n", help)
 
-        fmt.Fprint(stdout, "Options:\n")
-        flag.PrintDefaults()
-        fmt.Fprint(stdout, "\nRun 'cwcli COMMAND --help' for more information on a command.\n")
-    }
+		fmt.Fprint(stdout, "Options:\n")
+		flag.PrintDefaults()
+		fmt.Fprint(stdout, "\nRun 'cwcli COMMAND --help' for more information on a command.\n")
+	}
 
-    flgHelp := flag.Bool([]string{"h", "-help"}, false, "Print usage")
-    flgDebug := flag.Bool([]string{"D", "-debug"}, false, "Debugging mode")
-    flgHost := flag.String([]string{"H", "-host"}, "", "Connect to remote host")
+	flgHelp := flag.Bool([]string{"h", "-help"}, false, "Print usage")
+	flgDebug := flag.Bool([]string{"D", "-debug"}, false, "Debugging mode")
+	flgHost := flag.String([]string{"H", "-host"}, "", "Connect to remote host")
 
-    flag.Parse()
+	flag.Parse()
 
-    if *flgHelp {
-        // if global flag --help is present, regardless of what other options
-        // and commands there are, just print the usage.
-        flag.Usage()
-        return
-    }
+	if *flgHelp {
+		// if global flag --help is present, regardless of what other options
+		// and commands there are, just print the usage.
+		flag.Usage()
+		return
+	}
 
-    if *flgDebug {
-        logrus.SetLevel(logrus.DebugLevel)
-    }
+	if *flgDebug {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 
-    var host string
-    if *flgHost != "" {
-        if host, err := parseHost(*flgHost); err != nil {
-            fmt.Fprintln(stderr, err)
-            os.Exit(1)
-        } else {
-            config.Set("host", host)
-            config.Save()
-        }
-    }
+	var host string
+	if *flgHost != "" {
+		if host, err := parseHost(*flgHost); err != nil {
+			fmt.Fprintln(stderr, err)
+			os.Exit(1)
+		} else {
+			config.Set("host", host)
+			config.Save()
+		}
+	}
 
-    c := cmds.Init(host, stdout, stderr)
-    if err := c.Run(flag.Args()...); err != nil {
-        if se, ok := err.(rest.ServerError); ok && se.StatusCode() == http.StatusUnauthorized {
-            fmt.Fprintln(stderr, "Your access token has been expired, please login again.")
-        } else {
-            fmt.Fprintln(stderr, err)
-        }
-        os.Exit(1)
-    }
+	c := cmds.Init(host, stdout, stderr)
+	if err := c.Run(flag.Args()...); err != nil {
+		if se, ok := err.(rest.ServerError); ok && se.StatusCode() == http.StatusUnauthorized {
+			fmt.Fprintln(stderr, "Your access token has been expired, please login again.")
+		} else {
+			fmt.Fprintln(stderr, err)
+		}
+		os.Exit(1)
+	}
 }
 
 func parseHost(host string) (string, error) {
-    if strings.Contains(host, "://") {
-        if u, err := url.Parse(host); err != nil {
-            return "", err
-        } else {
-            u.Path = ""
-            return u.String(), nil
-        }
-    } else {
-        return "http://" + host, nil
-    }
+	if strings.Contains(host, "://") {
+		if u, err := url.Parse(host); err != nil {
+			return "", err
+		} else {
+			u.Path = ""
+			return u.String(), nil
+		}
+	} else {
+		return "http://" + host, nil
+	}
 }
