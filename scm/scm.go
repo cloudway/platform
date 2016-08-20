@@ -76,5 +76,5 @@ var New = func() (SCM, error) {
 	if scmtype == "" {
 		return nil, fmt.Errorf("The SCM plugin does not configured")
 	}
-	return nil, fmt.Errorf("Unsuuported SCM type: %s", scmtype)
+	return nil, fmt.Errorf("Unsupported SCM type: %s", scmtype)
 }
