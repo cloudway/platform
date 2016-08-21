@@ -117,9 +117,9 @@ var _ = Describe("SCM", func() {
 			Expect(contents).To(Equal(message))
 		})
 
-		It("should fail if repository already populated", func() {
+		It("should success even if repository already populated", func() {
 			Expect(mock.Populate("demo", "test", payload, int64(payload.Len()))).To(Succeed())
-			Expect(mock.Populate("demo", "test", payload, int64(payload.Len()))).NotTo(Succeed())
+			Expect(mock.Populate("demo", "test", payload, int64(payload.Len()))).To(Succeed())
 		})
 
 		It("should fail if namespace does not exist", func() {
@@ -164,9 +164,9 @@ var _ = Describe("SCM", func() {
 			Expect(mock.PopulateURL("demo", "test", tempdir)).To(Succeed())
 		})
 
-		It("should fail if repository already populated", func() {
+		It("should success even if repository already populated", func() {
 			Expect(mock.PopulateURL("demo", "test", tempdir)).To(Succeed())
-			Expect(mock.PopulateURL("demo", "test", tempdir)).NotTo(Succeed())
+			Expect(mock.PopulateURL("demo", "test", tempdir)).To(Succeed())
 		})
 
 		It("should fail if namespace does not exist", func() {

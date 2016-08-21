@@ -8,10 +8,29 @@ bundle_test_setup() {
     local logfile=/var/log/mongodb/mongod.log
     gosu mongodb mongod --fork --logpath $logfile --bind_ip 127.0.0.1 >/dev/null
     export CLOUDWAY_USERDB_URL=mongodb://127.0.0.1:27017/cloudway
+
+    if [ -n "$DOCKER_REGISTRY_MIRROR" ]; then
+        sed -i /etc/default/docker -e 's|#DOCKER_OPTS=.*|DOCKER_OPTS="--registry-mirror '$DOCKER_REGISTRY_MIRROR'"|'
+    fi
+
+    /etc/init.d/docker start
+    bundle_test_cleanup || true
+    source "${MAKEDIR}/.ensure-images"
+
+    tar -xf "$DEST/../tgz/cloudway-broker-$VERSION-linux-amd64.tar.gz" --strip-components=1 -C /
 }
 
 bundle_test_teardown() {
     gosu mongodb mongod --shutdown
+    /etc/init.d/docker stop
+}
+
+bundle_test_cleanup() {
+    set +e
+    docker ps -aq | xargs docker rm -fv &>/dev/null
+    docker volume ls -q | xargs docker volume rm &>/dev/null
+    docker images | grep '<none>' | awk '{print $3}' | xargs docker rmi &>/dev/null
+    set -e
 }
 
 # Run unit test suite, and store their output as a bundle. If $TESTFLAGS

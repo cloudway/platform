@@ -15,8 +15,11 @@ FROM icloudway/dev:latest
 
 ENV GOPATH /go:/go/src/github.com/cloudway/platform/vendor
 
-RUN go get -u github.com/onsi/ginkgo/ginkgo && \
-    go get -u github.com/onsi/gomega
+RUN go get -u github.com/onsi/ginkgo/ginkgo github.com/onsi/gomega
+
+RUN git clone https://github.com/cloudway/plugins.git \
+ && ( cd plugins && ./install.sh ) \
+ && rm -rf plugins
 
 # Compile Go for cross compilation
 ENV CLOUDWAY_CROSSPLATFORMS \
@@ -27,8 +30,10 @@ ENV CLOUDWAY_CROSSPLATFORMS \
 
 WORKDIR /go/src/github.com/cloudway/platform
 
+VOLUME /data
+
 # Wrap all commands in the "docker-in-docker" script to allow nested containers
 ENTRYPOINT ["build/dind"]
 
-# Upload docker source
+# Upload source
 COPY . /go/src/github.com/cloudway/platform

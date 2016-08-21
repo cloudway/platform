@@ -100,9 +100,9 @@ func (mock mockSCM) ensureRepositoryNotExist(namespace, name string) error {
 	}
 }
 
-func (mock mockSCM) ensureEmptyRepository(namespace, name string) error {
+func (mock mockSCM) isEmptyRepository(namespace, name string) (bool, error) {
 	if err := mock.ensureRepositoryExist(namespace, name); err != nil {
-		return err
+		return false, err
 	}
 
 	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
@@ -111,14 +111,9 @@ func (mock mockSCM) ensureEmptyRepository(namespace, name string) error {
 
 	out, err := cmd.Output()
 	if err != nil {
-		return err
+		return false, err
 	}
-
-	if strings.HasPrefix(string(out), "0 objects") {
-		return nil
-	} else {
-		return fmt.Errorf("The repository %s/%s is not empty", namespace, name)
-	}
+	return strings.HasPrefix(string(out), "0 objects"), nil
 }
 
 func (mock mockSCM) CreateNamespace(namespace string) error {
@@ -161,7 +156,7 @@ func (mock mockSCM) RemoveRepo(namespace, name string) error {
 }
 
 func (mock mockSCM) Populate(namespace, name string, payload io.Reader, size int64) error {
-	if err := mock.ensureEmptyRepository(namespace, name); err != nil {
+	if empty, err := mock.isEmptyRepository(namespace, name); !empty || err != nil {
 		return err
 	}
 
@@ -200,7 +195,7 @@ func (mock mockSCM) Populate(namespace, name string, payload io.Reader, size int
 }
 
 func (mock mockSCM) PopulateURL(namespace, name string, url string) error {
-	if err := mock.ensureEmptyRepository(namespace, name); err != nil {
+	if empty, err := mock.isEmptyRepository(namespace, name); !empty || err != nil {
 		return err
 	}
 
@@ -222,7 +217,7 @@ func (mock mockSCM) PopulateURL(namespace, name string, url string) error {
 }
 
 func (mock mockSCM) Deploy(namespace, name string, branch string) error {
-	return errors.New("Not yet implemented")
+	return nil // Not yet implemented
 }
 
 func (mock mockSCM) GetDeploymentBranch(namespace, name string) (*scm.Branch, error) {

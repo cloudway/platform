@@ -16,6 +16,7 @@ DOCKER_ENVS := \
     -e CLOUDWAY_INCREMENTAL_BINARY \
     -e TESTDIRS \
     -e TESTFLAGS \
+    -e DOCKER_REGISTRY_MIRROR \
     -e CROSS \
     -e COVER \
     -e TIMEOUT
@@ -30,7 +31,7 @@ GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 GIT_BRANCH_CLEAN := $(shell echo $(GIT_BRANCH) | sed -e "s/[^[:alnum:]]/-/g")
 DOCKER_IMAGE := cloudway-dev$(if $(GIT_BRANCH_CLEAN),:$(GIT_BRANCH_CLEAN))
 
-DOCKER_FLAGS := docker run --rm -i --privileged $(DOCKER_ENVS) $(DOCKER_MOUNT)
+DOCKER_FLAGS := docker run --rm -i --privileged $(DOCKER_ENVS) $(DOCKER_MOUNT) -v docker-data:/var/lib/docker
 
 # if this session isn't interactive, then we don't want to allocate a
 # TTY, which would fail, but if it is interactive, we do want to attach
@@ -74,7 +75,7 @@ shell: build ## start a shell inside the build env
 	$(DOCKER_RUN_DOCKER) bash
 
 test: build ## run the tests
-	$(DOCKER_RUN_DOCKER) build/make.sh test-unit cover
+	$(DOCKER_RUN_DOCKER) build/make.sh binary tgz test-unit cover
 
 validate: build ## validate gofmt, go vet
 	$(DOCKER_RUN_DOCKER) build/make.sh validate-gofmt validate-vet

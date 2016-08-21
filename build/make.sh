@@ -55,10 +55,10 @@ DEFAULT_BUNDLES=(
     binary-client
     binary-server
     binary-sandbox
-    test-unit
-    cover
     cross
     tgz
+    test-unit
+    cover
 )
 
 VERSION=$(< ./VERSION)
