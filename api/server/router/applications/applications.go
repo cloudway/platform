@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/cloudway/platform/api/server/httputils"
-	"github.com/cloudway/platform/api/server/middleware"
 	"github.com/cloudway/platform/api/server/router"
 	"github.com/cloudway/platform/api/types"
 	"github.com/cloudway/platform/auth/userdb"
@@ -60,7 +59,7 @@ func (ar *applicationsRouter) Routes() []router.Route {
 }
 
 func (ar *applicationsRouter) currentUser(ctx context.Context) *userdb.BasicUser {
-	return ctx.Value(middleware.UserKey).(*userdb.BasicUser)
+	return ctx.Value(httputils.UserKey).(*userdb.BasicUser)
 }
 
 func (ar *applicationsRouter) list(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {

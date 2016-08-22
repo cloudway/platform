@@ -7,11 +7,7 @@ bundle_test_setup() {
     local logfile=/var/log/mongodb/mongod.log
     gosu mongodb mongod --fork --logpath $logfile --bind_ip 127.0.0.1 >/dev/null
 
-    if [ -n "$DOCKER_REGISTRY_MIRROR" ]; then
-        sed -i /etc/default/docker -e 's|#DOCKER_OPTS=.*|DOCKER_OPTS="--registry-mirror '$DOCKER_REGISTRY_MIRROR'"|'
-    fi
-
-    /etc/init.d/docker start
+    start_docker
     bundle_test_cleanup || true
     source "${MAKEDIR}/.ensure-images"
 
@@ -29,6 +25,19 @@ bundle_test_cleanup() {
     docker volume ls -q | xargs docker volume rm &>/dev/null
     docker images | grep '<none>' | awk '{print $3}' | xargs docker rmi &>/dev/null
     set -e
+}
+
+start_docker() {
+    if [ -n "$DOCKER_REGISTRY_MIRROR" ]; then
+        sed -i /etc/default/docker -e 's|#DOCKER_OPTS=.*|DOCKER_OPTS="--registry-mirror '$DOCKER_REGISTRY_MIRROR'"|'
+    fi
+
+    /etc/init.d/docker start
+
+    for i in {1..10}; do
+        docker version &>/dev/null && break
+        sleep 0.5
+    done
 }
 
 # Run unit test suite, and store their output as a bundle. If $TESTFLAGS

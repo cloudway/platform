@@ -11,8 +11,15 @@ import (
 	"golang.org/x/net/context"
 )
 
+// key is an unexported type for keys defined in this package.
+// This prevents collisions with keys defined in other packages.
+type key int
+
 // APIVersionKey is the client's requested API version.
-const APIVersionKey = "api-version"
+const APIVersionKey key = 0
+
+// UseKey is the key for userdb.User values in Contexts.
+const UserKey key = 1
 
 // APIFunc is an adapter to allow the use of ordinary functions as API endpoints.
 // Any function that has the appropriate signature can be registered as a API endpoint.
@@ -62,4 +69,16 @@ func MatchesContentType(contentType, expectedType string) bool {
 		logrus.WithError(err).Errorf("Error parsing media type: %s", contentType)
 	}
 	return err == nil && mimeType == expectedType
+}
+
+// VersionFromContext returns an API version from the context using APIVersionKey.
+func VersionFromContext(ctx context.Context) (ver string) {
+	if ctx == nil {
+		return
+	}
+	val := ctx.Value(APIVersionKey)
+	if val == nil {
+		return
+	}
+	return val.(string)
 }

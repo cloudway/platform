@@ -1,14 +1,15 @@
 package api_test
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
 
-	"github.com/cloudway/platform/api"
 	"github.com/cloudway/platform/api/client"
 	"github.com/cloudway/platform/api/server"
 	"github.com/cloudway/platform/api/server/middleware"
@@ -19,6 +20,7 @@ import (
 	br "github.com/cloudway/platform/broker"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/container"
+	"github.com/cloudway/platform/pkg/rest"
 	"golang.org/x/net/context"
 
 	_ "github.com/cloudway/platform/auth/userdb/mongodb"
@@ -113,14 +115,25 @@ func NewTestClient(login bool) *client.APIClient {
 	return cli
 }
 
-var _ = Describe("Server version", func() {
-	It("should return server version information", func() {
-		cli := NewTestClient(false)
-		version, err := cli.ServerVersion(context.Background())
-		Ω(err).ShouldNot(HaveOccurred())
+type HaveHTTPStatus int
 
-		Ω(version.Version).Should(Equal(api.Version))
-		Ω(version.GitCommit).Should(Equal(api.GitCommit))
-		Ω(version.BuildTime).Should(Equal(api.BuildTime))
-	})
-})
+func (matcher HaveHTTPStatus) Match(actual interface{}) (success bool, err error) {
+	if actual == nil {
+		return false, fmt.Errorf("Expected an error, got nil")
+	}
+
+	if _, ok := actual.(error); !ok {
+		return false, fmt.Errorf("Expected an error. Got:\n%s", format.Object(actual, 1))
+	}
+
+	se, ok := actual.(rest.ServerError)
+	return ok && se.StatusCode() == int(matcher), nil
+}
+
+func (matcher HaveHTTPStatus) FailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, fmt.Sprintf("to have HTTP status code %d", int(matcher)))
+}
+
+func (matcher HaveHTTPStatus) NegatedFailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, fmt.Sprintf("not to have HTTP status code %d", int(matcher)))
+}

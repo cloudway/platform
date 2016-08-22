@@ -16,3 +16,11 @@ func (api *APIClient) ServerVersion(ctx context.Context) (types.Version, error) 
 	}
 	return server, err
 }
+
+func (cli *APIClient) ClientVersion() string {
+	return cli.cli.ClientVersion()
+}
+
+func (cli *APIClient) UpdateClientVersion(v string) {
+	cli.cli.UpdateClientVersion(v)
+}

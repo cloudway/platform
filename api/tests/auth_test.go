@@ -39,23 +39,27 @@ var _ = Describe("Security", func() {
 	})
 
 	Describe("Authorization", func() {
-		It("should success to access protected resource after login", func() {
-			token, err := cli.Authenticate(ctx, TEST_USER, TEST_PASSWORD)
-			Ω(err).ShouldNot(HaveOccurred())
-			cli.SetToken(token)
+		Context("with login", func() {
+			It("should success to access protected resource", func() {
+				token, err := cli.Authenticate(ctx, TEST_USER, TEST_PASSWORD)
+				Ω(err).ShouldNot(HaveOccurred())
+				cli.SetToken(token)
 
-			_, err = cli.GetApplications(ctx)
-			Ω(err).ShouldNot(HaveOccurred())
+				_, err = cli.GetApplications(ctx)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
 		})
 
-		It("should success to access unprotected resource without login", func() {
-			_, err := cli.ServerVersion(ctx)
-			Ω(err).ShouldNot(HaveOccurred())
-		})
+		Context("without login", func() {
+			It("should success to access unprotected resource", func() {
+				_, err := cli.ServerVersion(ctx)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
 
-		It("should fail to access protected resource without login", func() {
-			_, err := cli.GetApplications(ctx)
-			Ω(err).Should(HaveOccurred())
+			It("should fail to access protected resource", func() {
+				_, err := cli.GetApplications(ctx)
+				Ω(err).Should(HaveOccurred())
+			})
 		})
 	})
 })

@@ -33,7 +33,7 @@ func (m authMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc
 		}
 
 		logrus.Debugf("Logged in user: %s", user)
-		ctx = context.WithValue(ctx, UserKey, user)
+		ctx = context.WithValue(ctx, httputils.UserKey, user)
 		return handler(ctx, w, r, vars)
 	}
 }
