@@ -28,13 +28,28 @@ import (
 	"github.com/cloudway/platform/pkg/manifest"
 )
 
+func (br *UserBroker) GetApplications() (apps map[string]*userdb.Application, err error) {
+	if err = br.Refresh(); err != nil {
+		return nil, err
+	}
+	return br.User.Basic().Applications, nil
+}
+
 func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []string) (containers []*container.Container, err error) {
+	if err = br.Refresh(); err != nil {
+		return nil, err
+	}
+
 	user := br.User.Basic()
 	apps := user.Applications
 
 	// check if the application already exists
 	if apps[opts.Name] != nil {
 		return nil, ApplicationExistError{opts.Name, user.Namespace}
+	}
+
+	if opts.Scaling == 0 {
+		opts.Scaling = 1
 	}
 
 	// check plugins
@@ -139,6 +154,10 @@ func generateSharedSecret() (string, error) {
 }
 
 func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string) (containers []*container.Container, err error) {
+	if err = br.Refresh(); err != nil {
+		return nil, err
+	}
+
 	user := br.User.Basic()
 	app := user.Applications[opts.Name]
 
@@ -188,6 +207,10 @@ func (br *UserBroker) createContainers(opts container.CreateOptions, plugins []*
 }
 
 func (br *UserBroker) RemoveApplication(name string) (err error) {
+	if err = br.Refresh(); err != nil {
+		return err
+	}
+
 	user := br.User.Basic()
 	apps := user.Applications
 
@@ -219,6 +242,10 @@ func (br *UserBroker) RemoveApplication(name string) (err error) {
 }
 
 func (br *UserBroker) RemoveService(name, service string) (err error) {
+	if err = br.Refresh(); err != nil {
+		return err
+	}
+
 	user := br.User.Basic()
 	app := user.Applications[name]
 
@@ -264,6 +291,10 @@ func (e ScalingError) HTTPErrorStatusCode() int {
 func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Container, error) {
 	if num <= 0 || num > 10 {
 		return nil, ScalingError(num)
+	}
+
+	if err := br.Refresh(); err != nil {
+		return nil, err
 	}
 
 	user := br.User.Basic()
@@ -324,6 +355,10 @@ func (br *UserBroker) AddHost(name, host string) error {
 		return errs.New("Invalid domain name")
 	}
 
+	if err := br.Refresh(); err != nil {
+		return err
+	}
+
 	user := br.User.Basic()
 	app := user.Applications[name]
 	if app == nil {
@@ -354,6 +389,10 @@ func (br *UserBroker) AddHost(name, host string) error {
 }
 
 func (br *UserBroker) RemoveHost(name, host string) error {
+	if err := br.Refresh(); err != nil {
+		return err
+	}
+
 	user := br.User.Basic()
 	app := user.Applications[name]
 	if app == nil {
@@ -396,13 +435,14 @@ func (br *UserBroker) RestartApplication(name string) error {
 }
 
 func (br *UserBroker) StopApplication(name string) error {
-	user := br.User.Basic()
-	app := user.Applications[name]
-	if app == nil {
+	namespace := br.User.Basic().Namespace
+	containers, err := br.FindAll(name, namespace)
+	if err != nil {
+		return err
+	}
+	if len(containers) == 0 {
 		return ApplicationNotFoundError(name)
 	}
-
-	containers, err := br.FindAll(name, user.Namespace)
 	return startParallel(err, containers, (*container.Container).Stop)
 }
 
@@ -411,15 +451,13 @@ func (br *Broker) StartContainers(containers []*container.Container) error {
 }
 
 func (br *UserBroker) startApplication(name string, fn func(*container.Container) error) error {
-	user := br.User.Basic()
-	app := user.Applications[name]
-	if app == nil {
-		return ApplicationNotFoundError(name)
-	}
-
-	containers, err := br.FindAll(name, user.Namespace)
+	namespace := br.User.Basic().Namespace
+	containers, err := br.FindAll(name, namespace)
 	if err != nil {
 		return err
+	}
+	if len(containers) == 0 {
+		return ApplicationNotFoundError(name)
 	}
 	return startContainers(containers, fn)
 }
@@ -504,8 +542,8 @@ func startSerial(err error, cs []*container.Container, fn func(*container.Contai
 
 // Download application repository as a archive file.
 func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
-	user := br.User.Basic()
-	containers, err := br.FindApplications(name, user.Namespace)
+	namespace := br.User.Basic().Namespace
+	containers, err := br.FindApplications(name, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -544,6 +582,9 @@ func (br *UserBroker) Upload(name string, content io.Reader) error {
 	containers, err := br.FindApplications(name, namespace)
 	if err != nil {
 		return err
+	}
+	if len(containers) == 0 {
+		return ApplicationNotFoundError(name)
 	}
 	for _, c := range containers {
 		err = c.Deploy(tempdir)

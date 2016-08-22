@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/cloudway/platform/api/server/httputils"
+	"github.com/cloudway/platform/api/server/middleware"
 	"github.com/cloudway/platform/api/server/router"
 	"github.com/cloudway/platform/api/types"
 	"github.com/cloudway/platform/auth/userdb"
@@ -58,34 +59,37 @@ func (ar *applicationsRouter) Routes() []router.Route {
 	return ar.routes
 }
 
-func (ar *applicationsRouter) currentUser(vars map[string]string) (*userdb.BasicUser, error) {
-	var user userdb.BasicUser
-	err := ar.Users.Find(vars["user"], &user)
-	return &user, err
+func (ar *applicationsRouter) currentUser(ctx context.Context) *userdb.BasicUser {
+	return ctx.Value(middleware.UserKey).(*userdb.BasicUser)
 }
 
 func (ar *applicationsRouter) list(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
+	user := ar.currentUser(ctx)
+
+	apps, err := ar.NewUserBroker(user).GetApplications()
 	if err != nil {
 		return err
 	}
 
-	var apps []string
-	for name := range user.Applications {
-		apps = append(apps, name)
+	var names []string
+	for name := range apps {
+		names = append(names, name)
 	}
-
-	return httputils.WriteJSON(w, http.StatusOK, apps)
+	return httputils.WriteJSON(w, http.StatusOK, names)
 }
 
 func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
+	var (
+		user = ar.currentUser(ctx)
+		name = vars["name"]
+	)
+
+	apps, err := ar.NewUserBroker(user).GetApplications()
 	if err != nil {
 		return err
 	}
 
-	name := vars["name"]
-	app := user.Applications[name]
+	app := apps[name]
 	if app == nil {
 		return httputils.NewStatusError(http.StatusNotFound)
 	}
@@ -144,10 +148,8 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		return err
 	}
 
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
+	br := ar.NewUserBroker(user)
 
 	var req types.CreateApplication
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -173,7 +175,6 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 	}
 
 	tags := append([]string{req.Framework}, req.Services...)
-	br := ar.NewUserBroker(user)
 
 	cs, err := br.CreateApplication(opts, tags)
 	if err != nil {
@@ -189,52 +190,37 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 }
 
 func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
+	br := ar.NewUserBroker(user)
 
-	err = ar.NewUserBroker(user).RemoveApplication(vars["name"])
-	if err != nil {
+	if err := br.RemoveApplication(vars["name"]); err != nil {
 		return err
+	} else {
+		w.WriteHeader(http.StatusNoContent)
+		return nil
 	}
-
-	w.WriteHeader(http.StatusNoContent)
-	return nil
 }
 
 func (ar *applicationsRouter) start(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
 	return ar.NewUserBroker(user).StartApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) stop(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
 	return ar.NewUserBroker(user).StopApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) restart(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
 	return ar.NewUserBroker(user).RestartApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
-
+	user := ar.currentUser(ctx)
 	name, branch := vars["name"], r.FormValue("branch")
-	err = ar.SCM.Deploy(user.Namespace, name, branch)
+
+	err := ar.SCM.Deploy(user.Namespace, name, branch)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	} else {
@@ -244,11 +230,7 @@ func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter,
 }
 
 func (ar *applicationsRouter) getDeployments(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
-
+	user := ar.currentUser(ctx)
 	name := vars["name"]
 
 	current, err := ar.SCM.GetDeploymentBranch(user.Namespace, name)
@@ -285,10 +267,7 @@ func convertBranchesJson(branches []scm.Branch) []types.Branch {
 }
 
 func (ar *applicationsRouter) download(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
 
 	tr, err := ar.NewUserBroker(user).Download(vars["name"])
 	if err != nil {
@@ -307,18 +286,12 @@ func (ar *applicationsRouter) download(ctx context.Context, w http.ResponseWrite
 }
 
 func (ar *applicationsRouter) upload(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
 	return ar.NewUserBroker(user).Upload(vars["name"], r.Body)
 }
 
 func (ar *applicationsRouter) dump(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
 
 	tr, err := ar.NewUserBroker(user).Dump(vars["name"])
 	if err != nil {
@@ -337,19 +310,12 @@ func (ar *applicationsRouter) dump(ctx context.Context, w http.ResponseWriter, r
 }
 
 func (ar *applicationsRouter) restore(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
 	return ar.NewUserBroker(user).Restore(vars["name"], r.Body)
 }
 
 func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
-
+	user := ar.currentUser(ctx)
 	name := vars["name"]
 	scaling := r.FormValue("scale")
 
@@ -415,10 +381,7 @@ func (ar *applicationsRouter) getContainer(namespace string, vars map[string]str
 }
 
 func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
 
 	container, err := ar.getContainer(user.Namespace, vars)
 	if err != nil {
@@ -432,10 +395,7 @@ func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter
 }
 
 func (ar *applicationsRouter) getenv(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
 
 	container, err := ar.getContainer(user.Namespace, vars)
 	if err != nil {
@@ -466,10 +426,7 @@ func (ar *applicationsRouter) setenv(ctx context.Context, w http.ResponseWriter,
 		return err
 	}
 
-	user, err := ar.currentUser(vars)
-	if err != nil {
-		return err
-	}
+	user := ar.currentUser(ctx)
 
 	cs, err := ar.getContainers(user.Namespace, vars)
 	if err != nil {

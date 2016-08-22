@@ -55,3 +55,9 @@ func (br *Broker) RemoveUser(username string) (err error) {
 
 	return errors.Err()
 }
+
+func (br *Broker) GetUser(username string) (userdb.User, error) {
+	var user userdb.BasicUser
+	err := br.Users.Find(username, &user)
+	return &user, err
+}

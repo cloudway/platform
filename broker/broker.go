@@ -1,6 +1,8 @@
 package broker
 
 import (
+	"reflect"
+
 	"github.com/cloudway/platform/auth"
 	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/container"
@@ -56,4 +58,11 @@ func New(cli container.DockerClient) (broker *Broker, err error) {
 
 func (br *Broker) NewUserBroker(user userdb.User) *UserBroker {
 	return &UserBroker{Broker: br, User: user}
+}
+
+func (br *UserBroker) Refresh() error {
+	username := br.User.Basic().Name
+	p := reflect.ValueOf(br.User).Elem()
+	p.Set(reflect.Zero(p.Type()))
+	return br.Users.Find(username, br.User)
 }

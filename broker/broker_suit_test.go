@@ -24,7 +24,7 @@ var broker *br.Broker
 
 const (
 	REPOROOT  = "/var/git/broker_test"
-	USERNAME  = "broker_test@example.com"
+	TESTUSER  = "broker_test@example.com"
 	NAMESPACE = "broker_test"
 )
 

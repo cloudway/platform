@@ -22,8 +22,9 @@ func TestAuthenticator(t *testing.T) {
 
 var _ = Describe("Authenticator", func() {
 	const (
-		TEST_USER     = "test@example.com"
-		TEST_PASSWORD = "test"
+		TEST_USER      = "test@example.com"
+		TEST_NAMESPACE = "test"
+		TEST_PASSWORD  = "test"
 	)
 
 	var (
@@ -40,7 +41,7 @@ var _ = Describe("Authenticator", func() {
 		authz, err = auth.NewAuthenticator(db)
 		Expect(err).NotTo(HaveOccurred())
 
-		user := userdb.BasicUser{Name: TEST_USER}
+		user := userdb.BasicUser{Name: TEST_USER, Namespace: TEST_NAMESPACE}
 		err = db.Create(&user, TEST_PASSWORD)
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -80,9 +81,10 @@ var _ = Describe("Authenticator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			r.Header.Set("Authorization", "bearer "+token)
-			username, err := authz.Verify(nil, r)
+			user, err := authz.Verify(nil, r)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(username).To(Equal(TEST_USER))
+			Expect(user.Name).To(Equal(TEST_USER))
+			Expect(user.Namespace).To(Equal(TEST_NAMESPACE))
 		})
 
 		It("should fail with incorrect token", func() {

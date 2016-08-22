@@ -33,6 +33,11 @@ func NewAuthenticator(userdb *userdb.UserDatabase) (*Authenticator, error) {
 	return &Authenticator{userdb, secret}, nil
 }
 
+type customClaims struct {
+	*jwt.StandardClaims
+	Namespace string `json:"ns"`
+}
+
 // Authenticate user with name and password. Returns the User object
 // and a token.
 func (auth *Authenticator) Authenticate(username, password string) (*userdb.BasicUser, string, error) {
@@ -43,9 +48,12 @@ func (auth *Authenticator) Authenticate(username, password string) (*userdb.Basi
 	}
 
 	// Create a new token object, specifying singing method and the claims
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &jwt.StandardClaims{
-		ExpiresAt: time.Now().Add(_TOKEN_EXPIRE_TIME).Unix(),
-		Subject:   user.Name,
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &customClaims{
+		&jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(_TOKEN_EXPIRE_TIME).Unix(),
+			Subject:   user.Name,
+		},
+		user.Namespace,
 	})
 
 	// Sign and get the complete encoded token as a string using the secret
@@ -55,8 +63,8 @@ func (auth *Authenticator) Authenticate(username, password string) (*userdb.Basi
 }
 
 // Verify the current http request is authorized.
-func (auth *Authenticator) Verify(w http.ResponseWriter, r *http.Request) (string, error) {
-	claims := jwt.StandardClaims{}
+func (auth *Authenticator) Verify(w http.ResponseWriter, r *http.Request) (*userdb.BasicUser, error) {
+	var claims customClaims
 
 	// Get token from request
 	_, err := request.ParseFromRequestWithClaims(r, request.AuthorizationHeaderExtractor, &claims,
@@ -66,8 +74,8 @@ func (auth *Authenticator) Verify(w http.ResponseWriter, r *http.Request) (strin
 
 	// If the token is missing or invalid, return error
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return claims.Subject, nil
+	return &userdb.BasicUser{Name: claims.Subject, Namespace: claims.Namespace}, nil
 }
