@@ -37,6 +37,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/justinas/nosurf"
 	"github.com/oxtoacart/bpool"
+	"golang.org/x/net/context"
 )
 
 var funcs = template.FuncMap{
@@ -196,6 +197,10 @@ func (con *Console) currentUser(w http.ResponseWriter, r *http.Request) *userdb.
 		return nil
 	}
 	return user.(*auth.AuthbossUser).Basic()
+}
+
+func (con *Console) NewUserBroker(user userdb.User) *broker.UserBroker {
+	return con.Broker.NewUserBroker(user, context.Background())
 }
 
 func (con *Console) layoutData(w http.ResponseWriter, r *http.Request) authboss.HTMLData {

@@ -8,6 +8,7 @@ import (
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/hub"
 	"github.com/cloudway/platform/scm"
+	"golang.org/x/net/context"
 
 	// Load all plugings
 	_ "github.com/cloudway/platform/auth/userdb/mongodb"
@@ -27,6 +28,7 @@ type Broker struct {
 type UserBroker struct {
 	*Broker
 	User userdb.User
+	ctx  context.Context
 }
 
 func New(cli container.DockerClient) (broker *Broker, err error) {
@@ -56,8 +58,12 @@ func New(cli container.DockerClient) (broker *Broker, err error) {
 	return broker, nil
 }
 
-func (br *Broker) NewUserBroker(user userdb.User) *UserBroker {
-	return &UserBroker{Broker: br, User: user}
+func (br *Broker) NewUserBroker(user userdb.User, ctx context.Context) *UserBroker {
+	return &UserBroker{
+		Broker: br,
+		User:   user,
+		ctx:    ctx,
+	}
 }
 
 func (br *UserBroker) Refresh() error {

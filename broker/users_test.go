@@ -8,6 +8,7 @@ import (
 
 	"github.com/cloudway/platform/auth/userdb"
 	. "github.com/cloudway/platform/auth/userdb/matchers"
+	"golang.org/x/net/context"
 )
 
 var _ = Describe("Users", func() {
@@ -61,7 +62,7 @@ var _ = Describe("Users", func() {
 		})
 
 		It("should load fresh values from database", func() {
-			br := broker.NewUserBroker(&user)
+			br := broker.NewUserBroker(&user, context.Background())
 			Expect(br.User).To(BeIdenticalTo(&user))
 
 			Expect(br.Users.Update(TESTUSER, userdb.Args{"extrafield": "new field value"})).To(Succeed())
@@ -73,7 +74,7 @@ var _ = Describe("Users", func() {
 		})
 
 		It("should fail after removed user", func() {
-			br := broker.NewUserBroker(&user)
+			br := broker.NewUserBroker(&user, context.Background())
 			Expect(br.RemoveUser(TESTUSER)).To(Succeed())
 			Expect(br.Refresh()).To(BeUserNotFound(TESTUSER))
 		})

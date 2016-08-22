@@ -10,7 +10,7 @@ import (
 	"github.com/docker/engine-api/types"
 )
 
-func (c *Container) Deploy(path string) error {
+func (c *Container) Deploy(ctx context.Context, path string) error {
 	// Create context archive containing the repo archive
 	r, w := io.Pipe()
 	go func() {
@@ -21,12 +21,12 @@ func (c *Container) Deploy(path string) error {
 	}()
 
 	// Copy file to container
-	err := c.CopyToContainer(context.Background(), c.ID, c.DeployDir(), r, types.CopyToContainerOptions{})
+	err := c.CopyToContainer(ctx, c.ID, c.DeployDir(), r, types.CopyToContainerOptions{})
 	if err != nil {
 		return err
 	}
 
 	// Send signal to container to complete the deployment
-	c.ContainerKill(context.Background(), c.ID, "SIGHUP")
+	c.ContainerKill(ctx, c.ID, "SIGHUP")
 	return nil
 }

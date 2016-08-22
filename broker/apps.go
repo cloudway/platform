@@ -89,7 +89,7 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	defer func() {
 		if !success {
 			for _, c := range containers {
-				c.Destroy()
+				c.Destroy(br.ctx)
 			}
 			if repoCreated {
 				br.SCM.RemoveRepo(opts.Namespace, opts.Name)
@@ -197,7 +197,7 @@ func (br *UserBroker) createContainers(opts container.CreateOptions, plugins []*
 	for _, plugin := range plugins {
 		opts.Plugin = plugin
 		var cs []*container.Container
-		cs, err = br.Create(br.SCM, opts)
+		cs, err = br.Create(br.ctx, br.SCM, opts)
 		containers = append(containers, cs...)
 		if err != nil {
 			return
@@ -222,12 +222,12 @@ func (br *UserBroker) RemoveApplication(name string) (err error) {
 
 	// remove application containers
 	var containers []*container.Container
-	containers, err = br.FindAll(name, user.Namespace)
+	containers, err = br.FindAll(br.ctx, name, user.Namespace)
 	if err != nil {
 		errors.Add(err)
 	} else {
 		for _, c := range containers {
-			errors.Add(c.Destroy())
+			errors.Add(c.Destroy(br.ctx))
 		}
 	}
 
@@ -256,13 +256,13 @@ func (br *UserBroker) RemoveService(name, service string) (err error) {
 	var errors errors.Errors
 	var containers []*container.Container
 
-	containers, err = br.FindService(name, user.Namespace, service)
+	containers, err = br.FindService(br.ctx, name, user.Namespace, service)
 	if err != nil {
 		return err
 	}
 
 	for _, c := range containers {
-		errors.Add(c.Destroy())
+		errors.Add(c.Destroy(br.ctx))
 
 		tag := c.PluginTag()
 		for i := range app.Plugins {
@@ -303,7 +303,7 @@ func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Conta
 	if app == nil {
 		return nil, ApplicationNotFoundError(name)
 	}
-	cs, err := br.FindApplications(name, user.Namespace)
+	cs, err := br.FindApplications(br.ctx, name, user.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -338,12 +338,12 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int, secret stri
 		Repo:      "empty",
 	}
 
-	return br.Create(br.SCM, opts)
+	return br.Create(br.ctx, br.SCM, opts)
 }
 
 func (br *UserBroker) scaleDown(containers []*container.Container, num int) error {
 	for i := 0; i < num; i++ {
-		if err := containers[i].Destroy(); err != nil {
+		if err := containers[i].Destroy(br.ctx); err != nil {
 			return err
 		}
 	}
@@ -371,16 +371,16 @@ func (br *UserBroker) AddHost(name, host string) error {
 		}
 	}
 
-	cs, err := br.FindAll(name, user.Namespace)
+	cs, err := br.FindAll(br.ctx, name, user.Namespace)
 	if err != nil {
 		return err
 	}
 
 	for _, c := range cs {
 		if c.Category().IsFramework() {
-			c.AddHost(host)
+			c.AddHost(br.ctx, host)
 		} else if c.Category().IsService() {
-			c.AddHost(c.ServiceName() + "." + host)
+			c.AddHost(br.ctx, c.ServiceName()+"."+host)
 		}
 	}
 
@@ -410,16 +410,16 @@ func (br *UserBroker) RemoveHost(name, host string) error {
 		return nil
 	}
 
-	cs, err := br.FindAll(name, user.Namespace)
+	cs, err := br.FindAll(br.ctx, name, user.Namespace)
 	if err != nil {
 		return err
 	}
 
 	for _, c := range cs {
 		if c.Category().IsFramework() {
-			c.RemoveHost(host)
+			c.RemoveHost(br.ctx, host)
 		} else if c.Category().IsService() {
-			c.RemoveHost(c.ServiceName() + "." + host)
+			c.RemoveHost(br.ctx, c.ServiceName()+"."+host)
 		}
 	}
 
@@ -427,32 +427,32 @@ func (br *UserBroker) RemoveHost(name, host string) error {
 }
 
 func (br *UserBroker) StartApplication(name string) error {
-	return br.startApplication(name, (*container.Container).Start)
+	return br.startApplication(name, func(c *container.Container) error { return c.Start(br.ctx) })
 }
 
 func (br *UserBroker) RestartApplication(name string) error {
-	return br.startApplication(name, (*container.Container).Restart)
+	return br.startApplication(name, func(c *container.Container) error { return c.Restart(br.ctx) })
 }
 
 func (br *UserBroker) StopApplication(name string) error {
 	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(name, namespace)
+	containers, err := br.FindAll(br.ctx, name, namespace)
 	if err != nil {
 		return err
 	}
 	if len(containers) == 0 {
 		return ApplicationNotFoundError(name)
 	}
-	return startParallel(err, containers, (*container.Container).Stop)
+	return startParallel(err, containers, func(c *container.Container) error { return c.Stop(br.ctx) })
 }
 
-func (br *Broker) StartContainers(containers []*container.Container) error {
-	return startContainers(containers, (*container.Container).Start)
+func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container) error {
+	return startContainers(containers, func(c *container.Container) error { return c.Start(ctx) })
 }
 
 func (br *UserBroker) startApplication(name string, fn func(*container.Container) error) error {
 	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(name, namespace)
+	containers, err := br.FindAll(br.ctx, name, namespace)
 	if err != nil {
 		return err
 	}
@@ -543,7 +543,7 @@ func startSerial(err error, cs []*container.Container, fn func(*container.Contai
 // Download application repository as a archive file.
 func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
 	namespace := br.User.Basic().Namespace
-	containers, err := br.FindApplications(name, namespace)
+	containers, err := br.FindApplications(br.ctx, name, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -551,7 +551,7 @@ func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
 		return nil, ApplicationNotFoundError(name)
 	}
 	c := containers[0]
-	r, _, err := c.CopyFromContainer(context.Background(), c.ID, c.RepoDir()+"/.")
+	r, _, err := c.CopyFromContainer(br.ctx, c.ID, c.RepoDir()+"/.")
 	return r, err
 }
 
@@ -579,7 +579,7 @@ func (br *UserBroker) Upload(name string, content io.Reader) error {
 
 	// deploy to containers
 	namespace := br.User.Basic().Namespace
-	containers, err := br.FindApplications(name, namespace)
+	containers, err := br.FindApplications(br.ctx, name, namespace)
 	if err != nil {
 		return err
 	}
@@ -587,7 +587,7 @@ func (br *UserBroker) Upload(name string, content io.Reader) error {
 		return ApplicationNotFoundError(name)
 	}
 	for _, c := range containers {
-		err = c.Deploy(tempdir)
+		err = c.Deploy(br.ctx, tempdir)
 		if err != nil {
 			return err
 		}
@@ -598,7 +598,7 @@ func (br *UserBroker) Upload(name string, content io.Reader) error {
 func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {
 	// find all containers
 	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(name, namespace)
+	containers, err := br.FindAll(br.ctx, name, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -617,9 +617,9 @@ func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {
 	// save snapshot archives
 	for _, c := range containers {
 		if c.Category().IsFramework() {
-			err = saveSnapshot(c, filepath.Join(tempdir, "app", "data.tar"))
+			err = saveSnapshot(br.ctx, c, filepath.Join(tempdir, "app", "data.tar"))
 		} else if c.Category().IsService() {
-			err = saveSnapshot(c, filepath.Join(tempdir, "services", c.ServiceName()+".tar"))
+			err = saveSnapshot(br.ctx, c, filepath.Join(tempdir, "services", c.ServiceName()+".tar"))
 		}
 		if err != nil {
 			return nil, err
@@ -650,7 +650,7 @@ func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {
 func (br *UserBroker) Restore(name string, source io.Reader) error {
 	// find all containers
 	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(name, namespace)
+	containers, err := br.FindAll(br.ctx, name, namespace)
 	if err != nil {
 		return err
 	}
@@ -679,9 +679,9 @@ func (br *UserBroker) Restore(name string, source io.Reader) error {
 	// restore snapshot archive to containers
 	for _, c := range containers {
 		if c.Category().IsFramework() {
-			err = restoreSnapshot(c, filepath.Join(tempdir, "app", "data.tar"))
+			err = restoreSnapshot(br.ctx, c, filepath.Join(tempdir, "app", "data.tar"))
 		} else if c.Category().IsService() {
-			err = restoreSnapshot(c, filepath.Join(tempdir, "services", c.ServiceName()+".tar"))
+			err = restoreSnapshot(br.ctx, c, filepath.Join(tempdir, "services", c.ServiceName()+".tar"))
 		}
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to restore snapshot")
@@ -691,7 +691,7 @@ func (br *UserBroker) Restore(name string, source io.Reader) error {
 	return nil
 }
 
-func saveSnapshot(c *container.Container, filename string) error {
+func saveSnapshot(ctx context.Context, c *container.Container, filename string) error {
 	if _, err := os.Stat(filename); err == nil {
 		return nil // file exists, don't overwrite
 	}
@@ -701,16 +701,16 @@ func saveSnapshot(c *container.Container, filename string) error {
 		return err
 	}
 	defer file.Close()
-	return c.ExecE("", nil, file, "cwctl", "dump")
+	return c.ExecE(ctx, "", nil, file, "cwctl", "dump")
 }
 
-func restoreSnapshot(c *container.Container, filename string) error {
+func restoreSnapshot(ctx context.Context, c *container.Container, filename string) error {
 	file, err := os.Open(filename)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	return c.ExecE("", file, nil, "cwctl", "restore")
+	return c.ExecE(ctx, "", file, nil, "cwctl", "restore")
 }
 
 type deleteReadCloser struct {

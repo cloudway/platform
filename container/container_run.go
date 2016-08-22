@@ -10,7 +10,7 @@ import (
 )
 
 // Run interactive command in a running container.
-func (c *Container) Run(user string, cmd ...string) error {
+func (c *Container) Run(ctx context.Context, user string, cmd ...string) error {
 	tty := NewTty()
 
 	execConfig := types.ExecConfig{
@@ -21,8 +21,6 @@ func (c *Container) Run(user string, cmd ...string) error {
 		AttachStderr: true,
 		Cmd:          cmd,
 	}
-
-	ctx := context.Background()
 
 	execResp, err := c.ContainerExecCreate(ctx, c.ID, execConfig)
 	if err != nil {

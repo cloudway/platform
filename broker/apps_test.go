@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/container"
+	"golang.org/x/net/context"
 )
 
 var _ = Describe("Applications", func() {
@@ -24,7 +25,7 @@ var _ = Describe("Applications", func() {
 
 	Describe("Create", func() {
 		It("should create application", func() {
-			br := broker.NewUserBroker(&user)
+			br := broker.NewUserBroker(&user, context.Background())
 
 			options := container.CreateOptions{
 				Name: "test",

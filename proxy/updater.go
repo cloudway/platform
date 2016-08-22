@@ -80,22 +80,24 @@ func update(proxy Proxy) error {
 }
 
 func rebuild(cli container.DockerClient, proxy Proxy) error {
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
+	ctx := context.Background()
+
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
 	if err != nil {
 		return err
 	}
 
 	for _, item := range containers {
 		if item.Labels[container.APP_NAME_KEY] != "" && item.Labels[container.APP_NAMESPACE_KEY] != "" {
-			c, err := cli.Inspect(item.ID)
+			c, err := cli.Inspect(ctx, item.ID)
 			if err == nil {
-				err = handleStart(proxy, c)
+				err = handleStart(proxy, ctx, c)
 			}
 			if err != nil {
 				logrus.Error(err)
 			}
 		} else {
-			info, err := cli.ContainerInspect(context.Background(), item.ID)
+			info, err := cli.ContainerInspect(ctx, item.ID)
 			if err == nil {
 				err = handleVirtualHost(proxy, info)
 			}
@@ -108,6 +110,7 @@ func rebuild(cli container.DockerClient, proxy Proxy) error {
 }
 
 func listen(cli container.DockerClient, proxy Proxy) error {
+	var ctx = context.Background()
 	var err error
 
 	filters := filters.NewArgs()
@@ -116,7 +119,7 @@ func listen(cli container.DockerClient, proxy Proxy) error {
 	filters.Add("event", "die")
 	filters.Add("event", "destroy")
 
-	resp, err := cli.Events(context.Background(), types.EventsOptions{Filters: filters})
+	resp, err := cli.Events(ctx, types.EventsOptions{Filters: filters})
 	if err != nil {
 		return err
 	}
@@ -139,12 +142,12 @@ func listen(cli container.DockerClient, proxy Proxy) error {
 			_, ok2 := event.Actor.Attributes[container.APP_NAMESPACE_KEY]
 			if ok1 && ok2 {
 				logrus.Debugf("container started: %s", event.Actor.ID)
-				c, err := cli.Inspect(event.Actor.ID)
+				c, err := cli.Inspect(ctx, event.Actor.ID)
 				if err == nil {
-					err = handleStart(proxy, c)
+					err = handleStart(proxy, ctx, c)
 				}
 			} else {
-				info, err := cli.ContainerInspect(context.Background(), event.Actor.ID)
+				info, err := cli.ContainerInspect(ctx, event.Actor.ID)
 				if err == nil {
 					err = handleVirtualHost(proxy, info)
 				}
@@ -163,9 +166,9 @@ func listen(cli container.DockerClient, proxy Proxy) error {
 	return nil
 }
 
-func handleStart(proxy Proxy, c *container.Container) error {
+func handleStart(proxy Proxy, ctx context.Context, c *container.Container) error {
 	// reterieve application info from container
-	info, err := c.GetInfo()
+	info, err := c.GetInfo(ctx)
 	if err != nil {
 		return err
 	}

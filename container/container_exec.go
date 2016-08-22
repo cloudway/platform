@@ -23,7 +23,7 @@ func (e StatusError) Error() string {
 }
 
 // Execute command in application container.
-func (c *Container) Exec(user string, stdin io.Reader, stdout, stderr io.Writer, cmd ...string) error {
+func (c *Container) Exec(ctx context.Context, user string, stdin io.Reader, stdout, stderr io.Writer, cmd ...string) error {
 	// FIXME: Output may be closed if no stdin attached at sometimes.
 	// To workaround this problem always attach the stdin. This problem
 	// just occurres in docker swarm cluster, so it may be a docker bug.
@@ -39,8 +39,6 @@ func (c *Container) Exec(user string, stdin io.Reader, stdout, stderr io.Writer,
 		AttachStderr: true,
 		Cmd:          cmd,
 	}
-
-	ctx := context.Background()
 
 	execResp, err := c.ContainerExecCreate(ctx, c.ID, execConfig)
 	if err != nil {
@@ -116,9 +114,9 @@ func pumpStreams(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer,
 
 // Execute the command and accumulate error messages from standard error of
 // the command.
-func (c *Container) ExecE(user string, in io.Reader, out io.Writer, cmd ...string) error {
+func (c *Container) ExecE(ctx context.Context, user string, in io.Reader, out io.Writer, cmd ...string) error {
 	var errbuf bytes.Buffer
-	err := c.Exec(user, in, out, &errbuf, cmd...)
+	err := c.Exec(ctx, user, in, out, &errbuf, cmd...)
 	if se, ok := err.(StatusError); ok && se.Message == "" {
 		err = StatusError{Message: chomp(&errbuf), Code: se.Code}
 	}
@@ -129,16 +127,16 @@ func (c *Container) ExecE(user string, in io.Reader, out io.Writer, cmd ...strin
 // error of the command.
 //
 // Equivalent to: ExecE(user, nil, nil, cmd...)
-func (c *Container) ExecQ(user string, cmd ...string) error {
-	return c.ExecE(user, nil, nil, cmd...)
+func (c *Container) ExecQ(ctx context.Context, user string, cmd ...string) error {
+	return c.ExecE(ctx, user, nil, nil, cmd...)
 }
 
 // Performs the expansion by executing command and return the contents
 // as the standard output of the command, with any trailing newlines
 // deleted.
-func (c *Container) Subst(user string, in io.Reader, cmd ...string) (string, error) {
+func (c *Container) Subst(ctx context.Context, user string, in io.Reader, cmd ...string) (string, error) {
 	var outbuf, errbuf bytes.Buffer
-	err := c.Exec(user, in, &outbuf, &errbuf, cmd...)
+	err := c.Exec(ctx, user, in, &outbuf, &errbuf, cmd...)
 	if se, ok := err.(StatusError); ok && se.Message == "" {
 		err = StatusError{Message: chomp(&errbuf), Code: se.Code}
 	}

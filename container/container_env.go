@@ -18,7 +18,7 @@ import (
 // Adds the variable to the environment with the value, if name does not
 // exists. If name does exist in the environment, then its value is changed
 // to value.
-func (c *Container) Setenv(name, value string) error {
+func (c *Container) Setenv(ctx context.Context, name, value string) error {
 	content := []byte(value)
 
 	// Make an archive containing the environmnet file
@@ -33,14 +33,14 @@ func (c *Container) Setenv(name, value string) error {
 	tw.Close()
 
 	// Copy the archive to the container at specified path
-	return c.CopyToContainer(context.Background(), c.ID, c.EnvDir(), buf, types.CopyToContainerOptions{})
+	return c.CopyToContainer(ctx, c.ID, c.EnvDir(), buf, types.CopyToContainerOptions{})
 }
 
 // Get an environment variable value.
-func (c *Container) Getenv(name string) (string, error) {
+func (c *Container) Getenv(ctx context.Context, name string) (string, error) {
 	// Copy the archive from the container that contains the environment file
 	path := c.EnvDir() + "/" + name
-	r, _, err := c.CopyFromContainer(context.Background(), c.ID, path)
+	r, _, err := c.CopyFromContainer(ctx, c.ID, path)
 	if err != nil {
 		return "", err
 	}
@@ -58,17 +58,17 @@ func (c *Container) Getenv(name string) (string, error) {
 	return strings.TrimRight(string(content), "\r\n"), nil
 }
 
-func (c *Container) ActiveState() manifest.ActiveState {
+func (c *Container) ActiveState(ctx context.Context) manifest.ActiveState {
 	// Get active state from running processes
 	if c.State.Running {
-		state, err := c.activeStateFromRunningProcess()
+		state, err := c.activeStateFromRunningProcess(ctx)
 		if err == nil {
 			return state
 		}
 	}
 
 	// Fallback to get active state from state file
-	str, err := c.Getenv(".state")
+	str, err := c.Getenv(ctx, ".state")
 	if err != nil {
 		return manifest.StateUnknown
 	}
@@ -87,8 +87,8 @@ func (c *Container) ActiveState() manifest.ActiveState {
 
 var statePattern = regexp.MustCompile(`^/usr/bin/cwctl \[([0-9])\]`)
 
-func (c *Container) activeStateFromRunningProcess() (manifest.ActiveState, error) {
-	ps, err := c.ContainerTop(context.Background(), c.ID, []string{})
+func (c *Container) activeStateFromRunningProcess(ctx context.Context) (manifest.ActiveState, error) {
+	ps, err := c.ContainerTop(ctx, c.ID, []string{})
 	if err != nil {
 		return manifest.StateUnknown, err
 	}

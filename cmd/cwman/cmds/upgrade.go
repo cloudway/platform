@@ -28,7 +28,9 @@ func (cli *CWMan) CmdUpgrade(args ...string) error {
 	}
 	defer os.Remove(ar)
 
-	containers, err := cli.FindAll("", "")
+	ctx := context.Background()
+
+	containers, err := cli.FindAll(ctx, "", "")
 	if err != nil {
 		return err
 	}
@@ -40,7 +42,6 @@ func (cli *CWMan) CmdUpgrade(args ...string) error {
 		apps[key] = append(apps[key], c)
 	}
 
-	ctx := context.Background()
 	opts := types.CopyToContainerOptions{}
 
 	// Stop applications, copy support files, and restart applications
@@ -53,9 +54,9 @@ func (cli *CWMan) CmdUpgrade(args ...string) error {
 				return err
 			}
 			logrus.Infof("upgrading container %s.%s-%s", c.ServiceName(), c.Name, c.Namespace)
-			logError(c.Stop())
+			logError(c.Stop(ctx))
 			logError(c.CopyToContainer(ctx, c.ID, "/", file, opts))
-			logError(c.Start())
+			logError(c.Start(ctx))
 			file.Close()
 		}
 	}

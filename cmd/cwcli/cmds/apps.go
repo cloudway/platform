@@ -600,15 +600,17 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 		return err
 	}
 
+	ctx := context.Background()
+
 	if del {
 		// cwcli app:env -d key1 key2 ...
-		return cli.ApplicationUnsetenv(context.Background(), name, service, cmd.Args()...)
+		return cli.ApplicationUnsetenv(ctx, name, service, cmd.Args()...)
 	}
 
 	switch {
 	case cmd.NArg() == 0:
 		// cwcli app:env
-		env, err := cli.ApplicationEnviron(context.Background(), name, service)
+		env, err := cli.ApplicationEnviron(ctx, name, service)
 		if err != nil {
 			return err
 		}
@@ -618,7 +620,7 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 
 	case cmd.NArg() == 1 && !strings.ContainsRune(cmd.Arg(0), '='):
 		// cwcli app:env key
-		val, err := cli.ApplicationGetenv(context.Background(), name, service, cmd.Arg(0))
+		val, err := cli.ApplicationGetenv(ctx, name, service, cmd.Arg(0))
 		if err != nil {
 			return err
 		}
@@ -636,7 +638,7 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 				os.Exit(1)
 			}
 		}
-		return cli.ApplicationSetenv(context.Background(), name, service, env)
+		return cli.ApplicationSetenv(ctx, name, service, env)
 	}
 
 	return nil

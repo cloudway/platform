@@ -7,12 +7,12 @@ import (
 )
 
 // Destroy the application container.
-func (c *Container) Destroy() error {
+func (c *Container) Destroy(ctx context.Context) error {
 	image := c.Config.Image
 
 	// remove the container, force kill if it's running
 	options := types.ContainerRemoveOptions{Force: true, RemoveVolumes: true}
-	err := c.ContainerRemove(context.Background(), c.ID, options)
+	err := c.ContainerRemove(ctx, c.ID, options)
 	if err != nil {
 		return err
 	}
@@ -21,7 +21,7 @@ func (c *Container) Destroy() error {
 	// remove associated image
 	if image != "" {
 		options := types.ImageRemoveOptions{Force: true, PruneChildren: true}
-		c.ImageRemove(context.Background(), image, options)
+		c.ImageRemove(ctx, image, options)
 		logrus.Debugf("Removed image %s", image)
 	}
 

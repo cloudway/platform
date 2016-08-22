@@ -59,7 +59,7 @@ type createConfig struct {
 }
 
 // Create new application containers.
-func (cli DockerClient) Create(scm SCM, opts CreateOptions) ([]*Container, error) {
+func (cli DockerClient) Create(ctx context.Context, scm SCM, opts CreateOptions) ([]*Container, error) {
 	cfg := &createConfig{CreateOptions: &opts}
 	cfg.Env = make(map[string]string)
 	for k, v := range opts.Env {
@@ -99,15 +99,15 @@ func (cli DockerClient) Create(scm SCM, opts CreateOptions) ([]*Container, error
 
 	switch cfg.Category {
 	case manifest.Framework:
-		return createApplicationContainer(cli, scm, cfg)
+		return createApplicationContainer(cli, ctx, scm, cfg)
 	case manifest.Service:
-		return createServiceContainer(cli, cfg)
+		return createServiceContainer(cli, ctx, cfg)
 	default:
 		return nil, fmt.Errorf("%s:%s is not a valid plugin", meta.Name, meta.Version)
 	}
 }
 
-func createApplicationContainer(cli DockerClient, scm SCM, cfg *createConfig) ([]*Container, error) {
+func createApplicationContainer(cli DockerClient, ctx context.Context, scm SCM, cfg *createConfig) ([]*Container, error) {
 	if cfg.ServiceName != "" {
 		return nil, fmt.Errorf("The application name cannot contains a serivce name: %s", cfg.ServiceName)
 	}
@@ -116,19 +116,19 @@ func createApplicationContainer(cli DockerClient, scm SCM, cfg *createConfig) ([
 	cfg.FQDN = cfg.Hostname + "." + defaults.Domain()
 	cfg.Env["CLOUDWAY_APP_DNS"] = cfg.FQDN
 
-	scale, err := getScaling(cli, cfg.Name, cfg.Namespace, cfg.Scaling)
+	scale, err := getScaling(cli, ctx, cfg.Name, cfg.Namespace, cfg.Scaling)
 	if err != nil {
 		return nil, err
 	}
 
-	image, err := buildImage(cli, dockerfileTemplate, cfg)
+	image, err := buildImage(cli, ctx, dockerfileTemplate, cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	var containers []*Container
 	for i := 0; i < scale; i++ {
-		if c, err := createContainer(cli, image, cfg); err != nil {
+		if c, err := createContainer(cli, ctx, image, cfg); err != nil {
 			return containers, err
 		} else {
 			containers = append(containers, c)
@@ -144,12 +144,12 @@ func createApplicationContainer(cli DockerClient, scm SCM, cfg *createConfig) ([
 	return containers, err
 }
 
-func getScaling(cli DockerClient, name, namespace string, scale int) (int, error) {
+func getScaling(cli DockerClient, ctx context.Context, name, namespace string, scale int) (int, error) {
 	if scale <= 0 {
 		return 0, fmt.Errorf("Invalid scaling value, it must be greater than 0")
 	}
 
-	cs, err := cli.FindApplications(name, namespace)
+	cs, err := cli.FindApplications(ctx, name, namespace)
 	if err != nil {
 		return 0, err
 	}
@@ -202,7 +202,7 @@ func populateFromTemplate(scm SCM, cfg *createConfig) error {
 	return err
 }
 
-func createServiceContainer(cli DockerClient, cfg *createConfig) ([]*Container, error) {
+func createServiceContainer(cli DockerClient, ctx context.Context, cfg *createConfig) ([]*Container, error) {
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = cfg.Plugin.Name
 	}
@@ -213,7 +213,7 @@ func createServiceContainer(cli DockerClient, cfg *createConfig) ([]*Container, 
 	cfg.Env["CLOUDWAY_APP_DNS"] = cfg.FQDN
 	cfg.Env["CLOUDWAY_SERVICE_NAME"] = cfg.ServiceName
 
-	cs, err := cli.FindService(name, namespace, service)
+	cs, err := cli.FindService(ctx, name, namespace, service)
 	if err != nil {
 		return nil, err
 	}
@@ -221,12 +221,12 @@ func createServiceContainer(cli DockerClient, cfg *createConfig) ([]*Container, 
 		return nil, fmt.Errorf("Service already installed: %s", service)
 	}
 
-	image, err := buildImage(cli, dockerfileTemplate, cfg)
+	image, err := buildImage(cli, ctx, dockerfileTemplate, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	c, err := createContainer(cli, image, cfg)
+	c, err := createContainer(cli, ctx, image, cfg)
 	if err != nil {
 		return nil, err
 	} else {
@@ -234,7 +234,7 @@ func createServiceContainer(cli DockerClient, cfg *createConfig) ([]*Container, 
 	}
 }
 
-func buildImage(cli DockerClient, t *template.Template, cfg *createConfig) (imageId string, err error) {
+func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg *createConfig) (imageId string, err error) {
 	// Create temporary tar archive to create build context
 	tarFile, err := ioutil.TempFile("", "docker")
 	if err != nil {
@@ -273,7 +273,7 @@ func buildImage(cli DockerClient, t *template.Template, cfg *createConfig) (imag
 
 	// build the image from context
 	options := types.ImageBuildOptions{Dockerfile: "Dockerfile", Remove: true, ForceRemove: true}
-	response, err := cli.ImageBuild(context.Background(), tarFile, options)
+	response, err := cli.ImageBuild(ctx, tarFile, options)
 
 	// read image ID from build response
 	if err == nil {
@@ -283,7 +283,7 @@ func buildImage(cli DockerClient, t *template.Template, cfg *createConfig) (imag
 
 	// get actual image ID
 	if err == nil {
-		info, _, err := cli.ImageInspectWithRaw(context.Background(), imageId, false)
+		info, _, err := cli.ImageInspectWithRaw(ctx, imageId, false)
 		if err == nil {
 			imageId = info.ID
 		}
@@ -355,7 +355,7 @@ func addPluginFiles(tw *tar.Writer, dst, path string) error {
 	}
 }
 
-func createContainer(cli DockerClient, imageId string, cfg *createConfig) (*Container, error) {
+func createContainer(cli DockerClient, ctx context.Context, imageId string, cfg *createConfig) (*Container, error) {
 	config := &container.Config{
 		Image: imageId,
 		Labels: map[string]string{
@@ -393,18 +393,18 @@ func createContainer(cli DockerClient, imageId string, cfg *createConfig) (*Cont
 	var containerName string
 	for i := 1; ; i++ {
 		containerName = baseName + strconv.Itoa(i)
-		_, err := cli.ContainerInspect(context.Background(), containerName)
+		_, err := cli.ContainerInspect(ctx, containerName)
 		if err != nil {
 			break
 		}
 	}
 
-	resp, err := cli.ContainerCreate(context.Background(), config, hostConfig, netConfig, containerName)
+	resp, err := cli.ContainerCreate(ctx, config, hostConfig, netConfig, containerName)
 	if err != nil {
 		logrus.WithError(err).Error("failed to create container")
 		return nil, err
 	}
-	c, err := cli.Inspect(resp.ID)
+	c, err := cli.Inspect(ctx, resp.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +418,7 @@ func createContainer(cli DockerClient, imageId string, cfg *createConfig) (*Cont
 			}
 			hosts = shosts
 		}
-		c.AddHost(hosts[0], hosts[1:]...)
+		c.AddHost(ctx, hosts[0], hosts[1:]...)
 	}
 
 	return c, nil

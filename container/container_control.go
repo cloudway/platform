@@ -14,43 +14,43 @@ import (
 var _WAIT_SECONDS = time.Second * 60
 
 // Start the application container.
-func (c *Container) Start() error {
-	err := c.ContainerStart(context.Background(), c.ID, types.ContainerStartOptions{})
+func (c *Container) Start(ctx context.Context) error {
+	err := c.ContainerStart(ctx, c.ID, types.ContainerStartOptions{})
 	if err != nil {
 		return err
 	}
-	return startContainer(c)
+	return startSandbox(ctx, c)
 }
 
 // Restart the application container.
-func (c *Container) Restart() error {
-	err := c.ContainerRestart(context.Background(), c.ID, &_WAIT_SECONDS)
+func (c *Container) Restart(ctx context.Context) error {
+	err := c.ContainerRestart(ctx, c.ID, &_WAIT_SECONDS)
 	if err != nil {
 		return err
 	}
-	return startContainer(c)
+	return startSandbox(ctx, c)
 }
 
 // Stop the application container.
-func (c *Container) Stop() error {
-	return c.ContainerStop(context.Background(), c.ID, &_WAIT_SECONDS)
+func (c *Container) Stop(ctx context.Context) error {
+	return c.ContainerStop(ctx, c.ID, &_WAIT_SECONDS)
 }
 
-func startContainer(c *Container) error {
-	err := c.Exec("", nil, os.Stdout, os.Stderr, "/usr/bin/cwctl", "start")
+func startSandbox(ctx context.Context, c *Container) error {
+	err := c.Exec(ctx, "", nil, os.Stdout, os.Stderr, "/usr/bin/cwctl", "start")
 	if err != nil {
 		return err
 	}
 
-	info, err := c.GetInfo()
+	info, err := c.GetInfo(ctx)
 	if err != nil {
 		return err
 	}
 
-	return distributeEnv(c, info.Env)
+	return distributeEnv(ctx, c, info.Env)
 }
 
-func distributeEnv(c *Container, env map[string]string) error {
+func distributeEnv(ctx context.Context, c *Container, env map[string]string) error {
 	if !c.Category().IsService() || len(env) == 0 {
 		return nil
 	}
@@ -59,12 +59,11 @@ func distributeEnv(c *Container, env map[string]string) error {
 	envfile := createEnvFile(env)
 
 	// Write environments to all containers in the application
-	cs, err := c.FindAll(c.Name, c.Namespace)
+	cs, err := c.FindAll(ctx, c.Name, c.Namespace)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
 	opt := types.CopyToContainerOptions{}
 	for _, cc := range cs {
 		if cc.ID != c.ID {

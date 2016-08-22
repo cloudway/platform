@@ -65,7 +65,7 @@ func (ar *applicationsRouter) currentUser(ctx context.Context) *userdb.BasicUser
 func (ar *applicationsRouter) list(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := ar.currentUser(ctx)
 
-	apps, err := ar.NewUserBroker(user).GetApplications()
+	apps, err := ar.NewUserBroker(user, ctx).GetApplications()
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r
 		name = vars["name"]
 	)
 
-	apps, err := ar.NewUserBroker(user).GetApplications()
+	apps, err := ar.NewUserBroker(user, ctx).GetApplications()
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	cs, _ := ar.FindApplications(name, user.Namespace)
+	cs, _ := ar.FindApplications(ctx, name, user.Namespace)
 	info.Scaling = len(cs)
 
 	return httputils.WriteJSON(w, http.StatusOK, &info)
@@ -148,7 +148,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 	}
 
 	user := ar.currentUser(ctx)
-	br := ar.NewUserBroker(user)
+	br := ar.NewUserBroker(user, ctx)
 
 	var req types.CreateApplication
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -180,7 +180,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		return err
 	}
 
-	if err = br.StartContainers(cs); err != nil {
+	if err = br.StartContainers(ctx, cs); err != nil {
 		return err
 	}
 
@@ -190,7 +190,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 
 func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := ar.currentUser(ctx)
-	br := ar.NewUserBroker(user)
+	br := ar.NewUserBroker(user, ctx)
 
 	if err := br.RemoveApplication(vars["name"]); err != nil {
 		return err
@@ -202,17 +202,17 @@ func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter,
 
 func (ar *applicationsRouter) start(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := ar.currentUser(ctx)
-	return ar.NewUserBroker(user).StartApplication(vars["name"])
+	return ar.NewUserBroker(user, ctx).StartApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) stop(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := ar.currentUser(ctx)
-	return ar.NewUserBroker(user).StopApplication(vars["name"])
+	return ar.NewUserBroker(user, ctx).StopApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) restart(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := ar.currentUser(ctx)
-	return ar.NewUserBroker(user).RestartApplication(vars["name"])
+	return ar.NewUserBroker(user, ctx).RestartApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -268,7 +268,7 @@ func convertBranchesJson(branches []scm.Branch) []types.Branch {
 func (ar *applicationsRouter) download(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := ar.currentUser(ctx)
 
-	tr, err := ar.NewUserBroker(user).Download(vars["name"])
+	tr, err := ar.NewUserBroker(user, ctx).Download(vars["name"])
 	if err != nil {
 		return err
 	}
@@ -286,13 +286,13 @@ func (ar *applicationsRouter) download(ctx context.Context, w http.ResponseWrite
 
 func (ar *applicationsRouter) upload(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := ar.currentUser(ctx)
-	return ar.NewUserBroker(user).Upload(vars["name"], r.Body)
+	return ar.NewUserBroker(user, ctx).Upload(vars["name"], r.Body)
 }
 
 func (ar *applicationsRouter) dump(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := ar.currentUser(ctx)
 
-	tr, err := ar.NewUserBroker(user).Dump(vars["name"])
+	tr, err := ar.NewUserBroker(user, ctx).Dump(vars["name"])
 	if err != nil {
 		return err
 	}
@@ -310,7 +310,7 @@ func (ar *applicationsRouter) dump(ctx context.Context, w http.ResponseWriter, r
 
 func (ar *applicationsRouter) restore(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := ar.currentUser(ctx)
-	return ar.NewUserBroker(user).Restore(vars["name"], r.Body)
+	return ar.NewUserBroker(user, ctx).Restore(vars["name"], r.Body)
 }
 
 func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -334,7 +334,7 @@ func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	if up || down {
-		cs, err := ar.FindApplications(name, user.Namespace)
+		cs, err := ar.FindApplications(ctx, name, user.Namespace)
 		if err != nil {
 			return err
 		}
@@ -345,20 +345,20 @@ func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, 
 		}
 	}
 
-	br := ar.NewUserBroker(user)
+	br := ar.NewUserBroker(user, ctx)
 	cs, err := br.ScaleApplication(name, num)
 	if err == nil {
-		err = br.StartContainers(cs)
+		err = br.StartContainers(ctx, cs)
 	}
 	return err
 }
 
-func (ar *applicationsRouter) getContainers(namespace string, vars map[string]string) (cs []*container.Container, err error) {
+func (ar *applicationsRouter) getContainers(ctx context.Context, namespace string, vars map[string]string) (cs []*container.Container, err error) {
 	name, service := vars["name"], vars["service"]
 	if service == "" || service == "*" || service == "_" {
-		cs, err = ar.FindApplications(name, namespace)
+		cs, err = ar.FindApplications(ctx, name, namespace)
 	} else {
-		cs, err = ar.FindService(name, namespace, service)
+		cs, err = ar.FindService(ctx, name, namespace, service)
 	}
 	if err == nil && len(cs) == 0 {
 		if service != "" {
@@ -370,8 +370,8 @@ func (ar *applicationsRouter) getContainers(namespace string, vars map[string]st
 	return cs, err
 }
 
-func (ar *applicationsRouter) getContainer(namespace string, vars map[string]string) (*container.Container, error) {
-	cs, err := ar.getContainers(namespace, vars)
+func (ar *applicationsRouter) getContainer(ctx context.Context, namespace string, vars map[string]string) (*container.Container, error) {
+	cs, err := ar.getContainers(ctx, namespace, vars)
 	if err == nil {
 		return cs[0], nil
 	} else {
@@ -382,11 +382,11 @@ func (ar *applicationsRouter) getContainer(namespace string, vars map[string]str
 func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := ar.currentUser(ctx)
 
-	container, err := ar.getContainer(user.Namespace, vars)
+	container, err := ar.getContainer(ctx, user.Namespace, vars)
 	if err != nil {
 		return err
 	}
-	if info, err := container.GetInfo(); err != nil {
+	if info, err := container.GetInfo(ctx); err != nil {
 		return err
 	} else {
 		return httputils.WriteJSON(w, http.StatusOK, info.Env)
@@ -396,11 +396,11 @@ func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter
 func (ar *applicationsRouter) getenv(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := ar.currentUser(ctx)
 
-	container, err := ar.getContainer(user.Namespace, vars)
+	container, err := ar.getContainer(ctx, user.Namespace, vars)
 	if err != nil {
 		return err
 	}
-	if info, err := container.GetInfo(); err != nil {
+	if info, err := container.GetInfo(ctx); err != nil {
 		return err
 	} else {
 		key := vars["key"]
@@ -427,7 +427,7 @@ func (ar *applicationsRouter) setenv(ctx context.Context, w http.ResponseWriter,
 
 	user := ar.currentUser(ctx)
 
-	cs, err := ar.getContainers(user.Namespace, vars)
+	cs, err := ar.getContainers(ctx, user.Namespace, vars)
 	if err != nil {
 		return err
 	}
@@ -450,7 +450,7 @@ func (ar *applicationsRouter) setenv(ctx context.Context, w http.ResponseWriter,
 	}
 
 	for _, container := range cs {
-		if err = container.ExecE("root", nil, nil, args...); err != nil {
+		if err = container.ExecE(ctx, "root", nil, nil, args...); err != nil {
 			return err
 		}
 	}

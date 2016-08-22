@@ -48,8 +48,8 @@ func SplitNames(name string) (string, string, string) {
 
 // Returns an application container object constructed from the
 // container id in the system.
-func (cli DockerClient) Inspect(id string) (*Container, error) {
-	info, err := cli.ContainerInspect(context.Background(), id)
+func (cli DockerClient) Inspect(ctx context.Context, id string) (*Container, error) {
+	info, err := cli.ContainerInspect(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -70,13 +70,13 @@ func (cli DockerClient) Inspect(id string) (*Container, error) {
 }
 
 // Returns a list of ids for every cloudway container in the system.
-func (cli DockerClient) IDs() (ids []string, err error) {
+func (cli DockerClient) IDs(ctx context.Context) (ids []string, err error) {
 	args := filters.NewArgs()
 	args.Add("label", APP_NAME_KEY)
 	args.Add("label", APP_NAMESPACE_KEY)
 	options := types.ContainerListOptions{All: true, Filter: args}
 
-	containers, err := cli.ContainerList(context.Background(), options)
+	containers, err := cli.ContainerList(ctx, options)
 	if err == nil {
 		ids = make([]string, len(containers))
 		for i, c := range containers {
@@ -88,15 +88,15 @@ func (cli DockerClient) IDs() (ids []string, err error) {
 
 // Returns a list of application container objects for every cloudway
 // container in the system.
-func (cli DockerClient) ListAll() ([]*Container, error) {
-	ids, err := cli.IDs()
+func (cli DockerClient) ListAll(ctx context.Context) ([]*Container, error) {
+	ids, err := cli.IDs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	containers := make([]*Container, 0, len(ids))
 	for _, id := range ids {
-		c, err := cli.Inspect(id)
+		c, err := cli.Inspect(ctx, id)
 		if err != nil {
 			return nil, err
 		}
@@ -106,26 +106,26 @@ func (cli DockerClient) ListAll() ([]*Container, error) {
 }
 
 // Find all containers with the given name and namespace.
-func (cli DockerClient) FindAll(name, namespace string) ([]*Container, error) {
-	return find(cli, "", "", name, namespace)
+func (cli DockerClient) FindAll(ctx context.Context, name, namespace string) ([]*Container, error) {
+	return find(cli, ctx, "", "", name, namespace)
 }
 
 // Find all application containers with the given name and namespace.
-func (cli DockerClient) FindApplications(name, namespace string) ([]*Container, error) {
-	return find(cli, manifest.Framework, "", name, namespace)
+func (cli DockerClient) FindApplications(ctx context.Context, name, namespace string) ([]*Container, error) {
+	return find(cli, ctx, manifest.Framework, "", name, namespace)
 }
 
 // Find all service containers associated with the given name and namespace.
-func (cli DockerClient) FindServices(name, namespace string) ([]*Container, error) {
-	return find(cli, manifest.Service, "", name, namespace)
+func (cli DockerClient) FindServices(ctx context.Context, name, namespace string) ([]*Container, error) {
+	return find(cli, ctx, manifest.Service, "", name, namespace)
 }
 
 // Find service container with the give name, namespace and service name.
-func (cli DockerClient) FindService(name, namespace, service string) ([]*Container, error) {
-	return find(cli, manifest.Service, service, name, namespace)
+func (cli DockerClient) FindService(ctx context.Context, name, namespace, service string) ([]*Container, error) {
+	return find(cli, ctx, manifest.Service, service, name, namespace)
 }
 
-func find(cli DockerClient, category manifest.Category, service, name, namespace string) ([]*Container, error) {
+func find(cli DockerClient, ctx context.Context, category manifest.Category, service, name, namespace string) ([]*Container, error) {
 	args := filters.NewArgs()
 	if category != "" {
 		args.Add("label", CATEGORY_KEY+"="+string(category))
@@ -145,14 +145,14 @@ func find(cli DockerClient, category manifest.Category, service, name, namespace
 	}
 
 	options := types.ContainerListOptions{All: true, Filter: args}
-	list, err := cli.ContainerList(context.Background(), options)
+	list, err := cli.ContainerList(ctx, options)
 	if err != nil {
 		return nil, err
 	}
 
 	containers := make([]*Container, 0, len(list))
 	for _, c := range list {
-		cc, err := cli.Inspect(c.ID)
+		cc, err := cli.Inspect(ctx, c.ID)
 		if err != nil {
 			return nil, err
 		}

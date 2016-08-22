@@ -15,17 +15,19 @@ import (
 )
 
 var _ = Describe("Version", func() {
+	var ctx = context.Background()
+
 	Context("Server", func() {
 		It("should return server version information", func() {
 			cli := NewTestClient(false)
-			version, err := cli.ServerVersion(context.Background())
+			version, err := cli.ServerVersion(ctx)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(version.Version).Should(Equal(api.Version))
 			Ω(version.GitCommit).Should(Equal(api.GitCommit))
 			Ω(version.BuildTime).Should(Equal(api.BuildTime))
 
-			dockerVersion, err := broker.ServerVersion(context.Background())
+			dockerVersion, err := broker.ServerVersion(ctx)
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(version.DockerVersion).Should(Equal(dockerVersion.Version))
 
@@ -38,28 +40,28 @@ var _ = Describe("Version", func() {
 		It("should success if client version is equal to the server version", func() {
 			cli := NewTestClient(false)
 			cli.UpdateClientVersion(api.Version)
-			_, err := cli.ServerVersion(context.Background())
+			_, err := cli.ServerVersion(ctx)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
 		It("should success if client version less than server version but greater than min version", func() {
 			cli := NewTestClient(false)
 			cli.UpdateClientVersion(api.MinVersion + ".1")
-			_, err := cli.ServerVersion(context.Background())
+			_, err := cli.ServerVersion(ctx)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
 		It("should fail if client version is greater than server version", func() {
 			cli := NewTestClient(false)
 			cli.UpdateClientVersion("1000.0")
-			_, err := cli.ServerVersion(context.Background())
+			_, err := cli.ServerVersion(ctx)
 			Ω(err).Should(HaveHTTPStatus(http.StatusBadRequest))
 		})
 
 		It("should fail if client version is less than minimum version", func() {
 			cli := NewTestClient(false)
 			cli.UpdateClientVersion("0.1")
-			_, err := cli.ServerVersion(context.Background())
+			_, err := cli.ServerVersion(ctx)
 			Ω(err).Should(HaveHTTPStatus(http.StatusBadRequest))
 		})
 	})
@@ -78,7 +80,6 @@ var _ = Describe("Version", func() {
 
 			req, _ := http.NewRequest("GET", "/test", nil)
 			resp := httptest.NewRecorder()
-			ctx := context.Background()
 			vars := map[string]string{}
 
 			Ω(h(ctx, resp, req, vars)).Should(Succeed())

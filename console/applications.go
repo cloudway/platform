@@ -17,6 +17,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
+	"golang.org/x/net/context"
 	"gopkg.in/authboss.v0"
 
 	"github.com/cloudway/platform/auth/userdb"
@@ -232,7 +233,7 @@ func (con *Console) parseServiceCreateOptions(r *http.Request) (opts container.C
 func (con *Console) startContainers(containers []*container.Container) error {
 	errChan := make(chan error, 1)
 	go func() {
-		errChan <- con.Broker.StartContainers(containers)
+		errChan <- con.Broker.StartContainers(context.Background(), containers)
 	}()
 
 	timer := time.NewTimer(time.Second * 10)
@@ -283,6 +284,7 @@ func (con *Console) getApplication(w http.ResponseWriter, r *http.Request) {
 func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user *userdb.BasicUser, data authboss.HTMLData) {
 	name := mux.Vars(r)["name"]
 	app := user.Applications[name]
+	ctx := context.Background()
 
 	if app == nil {
 		con.error(w, r, http.StatusNotFound, "应用未找到", "/applications")
@@ -302,7 +304,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 		appData.CloneURL = cloneURL
 	}
 
-	cs, err := con.FindAll(name, user.Namespace)
+	cs, err := con.FindAll(ctx, name, user.Namespace)
 	if err != nil {
 		logrus.Error(err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -320,7 +322,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 			Name:     c.ServiceName(),
 			Category: c.Category(),
 			IP:       c.IP(),
-			State:    c.ActiveState().String(),
+			State:    c.ActiveState(ctx).String(),
 		}
 
 		meta, err := con.Hub.GetPluginInfo(c.PluginTag())
@@ -542,6 +544,7 @@ func (con *Console) getApplicationStatus(w http.ResponseWriter, r *http.Request)
 
 	id := r.FormValue("id")
 	name := mux.Vars(r)["name"]
+	ctx := context.Background()
 
 	var inprogress bool
 	if id != "" {
@@ -550,7 +553,7 @@ func (con *Console) getApplicationStatus(w http.ResponseWriter, r *http.Request)
 		muTask.RUnlock()
 	}
 
-	cs, err := con.FindAll(name, user.Namespace)
+	cs, err := con.FindAll(ctx, name, user.Namespace)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -560,7 +563,7 @@ func (con *Console) getApplicationStatus(w http.ResponseWriter, r *http.Request)
 	status.States = make([]stateData, len(cs))
 	for i, c := range cs {
 		status.States[i].ID = c.ID
-		status.States[i].State = c.ActiveState().String()
+		status.States[i].State = c.ActiveState(ctx).String()
 	}
 
 	if inprogress {

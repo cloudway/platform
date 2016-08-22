@@ -12,9 +12,10 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/cloudway/platform/pkg/archive"
+	"golang.org/x/net/context"
 )
 
-func (c *Container) Install(source string) error {
+func (c *Container) Install(ctx context.Context, source string) error {
 	if !c.State.Running || c.State.Paused {
 		return errors.New("Container is not running")
 	}
@@ -72,5 +73,5 @@ func (c *Container) Install(source string) error {
 	}
 
 	// run install command in application container
-	return c.Exec("root", tarFile, os.Stdout, os.Stderr, "/usr/bin/cwctl", "install", meta.Name)
+	return c.Exec(ctx, "root", tarFile, os.Stdout, os.Stderr, "/usr/bin/cwctl", "install", meta.Name)
 }

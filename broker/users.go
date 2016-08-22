@@ -3,6 +3,7 @@ package broker
 import (
 	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 func (br *Broker) CreateUser(user userdb.User, password string) (err error) {
@@ -27,6 +28,8 @@ func (br *Broker) CreateUser(user userdb.User, password string) (err error) {
 }
 
 func (br *Broker) RemoveUser(username string) (err error) {
+	ctx := context.Background()
+
 	var user userdb.BasicUser
 	err = br.Users.Find(username, &user)
 	if err != nil {
@@ -36,12 +39,12 @@ func (br *Broker) RemoveUser(username string) (err error) {
 	var errors errors.Errors
 
 	// remove all containers belongs to the user
-	cs, err := br.FindAll("", user.Namespace)
+	cs, err := br.FindAll(ctx, "", user.Namespace)
 	if err != nil {
 		errors.Add(err)
 	} else {
 		for _, c := range cs {
-			errors.Add(c.Destroy())
+			errors.Add(c.Destroy(ctx))
 		}
 	}
 

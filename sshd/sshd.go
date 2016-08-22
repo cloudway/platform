@@ -83,16 +83,18 @@ func Serve(cli container.DockerClient, addr string) error {
 }
 
 func findContainer(cli container.DockerClient, userInfo string) (*container.Container, error) {
+	ctx := context.Background()
+
 	service, name, namespace := container.SplitNames(userInfo)
 	if name == "" || namespace == "" {
-		return cli.Inspect(userInfo)
+		return cli.Inspect(ctx, userInfo)
 	}
 
 	var cs []*container.Container
 	if service == "" || service == "*" {
-		cs, _ = cli.FindApplications(name, namespace)
+		cs, _ = cli.FindApplications(ctx, name, namespace)
 	} else {
-		cs, _ = cli.FindService(name, namespace, service)
+		cs, _ = cli.FindService(ctx, name, namespace, service)
 	}
 
 	if len(cs) == 0 {
@@ -262,7 +264,7 @@ func execCmd(channel ssh.Channel, c *container.Container, args string) {
 	defer channel.Close()
 
 	logrus.Debugf("exec: %s", args)
-	err := c.Exec("", channel, channel, channel.Stderr(), "/usr/bin/cwsh", "-c", args)
+	err := c.Exec(context.Background(), "", channel, channel, channel.Stderr(), "/usr/bin/cwsh", "-c", args)
 
 	var exitCode int
 	if se, ok := err.(container.StatusError); ok {
