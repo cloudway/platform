@@ -20,5 +20,9 @@ func (api *APIClient) Authenticate(ctx context.Context, username, password strin
 }
 
 func (api *APIClient) SetToken(token string) {
-	api.cli.AddCustomHeader("Authorization", "Bearer "+token)
+	if token != "" {
+		api.cli.AddCustomHeader("Authorization", "Bearer "+token)
+	} else {
+		api.cli.RemoveCustomHeader("Authorization")
+	}
 }

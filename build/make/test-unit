@@ -4,10 +4,8 @@ set -e
 bundle_test_setup() {
     mkdir -p /data/db
     chown -R mongodb /data/db
-
     local logfile=/var/log/mongodb/mongod.log
     gosu mongodb mongod --fork --logpath $logfile --bind_ip 127.0.0.1 >/dev/null
-    export CLOUDWAY_USERDB_URL=mongodb://127.0.0.1:27017/cloudway
 
     if [ -n "$DOCKER_REGISTRY_MIRROR" ]; then
         sed -i /etc/default/docker -e 's|#DOCKER_OPTS=.*|DOCKER_OPTS="--registry-mirror '$DOCKER_REGISTRY_MIRROR'"|'
