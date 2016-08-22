@@ -29,14 +29,16 @@ func (api *APIClient) GetApplicationInfo(ctx context.Context, name string) (*typ
 	return &info, err
 }
 
-func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateApplication) (*types.ApplicationInfo, error) {
-	var info types.ApplicationInfo
+func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateApplication, log io.Writer) (*types.ApplicationInfo, error) {
 	resp, err := api.cli.Post(ctx, "/applications/", nil, &opts, nil)
-	if err == nil {
-		err = json.NewDecoder(resp.Body).Decode(&info)
-		resp.EnsureClosed()
+	if err != nil {
+		return nil, err
 	}
-	return &info, err
+	if log != nil {
+		io.Copy(log, resp.Body)
+	}
+	resp.EnsureClosed()
+	return api.GetApplicationInfo(ctx, opts.Name)
 }
 
 func (api *APIClient) RemoveApplication(ctx context.Context, name string) error {

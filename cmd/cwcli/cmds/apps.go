@@ -428,7 +428,7 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
 		return err
 	}
 
-	app, err := cli.CreateApplication(context.Background(), req)
+	app, err := cli.CreateApplication(context.Background(), req, cli.stdout)
 	if err != nil {
 		return err
 	}

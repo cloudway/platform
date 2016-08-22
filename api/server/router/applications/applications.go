@@ -159,6 +159,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		Name:    req.Name,
 		Repo:    req.Repo,
 		Scaling: 1,
+		Logout:  w,
 	}
 
 	if !namePattern.MatchString(opts.Name) {
@@ -184,8 +185,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		return err
 	}
 
-	vars["name"] = req.Name
-	return ar.info(ctx, w, r, vars)
+	return nil
 }
 
 func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {

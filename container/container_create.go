@@ -2,12 +2,14 @@ package container
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -43,6 +45,7 @@ type CreateOptions struct {
 	Hosts       []string
 	Env         map[string]string
 	Repo        string
+	Logout      io.Writer
 }
 
 type createConfig struct {
@@ -278,7 +281,7 @@ func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg
 	// read image ID from build response
 	if err == nil {
 		defer response.Body.Close()
-		imageId, err = readBuildImageId(response.Body)
+		imageId, err = readBuildStream(response.Body, cfg.Logout)
 	}
 
 	// get actual image ID
@@ -292,7 +295,7 @@ func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg
 	return
 }
 
-func readBuildImageId(in io.Reader) (id string, err error) {
+func readBuildStream(in io.Reader, out io.Writer) (id string, err error) {
 	const SUCCESS = "Successfully built "
 
 	var dec = json.NewDecoder(in)
@@ -305,8 +308,14 @@ func readBuildImageId(in io.Reader) (id string, err error) {
 			break
 		}
 
-		if jm.Stream != "" {
-			fmt.Print(jm.Stream)
+		if out != nil && jm.Stream != "" {
+			out.Write([]byte(jm.Stream))
+			switch b := out.(type) {
+			case *bufio.Writer:
+				b.Flush()
+			case http.Flusher:
+				b.Flush()
+			}
 		}
 
 		if jm.Error != nil {
