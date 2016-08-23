@@ -17,7 +17,7 @@ import (
 
 var (
 	dockerCli      container.DockerClient
-	repositoryRoot string
+	repositoryRoot string = "/var/git/container_test"
 	mockScm        scm.SCM
 	pluginHub      *hub.PluginHub
 )
@@ -31,17 +31,15 @@ var _ = BeforeSuite(func() {
 	var err error
 
 	Expect(config.Initialize()).To(Succeed())
+	config.Set("scm.type", "mock")
+	config.Set("scm.url", "file://"+repositoryRoot)
+	mockScm, err = scm.New()
+	Expect(err).NotTo(HaveOccurred())
 
 	dockerCli, err = container.NewEnvClient()
 	Expect(err).NotTo(HaveOccurred())
 
 	_, err = dockerCli.ServerVersion(context.Background())
-	Expect(err).NotTo(HaveOccurred())
-
-	repositoryRoot = "/var/git/container_test"
-	os.Setenv("CLOUDWAY_SCM_TYPE", "mock")
-	os.Setenv("CLOUDWAY_SCM_URL", "file://"+repositoryRoot)
-	mockScm, err = scm.New()
 	Expect(err).NotTo(HaveOccurred())
 
 	pluginHub, err = hub.New()

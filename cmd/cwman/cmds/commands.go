@@ -47,6 +47,7 @@ func Init(docker container.DockerClient) *CWMan {
 		"api-server":   cli.CmdAPIServer,
 		"update-proxy": cli.CmdUpdateProxy,
 		"sshd":         cli.CmdSshd,
+		"git-ssh":      cli.CmdGitSSH,
 		"config":       cli.CmdConfig,
 		"install":      cli.CmdInstallPlugin,
 		"deploy":       cli.CmdDeploy,

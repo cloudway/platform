@@ -47,7 +47,7 @@ type SSHKeyPage struct {
 
 type BranchPage struct {
 	Page
-	Values []scm.Branch `json:"values"`
+	Values []*scm.Branch `json:"values"`
 }
 
 type ServerErrors struct {

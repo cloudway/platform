@@ -42,7 +42,7 @@ type SCM interface {
 	GetDeploymentBranch(namespace, name string) (*Branch, error)
 
 	// Get all deployment branches.
-	GetDeploymentBranches(namespace, name string) ([]Branch, error)
+	GetDeploymentBranches(namespace, name string) ([]*Branch, error)
 
 	// Add an SSH key to the given namespace.
 	AddKey(namespace string, key string) error

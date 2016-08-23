@@ -60,5 +60,5 @@ type Deployments struct {
 	Current *Branch
 
 	// All deployment branches
-	Branches []Branch
+	Branches []*Branch
 }
