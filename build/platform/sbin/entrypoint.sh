@@ -3,7 +3,7 @@ set -e
 
 : ${CLOUDWAY_DOMAIN:=example.com}
 : ${CONSOLE_URL:=http://api.${CLOUDWAY_DOMAIN}}
-: ${BITBUCKET_URL:=http://git.${CLOUDWAY_DOMAIN}}
+: ${GIT_URL:=http://git.${CLOUDWAY_DOMAIN}}
 
 export CLOUDWAY_DOMAIN
 
@@ -14,49 +14,14 @@ get_domain() {
 }
 
 CONSOLE_DOMAIN=$(get_domain $CONSOLE_URL)
-BITBUCKET_DOMAIN=$(get_domain $BITBUCKET_URL)
 
 cwman config "domain" ${CLOUDWAY_DOMAIN}
 cwman config "console.url" ${CONSOLE_URL}
 cwman config "proxy.url" hipache://127.0.0.1:6379
 cwman config "proxy-mapping.${CONSOLE_DOMAIN}" http://127.0.0.1:6616
-cwman config "proxy-mapping.${BITBUCKET_DOMAIN}" http://127.0.0.1:7990
-cwman config "scm.type" bitbucket
-cwman config "scm.url" "http://${BITBUCKET_USER:-admin}:${BITBUCKET_PASSWORD?}@127.0.0.1:7990"
-cwman config "scm.clone_url" "git clone ssh://git@${BITBUCKET_DOMAIN}:7999/<namespace>/<repo>.git"
-
-# allow the container to be started with `--user`
-mkdir -p $BITBUCKET_HOME
-chown ${RUN_USER}:${RUN_GROUP} $BITBUCKET_HOME
-
-# https://jira.atlassian.com/browse/BSERV-8345
-sed -i $BITBUCKET_INSTALL_DIR/bin/setenv.sh \
-    -e 's|JVM_SUPPORT_RECOMMENDED_ARGS=""|JVM_SUPPORT_RECOMMENDED_ARGS="-Djava.security.egd=file:/dev/./urandom"|'
-
-UNATTENDED_CONFIG=$BITBUCKET_HOME/shared/bitbucket.properties
-if [ ! -e $UNATTENDED_CONFIG ]; then
-    if [ -z "$BITBUCKET_PASSWORD" -o -z "$BITBUCKET_LICENSE" ]; then
-        echo >&2 'You must specifiy the BITBUCKET_PASSWORD and BITBUCKET_LICENSE environment variables'
-        exit 1
-    fi
-
-    # Use the \u000a character to not break the license over multiple lines
-    BITBUCKET_LICENSE=$(echo $BITBUCKET_LICENSE | sed ':a;N;$!ba;s/\n/ /g' | sed 's/ /\\u000a/g')
-
-    mkdir -p $BITBUCKET_HOME/shared
-    chown ${RUN_USER}:${RUN_GROUP} $BITBUCKET_HOME/shared
-
-    cat > $UNATTENDED_CONFIG <<EOF
-setup.displayName = Bitbucket
-setup.baseUrl = ${BITBUCKET_URL}
-setup.license = ${BITBUCKET_LICENSE}
-setup.sysadmin.username = ${BITBUCKET_USER:-admin}
-setup.sysadmin.password = ${BITBUCKET_PASSWORD}
-setup.sysadmin.displayName = Administrator
-setup.sysadmin.emailAddress = admin@example.com
-EOF
-    chown ${RUN_USER}:${RUN_GROUP} $UNATTENDED_CONFIG
-fi
+cwman config "scm.type" mock
+cwman config "scm.url" "file:///data/git"
+cwman config "scm.clone_url" "git clone ssh://git@${GIT_DOMAIN}:7999/<namespace>/<repo>.git"
 
 # Initialize mongodb data directory
 mkdir -p /data/db /data/configdb

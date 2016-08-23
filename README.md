@@ -56,24 +56,15 @@ Cloudway: <small>The way to cloud</small>
 
     DOMAIN=example.com
     CONSOLE_URL=http://api.$DOMAIN
-    GIT_URL=http://git.$DOMAIN
 
     : ${CLOUDWAY_TAG:=latest}
 
     cd "$(dirname "$BASH_SOURCE")"
 
-    # generate random password
-    if [ ! -e scm-password ]; then
-        LC_CTYPE=C tr -cd '[:alnum:]' < /dev/urandom | fold -w20 | head -n1 > scm-password
-    fi
-
     # start all-in-one container
     docker run -d --name cloudway-platform --restart=always \
                -e CLOUDWAY_DOMAIN=$DOMAIN \
                -e CONSOLE_URL=$CONSOLE_URL \
-               -e BITBUCKET_URL=$GIT_URL \
-               -e BITBUCKET_PASSWORD="$(< scm-password)" \
-               -e BITBUCKET_LICENSE="$(< scm-license)" \
                -v /var/run/docker.sock:/var/run/docker.sock:ro \
                -v cloudway-data:/data \
                -p 80:80 -p 7999:7999 -p 2200:2200 \
