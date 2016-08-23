@@ -7,8 +7,8 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"golang.org/x/crypto/ssh"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,8 +17,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/scm"
 	mockscm "github.com/cloudway/platform/scm/mock"
+	"golang.org/x/crypto/ssh"
 )
 
 func TestSCM(t *testing.T) {
@@ -26,20 +28,42 @@ func TestSCM(t *testing.T) {
 	RunSpecs(t, "SCM Suite")
 }
 
+var (
+	mock      scm.SCM
+	repoRoot  = "/var/git/scm_test"
+	sshServer *mockscm.SSHServer
+	sshURL    string
+	waitChan  chan error
+)
+
+var _ = BeforeSuite(func() {
+	var err error
+
+	Expect(config.Initialize()).To(Succeed())
+	config.Set("scm.type", "mock")
+	config.Set("scm.url", "file://"+repoRoot)
+	mock, err = scm.New()
+	Expect(err).NotTo(HaveOccurred())
+
+	sshServer = mockscm.NewSSHServer(repoRoot)
+
+	laddr := "127.0.0.1:0"
+	l, err := net.Listen("tcp", laddr)
+	Expect(err).ShouldNot(HaveOccurred())
+	sshServer.Accept(l)
+	sshURL = "ssh://git@" + l.Addr().String()
+
+	waitChan = make(chan error)
+	go sshServer.Wait(waitChan)
+})
+
+var _ = AfterSuite(func() {
+	sshServer.Close()
+	sshErr := <-waitChan
+	Expect(sshErr).ShouldNot(HaveOccurred())
+})
+
 var _ = Describe("SCM", func() {
-	var repoRoot = "/var/git/scm_test"
-	var mock scm.SCM
-
-	BeforeEach(func() {
-		var err error
-
-		os.Setenv("CLOUDWAY_SCM_TYPE", "mock")
-		os.Setenv("CLOUDWAY_SCM_URL", "file://"+repoRoot)
-
-		mock, err = scm.New()
-		Expect(err).NotTo(HaveOccurred())
-	})
-
 	AfterEach(func() {
 		os.RemoveAll(repoRoot)
 	})
@@ -147,8 +171,6 @@ var _ = Describe("SCM", func() {
 			// Initialize the git repository
 			repo := mockscm.NewGitRepo(tempdir)
 			Expect(repo.Init(false)).To(Succeed())
-			Expect(repo.Config("user.email", "test@example.com")).To(Succeed())
-			Expect(repo.Config("user.name", "Test User")).To(Succeed())
 			Expect(repo.Run("add", "-f", ".")).To(Succeed())
 			Expect(repo.Commit("Initial commit")).To(Succeed())
 
@@ -194,8 +216,6 @@ var _ = Describe("SCM", func() {
 			// Initialize the git repository
 			repo = mockscm.NewGitRepo(tempdir)
 			Expect(repo.Init(false)).To(Succeed())
-			Expect(repo.Config("user.email", "test@example.com")).To(Succeed())
-			Expect(repo.Config("user.name", "Test User")).To(Succeed())
 			Expect(repo.Run("add", "-f", ".")).To(Succeed())
 			Expect(repo.Commit("Initial commit")).To(Succeed())
 		})
@@ -324,6 +344,23 @@ var _ = Describe("SCM", func() {
 				_, err := mock.ListKeys("nonexist")
 				Expect(err).To(HaveOccurred())
 			})
+		})
+	})
+
+	PDescribe("SSH server", func() {
+		Context("with ssh key", func() {
+			PIt("should success to clone")
+			PIt("should success to push")
+		})
+
+		Context("without ssh key", func() {
+			PIt("should fail to clone")
+			PIt("should fail to push")
+		})
+
+		Context("with wrong ssh key", func() {
+			PIt("should fail to clone")
+			PIt("should fail to push")
 		})
 	})
 })

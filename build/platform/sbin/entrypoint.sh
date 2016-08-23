@@ -14,6 +14,7 @@ get_domain() {
 }
 
 CONSOLE_DOMAIN=$(get_domain $CONSOLE_URL)
+GIT_DOMAIN=$(get_domain $GIT_URL)
 
 cwman config "domain" ${CLOUDWAY_DOMAIN}
 cwman config "console.url" ${CONSOLE_URL}

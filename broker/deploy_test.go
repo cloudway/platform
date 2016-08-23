@@ -133,8 +133,6 @@ var _ = Describe("Deploy", func() {
 			repodir := filepath.Join(REPOROOT, NAMESPACE, "test")
 			repo := mock.NewGitRepo(tempdir)
 			Expect(repo.Run("clone", repodir, tempdir)).To(Succeed())
-			Expect(repo.Config("user.email", "test@example.com")).To(Succeed())
-			Expect(repo.Config("user.name", "Test User")).To(Succeed())
 
 			By("Create some branches and tags")
 			createBranch(repo, "develop")
@@ -177,8 +175,6 @@ var _ = Describe("Deploy", func() {
 
 			By("Clone the application repository")
 			Expect(repo.Run("clone", repodir, tempdir)).To(Succeed())
-			Expect(repo.Config("user.email", "test@example.com")).To(Succeed())
-			Expect(repo.Config("user.name", "Test User")).To(Succeed())
 
 			By("Make change to local repository")
 			Expect(ioutil.WriteFile(testfile, []byte(text), 0644)).To(Succeed())
@@ -198,8 +194,6 @@ var _ = Describe("Deploy", func() {
 
 			By("Clone the application repository")
 			Expect(repo.Run("clone", repodir, tempdir)).To(Succeed())
-			Expect(repo.Config("user.email", "test@example.com")).To(Succeed())
-			Expect(repo.Config("user.name", "Test User")).To(Succeed())
 
 			By("Create develop branch")
 			Expect(repo.Run("checkout", "-b", "develop")).To(Succeed())

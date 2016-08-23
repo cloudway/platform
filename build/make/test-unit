@@ -2,6 +2,9 @@
 set -e
 
 bundle_test_setup() {
+    git config --system user.email test@example.com
+    git config --system user.name 'Test User'
+
     mkdir -p /data/db
     chown -R mongodb /data/db
     local logfile=/var/log/mongodb/mongod.log

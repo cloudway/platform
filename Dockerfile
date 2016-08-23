@@ -30,6 +30,10 @@ ENV CLOUDWAY_CROSSPLATFORMS \
 
 WORKDIR /go/src/github.com/cloudway/platform
 
+RUN sed -i /etc/ssh/ssh_config \
+        -e 's/#   StrictHostKeyChecking/    StrictHostKeyChecking/' \
+        -e 's/StrictHostKeyChecking ask/StrictHostKeyChecking no/'
+
 VOLUME /data
 
 # Wrap all commands in the "docker-in-docker" script to allow nested containers
