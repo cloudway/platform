@@ -138,6 +138,26 @@ func (mock mockSCM) RemoveNamespace(namespace string) error {
 	return os.RemoveAll(dir)
 }
 
+const postReceiveHook = `#!/bin/bash
+set -e
+
+target_branch=$(git config cloudway.deploy || true)
+target_ref=$(git rev-parse --symbolic-full-name $target_branch 2>/dev/null)
+: ${target_ref:=/refs/heads/master}
+
+tempdir=$(mktemp -d /tmp/deployXXXXXX) || exit 1
+archive="$tempdir/$(basename $tempdir).tar.gz"
+trap "rm -rf $tempdir" EXIT
+
+while read oldrev newrev refname; do
+    ref=$(git rev-parse --symbolic-full-name $refname 2>/dev/null)
+    if [ "$ref" = "$target_ref" ]; then
+		git archive --format=tar.gz -o "$archive" "$ref"
+		/usr/bin/cwman deploy %s %s "$tempdir"
+    fi
+done
+`
+
 func (mock mockSCM) CreateRepo(namespace, name string) error {
 	if err := mock.ensureRepositoryNotExist(namespace, name); err != nil {
 		return err
@@ -147,7 +167,15 @@ func (mock mockSCM) CreateRepo(namespace, name string) error {
 	if err := os.Mkdir(repodir, 0700); err != nil {
 		return err
 	}
-	return NewGitRepo(repodir).Init(true)
+
+	repo := NewGitRepo(repodir)
+	if err := repo.Init(true); err != nil {
+		return err
+	}
+
+	hook := filepath.Join(repodir, "hooks", "post-receive")
+	script := fmt.Sprintf(postReceiveHook, name, namespace)
+	return ioutil.WriteFile(hook, []byte(script), 0750)
 }
 
 func (mock mockSCM) RemoveRepo(namespace, name string) error {

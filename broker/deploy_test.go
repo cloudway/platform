@@ -25,6 +25,7 @@ var _ = Describe("Deploy", func() {
 	var (
 		tempdir  string
 		testfile string
+		checkdir string
 		app      *container.Container
 	)
 
@@ -34,6 +35,9 @@ var _ = Describe("Deploy", func() {
 		tempdir, err = ioutil.TempDir("", "repo")
 		Expect(err).NotTo(HaveOccurred())
 		testfile = filepath.Join(tempdir, "track")
+
+		checkdir, err = ioutil.TempDir("", "check")
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(broker.CreateUser(&user, "test")).To(Succeed())
 		br := broker.NewUserBroker(&user, context.Background())
@@ -55,6 +59,7 @@ var _ = Describe("Deploy", func() {
 		br.RemoveApplication("test")
 		broker.RemoveUser(TESTUSER)
 		os.RemoveAll(tempdir)
+		os.RemoveAll(checkdir)
 	})
 
 	var createBranch = func(repo mock.Git, branch string) {
@@ -77,10 +82,10 @@ var _ = Describe("Deploy", func() {
 			return "", err
 		}
 		defer r.Close()
-		if err := archive.ExtractFiles(tempdir, r); err != nil {
+		if err := archive.ExtractFiles(checkdir, r); err != nil {
 			return "", err
 		}
-		content, err := ioutil.ReadFile(testfile)
+		content, err := ioutil.ReadFile(filepath.Join(checkdir, "track"))
 		return string(content), err
 	}
 
@@ -137,7 +142,7 @@ var _ = Describe("Deploy", func() {
 			createTag(repo, "v1.0")
 			createTag(repo, "v1.1")
 
-			By("Continue with master branch")
+			By("Continue work on master branch")
 			Expect(ioutil.WriteFile(testfile, []byte("master"), 0644)).To(Succeed())
 			Expect(repo.Run("add", "track")).To(Succeed())
 			Expect(repo.Commit("in master branch")).To(Succeed())
@@ -162,13 +167,15 @@ var _ = Describe("Deploy", func() {
 		})
 	})
 
-	PDescribe("Push to deploy", func() {
+	Describe("Push to deploy", func() {
 		It("should deploy after git push", func() {
-			var text = "changed"
+			var (
+				repodir = filepath.Join(REPOROOT, NAMESPACE, "test")
+				repo    = mock.NewGitRepo(tempdir)
+				text    = "changed"
+			)
 
 			By("Clone the application repository")
-			repodir := filepath.Join(REPOROOT, NAMESPACE, "test")
-			repo := mock.NewGitRepo(tempdir)
 			Expect(repo.Run("clone", repodir, tempdir)).To(Succeed())
 			Expect(repo.Config("user.email", "test@example.com")).To(Succeed())
 			Expect(repo.Config("user.name", "Test User")).To(Succeed())
@@ -177,10 +184,60 @@ var _ = Describe("Deploy", func() {
 			Expect(ioutil.WriteFile(testfile, []byte(text), 0644)).To(Succeed())
 			Expect(repo.Run("add", "track")).To(Succeed())
 			Expect(repo.Commit("make change")).To(Succeed())
-			Expect(repo.Run("push")).To(Succeed())
 
 			By("New commit should be deployed")
+			Expect(repo.Run("push")).To(Succeed())
 			Eventually(fetchDeployedFile, "5s").Should(Equal(text))
+		})
+
+		It("should deploy to given branch", func() {
+			var (
+				repodir = filepath.Join(REPOROOT, NAMESPACE, "test")
+				repo    = mock.NewGitRepo(tempdir)
+			)
+
+			By("Clone the application repository")
+			Expect(repo.Run("clone", repodir, tempdir)).To(Succeed())
+			Expect(repo.Config("user.email", "test@example.com")).To(Succeed())
+			Expect(repo.Config("user.name", "Test User")).To(Succeed())
+
+			By("Create develop branch")
+			Expect(repo.Run("checkout", "-b", "develop")).To(Succeed())
+			Expect(ioutil.WriteFile(testfile, []byte("develop"), 0644)).To(Succeed())
+			Expect(repo.Run("add", "track")).To(Succeed())
+			Expect(repo.Commit("in develop branch")).To(Succeed())
+
+			By("Continue work on master branch")
+			Expect(repo.Run("checkout", "master")).To(Succeed())
+			Expect(ioutil.WriteFile(testfile, []byte("master"), 0644)).To(Succeed())
+			Expect(repo.Run("add", "track")).To(Succeed())
+			Expect(repo.Commit("in master branch")).To(Succeed())
+
+			By("Push to the remote repository")
+			Expect(repo.Run("push", "--mirror")).To(Succeed())
+
+			By("Current deployment should stay on master branch")
+			Eventually(fetchDeployedFile, "5s").Should(Equal("master"))
+
+			By("Switch deployment branch to develop")
+			Expect(broker.SCM.Deploy(NAMESPACE, "test", "develop"))
+			Eventually(fetchDeployedFile, "5s").Should(Equal("develop"))
+
+			By("Switch local repository to develop branch")
+			Expect(repo.Run("checkout", "develop")).To(Succeed())
+			Expect(ioutil.WriteFile(testfile, []byte("new feature"), 0644)).To(Succeed())
+			Expect(repo.Run("add", "track")).To(Succeed())
+			Expect(repo.Commit("develop new feature")).To(Succeed())
+			Expect(repo.Run("push", "origin", "develop")).To(Succeed())
+			Eventually(fetchDeployedFile, "5s").Should(Equal("new feature"))
+
+			By("Switch local repository to master branch (deployment branch should stay on develop branch)")
+			Expect(repo.Run("checkout", "master")).To(Succeed())
+			Expect(ioutil.WriteFile(testfile, []byte("new release"), 0644)).To(Succeed())
+			Expect(repo.Run("add", "track")).To(Succeed())
+			Expect(repo.Commit("create new release")).To(Succeed())
+			Expect(repo.Run("push", "origin", "master")).To(Succeed())
+			Eventually(fetchDeployedFile, "5s").Should(Equal("new feature"))
 		})
 	})
 })
