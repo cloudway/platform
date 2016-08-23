@@ -257,10 +257,10 @@ func convertBranchJson(br *scm.Branch) *types.Branch {
 	}
 }
 
-func convertBranchesJson(branches []scm.Branch) []types.Branch {
-	result := make([]types.Branch, len(branches))
+func convertBranchesJson(branches []*scm.Branch) []*types.Branch {
+	result := make([]*types.Branch, len(branches))
 	for i := range branches {
-		result[i] = *convertBranchJson(&branches[i])
+		result[i] = convertBranchJson(branches[i])
 	}
 	return result
 }

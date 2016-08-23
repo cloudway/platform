@@ -3,6 +3,7 @@ package mock
 import (
 	"os"
 	"os/exec"
+	"strings"
 )
 
 type Git struct {
@@ -39,6 +40,13 @@ func (git Git) Init(bare bool) error {
 
 func (git Git) Config(key, value string) error {
 	return git.Run("config", key, value)
+}
+
+func (git Git) GetConfig(key string) string {
+	cmd := git.Command("config", key)
+	cmd.Stdout = nil
+	output, _ := cmd.Output()
+	return strings.TrimSpace(string(output))
 }
 
 func (git Git) Commit(message string) error {

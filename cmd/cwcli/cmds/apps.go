@@ -539,7 +539,7 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
 			return err
 		}
 
-		var display = func(ref types.Branch) {
+		var display = func(ref *types.Branch) {
 			display := ref.DisplayId
 			if ref.Id == deployments.Current.Id {
 				display = "* " + hilite(display)

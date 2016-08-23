@@ -226,7 +226,7 @@ func (cli *bitbucketClient) GetDeploymentBranch(namespace, name string) (*scm.Br
 	return &branch, err
 }
 
-func (cli *bitbucketClient) GetDeploymentBranches(namespace, name string) ([]scm.Branch, error) {
+func (cli *bitbucketClient) GetDeploymentBranches(namespace, name string) ([]*scm.Branch, error) {
 	branches, err := cli.getRefs(namespace, name, "branches")
 	if err != nil {
 		return nil, err
@@ -240,11 +240,11 @@ func (cli *bitbucketClient) GetDeploymentBranches(namespace, name string) ([]scm
 	return append(branches, tags...), nil
 }
 
-func (cli *bitbucketClient) getRefs(namespace, name, typ string) ([]scm.Branch, error) {
+func (cli *bitbucketClient) getRefs(namespace, name, typ string) ([]*scm.Branch, error) {
 	path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s/%s", namespace, name, typ)
 	ctx := context.Background()
 
-	refs := make([]scm.Branch, 0)
+	refs := make([]*scm.Branch, 0)
 	start := 0
 
 	for {

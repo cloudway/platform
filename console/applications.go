@@ -252,7 +252,7 @@ type appData struct {
 	URL        string
 	CloneURL   string
 	Branch     *scm.Branch
-	Branches   []scm.Branch
+	Branches   []*scm.Branch
 	Frameworks []serviceData
 	Services   []serviceData
 	Hosts      []string

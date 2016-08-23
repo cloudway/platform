@@ -1,15 +1,16 @@
 package mock
 
 import (
+	"archive/tar"
 	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
-	"archive/tar"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/context"
@@ -229,6 +230,16 @@ func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
 		return err
 	}
 
+	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
+	repo := NewGitRepo(repodir)
+
+	current, err := mock.getCurrentDeployment(namespace, name, branch)
+	if err != nil {
+		return err
+	} else {
+		repo.Config("cloudway.deploy", current.Id)
+	}
+
 	// Create temporary directory to save deployment archive
 	tempdir, err := ioutil.TempDir("", "deploy")
 	if err != nil {
@@ -248,9 +259,7 @@ func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
 		}
 	} else {
 		// run git command to generate an archive file
-		repodir := filepath.Join(mock.repositoryRoot, namespace, name)
-		repo := NewGitRepo(repodir)
-		err = repo.Run("archive", "--format=tar.gz", "-o", archiveFile, "master")
+		err = repo.Run("archive", "--format=tar.gz", "-o", archiveFile, current.Id)
 	}
 	if err != nil {
 		return err
@@ -272,21 +281,104 @@ func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
 }
 
 func (mock mockSCM) GetDeploymentBranch(namespace, name string) (*scm.Branch, error) {
-	// Not yet implemented
-	return &scm.Branch{
-		Id:        "ref/heads/master",
-		DisplayId: "master",
-		Type:      "BRANCH",
-	}, nil
+	if err := mock.ensureRepositoryExist(namespace, name); err != nil {
+		return nil, err
+	}
+	return mock.getCurrentDeployment(namespace, name, "")
 }
 
-func (mock mockSCM) GetDeploymentBranches(namespace, name string) ([]scm.Branch, error) {
-	// Not yet implemented
-	return []scm.Branch{{
-		Id:        "ref/heads/master",
-		DisplayId: "master",
-		Type:      "BRANCH",
-	}}, nil
+func (mock mockSCM) getCurrentDeployment(namespace, name, refId string) (*scm.Branch, error) {
+	const DEFAULT_BRANCH = "refs/heads/master"
+
+	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
+	repo := NewGitRepo(repodir)
+
+	if refId == "" {
+		refId = repo.GetConfig("cloudway.deploy")
+		if refId == "" {
+			refId = DEFAULT_BRANCH
+		}
+	}
+
+	cmd := repo.Command("rev-parse", "--symbolic-full-name", refId)
+	cmd.Stdout = nil
+	output, err := cmd.Output()
+	rev := strings.TrimSpace(string(output))
+	if err != nil || rev == "" {
+		refId = DEFAULT_BRANCH
+	} else {
+		refId = rev
+	}
+
+	refs, err := mock.GetDeploymentBranches(namespace, name)
+	if err != nil {
+		return nil, err
+	}
+
+	var current *scm.Branch
+	for _, ref := range refs {
+		if refId == ref.Id {
+			current = ref
+			break
+		}
+	}
+
+	// use default branch
+	if current == nil {
+		current = &scm.Branch{
+			Id:        DEFAULT_BRANCH,
+			DisplayId: "master",
+			Type:      "BRANCH",
+		}
+	}
+
+	return current, nil
+}
+
+func (mock mockSCM) GetDeploymentBranches(namespace, name string) ([]*scm.Branch, error) {
+	if err := mock.ensureRepositoryExist(namespace, name); err != nil {
+		return nil, err
+	}
+
+	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
+	repo := NewGitRepo(repodir)
+
+	branches, err := getGitRefs(repo.Command("branch", "--no-color"), "refs/heads/", "BRANCH")
+	if err != nil {
+		return nil, err
+	}
+	tags, err := getGitRefs(repo.Command("tag"), "refs/tags/", "TAG")
+	if err != nil {
+		return nil, err
+	}
+
+	return append(branches, tags...), nil
+}
+
+func getGitRefs(cmd *exec.Cmd, refPrefix, refType string) ([]*scm.Branch, error) {
+	cmd.Stdout = nil
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	refs := strings.Split(string(output), "\n")
+	result := make([]*scm.Branch, 0, len(refs))
+	for i := range refs {
+		id := refs[i]
+		if id == "" {
+			continue
+		}
+		if strings.HasPrefix(id, "  ") || strings.HasPrefix(id, "* ") {
+			id = id[2:]
+		}
+		result = append(result, &scm.Branch{
+			Id:        refPrefix + id,
+			DisplayId: id,
+			Type:      refType,
+		})
+	}
+	return result, nil
 }
 
 func (mock mockSCM) AddKey(namespace string, key string) error {
