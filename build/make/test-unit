@@ -4,6 +4,7 @@ set -e
 bundle_test_setup() {
     git config --system user.email test@example.com
     git config --system user.name 'Test User'
+    git config --system push.default simple
 
     mkdir -p /data/db
     chown -R mongodb /data/db

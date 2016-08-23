@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -347,20 +348,141 @@ var _ = Describe("SCM", func() {
 		})
 	})
 
-	PDescribe("SSH server", func() {
+	Describe("SSH server", func() {
+		var initRepo = func(namespace, name string) (repourl, pub, priv string) {
+			var err error
+
+			pub, priv, err = makeSSHKeyPair()
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			ExpectWithOffset(1, mock.CreateNamespace(namespace)).To(Succeed())
+			ExpectWithOffset(1, mock.AddKey(namespace, pub)).To(Succeed())
+			ExpectWithOffset(1, mock.CreateRepo(namespace, name)).To(Succeed())
+
+			repourl = sshURL + "/" + namespace + "/" + name + ".git"
+			return
+		}
+
+		var saveKey = func(key string) (keyfile, wrapper string) {
+			var tempfile *os.File
+			var err error
+
+			tempfile, err = ioutil.TempFile("", "tmp")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			tempfile.Close()
+
+			keyfile = tempfile.Name()
+			ExpectWithOffset(1, ioutil.WriteFile(keyfile, []byte(key), 0600)).To(Succeed())
+
+			tempfile, err = ioutil.TempFile("", "tmp")
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			tempfile.Close()
+
+			wrapper = tempfile.Name()
+			script := fmt.Sprintf("#!/bin/sh\nssh -i \"%s\" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $@", keyfile)
+			ExpectWithOffset(1, ioutil.WriteFile(wrapper, []byte(script), 0755)).To(Succeed())
+			os.Chmod(wrapper, 0755)
+
+			return
+		}
+
+		var initLocalRepo = func(dir string) {
+			testfile := filepath.Join(dir, "testfile")
+			git := mockscm.NewGitRepo(dir)
+
+			ExpectWithOffset(1, git.Init(false)).To(Succeed())
+			ExpectWithOffset(1, ioutil.WriteFile(testfile, []byte("this is a test"), 0644)).To(Succeed())
+			ExpectWithOffset(1, git.Run("add", ".")).To(Succeed())
+			ExpectWithOffset(1, git.Commit("initial commit")).To(Succeed())
+		}
+
+		var (
+			tempdir string
+			repourl string
+			pubkey  string
+			keyfile string
+			wrapper string
+		)
+
+		BeforeEach(func() {
+			var privkey string
+			var err error
+
+			repourl, pubkey, privkey = initRepo("demo", "test")
+			keyfile, wrapper = saveKey(privkey)
+
+			tempdir, err = ioutil.TempDir("", "repo")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			os.RemoveAll(tempdir)
+			os.Remove(keyfile)
+			os.Remove(wrapper)
+		})
+
 		Context("with ssh key", func() {
-			PIt("should success to clone")
-			PIt("should success to push")
+			It("should success to clone", func() {
+				git := mockscm.NewGitRepo(tempdir)
+				cmd := git.Command("clone", repourl, tempdir)
+				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
+				Expect(cmd.Run()).To(Succeed())
+			})
+
+			It("should success to push", func() {
+				initLocalRepo(tempdir)
+
+				git := mockscm.NewGitRepo(tempdir)
+				cmd := git.Command("push", "--set-upstream", repourl, "master")
+				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
+				Expect(cmd.Run()).To(Succeed())
+			})
 		})
 
 		Context("without ssh key", func() {
-			PIt("should fail to clone")
-			PIt("should fail to push")
+			BeforeEach(func() {
+				Expect(mock.RemoveKey("demo", pubkey)).To(Succeed())
+			})
+
+			It("should fail to clone", func() {
+				git := mockscm.NewGitRepo(tempdir)
+				cmd := git.Command("clone", repourl, tempdir)
+				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
+				Expect(cmd.Run()).NotTo(Succeed())
+			})
+
+			It("should fail to push", func() {
+				initLocalRepo(tempdir)
+
+				git := mockscm.NewGitRepo(tempdir)
+				cmd := git.Command("push", "--set-upstream", repourl, "master")
+				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
+				Expect(cmd.Run()).NotTo(Succeed())
+			})
 		})
 
 		Context("with wrong ssh key", func() {
-			PIt("should fail to clone")
-			PIt("should fail to push")
+			var other_repourl string
+
+			BeforeEach(func() {
+				other_repourl, _, _ = initRepo("other", "test")
+			})
+
+			It("should fail to clone", func() {
+				git := mockscm.NewGitRepo(tempdir)
+				cmd := git.Command("clone", other_repourl, tempdir)
+				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
+				Expect(cmd.Run()).NotTo(Succeed())
+			})
+
+			It("should fail to push", func() {
+				initLocalRepo(tempdir)
+
+				git := mockscm.NewGitRepo(tempdir)
+				cmd := git.Command("push", "--set-upstream", other_repourl, "master")
+				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
+				Expect(cmd.Run()).NotTo(Succeed())
+			})
 		})
 	})
 })
