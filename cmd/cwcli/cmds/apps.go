@@ -203,15 +203,23 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
 	cmd.Require(mflag.Exact, 1)
 	cmd.BoolVar(&binary, []string{"-binary"}, false, "Download binary repository")
 	cmd.ParseFlags(args, true)
+	name := args[0]
+
+	if _, err := os.Stat(name); !os.IsNotExist(err) {
+		if err == nil {
+			err = fmt.Errorf("destination path '%s' already exists", name)
+		}
+		return err
+	}
 
 	if err := cli.ConnectAndLogin(); err != nil {
 		return err
 	}
 
 	if binary {
-		return cli.download(cmd.Arg(0))
+		return cli.download(name)
 	} else {
-		app, err := cli.GetApplicationInfo(context.Background(), cmd.Arg(0))
+		app, err := cli.GetApplicationInfo(context.Background(), name)
 		if err == nil {
 			err = gitClone(cli.host, app, true)
 		}
@@ -423,6 +431,15 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
 	cmd.BoolVar(&binary, []string{"-binary"}, false, "Download binary repository")
 	cmd.ParseFlags(args, true)
 	req.Name = cmd.Arg(0)
+
+	if !noclone {
+		if _, err := os.Stat(req.Name); !os.IsNotExist(err) {
+			if err == nil {
+				err = fmt.Errorf("destination path '%s' already exists", req.Name)
+			}
+			return err
+		}
+	}
 
 	if err := cli.ConnectAndLogin(); err != nil {
 		return err
