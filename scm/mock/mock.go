@@ -2,7 +2,6 @@ package mock
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,11 +9,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"archive/tar"
+
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/config"
+	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/scm"
-	"golang.org/x/crypto/ssh"
 )
 
 type mockSCM struct {
@@ -216,16 +219,74 @@ func (mock mockSCM) PopulateURL(namespace, name string, url string) error {
 	return repo.Run("push", "--mirror", repodir)
 }
 
-func (mock mockSCM) Deploy(namespace, name string, branch string) error {
-	return nil // Not yet implemented
+func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
+	if err = mock.ensureRepositoryExist(namespace, name); err != nil {
+		return err
+	}
+
+	cli, err := container.NewEnvClient()
+	if err != nil {
+		return err
+	}
+
+	// Create temporary directory to save deployment archive
+	tempdir, err := ioutil.TempDir("", "deploy")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tempdir)
+	archiveFile := filepath.Join(tempdir, filepath.Base(tempdir)+".tar.gz")
+
+	if empty, _ := mock.isEmptyRepository(namespace, name); empty {
+		// create empty archive
+		var file *os.File
+		file, err = os.Create(archiveFile)
+		if err == nil {
+			tw := tar.NewWriter(file)
+			err = tw.Close()
+			file.Close()
+		}
+	} else {
+		// run git command to generate an archive file
+		repodir := filepath.Join(mock.repositoryRoot, namespace, name)
+		repo := NewGitRepo(repodir)
+		err = repo.Run("archive", "--format=tar.gz", "-o", archiveFile, "master")
+	}
+	if err != nil {
+		return err
+	}
+
+	// Deploy the archive
+	ctx := context.Background()
+	containers, err := cli.FindApplications(ctx, name, namespace)
+	if err != nil {
+		return err
+	}
+	for _, c := range containers {
+		err = c.Deploy(ctx, tempdir)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (mock mockSCM) GetDeploymentBranch(namespace, name string) (*scm.Branch, error) {
-	return nil, errors.New("Not yet implemented")
+	// Not yet implemented
+	return &scm.Branch{
+		Id:        "ref/heads/master",
+		DisplayId: "master",
+		Type:      "BRANCH",
+	}, nil
 }
 
 func (mock mockSCM) GetDeploymentBranches(namespace, name string) ([]scm.Branch, error) {
-	return nil, errors.New("Not yet implemented")
+	// Not yet implemented
+	return []scm.Branch{{
+		Id:        "ref/heads/master",
+		DisplayId: "master",
+		Type:      "BRANCH",
+	}}, nil
 }
 
 func (mock mockSCM) AddKey(namespace string, key string) error {

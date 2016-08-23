@@ -1,11 +1,17 @@
 package container_test
 
 import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudway/platform/container"
+	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/manifest"
+	"github.com/cloudway/platform/scm/mock"
 	"golang.org/x/net/context"
 )
 
@@ -156,6 +162,53 @@ var _ = Describe("Create Container", func() {
 			options.Scaling = -2
 			containers, err = dockerCli.Create(ctx, mockScm, options)
 			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Context("Deploy", func() {
+		var tempdir string
+
+		BeforeEach(func() {
+			tempdir, err = ioutil.TempDir("", "repo")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			os.RemoveAll(tempdir)
+		})
+
+		var assertTestFileExist = func() {
+			content, err := ioutil.ReadFile(filepath.Join(tempdir, "index.php"))
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			ExpectWithOffset(1, content).To(ContainSubstring("It works!"))
+		}
+
+		It("should populated application repository after create", func() {
+			containers, err = dockerCli.Create(ctx, mockScm, options)
+			Expect(err).NotTo(HaveOccurred())
+
+			repodir := filepath.Join(repositoryRoot, NAMESPACE, "test")
+			repo := mock.NewGitRepo(tempdir)
+			Expect(repo.Run("clone", repodir, ".")).To(Succeed())
+
+			assertTestFileExist()
+		})
+
+		It("should deployed application repository after create", func() {
+			ctx := context.Background()
+
+			containers, err = dockerCli.Create(ctx, mockScm, options)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containers).To(HaveLen(1))
+
+			c := containers[0]
+			Expect(c.Start(ctx)).To(Succeed())
+
+			ar, _, err := dockerCli.CopyFromContainer(ctx, c.ID, c.RepoDir()+"/.")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(archive.ExtractFiles(tempdir, ar)).To(Succeed())
+
+			assertTestFileExist()
 		})
 	})
 })
