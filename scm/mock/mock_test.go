@@ -202,73 +202,90 @@ var _ = Describe("SCM", func() {
 	})
 
 	Describe("Deployment branches", func() {
-		var tempdir string
-		var repo mockscm.Git
+		Context("with non-empty repository", func() {
+			var tempdir string
+			var repo mockscm.Git
 
-		BeforeEach(func() {
-			var err error
+			BeforeEach(func() {
+				var err error
 
-			// Create a temporary git repository and commit
-			tempdir, err = ioutil.TempDir("", "repo")
-			Expect(err).NotTo(HaveOccurred())
-			testfile := filepath.Join(tempdir, "README")
-			Expect(ioutil.WriteFile(testfile, []byte("This is a test file"), 0644)).To(Succeed())
+				// Create a temporary git repository and commit
+				tempdir, err = ioutil.TempDir("", "repo")
+				Expect(err).NotTo(HaveOccurred())
+				testfile := filepath.Join(tempdir, "README")
+				Expect(ioutil.WriteFile(testfile, []byte("This is a test file"), 0644)).To(Succeed())
 
-			// Initialize the git repository
-			repo = mockscm.NewGitRepo(tempdir)
-			Expect(repo.Init(false)).To(Succeed())
-			Expect(repo.Run("add", "-f", ".")).To(Succeed())
-			Expect(repo.Commit("Initial commit")).To(Succeed())
+				// Initialize the git repository
+				repo = mockscm.NewGitRepo(tempdir)
+				Expect(repo.Init(false)).To(Succeed())
+				Expect(repo.Run("add", "-f", ".")).To(Succeed())
+				Expect(repo.Commit("Initial commit")).To(Succeed())
+			})
+
+			AfterEach(func() {
+				os.RemoveAll(tempdir)
+			})
+
+			It("should return all available deployment branches", func() {
+				// Create some branches and tags in the git repository
+				Expect(repo.Run("branch", "develop")).To(Succeed())
+				Expect(repo.Run("branch", "hotfix")).To(Succeed())
+				Expect(repo.Run("tag", "v1.0")).To(Succeed())
+				Expect(repo.Run("tag", "v1.1")).To(Succeed())
+
+				// Push the local git repository
+				Expect(mock.CreateNamespace("demo")).To(Succeed())
+				Expect(mock.CreateRepo("demo", "test")).To(Succeed())
+				Expect(mock.PopulateURL("demo", "test", tempdir)).To(Succeed())
+
+				// Check to see the branches and tags are returned correctly
+				expected := []*scm.Branch{
+					{
+						Id:        "refs/heads/master",
+						DisplayId: "master",
+						Type:      "BRANCH",
+					},
+					{
+						Id:        "refs/heads/develop",
+						DisplayId: "develop",
+						Type:      "BRANCH",
+					},
+					{
+						Id:        "refs/heads/hotfix",
+						DisplayId: "hotfix",
+						Type:      "BRANCH",
+					},
+					{
+						Id:        "refs/tags/v1.0",
+						DisplayId: "v1.0",
+						Type:      "TAG",
+					},
+					{
+						Id:        "refs/tags/v1.1",
+						DisplayId: "v1.1",
+						Type:      "TAG",
+					},
+				}
+
+				actual, err := mock.GetDeploymentBranches("demo", "test")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).To(ConsistOf(expected))
+			})
 		})
 
-		AfterEach(func() {
-			os.RemoveAll(tempdir)
-		})
+		Context("with empty repository", func() {
+			It("should return default deployment branch", func() {
+				Expect(mock.CreateNamespace("demo")).To(Succeed())
+				Expect(mock.CreateRepo("demo", "test")).To(Succeed())
 
-		It("should return all available deployment branches", func() {
-			// Create some branches and tags in the git repository
-			Expect(repo.Run("branch", "develop")).To(Succeed())
-			Expect(repo.Run("branch", "hotfix")).To(Succeed())
-			Expect(repo.Run("tag", "v1.0")).To(Succeed())
-			Expect(repo.Run("tag", "v1.1")).To(Succeed())
+				branch, err := mock.GetDeploymentBranch("demo", "test")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(branch.Id).To(Equal("refs/heads/master"))
 
-			// Push the local git repository
-			Expect(mock.CreateNamespace("demo")).To(Succeed())
-			Expect(mock.CreateRepo("demo", "test")).To(Succeed())
-			Expect(mock.PopulateURL("demo", "test", tempdir)).To(Succeed())
-
-			// Check to see the branches and tags are returned correctly
-			expected := []*scm.Branch{
-				{
-					Id:        "refs/heads/master",
-					DisplayId: "master",
-					Type:      "BRANCH",
-				},
-				{
-					Id:        "refs/heads/develop",
-					DisplayId: "develop",
-					Type:      "BRANCH",
-				},
-				{
-					Id:        "refs/heads/hotfix",
-					DisplayId: "hotfix",
-					Type:      "BRANCH",
-				},
-				{
-					Id:        "refs/tags/v1.0",
-					DisplayId: "v1.0",
-					Type:      "TAG",
-				},
-				{
-					Id:        "refs/tags/v1.1",
-					DisplayId: "v1.1",
-					Type:      "TAG",
-				},
-			}
-
-			actual, err := mock.GetDeploymentBranches("demo", "test")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(actual).To(ConsistOf(expected))
+				branches, err := mock.GetDeploymentBranches("demo", "test")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(branches).To(BeEmpty())
+			})
 		})
 	})
 

@@ -3,6 +3,7 @@ package mock
 import (
 	"archive/tar"
 	"bufio"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -249,23 +250,14 @@ func (mock mockSCM) PopulateURL(namespace, name string, url string) error {
 }
 
 func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
-	if err = mock.ensureRepositoryExist(namespace, name); err != nil {
+	empty, err := mock.isEmptyRepository(namespace, name)
+	if err != nil {
 		return err
 	}
 
 	cli, err := container.NewEnvClient()
 	if err != nil {
 		return err
-	}
-
-	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
-	repo := NewGitRepo(repodir)
-
-	current, err := mock.getCurrentDeployment(namespace, name, branch)
-	if err != nil {
-		return err
-	} else {
-		repo.Config("cloudway.deploy", current.Id)
 	}
 
 	// Create temporary directory to save deployment archive
@@ -276,17 +268,30 @@ func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
 	defer os.RemoveAll(tempdir)
 	archiveFile := filepath.Join(tempdir, filepath.Base(tempdir)+".tar.gz")
 
-	if empty, _ := mock.isEmptyRepository(namespace, name); empty {
+	if empty {
 		// create empty archive
 		var file *os.File
 		file, err = os.Create(archiveFile)
 		if err == nil {
-			tw := tar.NewWriter(file)
-			err = tw.Close()
-			file.Close()
+			defer file.Close()
+			zw := gzip.NewWriter(file)
+			tw := tar.NewWriter(zw)
+			if err = tw.Close(); err == nil {
+				err = zw.Close()
+			}
 		}
 	} else {
 		// run git command to generate an archive file
+		repodir := filepath.Join(mock.repositoryRoot, namespace, name)
+		repo := NewGitRepo(repodir)
+
+		current, err := mock.getCurrentDeployment(namespace, name, branch)
+		if err != nil {
+			return err
+		} else {
+			repo.Config("cloudway.deploy", current.Id)
+		}
+
 		err = repo.Run("archive", "--format=tar.gz", "-o", archiveFile, current.Id)
 	}
 	if err != nil {
@@ -308,23 +313,38 @@ func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
 	return nil
 }
 
+const _DEFAULT_BRANCH = "refs/heads/master"
+
+func defaultBranch() *scm.Branch {
+	return &scm.Branch{
+		Id:        _DEFAULT_BRANCH,
+		DisplayId: "master",
+		Type:      "BRANCH",
+	}
+}
+
 func (mock mockSCM) GetDeploymentBranch(namespace, name string) (*scm.Branch, error) {
-	if err := mock.ensureRepositoryExist(namespace, name); err != nil {
-		return nil, err
+	if empty, err := mock.isEmptyRepository(namespace, name); empty || err != nil {
+		return defaultBranch(), err
 	}
 	return mock.getCurrentDeployment(namespace, name, "")
 }
 
-func (mock mockSCM) getCurrentDeployment(namespace, name, refId string) (*scm.Branch, error) {
-	const DEFAULT_BRANCH = "refs/heads/master"
+func (mock mockSCM) GetDeploymentBranches(namespace, name string) ([]*scm.Branch, error) {
+	if empty, err := mock.isEmptyRepository(namespace, name); empty || err != nil {
+		return nil, err
+	}
+	return mock.getAllBranches(namespace, name)
+}
 
+func (mock mockSCM) getCurrentDeployment(namespace, name, refId string) (*scm.Branch, error) {
 	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
 	repo := NewGitRepo(repodir)
 
 	if refId == "" {
 		refId = repo.GetConfig("cloudway.deploy")
 		if refId == "" {
-			refId = DEFAULT_BRANCH
+			refId = _DEFAULT_BRANCH
 		}
 	}
 
@@ -333,12 +353,12 @@ func (mock mockSCM) getCurrentDeployment(namespace, name, refId string) (*scm.Br
 	output, err := cmd.Output()
 	rev := strings.TrimSpace(string(output))
 	if err != nil || rev == "" {
-		refId = DEFAULT_BRANCH
+		refId = _DEFAULT_BRANCH
 	} else {
 		refId = rev
 	}
 
-	refs, err := mock.GetDeploymentBranches(namespace, name)
+	refs, err := mock.getAllBranches(namespace, name)
 	if err != nil {
 		return nil, err
 	}
@@ -350,24 +370,13 @@ func (mock mockSCM) getCurrentDeployment(namespace, name, refId string) (*scm.Br
 			break
 		}
 	}
-
-	// use default branch
 	if current == nil {
-		current = &scm.Branch{
-			Id:        DEFAULT_BRANCH,
-			DisplayId: "master",
-			Type:      "BRANCH",
-		}
+		current = defaultBranch()
 	}
-
 	return current, nil
 }
 
-func (mock mockSCM) GetDeploymentBranches(namespace, name string) ([]*scm.Branch, error) {
-	if err := mock.ensureRepositoryExist(namespace, name); err != nil {
-		return nil, err
-	}
-
+func (mock mockSCM) getAllBranches(namespace, name string) ([]*scm.Branch, error) {
 	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
 	repo := NewGitRepo(repodir)
 
@@ -379,7 +388,6 @@ func (mock mockSCM) GetDeploymentBranches(namespace, name string) ([]*scm.Branch
 	if err != nil {
 		return nil, err
 	}
-
 	return append(branches, tags...), nil
 }
 
