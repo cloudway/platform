@@ -30,4 +30,7 @@ if [ -z "$VALIDATE_UPSTREAM" ]; then
             git log "$VALIDATE_COMMIT_LOG" "$@"
         fi
     }
+    unstaged() {
+        git status --porcelain --untracked-files=all | sed 's/^...//' | grep '\.go$'
+    }
 fi

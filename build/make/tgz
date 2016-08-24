@@ -30,6 +30,7 @@ cp -R $SCRIPTDIR/broker/files/* $TAR_PATH/usr/local/cloudway/
 cp -L $SANDBOX_BINARY $TAR_PATH/usr/local/cloudway/sandbox/usr/bin/cwctl
 
 for d in "$CROSS"/*/*; do
+  if [ -d $d ]; then
   (
     export GOARCH="$(basename "$d")"
     export GOOS="$(basename "$(dirname "$d")")"
@@ -38,6 +39,7 @@ for d in "$CROSS"/*/*; do
     mkdir -p $DIST
     cp -L "$d/cwcli-$VERSION$BINARY_EXTENSION" "$DIST/cwcli$BINARY_EXTENSION"
   )
+  fi
 done
 
 echo "Creating tgz from $BUILD_PATH and naming it $TGZ"

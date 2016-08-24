@@ -1,41 +1,42 @@
 package router
 
 import (
-    "github.com/cloudway/platform/api/server/httputils"
-    "golang.org/x/net/context"
-    "net/http"
+	"golang.org/x/net/context"
+	"net/http"
+
+	"github.com/cloudway/platform/api/server/httputils"
 )
 
 // localRoute defines an individual API route.
 type localRoute struct {
-    method  string
-    path    string
-    handler httputils.APIFunc
+	method  string
+	path    string
+	handler httputils.APIFunc
 }
 
 // Handler returns the APIFunc to let the server wrap it in middlewares.
 func (l localRoute) Handler() httputils.APIFunc {
-    return l.handler
+	return l.handler
 }
 
 // Method returns the http method that the route responds to.
 func (l localRoute) Method() string {
-    return l.method
+	return l.method
 }
 
 // Path returns the subpath where the route responds to.
 func (l localRoute) Path() string {
-    return l.path
+	return l.path
 }
 
 // NewRoute initializes a new local route for the router.
 func NewRoute(method, path string, handler httputils.APIFunc) Route {
-    return localRoute{method, path, handler}
+	return localRoute{method, path, handler}
 }
 
 // NewGetRoute initialize a new route with the http method GET.
 func NewGetRoute(path string, handler httputils.APIFunc) Route {
-    return NewRoute("GET", path, handler)
+	return NewRoute("GET", path, handler)
 }
 
 // NewPostRoute initializes a new route with the http method POST.
@@ -64,31 +65,31 @@ func NewHeadRoute(path string, handler httputils.APIFunc) Route {
 }
 
 func cancellableHandler(h httputils.APIFunc) httputils.APIFunc {
-    return func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-        if notifier, ok := w.(http.CloseNotifier); ok {
-            notify := notifier.CloseNotify()
-            notifyCtx, cancel := context.WithCancel(ctx)
-            finished := make(chan struct{})
-            defer close(finished)
-            ctx = notifyCtx
-            go func() {
-                select {
-                case <-notify:
-                    cancel()
-                case <-finished:
-                }
-            }()
-        }
-        return h(ctx, w, r, vars)
-    }
+	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+		if notifier, ok := w.(http.CloseNotifier); ok {
+			notify := notifier.CloseNotify()
+			notifyCtx, cancel := context.WithCancel(ctx)
+			finished := make(chan struct{})
+			defer close(finished)
+			ctx = notifyCtx
+			go func() {
+				select {
+				case <-notify:
+					cancel()
+				case <-finished:
+				}
+			}()
+		}
+		return h(ctx, w, r, vars)
+	}
 }
 
 // Cancellable makes new route which embeds http.CloseNotifier feature to
 // context.Context of handler.
 func Cancellable(r Route) Route {
-    return localRoute{
-        method:  r.Method(),
-        path:    r.Path(),
-        handler: cancellableHandler(r.Handler()),
-    }
+	return localRoute{
+		method:  r.Method(),
+		path:    r.Path(),
+		handler: cancellableHandler(r.Handler()),
+	}
 }

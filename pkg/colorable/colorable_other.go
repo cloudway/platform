@@ -3,22 +3,22 @@
 package colorable
 
 import (
-    "io"
-    "os"
+	"io"
+	"os"
 )
 
 func NewColorable(file *os.File) io.Writer {
-    if file == nil {
-        panic("nil passed instead of *os.File to NewColorable()")
-    }
+	if file == nil {
+		panic("nil passed instead of *os.File to NewColorable()")
+	}
 
-    return file
+	return file
 }
 
 func NewColorableStdout() io.Writer {
-    return os.Stdout
+	return os.Stdout
 }
 
 func NewColorableStderr() io.Writer {
-    return os.Stderr
+	return os.Stderr
 }

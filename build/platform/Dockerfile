@@ -1,9 +1,29 @@
-FROM bitbucket-server:deps
+FROM debian:jessie
+
+# allow replacing httpredir mirror
+ARG APT_MIRROR=httpredir.debian.org
+RUN sed -i s/httpredir.debian.org/$APT_MIRROR/g /etc/apt/sources.list \
+    && [ -f /etc/apt/sources.list.d/jessie-backports.list ] \
+    && sed -i s/httpredir.debian.org/$APT_MIRROR/g /etc/apt/sources.list.d/jessie-backports.list \
+    || true
+
+# grab gosu for easy step-down from root
+ENV GOSU_VERSION 1.7
+RUN set -x \
+    && apt-get update && apt-get install -y --no-install-recommends ca-certificates wget && rm -rf /var/lib/apt/lists/* \
+    && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
+    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc" \
+    && export GNUPGHOME="$(mktemp -d)" \
+    && gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
+    && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
+    && rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc \
+    && chmod +x /usr/local/bin/gosu \
+    && gosu nobody true
 
 RUN set -x \
  && apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        supervisor vim nodejs npm redis-server \
+        supervisor git vim nodejs npm redis-server \
         postfix sasl2-bin libsasl2-modules rsyslog openssh-client \
  && rm -rf /var/lib/apt/lists/*
 
@@ -60,7 +80,6 @@ RUN git clone git://github.com/cloudway/plugins.git \
 
 COPY supervisord.conf /etc/supervisor/conf.d/
 COPY sbin/ ${CLOUDWAY_ROOT}/sbin/
-COPY repo-deployer.jar $BITBUCKET_INSTALL_DIR/
 
 VOLUME /data
 WORKDIR $CLOUDWAY_ROOT

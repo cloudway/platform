@@ -21,6 +21,10 @@ cat > ~/.dockercfg <<EOF
 }
 EOF
 
+if [ -n $APT_MIRROR ]; then
+    APT_MIRROR_ARG="--build-arg APT_MIRROR=$APT_MIRROR"
+fi
+
 cp bundles/latest/tgz/cloudway-broker-*-linux-amd64.tar.gz build/broker/cloudway-broker.tar.gz
 docker build -t icloudway/broker:$DOCKER_TAG -f build/broker/Dockerfile build/broker
 docker push icloudway/broker:$DOCKER_TAG
@@ -33,9 +37,6 @@ cp -L bundles/latest/binary-server/cwman build/sshd/cwman
 docker build -t icloudway/sshd:$DOCKER_TAG -f build/sshd/Dockerfile build/sshd
 docker push icloudway/sshd:$DOCKER_TAG
 
-if [ -n $APT_MIRROR ]; then
-    APT_MIRROR_ARG="--build-arg APT_MIRROR=$APT_MIRROR"
-fi
 empty_dir=$(mktemp -d)
 cp build/bitbucket/Dockerfile.deps $empty_dir
 docker build $APT_MIRROR_ARG -t bitbucket-server:deps -f $empty_dir/Dockerfile.deps $empty_dir
@@ -47,6 +48,5 @@ docker build -t icloudway/bitbucket-server:$DOCKER_TAG -f build/bitbucket/Docker
 docker push icloudway/bitbucket-server:$DOCKER_TAG
 
 cp bundles/latest/tgz/cloudway-broker-*-linux-amd64.tar.gz build/platform/cloudway-broker.tar.gz
-cp scm/bitbucket/hooks/target/repo-deployer-*.jar build/platform/repo-deployer.jar
-docker build -t icloudway/platform:$DOCKER_TAG -f build/platform/Dockerfile build/platform
+docker build $APT_MIRROR_ARG -t icloudway/platform:$DOCKER_TAG -f build/platform/Dockerfile build/platform
 docker push icloudway/platform:$DOCKER_TAG

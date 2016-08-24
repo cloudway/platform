@@ -50,14 +50,15 @@ fi
 
 # List of bundles to create when no argument is passed
 DEFAULT_BUNDLES=(
+    validate-gofmt
     validate-vet
     binary-client
     binary-server
     binary-sandbox
-    test-unit
-    cover
     cross
     tgz
+    test-unit
+    cover
 )
 
 VERSION=$(< ./VERSION)

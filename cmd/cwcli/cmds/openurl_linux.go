@@ -1,10 +1,10 @@
 package cmds
 
 import (
-    "fmt"
-    "bytes"
-    "os"
-    "os/exec"
+	"bytes"
+	"fmt"
+	"os"
+	"os/exec"
 )
 
 const shellScript = `
@@ -17,9 +17,9 @@ echo "Cannot find brower to open $URL"
 `
 
 func openurl(url string) error {
-    script := fmt.Sprintf(shellScript, url)
-    cmd := exec.Command("bash")
-    cmd.Stdin = bytes.NewReader([]byte(script))
-    cmd.Stdout = os.Stdout
-    return cmd.Run()
+	script := fmt.Sprintf(shellScript, url)
+	cmd := exec.Command("bash")
+	cmd.Stdin = bytes.NewReader([]byte(script))
+	cmd.Stdout = os.Stdout
+	return cmd.Run()
 }
