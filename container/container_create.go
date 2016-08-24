@@ -308,13 +308,16 @@ func readBuildStream(in io.Reader, out io.Writer) (id string, err error) {
 			break
 		}
 
-		if out != nil && jm.Stream != "" {
-			out.Write([]byte(jm.Stream))
-			switch b := out.(type) {
-			case *bufio.Writer:
-				b.Flush()
-			case http.Flusher:
-				b.Flush()
+		if jm.Stream != "" {
+			os.Stdout.WriteString(jm.Stream)
+			if out != nil {
+				out.Write([]byte(jm.Stream))
+				switch b := out.(type) {
+				case *bufio.Writer:
+					b.Flush()
+				case http.Flusher:
+					b.Flush()
+				}
 			}
 		}
 
