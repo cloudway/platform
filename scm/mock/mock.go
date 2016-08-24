@@ -111,14 +111,11 @@ func (mock mockSCM) isEmptyRepository(namespace, name string) (bool, error) {
 	}
 
 	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
-	cmd := NewGitRepo(repodir).Command("count-objects")
-	cmd.Stdout = nil
-
-	out, err := cmd.Output()
+	out, err := NewGitRepo(repodir).Output("count-objects")
 	if err != nil {
 		return false, err
 	}
-	return strings.HasPrefix(string(out), "0 objects"), nil
+	return strings.HasPrefix(out, "0 objects"), nil
 }
 
 func (mock mockSCM) CreateNamespace(namespace string) error {
@@ -151,11 +148,11 @@ archive="$tempdir/$(basename $tempdir).tar.gz"
 trap "rm -rf $tempdir" EXIT
 
 while read oldrev newrev refname; do
-    ref=$(git rev-parse --symbolic-full-name $refname 2>/dev/null)
-    if [ "$ref" = "$target_ref" ]; then
+	ref=$(git rev-parse --symbolic-full-name $refname 2>/dev/null)
+	if [ "$ref" = "$target_ref" ]; then
 		git archive --format=tar.gz -o "$archive" "$ref"
 		/usr/bin/cwman deploy %s %s "$tempdir"
-    fi
+	fi
 done
 `
 
@@ -170,7 +167,7 @@ func (mock mockSCM) CreateRepo(namespace, name string) error {
 	}
 
 	repo := NewGitRepo(repodir)
-	if err := repo.Init(true); err != nil {
+	if err := repo.InitBare(); err != nil {
 		return err
 	}
 
@@ -206,7 +203,7 @@ func (mock mockSCM) Populate(namespace, name string, payload io.Reader, size int
 
 	// Create the temporary git repository
 	repo := NewGitRepo(tempdir)
-	if err := repo.Init(false); err != nil {
+	if err := repo.Init(); err != nil {
 		return err
 	}
 	if err := repo.Config("user.email", "test@example.com"); err != nil {
@@ -273,12 +270,12 @@ func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
 		var file *os.File
 		file, err = os.Create(archiveFile)
 		if err == nil {
-			defer file.Close()
 			zw := gzip.NewWriter(file)
 			tw := tar.NewWriter(zw)
 			if err = tw.Close(); err == nil {
 				err = zw.Close()
 			}
+			file.Close()
 		}
 	} else {
 		// run git command to generate an archive file
@@ -348,10 +345,8 @@ func (mock mockSCM) getCurrentDeployment(namespace, name, refId string) (*scm.Br
 		}
 	}
 
-	cmd := repo.Command("rev-parse", "--symbolic-full-name", refId)
-	cmd.Stdout = nil
-	output, err := cmd.Output()
-	rev := strings.TrimSpace(string(output))
+	out, err := repo.Output("rev-parse", "--symbolic-full-name", refId)
+	rev := strings.TrimSpace(out)
 	if err != nil || rev == "" {
 		refId = _DEFAULT_BRANCH
 	} else {

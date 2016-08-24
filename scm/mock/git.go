@@ -30,12 +30,19 @@ func (git Git) Run(arg ...string) error {
 	return git.Command(arg...).Run()
 }
 
-func (git Git) Init(bare bool) error {
-	args := []string{"init"}
-	if bare {
-		args = append(args, "--bare")
-	}
-	return git.Command(args...).Run()
+func (git Git) Output(arg ...string) (string, error) {
+	cmd := exec.Command("git", arg...)
+	cmd.Dir = git.dir
+	out, err := cmd.Output()
+	return string(out), err
+}
+
+func (git Git) Init() error {
+	return git.Run("init")
+}
+
+func (git Git) InitBare() error {
+	return git.Run("init", "--bare")
 }
 
 func (git Git) Config(key, value string) error {
@@ -43,10 +50,8 @@ func (git Git) Config(key, value string) error {
 }
 
 func (git Git) GetConfig(key string) string {
-	cmd := git.Command("config", key)
-	cmd.Stdout = nil
-	output, _ := cmd.Output()
-	return strings.TrimSpace(string(output))
+	out, _ := git.Output("config", key)
+	return strings.TrimSpace(out)
 }
 
 func (git Git) Commit(message string) error {

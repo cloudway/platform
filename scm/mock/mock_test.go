@@ -132,7 +132,7 @@ var _ = Describe("SCM", func() {
 
 			repodir := filepath.Join(repoRoot, "demo", "test")
 			repo := mockscm.NewGitRepo(tempdir)
-			Expect(repo.Command("clone", repodir, tempdir).Run()).To(Succeed())
+			Expect(repo.Run("clone", repodir, tempdir)).To(Succeed())
 
 			// Compare with test files
 			testfile := filepath.Join(tempdir, "README")
@@ -171,7 +171,7 @@ var _ = Describe("SCM", func() {
 
 			// Initialize the git repository
 			repo := mockscm.NewGitRepo(tempdir)
-			Expect(repo.Init(false)).To(Succeed())
+			Expect(repo.Init()).To(Succeed())
 			Expect(repo.Run("add", "-f", ".")).To(Succeed())
 			Expect(repo.Commit("Initial commit")).To(Succeed())
 
@@ -217,7 +217,7 @@ var _ = Describe("SCM", func() {
 
 				// Initialize the git repository
 				repo = mockscm.NewGitRepo(tempdir)
-				Expect(repo.Init(false)).To(Succeed())
+				Expect(repo.Init()).To(Succeed())
 				Expect(repo.Run("add", "-f", ".")).To(Succeed())
 				Expect(repo.Commit("Initial commit")).To(Succeed())
 			})
@@ -405,10 +405,10 @@ var _ = Describe("SCM", func() {
 
 		var initLocalRepo = func(dir string) {
 			testfile := filepath.Join(dir, "testfile")
-			git := mockscm.NewGitRepo(dir)
-
-			ExpectWithOffset(1, git.Init(false)).To(Succeed())
 			ExpectWithOffset(1, ioutil.WriteFile(testfile, []byte("this is a test"), 0644)).To(Succeed())
+
+			git := mockscm.NewGitRepo(dir)
+			ExpectWithOffset(1, git.Init()).To(Succeed())
 			ExpectWithOffset(1, git.Run("add", ".")).To(Succeed())
 			ExpectWithOffset(1, git.Commit("initial commit")).To(Succeed())
 		}
@@ -438,21 +438,28 @@ var _ = Describe("SCM", func() {
 			os.Remove(wrapper)
 		})
 
+		var clone = func(remote string) error {
+			git := mockscm.NewGitRepo(tempdir)
+			cmd := git.Command("clone", remote, tempdir)
+			cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
+			return cmd.Run()
+		}
+
+		var push = func(remote string) error {
+			git := mockscm.NewGitRepo(tempdir)
+			cmd := git.Command("push", "--set-upstream", remote, "master")
+			cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
+			return cmd.Run()
+		}
+
 		Context("with ssh key", func() {
 			It("should success to clone", func() {
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("clone", repourl, tempdir)
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).To(Succeed())
+				Expect(clone(repourl)).To(Succeed())
 			})
 
 			It("should success to push", func() {
 				initLocalRepo(tempdir)
-
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("push", "--set-upstream", repourl, "master")
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).To(Succeed())
+				Expect(push(repourl)).To(Succeed())
 			})
 		})
 
@@ -462,19 +469,12 @@ var _ = Describe("SCM", func() {
 			})
 
 			It("should fail to clone", func() {
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("clone", repourl, tempdir)
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).NotTo(Succeed())
+				Expect(clone(repourl)).NotTo(Succeed())
 			})
 
 			It("should fail to push", func() {
 				initLocalRepo(tempdir)
-
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("push", "--set-upstream", repourl, "master")
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).NotTo(Succeed())
+				Expect(push(repourl)).NotTo(Succeed())
 			})
 		})
 
@@ -486,19 +486,12 @@ var _ = Describe("SCM", func() {
 			})
 
 			It("should fail to clone", func() {
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("clone", other_repourl, tempdir)
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).NotTo(Succeed())
+				Expect(clone(other_repourl)).NotTo(Succeed())
 			})
 
 			It("should fail to push", func() {
 				initLocalRepo(tempdir)
-
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("push", "--set-upstream", other_repourl, "master")
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).NotTo(Succeed())
+				Expect(push(other_repourl)).NotTo(Succeed())
 			})
 		})
 	})
