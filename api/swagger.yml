@@ -1,0 +1,611 @@
+swagger: '2.0'
+
+info:
+  title: Cloudway API
+  description: The Cloudway API exposes operations for managing applications.
+  version: '0.2'
+
+schemes: [http]
+host: api.example.com
+basePath: /api/v0.2
+
+paths:
+  /version:
+    get:
+      summary: Version information
+      description: Get the server version information
+      operationId: version
+      produces:
+        - application/json
+      responses:
+        200:
+          description: The version information
+          schema:
+            $ref: '#/definitions/Version'
+
+  /auth:
+    post:
+      summary: User authentication
+      description: Authenticate with user name and password
+      operationId: authenticate
+      security:
+        - basicAuth: []
+      produces:
+        - application/json
+      responses:
+        200:
+          description: Return access token after successful authetnication
+          schema:
+            $ref: '#/definitions/Token'
+        401:
+          description: invalid user name or password
+
+  /applications/:
+    get:
+      summary: Application list
+      description: Get a list of application names.
+      operationId: getApplications
+      security:
+        - apiKey: []
+      produces:
+        - application/json
+      responses:
+        200:
+          description: a list of application names.
+          schema:
+            type: array
+            items:
+              type: string
+        401:
+          description: unauthorized
+    post:
+      summary: Create application
+      description: Create a new application
+      operationId: createApplication
+      security:
+        - apiKey: []
+      consumes:
+        - application/json
+      produces:
+        - text/plain
+      parameters:
+        - in: body
+          name: options
+          description: create options
+          required: true
+          schema:
+            $ref: '#/definitions/CreateOptions'
+      responses:
+        200:
+          description: application created
+          schema:
+            type: string
+            format: binary
+        400:
+          description: invalid parameters
+        401:
+          description: unauthorized
+
+  /applications/{name}/info:
+    get:
+      summary: Application information
+      description: Get detailed application information
+      operationId: getApplicationInfo
+      security:
+        - apiKey: []
+      produces:
+        - application/json
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        200:
+          description: detailed application information.
+          schema:
+            $ref: '#/definitions/ApplicationInfo'
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/{name}:
+    delete:
+      summary: Remove application
+      description: Remove the application
+      operationId: removeApplication
+      security:
+        - apiKey: []
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        204:
+          description: application removed
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/{name}/start:
+    post:
+      summary: Start application
+      description: Start the application
+      operationId: startApplication
+      security:
+        - apiKey: []
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        200:
+          description: application started
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/{name}/stop:
+    post:
+      summary: Stop application
+      description: Stop the application
+      operationId: stopApplication
+      security:
+        - apiKey: []
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        200:
+          description: application stopped
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/{name}/restart:
+    post:
+      summary: Restart application
+      description: Restart the application
+      operationId: restartApplication
+      security:
+        - apiKey: []
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        200:
+          description: application restarted
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/{name}/deploy:
+    post:
+      summary: Deploy application
+      description: Deploy the application
+      operationId: deployApplication
+      security:
+        - apiKey: []
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+        - name: branch
+          in: query
+          description: the deployment branch
+          required: false
+          type: string
+      responses:
+        204:
+          description: application deployed
+        400:
+          description: invalid parameters
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+    get:
+      summary: Get deployment branches
+      description: Get application deployment branches
+      operationId: getApplicationDeployments
+      security:
+        - apiKey: []
+      produces:
+        - application/json
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        200:
+          description: deployment branches
+          schema:
+            $ref: '#/definitions/Deployments'
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/{name}/repo:
+    get:
+      summary: Download application repository
+      description: Download application repository
+      operationId: download
+      produces:
+        - application/tar+gzip
+      security:
+        - apiKey: []
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        200:
+          description: repository archive
+          schema:
+            type: string
+            format: binary
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+    put:
+      summary: Upload application repository
+      description: Upload application repository
+      operationId: upload
+      consumes:
+        - application/tar+gzip
+      security:
+        - apiKey: []
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+        - name: body
+          in: body
+          description: repository archive
+          required: true
+          schema:
+            type: string
+            format: binary
+      responses:
+        200:
+          description: repository uploaded
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/{name}/data:
+    get:
+      summary: Dump application data
+      description: Dump application data
+      operationId: dump
+      produces:
+        - application/tar+gzip
+      security:
+        - apiKey: []
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        200:
+          description: data archive
+          schema:
+            type: string
+            format: binary
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+    put:
+      summary: Restore application data
+      description: Restore application data
+      operationId: restore
+      consumes:
+        - application/tar+gzip
+      security:
+        - apiKey: []
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+        - name: body
+          in: body
+          description: repository archive
+          required: true
+          schema:
+            type: string
+            format: binary
+      responses:
+        200:
+          description: application data restored
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/{name}/scale:
+    post:
+      summary: Scale application
+      description: Scale application
+      operationId: scaleApplication
+      security:
+        - apiKey: []
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+        - name: scale
+          in: query
+          description: scaling level
+          required: true
+          type: string
+      responses:
+        200:
+          description: application scaled
+        400:
+          description: invalid parameters
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/{name}/services/{service}/env/:
+    get:
+      summary: Get application environment
+      description: Get application environment
+      operationId: getApplicationEnviron
+      security:
+        - apiKey: []
+      produces:
+        - application/json
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+        - name: service
+          in: path
+          description: name of the service
+          required: true
+          type: string
+      responses:
+        200:
+          description: the application environment
+          schema:
+            type: string
+            format: binary
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+    post:
+      summary: Set application environment
+      description: Set application environment
+      operationId: setApplicationEnviron
+      security:
+        - apiKey: []
+      consumes:
+        - application/json
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+        - name: service
+          in: path
+          description: name of the service
+          required: true
+          type: string
+        - name: body
+          in: body
+          description: map of environment variables
+          required: true
+          schema:
+            type: string
+            format: binary
+      responses:
+        200:
+          description: application environment changed
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+securityDefinitions:
+  basicAuth:
+    type: basic
+    description: HTTP Basic Authentication.
+  apiKey:
+    type: apiKey
+    name: authorization
+    in: header
+    description: API key authentication
+
+definitions:
+  Version:
+    type: object
+    properties:
+      Version:
+        type: string
+        description: The server version number.
+      BuildTime:
+        type: string
+        description: The time of the server build.
+      DockerVersion:
+        type: string
+        description: The docker version.
+      Os:
+        type: string
+        description: The operating system that the server running.
+      Arch:
+        type: string
+        description: The hardware architecture that the server running.
+  Token:
+    type: object
+    properties:
+      Token:
+        type: string
+        description: API access token
+  ApplicationInfo:
+    type: object
+    properties:
+      Name:
+        type: string
+        description: application name
+      Namespace:
+        type: string
+        description: application namespace
+      CreatedAt:
+        type: string
+        format: date-time
+        description: the data and time that the application created at
+      URL:
+        type: string
+        description: the application url
+      CloneURL:
+        type: string
+        description: the source code clone url
+      SSHURL:
+        type: string
+        description: the SSH URL
+      Framework:
+        $ref: '#/definitions/Plugin'
+      Services:
+        type: array
+        items:
+          $ref: '#/definitions/Plugin'
+        description: the services
+  CreateOptions:
+    type: object
+    properties:
+      Name:
+        type: string
+        description: application name
+      Framework:
+        type: string
+        description: the application framework plugin tag
+      Services:
+        type: array
+        items:
+          type: string
+        description: the service plugin tags
+      Repo:
+        type: string
+        description: the code repository url
+  Deployments:
+    type: object
+    properties:
+      Current:
+        $ref: '#/definitions/Branch'
+      Branches:
+        type: array
+        items:
+          $ref: '#/definitions/Branch'
+        description: all deployment branches
+  Branch:
+    type: object
+    properties:
+      Id:
+        type: string
+        description: the branch identifier
+      DisplayId:
+        type: string
+        description: the display identifier
+      Type:
+        type: string
+        description: the branch type, such as BRANCH or TAG
+  Plugin:
+    type: object
+    properties:
+      Name:
+        type: string
+        description: plugin name
+      DisplayName:
+        type: string
+        description: plugin display name
+      Description:
+        type: string
+        description: plugin description
+      Version:
+        type: string
+        description: plugin version
+      Vendor:
+        type: string
+        description: plugin vendor
+      Logo:
+        type: string
+        description: plugin logo
+      Category:
+        type: string
+        description: plugin category
+      BaseImage:
+        type: string
+        description: plugin base image
+      DependsOn:
+        type: array
+        items:
+          type: string
+        description: dependent plugins
+      Endpoints:
+        type: array
+        items:
+          $ref: '#/definitions/Endpoint'
+        description: plugin endpoints
+  Endpoint:
+    type: object
+    properties:
+      PrivatePort:
+        type: integer
+        description: private port number
+      ProxyMappings:
+        type: array
+        items:
+          $ref: '#/definitions/ProxyMapping'
+        description: proxy mappings
+  ProxyMapping:
+    type: object
+    properties:
+      Frontend:
+        type: string
+        description: the frontend url
+      Backend:
+        type: string
+        description: the backend url
+      Protocol:
+        type: string
+        description: the protocol
