@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"net/url"
 
 	"github.com/cloudway/platform/api/types"
@@ -35,9 +36,14 @@ func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateAp
 		return nil, err
 	}
 	if log != nil {
-		io.Copy(log, resp.Body)
+		_, err = io.Copy(log, resp.Body)
+	} else {
+		_, err = io.Copy(ioutil.Discard, resp.Body)
 	}
-	resp.EnsureClosed()
+	resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
 	return api.GetApplicationInfo(ctx, opts.Name)
 }
 

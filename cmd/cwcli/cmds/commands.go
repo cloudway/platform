@@ -28,6 +28,7 @@ type CWCli struct {
 var CommandUsage = []Command{
 	{"login", "Login to a Cloudway server"},
 	{"logout", "Log out from a Cloudway server"},
+	{"namespace", "Get or set application namespace"},
 	{"app", "Manage applications"},
 	{"app:create", "Create application"},
 	{"app:remove", "Permanently remove an application"},
@@ -66,6 +67,7 @@ func Init(host string, stdout, stderr io.Writer) *CWCli {
 	c.handlers = map[string]func(...string) error{
 		"login":       c.CmdLogin,
 		"logout":      c.CmdLogout,
+		"namespace":   c.CmdNamespace,
 		"app":         c.CmdApps,
 		"app:create":  c.CmdAppCreate,
 		"app:remove":  c.CmdAppRemove,

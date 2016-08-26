@@ -13,6 +13,7 @@ import (
 	"github.com/cloudway/platform/api/server"
 	"github.com/cloudway/platform/api/server/middleware"
 	"github.com/cloudway/platform/api/server/router/applications"
+	"github.com/cloudway/platform/api/server/router/namespace"
 	"github.com/cloudway/platform/api/server/router/plugins"
 	"github.com/cloudway/platform/api/server/router/system"
 	"github.com/cloudway/platform/broker"
@@ -83,6 +84,7 @@ func initRouters(s *server.Server, br *broker.Broker) {
 	s.InitRouter(
 		system.NewRouter(br),
 		plugins.NewRouter(br),
+		namespace.NewRouter(br),
 		applications.NewRouter(br),
 	)
 }

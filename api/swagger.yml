@@ -40,6 +40,63 @@ paths:
         401:
           description: invalid user name or password
 
+  /namespace:
+    get:
+      summary: Namespace
+      description: Get the application namespace
+      operationId: getNamespace
+      security:
+        - apiKey: []
+      produces:
+        - application/json
+      responses:
+        200:
+          description: the application namespace
+          schema:
+            type: object
+            properties:
+              Namespace:
+                type: string
+                description: the application namespace
+        401:
+          description: unauthorized
+    post:
+      summary: Set namespace
+      description: Set the application namespace
+      operationId: setNamespace
+      security:
+        - apiKey: []
+      parameters:
+        - name: namespace
+          in: query
+          description: new namespace
+          required: true
+          type: string
+      responses:
+        200:
+          description: namespace changed
+        400:
+          description: invalid namespace
+        401:
+          description: unauthorized
+    delete:
+      summary: Remove namespace
+      description: Remove the application namespace
+      operationId: removeNamespace
+      security:
+        - apiKey: []
+      parameters:
+        - name: force
+          in: query
+          description: force to remove namespace
+          required: false
+          type: boolean
+      responses:
+        200:
+          description: namespace removed
+        401:
+          description: unauthorized
+
   /applications/:
     get:
       summary: Application list

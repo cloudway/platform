@@ -14,6 +14,7 @@ import (
 	"github.com/cloudway/platform/api/server"
 	"github.com/cloudway/platform/api/server/middleware"
 	"github.com/cloudway/platform/api/server/router/applications"
+	"github.com/cloudway/platform/api/server/router/namespace"
 	"github.com/cloudway/platform/api/server/router/plugins"
 	"github.com/cloudway/platform/api/server/router/system"
 	"github.com/cloudway/platform/auth/userdb"
@@ -74,15 +75,9 @@ var _ = BeforeSuite(func() {
 	apiServer.InitRouter(
 		system.NewRouter(broker),
 		plugins.NewRouter(broker),
+		namespace.NewRouter(broker),
 		applications.NewRouter(broker),
 	)
-
-	// Create test user
-	user := userdb.BasicUser{
-		Name:      TEST_USER,
-		Namespace: TEST_NAMESPACE,
-	}
-	Ω(broker.CreateUser(&user, TEST_PASSWORD)).Should(Succeed())
 
 	// The serve API routine never exists unless an error occurs
 	// we need to start it as a goroutine and wait on it so
@@ -101,10 +96,23 @@ var _ = AfterSuite(func() {
 	Ω(apiErr).ShouldNot(HaveOccurred())
 })
 
-func NewTestClient(login bool) *client.APIClient {
+type TestClient struct {
+	*client.APIClient
+	user *userdb.BasicUser
+}
+
+func NewTestClient() *TestClient {
 	headers := map[string]string{"Accept": "application/json"}
 	cli, err := client.NewAPIClient(serverURL, "", nil, headers)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	return &TestClient{APIClient: cli}
+}
+
+func NewTestClientWithUser(login bool) *TestClient {
+	cli := NewTestClient()
+
+	cli.user = &userdb.BasicUser{Name: TEST_USER}
+	ExpectWithOffset(1, broker.CreateUser(cli.user, TEST_PASSWORD)).To(Succeed())
 
 	if login {
 		token, err := cli.Authenticate(context.Background(), TEST_USER, TEST_PASSWORD)
@@ -113,6 +121,26 @@ func NewTestClient(login bool) *client.APIClient {
 	}
 
 	return cli
+}
+
+func NewTestClientWithNamespace(login bool) *TestClient {
+	cli := NewTestClientWithUser(login)
+
+	br := broker.NewUserBroker(cli.user, context.Background())
+	ExpectWithOffset(1, br.CreateNamespace(TEST_NAMESPACE)).To(Succeed())
+	ExpectWithOffset(1, cli.user.Namespace).To(Equal(TEST_NAMESPACE))
+
+	return cli
+}
+
+func (cli *TestClient) NewUserBroker() *br.UserBroker {
+	return broker.NewUserBroker(&*cli.user, context.Background())
+}
+
+func (cli *TestClient) Close() {
+	if cli != nil && cli.user != nil {
+		ExpectWithOffset(1, broker.RemoveUser(TEST_USER)).To(Succeed())
+	}
 }
 
 type HaveHTTPStatus int
