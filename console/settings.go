@@ -71,7 +71,7 @@ func (con *Console) removeNamespace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := con.NewUserBroker(user).RemoveNamespace()
+	err := con.NewUserBroker(user).RemoveNamespace(false)
 	if con.badRequest(w, r, err, "/settings") {
 		return
 	}

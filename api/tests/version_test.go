@@ -19,7 +19,7 @@ var _ = Describe("Version", func() {
 
 	Context("Server", func() {
 		It("should return server version information", func() {
-			cli := NewTestClient(false)
+			cli := NewTestClient()
 			version, err := cli.ServerVersion(ctx)
 			Ω(err).ShouldNot(HaveOccurred())
 
@@ -38,28 +38,28 @@ var _ = Describe("Version", func() {
 
 	Context("Client", func() {
 		It("should success if client version is equal to the server version", func() {
-			cli := NewTestClient(false)
+			cli := NewTestClient()
 			cli.UpdateClientVersion(api.Version)
 			_, err := cli.ServerVersion(ctx)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
 		It("should success if client version less than server version but greater than min version", func() {
-			cli := NewTestClient(false)
+			cli := NewTestClient()
 			cli.UpdateClientVersion(api.MinVersion + ".1")
 			_, err := cli.ServerVersion(ctx)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
 		It("should fail if client version is greater than server version", func() {
-			cli := NewTestClient(false)
+			cli := NewTestClient()
 			cli.UpdateClientVersion("1000.0")
 			_, err := cli.ServerVersion(ctx)
 			Ω(err).Should(HaveHTTPStatus(http.StatusBadRequest))
 		})
 
 		It("should fail if client version is less than minimum version", func() {
-			cli := NewTestClient(false)
+			cli := NewTestClient()
 			cli.UpdateClientVersion("0.1")
 			_, err := cli.ServerVersion(ctx)
 			Ω(err).Should(HaveHTTPStatus(http.StatusBadRequest))

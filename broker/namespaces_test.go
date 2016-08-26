@@ -1,6 +1,9 @@
 package broker_test
 
 import (
+	"os"
+	"path/filepath"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -101,10 +104,47 @@ var _ = Describe("Namespaces", func() {
 	})
 
 	Describe("Remove", func() {
+		var assertNamespaceRemoved = func(namespace string) {
+			ctx := context.Background()
+
+			cs, err := broker.FindAll(ctx, "", namespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cs).To(BeEmpty())
+
+			repodir := filepath.Join(REPOROOT, namespace)
+			_, err = os.Stat(repodir)
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			br := broker.NewUserBroker(user, ctx)
+			Expect(br.Refresh()).To(Succeed())
+			Expect(br.User.Basic().Namespace).To(BeEmpty())
+			Expect(br.User.Basic().Applications).To(BeEmpty())
+		}
+
+		var assertNamespaceNotRemoved = func(namespace string) {
+			ctx := context.Background()
+
+			repodir := filepath.Join(REPOROOT, namespace)
+			st, err := os.Stat(repodir)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(st.IsDir()).To(BeTrue())
+
+			br := broker.NewUserBroker(user, ctx)
+			Expect(br.Refresh()).To(Succeed())
+			Expect(br.User.Basic().Namespace).To(Equal(namespace))
+		}
+
 		Context("with fresh new user", func() {
 			It("should success to remove namespace", func() {
 				br := broker.NewUserBroker(user, context.Background())
-				Expect(br.RemoveNamespace()).To(Succeed())
+				Expect(br.RemoveNamespace(false)).To(Succeed())
+				assertNamespaceRemoved(NAMESPACE)
+			})
+
+			It("should success to force remove the namespace", func() {
+				br := broker.NewUserBroker(user, context.Background())
+				Expect(br.RemoveNamespace(true)).To(Succeed())
+				assertNamespaceRemoved(NAMESPACE)
 			})
 		})
 
@@ -116,7 +156,14 @@ var _ = Describe("Namespaces", func() {
 
 			It("should success to remove the namespace", func() {
 				br := broker.NewUserBroker(user, context.Background())
-				Expect(br.RemoveNamespace()).To(Succeed())
+				Expect(br.RemoveNamespace(false)).To(Succeed())
+				assertNamespaceRemoved(NAMESPACE)
+			})
+
+			It("should success to force remove the namespace", func() {
+				br := broker.NewUserBroker(user, context.Background())
+				Expect(br.RemoveNamespace(true)).To(Succeed())
+				assertNamespaceRemoved(NAMESPACE)
 			})
 		})
 
@@ -125,7 +172,14 @@ var _ = Describe("Namespaces", func() {
 
 			It("should fail to remove the namespace", func() {
 				br := broker.NewUserBroker(user, context.Background())
-				Expect(br.RemoveNamespace()).NotTo(Succeed())
+				Expect(br.RemoveNamespace(false)).NotTo(Succeed())
+				assertNamespaceNotRemoved(NAMESPACE)
+			})
+
+			It("should success to force remove the namespace", func() {
+				br := broker.NewUserBroker(user, context.Background())
+				Expect(br.RemoveNamespace(true)).To(Succeed())
+				assertNamespaceRemoved(NAMESPACE)
 			})
 		})
 	})

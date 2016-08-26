@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/cloudway/platform/auth/userdb"
 	"golang.org/x/net/context"
 )
 
@@ -81,4 +82,16 @@ func VersionFromContext(ctx context.Context) (ver string) {
 		return
 	}
 	return val.(string)
+}
+
+// UserFromContext returns the authenticated user from the context using UserKey.
+func UserFromContext(ctx context.Context) (user *userdb.BasicUser) {
+	if ctx == nil {
+		return
+	}
+	val := ctx.Value(UserKey)
+	if val == nil {
+		return
+	}
+	return val.(*userdb.BasicUser)
 }

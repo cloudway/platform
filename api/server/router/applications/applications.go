@@ -14,7 +14,6 @@ import (
 	"github.com/cloudway/platform/api/server/httputils"
 	"github.com/cloudway/platform/api/server/router"
 	"github.com/cloudway/platform/api/types"
-	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/broker"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
@@ -58,12 +57,8 @@ func (ar *applicationsRouter) Routes() []router.Route {
 	return ar.routes
 }
 
-func (ar *applicationsRouter) currentUser(ctx context.Context) *userdb.BasicUser {
-	return ctx.Value(httputils.UserKey).(*userdb.BasicUser)
-}
-
 func (ar *applicationsRouter) list(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	apps, err := ar.NewUserBroker(user, ctx).GetApplications()
 	if err != nil {
@@ -79,7 +74,7 @@ func (ar *applicationsRouter) list(ctx context.Context, w http.ResponseWriter, r
 
 func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	var (
-		user = ar.currentUser(ctx)
+		user = httputils.UserFromContext(ctx)
 		name = vars["name"]
 	)
 
@@ -147,7 +142,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		return err
 	}
 
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	br := ar.NewUserBroker(user, ctx)
 
 	var req types.CreateApplication
@@ -189,7 +184,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 }
 
 func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	br := ar.NewUserBroker(user, ctx)
 
 	if err := br.RemoveApplication(vars["name"]); err != nil {
@@ -201,22 +196,22 @@ func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter,
 }
 
 func (ar *applicationsRouter) start(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	return ar.NewUserBroker(user, ctx).StartApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) stop(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	return ar.NewUserBroker(user, ctx).StopApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) restart(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	return ar.NewUserBroker(user, ctx).RestartApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	name, branch := vars["name"], r.FormValue("branch")
 
 	err := ar.SCM.Deploy(user.Namespace, name, branch)
@@ -229,7 +224,7 @@ func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter,
 }
 
 func (ar *applicationsRouter) getDeployments(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	name := vars["name"]
 
 	current, err := ar.SCM.GetDeploymentBranch(user.Namespace, name)
@@ -266,7 +261,7 @@ func convertBranchesJson(branches []*scm.Branch) []*types.Branch {
 }
 
 func (ar *applicationsRouter) download(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	tr, err := ar.NewUserBroker(user, ctx).Download(vars["name"])
 	if err != nil {
@@ -285,12 +280,12 @@ func (ar *applicationsRouter) download(ctx context.Context, w http.ResponseWrite
 }
 
 func (ar *applicationsRouter) upload(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	return ar.NewUserBroker(user, ctx).Upload(vars["name"], r.Body)
 }
 
 func (ar *applicationsRouter) dump(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	tr, err := ar.NewUserBroker(user, ctx).Dump(vars["name"])
 	if err != nil {
@@ -309,12 +304,12 @@ func (ar *applicationsRouter) dump(ctx context.Context, w http.ResponseWriter, r
 }
 
 func (ar *applicationsRouter) restore(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	return ar.NewUserBroker(user, ctx).Restore(vars["name"], r.Body)
 }
 
 func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	name := vars["name"]
 	scaling := r.FormValue("scale")
 
@@ -380,7 +375,7 @@ func (ar *applicationsRouter) getContainer(ctx context.Context, namespace string
 }
 
 func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	container, err := ar.getContainer(ctx, user.Namespace, vars)
 	if err != nil {
@@ -394,7 +389,7 @@ func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter
 }
 
 func (ar *applicationsRouter) getenv(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	container, err := ar.getContainer(ctx, user.Namespace, vars)
 	if err != nil {
@@ -425,7 +420,7 @@ func (ar *applicationsRouter) setenv(ctx context.Context, w http.ResponseWriter,
 		return err
 	}
 
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	cs, err := ar.getContainers(ctx, user.Namespace, vars)
 	if err != nil {

@@ -56,7 +56,7 @@ func (br *UserBroker) CreateNamespace(namespace string) (err error) {
 	return nil
 }
 
-func (br *UserBroker) RemoveNamespace() (err error) {
+func (br *UserBroker) RemoveNamespace(force bool) (err error) {
 	if err = br.Refresh(); err != nil {
 		return err
 	}
@@ -66,15 +66,24 @@ func (br *UserBroker) RemoveNamespace() (err error) {
 		return nil
 	}
 
-	if len(user.Applications) != 0 {
+	if !force && len(user.Applications) != 0 {
 		return NamespaceNotEmptyError(user.Namespace)
 	}
 
+	// remove all applications in the namespace
+	for app := range user.Applications {
+		if err = br.RemoveApplication(app); err != nil {
+			return err
+		}
+	}
+
+	// remove the namespace from SCM
 	err = br.SCM.RemoveNamespace(user.Namespace)
 	if err != nil {
 		return err
 	}
 
+	// update namespace in the user database
 	err = br.Users.SetNamespace(user.Name, "")
 	if err != nil {
 		return err
