@@ -1,9 +1,28 @@
 package broker
 
-func (br *UserBroker) CreateNamespace(namespace string) (err error) {
-	user := br.User.Basic()
+import (
+	"errors"
+	"regexp"
+)
 
-	if user.Namespace == namespace {
+var namespacePattern = regexp.MustCompile("^[a-z][a-z_0-9]*$")
+
+func (br *UserBroker) CreateNamespace(namespace string) (err error) {
+	if namespace == "" {
+		return errors.New("The namespace cannot be empty")
+	}
+	if !namespacePattern.MatchString(namespace) {
+		return errors.New("The namespace can only contains lower case letters, digits, or underscores")
+	}
+
+	if err = br.Refresh(); err != nil {
+		return err
+	}
+
+	user := br.User.Basic()
+	oldNamespace := user.Namespace
+
+	if namespace == oldNamespace {
 		return nil
 	}
 
@@ -20,31 +39,43 @@ func (br *UserBroker) CreateNamespace(namespace string) (err error) {
 	}
 
 	// recreate namespace in the SCM
-	if user.Namespace != "" {
-		br.SCM.RemoveNamespace(user.Namespace)
+	if oldNamespace != "" {
+		err = br.SCM.RemoveNamespace(oldNamespace)
+	}
+	if err == nil {
+		err = br.SCM.CreateNamespace(namespace)
+	}
+
+	// restore user database if failed to recreate SCM namespace
+	if err != nil {
+		br.Users.SetNamespace(user.Name, oldNamespace)
+		return err
 	}
 
 	user.Namespace = namespace
-	return br.SCM.CreateNamespace(namespace)
+	return nil
 }
 
-func (br *UserBroker) RemoveNamespace(force bool) (err error) {
+func (br *UserBroker) RemoveNamespace() (err error) {
+	if err = br.Refresh(); err != nil {
+		return err
+	}
 	user := br.User.Basic()
 
 	if user.Namespace == "" {
 		return nil
 	}
 
-	if !force && len(user.Applications) != 0 {
+	if len(user.Applications) != 0 {
 		return NamespaceNotEmptyError(user.Namespace)
 	}
 
-	err = br.Users.SetNamespace(user.Name, "")
+	err = br.SCM.RemoveNamespace(user.Namespace)
 	if err != nil {
 		return err
 	}
 
-	err = br.SCM.RemoveNamespace(user.Namespace)
+	err = br.Users.SetNamespace(user.Name, "")
 	if err != nil {
 		return err
 	}
