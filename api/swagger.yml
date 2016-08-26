@@ -53,11 +53,7 @@ paths:
         200:
           description: the application namespace
           schema:
-            type: object
-            properties:
-              Namespace:
-                type: string
-                description: the application namespace
+            $ref: '#/definitions/Namespace'
         401:
           description: unauthorized
     post:
@@ -124,7 +120,7 @@ paths:
       consumes:
         - application/json
       produces:
-        - text/plain
+        - application/octet-stream
       parameters:
         - in: body
           name: options
@@ -136,8 +132,7 @@ paths:
         200:
           description: application created
           schema:
-            type: string
-            format: binary
+            type: file
         400:
           description: invalid parameters
         401:
@@ -322,8 +317,7 @@ paths:
         200:
           description: repository archive
           schema:
-            type: string
-            format: binary
+            type: file
         401:
           description: unauthorized
         404:
@@ -347,8 +341,7 @@ paths:
           description: repository archive
           required: true
           schema:
-            type: string
-            format: binary
+            type: file
       responses:
         200:
           description: repository uploaded
@@ -376,8 +369,7 @@ paths:
         200:
           description: data archive
           schema:
-            type: string
-            format: binary
+            type: file
         401:
           description: unauthorized
         404:
@@ -401,8 +393,7 @@ paths:
           description: repository archive
           required: true
           schema:
-            type: string
-            format: binary
+            type: file
       responses:
         200:
           description: application data restored
@@ -463,8 +454,7 @@ paths:
         200:
           description: the application environment
           schema:
-            type: string
-            format: binary
+            $ref: '#/definitions/Environ'
         401:
           description: unauthorized
         404:
@@ -493,8 +483,7 @@ paths:
           description: map of environment variables
           required: true
           schema:
-            type: string
-            format: binary
+            $ref: '#/definitions/Environ'
       responses:
         200:
           description: application environment changed
@@ -509,8 +498,8 @@ securityDefinitions:
     description: HTTP Basic Authentication.
   apiKey:
     type: apiKey
-    name: authorization
     in: header
+    name: authorization
     description: API key authentication
 
 definitions:
@@ -538,6 +527,12 @@ definitions:
       Token:
         type: string
         description: API access token
+  Namespace:
+    type: object
+    properties:
+      Namespace:
+        type: string
+        description: namespace
   ApplicationInfo:
     type: object
     properties:
@@ -567,6 +562,67 @@ definitions:
         items:
           $ref: '#/definitions/Plugin'
         description: the services
+  Plugin:
+    type: object
+    properties:
+      Name:
+        type: string
+        description: plugin name
+      DisplayName:
+        type: string
+        description: plugin display name
+      Description:
+        type: string
+        description: plugin description
+      Version:
+        type: string
+        description: plugin version
+      Vendor:
+        type: string
+        description: plugin vendor
+      Logo:
+        type: string
+        description: plugin logo
+      Category:
+        type: string
+        enum: [Framework, Service, Library]
+        description: plugin category
+      BaseImage:
+        type: string
+        description: plugin base image
+      DependsOn:
+        type: array
+        items:
+          type: string
+        description: dependent plugins
+      Endpoints:
+        type: array
+        items:
+          $ref: '#/definitions/Endpoint'
+        description: plugin endpoints
+  Endpoint:
+    type: object
+    properties:
+      PrivatePort:
+        type: integer
+        description: private port number
+      ProxyMappings:
+        type: array
+        items:
+          $ref: '#/definitions/ProxyMapping'
+        description: proxy mappings
+  ProxyMapping:
+    type: object
+    properties:
+      Frontend:
+        type: string
+        description: the frontend url
+      Backend:
+        type: string
+        description: the backend url
+      Protocol:
+        type: string
+        description: the protocol
   CreateOptions:
     type: object
     properties:
@@ -606,63 +662,7 @@ definitions:
       Type:
         type: string
         description: the branch type, such as BRANCH or TAG
-  Plugin:
+  Environ:
     type: object
-    properties:
-      Name:
-        type: string
-        description: plugin name
-      DisplayName:
-        type: string
-        description: plugin display name
-      Description:
-        type: string
-        description: plugin description
-      Version:
-        type: string
-        description: plugin version
-      Vendor:
-        type: string
-        description: plugin vendor
-      Logo:
-        type: string
-        description: plugin logo
-      Category:
-        type: string
-        description: plugin category
-      BaseImage:
-        type: string
-        description: plugin base image
-      DependsOn:
-        type: array
-        items:
-          type: string
-        description: dependent plugins
-      Endpoints:
-        type: array
-        items:
-          $ref: '#/definitions/Endpoint'
-        description: plugin endpoints
-  Endpoint:
-    type: object
-    properties:
-      PrivatePort:
-        type: integer
-        description: private port number
-      ProxyMappings:
-        type: array
-        items:
-          $ref: '#/definitions/ProxyMapping'
-        description: proxy mappings
-  ProxyMapping:
-    type: object
-    properties:
-      Frontend:
-        type: string
-        description: the frontend url
-      Backend:
-        type: string
-        description: the backend url
-      Protocol:
-        type: string
-        description: the protocol
+    additionalProperties:
+      type: string
