@@ -26,7 +26,7 @@ func (m authMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc
 			return handler(ctx, w, r, vars)
 		}
 
-		user, err := m.Authz.Verify(w, r)
+		user, err := m.Authz.Verify(r)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			return nil

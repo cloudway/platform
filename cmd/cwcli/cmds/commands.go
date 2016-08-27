@@ -45,6 +45,7 @@ var CommandUsage = []Command{
 	{"app:env", "Get or set application environment variables"},
 	{"app:open", "Open the application in a web brower"},
 	{"app:ssh", "Log into application console via SSH"},
+	{"plugin", "Show plugin information"},
 	{"version", "Show the version information"},
 }
 
@@ -84,6 +85,7 @@ func Init(host string, stdout, stderr io.Writer) *CWCli {
 		"app:env":     c.CmdAppEnv,
 		"app:open":    c.CmdAppOpen,
 		"app:ssh":     c.CmdAppSSH,
+		"plugin":      c.CmdPlugin,
 		"version":     c.CmdVersion,
 	}
 

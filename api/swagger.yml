@@ -40,6 +40,34 @@ paths:
         401:
           description: invalid user name or password
 
+  /plugins/{tag}:
+    get:
+      summary: Get plugin info
+      description: Get plugin information
+      operationId: getPluginInfo
+      produces:
+        - application/json
+      parameters:
+        - name: tag
+          in: path
+          description: plugin tag
+          required: false
+          type: string
+        - name: category
+          in: query
+          description: plugin category
+          required: false
+          type:
+            $ref: '#/definitions/Category'
+      responses:
+        200:
+          description: list of plugin meta data
+          schema:
+            type: array
+            $ref: '#/definitions/Plugin'
+        404:
+          description: plugin not found
+
   /namespace:
     get:
       summary: Namespace
@@ -584,9 +612,7 @@ definitions:
         type: string
         description: plugin logo
       Category:
-        type: string
-        enum: [Framework, Service, Library]
-        description: plugin category
+        $ref: '#/definitions/Category'
       BaseImage:
         type: string
         description: plugin base image
@@ -600,6 +626,10 @@ definitions:
         items:
           $ref: '#/definitions/Endpoint'
         description: plugin endpoints
+  Category:
+    type: string
+    enum: [Framework, Service, Library]
+    description: plugin category
   Endpoint:
     type: object
     properties:
