@@ -16,6 +16,8 @@ import (
 	"golang.org/x/net/context"
 )
 
+const deployTimeout = "10s"
+
 var _ = Describe("Deploy", func() {
 	var user = userdb.BasicUser{
 		Name:      TESTUSER,
@@ -125,7 +127,7 @@ var _ = Describe("Deploy", func() {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			ExpectWithOffset(1, ref.DisplayId).To(Equal(actual))
 
-			EventuallyWithOffset(1, fetchDeployedFile, "5s").Should(Equal(actual))
+			EventuallyWithOffset(1, fetchDeployedFile, deployTimeout).Should(Equal(actual))
 		}
 
 		It("should success to deploy the given branch", func() {
@@ -183,7 +185,7 @@ var _ = Describe("Deploy", func() {
 
 			By("New commit should be deployed")
 			Expect(repo.Run("push")).To(Succeed())
-			Eventually(fetchDeployedFile, "5s").Should(Equal(text))
+			Eventually(fetchDeployedFile, deployTimeout).Should(Equal(text))
 		})
 
 		It("should deploy to given branch", func() {
@@ -211,11 +213,11 @@ var _ = Describe("Deploy", func() {
 			Expect(repo.Run("push", "--mirror")).To(Succeed())
 
 			By("Current deployment should stay on master branch")
-			Eventually(fetchDeployedFile, "5s").Should(Equal("master"))
+			Eventually(fetchDeployedFile, deployTimeout).Should(Equal("master"))
 
 			By("Switch deployment branch to develop")
 			Expect(broker.SCM.Deploy(NAMESPACE, "test", "develop"))
-			Eventually(fetchDeployedFile, "5s").Should(Equal("develop"))
+			Eventually(fetchDeployedFile, deployTimeout).Should(Equal("develop"))
 
 			By("Switch local repository to develop branch")
 			Expect(repo.Run("checkout", "develop")).To(Succeed())
@@ -223,7 +225,7 @@ var _ = Describe("Deploy", func() {
 			Expect(repo.Run("add", "track")).To(Succeed())
 			Expect(repo.Commit("develop new feature")).To(Succeed())
 			Expect(repo.Run("push", "origin", "develop")).To(Succeed())
-			Eventually(fetchDeployedFile, "5s").Should(Equal("new feature"))
+			Eventually(fetchDeployedFile, deployTimeout).Should(Equal("new feature"))
 
 			By("Switch local repository to master branch (deployment branch should stay on develop branch)")
 			Expect(repo.Run("checkout", "master")).To(Succeed())
@@ -231,7 +233,7 @@ var _ = Describe("Deploy", func() {
 			Expect(repo.Run("add", "track")).To(Succeed())
 			Expect(repo.Commit("create new release")).To(Succeed())
 			Expect(repo.Run("push", "origin", "master")).To(Succeed())
-			Eventually(fetchDeployedFile, "5s").Should(Equal("new feature"))
+			Eventually(fetchDeployedFile, deployTimeout).Should(Equal("new feature"))
 		})
 	})
 })
