@@ -61,6 +61,8 @@ var _ = BeforeSuite(func() {
 	broker, err = br.New(cli)
 	Ω(err).ShouldNot(HaveOccurred())
 
+	installMockPlugins()
+
 	apiServer = server.New("/api")
 
 	laddr := "127.0.0.1:0"
@@ -89,6 +91,7 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	broker.RemoveUser(TEST_USER)
 	os.RemoveAll(REPO_ROOT)
+	removeMockPlugins()
 
 	// Close server and wait for serve API to complete
 	apiServer.Close()
@@ -109,26 +112,24 @@ func NewTestClient() *TestClient {
 }
 
 func NewTestClientWithUser(login bool) *TestClient {
-	cli := NewTestClient()
-
-	cli.user = &userdb.BasicUser{Name: TEST_USER}
-	ExpectWithOffset(1, broker.CreateUser(cli.user, TEST_PASSWORD)).To(Succeed())
-
-	if login {
-		token, err := cli.Authenticate(context.Background(), TEST_USER, TEST_PASSWORD)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred())
-		cli.SetToken(token)
-	}
-
-	return cli
+	return makeClient(TEST_USER, "", login)
 }
 
 func NewTestClientWithNamespace(login bool) *TestClient {
-	cli := NewTestClientWithUser(login)
+	return makeClient(TEST_USER, TEST_NAMESPACE, login)
+}
 
-	br := broker.NewUserBroker(cli.user, context.Background())
-	ExpectWithOffset(1, br.CreateNamespace(TEST_NAMESPACE)).To(Succeed())
-	ExpectWithOffset(1, cli.user.Namespace).To(Equal(TEST_NAMESPACE))
+func makeClient(username, namespace string, login bool) *TestClient {
+	cli := NewTestClient()
+
+	cli.user = &userdb.BasicUser{Name: username, Namespace: namespace}
+	ExpectWithOffset(2, broker.CreateUser(cli.user, TEST_PASSWORD)).To(Succeed())
+
+	if login {
+		token, err := cli.Authenticate(context.Background(), username, TEST_PASSWORD)
+		ExpectWithOffset(2, err).NotTo(HaveOccurred())
+		cli.SetToken(token)
+	}
 
 	return cli
 }

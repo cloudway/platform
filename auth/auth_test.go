@@ -81,7 +81,7 @@ var _ = Describe("Authenticator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			r.Header.Set("Authorization", "bearer "+token)
-			user, err := authz.Verify(nil, r)
+			user, err := authz.Verify(r)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(user.Name).To(Equal(TEST_USER))
 			Expect(user.Namespace).To(Equal(TEST_NAMESPACE))
@@ -92,7 +92,7 @@ var _ = Describe("Authenticator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			r.Header.Set("Authorization", "bearer INVALID_TOKEN")
-			_, err = authz.Verify(nil, r)
+			_, err = authz.Verify(r)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -100,7 +100,7 @@ var _ = Describe("Authenticator", func() {
 			r, err := http.NewRequest("GET", "/", nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = authz.Verify(nil, r)
+			_, err = authz.Verify(r)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -109,7 +109,7 @@ var _ = Describe("Authenticator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			r.Header.Set("Authorization", "basic INVALID_AUTH")
-			_, err = authz.Verify(nil, r)
+			_, err = authz.Verify(r)
 			Expect(err).To(HaveOccurred())
 		})
 	})
