@@ -2,10 +2,11 @@ package hub
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
-	"strings"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/archive"
@@ -26,7 +27,7 @@ func New() (*PluginHub, error) {
 }
 
 func (hub *PluginHub) ListPlugins(namespace string, category manifest.Category) []*manifest.Plugin {
-	dir, err := os.Open(hub.getBaseDir(namespace, ""))
+	dir, err := os.Open(hub.getBaseDir(namespace, "", ""))
 	if err != nil {
 		return nil
 	}
@@ -58,9 +59,15 @@ func (a byDisplayName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byDisplayName) Less(i, j int) bool { return a[i].DisplayName < a[j].DisplayName }
 
 func (hub *PluginHub) GetPluginPath(tag string) (string, error) {
-	namespace, name, version := splitTag(tag)
+	_, namespace, name, version, err := parseTag(tag)
+	if err != nil {
+		return "", err
+	}
+	return hub.pluginPath(namespace, name, version)
+}
 
-	base := hub.getBaseDir(namespace, name)
+func (hub *PluginHub) pluginPath(namespace, name, version string) (string, error) {
+	base := hub.getBaseDir(namespace, name, "")
 	versions, err := getAllVersions(base)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -77,11 +84,23 @@ func (hub *PluginHub) GetPluginPath(tag string) (string, error) {
 }
 
 func (hub *PluginHub) GetPluginInfo(tag string) (*manifest.Plugin, error) {
-	path, err := hub.GetPluginPath(tag)
+	_, plugin, err := hub.GetPluginInfoWithName(tag)
+	return plugin, err
+}
+
+func (hub *PluginHub) GetPluginInfoWithName(tag string) (string, *manifest.Plugin, error) {
+	service, namespace, name, version, err := parseTag(tag)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	return archive.ReadManifest(path)
+
+	path, err := hub.pluginPath(namespace, name, version)
+	if err != nil {
+		return "", nil, err
+	} else {
+		plugin, err := archive.ReadManifest(path)
+		return service, plugin, err
+	}
 }
 
 func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
@@ -90,7 +109,7 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 		return err
 	}
 
-	installDir := filepath.Join(hub.getBaseDir(namespace, meta.Name), meta.Version)
+	installDir := hub.getBaseDir(namespace, meta.Name, meta.Version)
 	if err = os.RemoveAll(installDir); err != nil {
 		return err
 	}
@@ -106,16 +125,14 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 }
 
 func (hub *PluginHub) RemovePlugin(tag string) error {
-	namespace, name, version := splitTag(tag)
-	base := hub.getBaseDir(namespace, name)
-	if version == "" {
-		return os.RemoveAll(base)
-	} else {
-		return os.RemoveAll(filepath.Join(base, version))
+	_, namespace, name, version, err := parseTag(tag)
+	if err != nil {
+		return err
 	}
+	return os.RemoveAll(hub.getBaseDir(namespace, name, version))
 }
 
-func (hub *PluginHub) getBaseDir(namespace, name string) string {
+func (hub *PluginHub) getBaseDir(namespace, name, version string) string {
 	if namespace == "" {
 		namespace = "_"
 	}
@@ -123,22 +140,40 @@ func (hub *PluginHub) getBaseDir(namespace, name string) string {
 	if name != "" {
 		dir = filepath.Join(dir, name)
 	}
+	if version != "" {
+		dir = filepath.Join(dir, version)
+	}
 	return dir
 }
 
-func splitTag(tag string) (namespace, name, version string) {
-	parts := strings.SplitN(tag, "/", 2)
-	if len(parts) == 2 {
-		namespace = parts[0]
-		tag = parts[1]
+var tagPattern = regexp.MustCompile(`^([a-zA-Z_0-9]+=)?([a-zA-Z_0-9]+/)?([a-zA-Z_0-9]+)(:[0-9][[0-9.]*)?$`)
+
+type malformedTagError string
+
+func (e malformedTagError) Error() string {
+	return fmt.Sprintf("%s: malformed service tag", string(e))
+}
+
+func (e malformedTagError) HTTPErrorStatusCode() int {
+	return http.StatusBadRequest
+}
+
+func parseTag(tag string) (service, namespace, name, version string, err error) {
+	m := tagPattern.FindStringSubmatch(tag)
+	if len(m) == 0 {
+		err = malformedTagError(tag)
+		return
 	}
 
-	parts = strings.SplitN(tag, ":", 2)
-	if len(parts) == 2 {
-		name, version = parts[0], parts[1]
-	} else {
-		name, version = parts[0], ""
+	service, namespace, name, version = m[1], m[2], m[3], m[4]
+	if service != "" {
+		service = service[:len(service)-1]
 	}
-
+	if namespace != "" {
+		namespace = namespace[:len(namespace)-1]
+	}
+	if version != "" {
+		version = version[1:]
+	}
 	return
 }

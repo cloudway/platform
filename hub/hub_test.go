@@ -343,5 +343,12 @@ var _ = Describe("Hub", func() {
 			_, err := pluginHub.GetPluginInfo("mock")
 			Ω(err).Should(HaveOccurred())
 		})
+
+		It("should fail with dangerous tag", func() {
+			Ω(pluginHub.RemovePlugin("")).ShouldNot(Succeed())
+			Ω(pluginHub.RemovePlugin("..")).ShouldNot(Succeed())
+			Ω(pluginHub.RemovePlugin("../..")).ShouldNot(Succeed())
+			Ω(pluginHub.RemovePlugin("..:..")).ShouldNot(Succeed())
+		})
 	})
 })

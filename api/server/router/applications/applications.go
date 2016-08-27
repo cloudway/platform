@@ -22,6 +22,9 @@ import (
 	"golang.org/x/net/context"
 )
 
+const appPath = "/applications/{name:[^/]+}"
+const servicePath = appPath + "/services/{service:[^/]+}"
+
 type applicationsRouter struct {
 	*broker.Broker
 	routes []router.Route
@@ -32,22 +35,24 @@ func NewRouter(broker *broker.Broker) router.Router {
 
 	r.routes = []router.Route{
 		router.NewGetRoute("/applications/", r.list),
-		router.NewGetRoute("/applications/{name:.*}/info", r.info),
 		router.NewPostRoute("/applications/", r.create),
-		router.NewDeleteRoute("/applications/{name:.*}", r.delete),
-		router.NewPostRoute("/applications/{name:.*}/start", r.start),
-		router.NewPostRoute("/applications/{name:.*}/stop", r.stop),
-		router.NewPostRoute("/applications/{name:.*}/restart", r.restart),
-		router.NewPostRoute("/applications/{name:.*}/deploy", r.deploy),
-		router.NewGetRoute("/applications/{name:.*}/deploy", r.getDeployments),
-		router.NewGetRoute("/applications/{name:.*}/repo", r.download),
-		router.NewPutRoute("/applications/{name:.*}/repo", r.upload),
-		router.NewGetRoute("/applications/{name:.*}/data", r.dump),
-		router.NewPutRoute("/applications/{name:.*}/data", r.restore),
-		router.NewPostRoute("/applications/{name:.*}/scale", r.scale),
-		router.NewGetRoute("/applications/{name:.*}/services/{service:.*}/env/", r.environ),
-		router.NewPostRoute("/applications/{name:.*}/services/{service:.*}/env/", r.setenv),
-		router.NewGetRoute("/applications/{name:.*}/services/{service:.*}/env/{key:.*}", r.getenv),
+		router.NewGetRoute(appPath, r.info),
+		router.NewDeleteRoute(appPath, r.delete),
+		router.NewPostRoute(appPath+"/start", r.start),
+		router.NewPostRoute(appPath+"/stop", r.stop),
+		router.NewPostRoute(appPath+"/restart", r.restart),
+		router.NewPostRoute(appPath+"/deploy", r.deploy),
+		router.NewGetRoute(appPath+"/deploy", r.getDeployments),
+		router.NewGetRoute(appPath+"/repo", r.download),
+		router.NewPutRoute(appPath+"/repo", r.upload),
+		router.NewGetRoute(appPath+"/data", r.dump),
+		router.NewPutRoute(appPath+"/data", r.restore),
+		router.NewPostRoute(appPath+"/scale", r.scale),
+		router.NewPostRoute(appPath+"/services/", r.createService),
+		router.NewDeleteRoute(servicePath, r.removeService),
+		router.NewGetRoute(servicePath+"/env/", r.environ),
+		router.NewPostRoute(servicePath+"/env/", r.setenv),
+		router.NewGetRoute(servicePath+"/env/{key:.*}", r.getenv),
 	}
 
 	return r
@@ -188,6 +193,49 @@ func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter,
 	br := ar.NewUserBroker(user, ctx)
 
 	if err := br.RemoveApplication(vars["name"]); err != nil {
+		return err
+	} else {
+		w.WriteHeader(http.StatusNoContent)
+		return nil
+	}
+}
+
+func (ar *applicationsRouter) createService(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := httputils.CheckForJSON(r); err != nil {
+		return err
+	}
+
+	user := httputils.UserFromContext(ctx)
+	br := ar.NewUserBroker(user, ctx)
+
+	var tags []string
+	if err := json.NewDecoder(r.Body).Decode(&tags); err != nil {
+		return err
+	}
+
+	opts := container.CreateOptions{
+		Name:   vars["name"],
+		Logout: w,
+	}
+
+	cs, err := br.CreateServices(opts, tags)
+	if err != nil {
+		return err
+	}
+
+	if err := br.StartContainers(ctx, cs); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (ar *applicationsRouter) removeService(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	user := httputils.UserFromContext(ctx)
+	br := ar.NewUserBroker(user, ctx)
+
+	name, service := vars["name"], vars["service"]
+	if err := br.RemoveService(name, service); err != nil {
 		return err
 	} else {
 		w.WriteHeader(http.StatusNoContent)

@@ -36,7 +36,6 @@ func (pr *pluginsRouter) getPluginInfo(ctx context.Context, w http.ResponseWrite
 	}
 
 	var (
-		plugins   []*manifest.Plugin
 		tag       = strings.TrimSpace(vars["tag"])
 		namespace = ""
 		category  = manifest.Category(r.FormValue("category"))
@@ -48,18 +47,20 @@ func (pr *pluginsRouter) getPluginInfo(ctx context.Context, w http.ResponseWrite
 	}
 
 	if tag == "" {
-		plugins = pr.Hub.ListPlugins(namespace, category)
+		plugins := pr.Hub.ListPlugins(namespace, category)
+		for _, p := range plugins {
+			p.Path = ""
+		}
+		if plugins == nil {
+			plugins = make([]*manifest.Plugin, 0)
+		}
+		return httputils.WriteJSON(w, http.StatusOK, plugins)
 	} else {
 		plugin, err := pr.Hub.GetPluginInfo(tag)
 		if err != nil {
 			return err
 		}
-		plugins = []*manifest.Plugin{plugin}
+		plugin.Path = ""
+		return httputils.WriteJSON(w, http.StatusOK, plugin)
 	}
-
-	for _, p := range plugins {
-		p.Path = ""
-	}
-
-	return httputils.WriteJSON(w, http.StatusOK, plugins)
 }

@@ -2,7 +2,6 @@ package cmds
 
 import (
 	"archive/tar"
-	"bufio"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -44,6 +43,9 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:env            Get or set application environment variables
   app:open           Open the application in a web brower
   app:ssh            Log into application console via SSH
+
+  app:service:add    Add new service to the application
+  app:service:rm     Remove service from the application
 `
 
 func (cli *CWCli) CmdApps(args ...string) error {
@@ -467,28 +469,9 @@ func (cli *CWCli) CmdAppRemove(args ...string) error {
 	cmd.BoolVar(&yes, []string{"y"}, false, "Confirm 'yes' to remove the application")
 	cmd.ParseFlags(args, true)
 
-	if !yes {
-		reader := bufio.NewReader(os.Stdin)
-		for {
-			fmt.Fprintf(cli.stdout, alert("WARNING")+": You will lost all your application data, continue (yes/no)? ")
-			answer, err := reader.ReadString('\n')
-			if err == io.EOF {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			answer = strings.TrimSpace(answer)
-			if answer == "no" || answer == "" {
-				return nil
-			}
-			if answer == "yes" {
-				break
-			}
-			fmt.Fprintln(cli.stdout, "Please answer yes or no.")
-		}
+	if !yes && !cli.confirm("You will lost all your application data") {
+		return nil
 	}
-
 	if err := cli.ConnectAndLogin(); err != nil {
 		return err
 	}
@@ -659,4 +642,43 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 	}
 
 	return nil
+}
+
+func (cli *CWCli) CmdAppServiceAdd(args ...string) error {
+	cmd := cli.Subcmd("app:service:add", "SERVICES...")
+	cmd.Require(mflag.Min, 1)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.ParseFlags(args, true)
+
+	name := cli.getAppName(cmd)
+	tags := cmd.Args()
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	return cli.CreateService(context.Background(), cli.stdout, name, tags...)
+}
+
+func (cli *CWCli) CmdAppServiceRemove(args ...string) error {
+	var yes bool
+
+	cmd := cli.Subcmd("app:service:rm", "SERVICE")
+	cmd.Require(mflag.Exact, 1)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.BoolVar(&yes, []string{"y"}, false, "Confirm 'yes' to remove the service")
+	cmd.ParseFlags(args, true)
+
+	name := cli.getAppName(cmd)
+	service := cmd.Arg(0)
+
+	if !yes && !cli.confirm("You will lost all your service data") {
+		return nil
+	}
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	return cli.RemoveService(context.Background(), name, service)
 }

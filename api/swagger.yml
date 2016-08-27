@@ -40,9 +40,30 @@ paths:
         401:
           description: invalid user name or password
 
+  /plugins/:
+    get:
+      summary: List Plugins
+      description: Get a list of plugins
+      operationId: listPlugins
+      produces:
+        - application/json
+      parameters:
+        - name: category
+          in: query
+          description: plugin category
+          required: false
+          type: string
+      responses:
+        200:
+          description: list of plugin meta data
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/Plugin'
+
   /plugins/{tag}:
     get:
-      summary: Get plugin info
+      summary: Plugin Info
       description: Get plugin information
       operationId: getPluginInfo
       produces:
@@ -51,20 +72,15 @@ paths:
         - name: tag
           in: path
           description: plugin tag
-          required: false
+          required: true
           type: string
-        - name: category
-          in: query
-          description: plugin category
-          required: false
-          type:
-            $ref: '#/definitions/Category'
       responses:
         200:
-          description: list of plugin meta data
+          description: plugin meta data
           schema:
             type: array
-            $ref: '#/definitions/Plugin'
+            items:
+              $ref: '#/definitions/Plugin'
         404:
           description: plugin not found
 
@@ -166,7 +182,7 @@ paths:
         401:
           description: unauthorized
 
-  /applications/{name}/info:
+  /applications/{name}:
     get:
       summary: Application information
       description: Get detailed application information
@@ -190,8 +206,6 @@ paths:
           description: unauthorized
         404:
           description: application not found
-
-  /applications/{name}:
     delete:
       summary: Remove application
       description: Remove the application
@@ -369,7 +383,8 @@ paths:
           description: repository archive
           required: true
           schema:
-            type: file
+            type: string
+            format: binary
       responses:
         200:
           description: repository uploaded
@@ -421,7 +436,8 @@ paths:
           description: repository archive
           required: true
           schema:
-            type: file
+            type: string
+            format: binary
       responses:
         200:
           description: application data restored
@@ -457,6 +473,65 @@ paths:
           description: unauthorized
         404:
           description: application not found
+
+  /applications/{name}/services/:
+    post:
+      summary: Create service
+      description: Create service in the application
+      operationId: createService
+      security:
+        - apiKey: []
+      consumes:
+        - application/json
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+        - name: tags
+          in: body
+          description: service tags
+          required: true
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        200:
+          description: services created
+        400:
+          description: invalid parameters
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/{name}/services/{service}:
+    delete:
+      summary: Remove service
+      description: Remove a service from application
+      operationId: removeService
+      security:
+        - apiKey: []
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+        - name: service
+          in: path
+          description: service name
+          required: true
+          type: string
+      responses:
+        200:
+          description: service removed
+        401:
+          description: unauthorized
+        404:
+          description: application or service not found
 
   /applications/{name}/services/{service}/env/:
     get:

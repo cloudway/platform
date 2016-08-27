@@ -53,10 +53,11 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	}
 
 	// check plugins
+	names := make([]string, len(tags))
 	plugins := make([]*manifest.Plugin, len(tags))
 	var framework *manifest.Plugin
 	for i, tag := range tags {
-		p, err := br.Hub.GetPluginInfo(tag)
+		n, p, err := br.Hub.GetPluginInfoWithName(tag)
 		if err != nil {
 			return nil, err
 		}
@@ -65,9 +66,11 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 				return nil, fmt.Errorf("Multiple framework plugins specified: %s and %s", p.Name, framework.Name)
 			}
 			framework = p
+			n = ""
 		} else if !p.IsService() {
 			return nil, fmt.Errorf("'%s' must be a framework or service plugin", tag)
 		}
+		names[i] = n
 		plugins[i] = p
 		tags[i] = p.Name + ":" + p.Version
 	}
@@ -124,7 +127,7 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	repoCreated = true
 
 	// create all containers
-	containers, err = br.createContainers(opts, plugins)
+	containers, err = br.createContainers(opts, names, plugins)
 	if err != nil {
 		return
 	}
@@ -166,15 +169,17 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
 	}
 
 	// check service plugins
+	names := make([]string, len(tags))
 	plugins := make([]*manifest.Plugin, len(tags))
 	for i, tag := range tags {
-		p, err := br.Hub.GetPluginInfo(tag)
+		n, p, err := br.Hub.GetPluginInfoWithName(tag)
 		if err != nil {
 			return nil, err
 		}
 		if !p.IsService() {
 			return nil, fmt.Errorf("'%s' is not a service plugin", tag)
 		}
+		names[i] = n
 		plugins[i] = p
 		tags[i] = p.Name + ":" + p.Version
 	}
@@ -183,7 +188,7 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
 	opts.Secret = app.Secret
 	opts.Hosts = app.Hosts
 
-	containers, err = br.createContainers(opts, plugins)
+	containers, err = br.createContainers(opts, names, plugins)
 	if err != nil {
 		return nil, err
 	}
@@ -193,9 +198,10 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
 	return containers, err
 }
 
-func (br *UserBroker) createContainers(opts container.CreateOptions, plugins []*manifest.Plugin) (containers []*container.Container, err error) {
-	for _, plugin := range plugins {
+func (br *UserBroker) createContainers(opts container.CreateOptions, serviceNames []string, plugins []*manifest.Plugin) (containers []*container.Container, err error) {
+	for i, plugin := range plugins {
 		opts.Plugin = plugin
+		opts.ServiceName = serviceNames[i]
 		var cs []*container.Container
 		cs, err = br.Create(br.ctx, br.SCM, opts)
 		containers = append(containers, cs...)
@@ -259,6 +265,9 @@ func (br *UserBroker) RemoveService(name, service string) (err error) {
 	containers, err = br.FindService(br.ctx, name, user.Namespace, service)
 	if err != nil {
 		return err
+	}
+	if len(containers) == 0 {
+		return fmt.Errorf("service '%s' not found in application '%s'", service, name)
 	}
 
 	for _, c := range containers {
@@ -434,22 +443,6 @@ func (br *UserBroker) RestartApplication(name string) error {
 	return br.startApplication(name, func(c *container.Container) error { return c.Restart(br.ctx) })
 }
 
-func (br *UserBroker) StopApplication(name string) error {
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
-	if err != nil {
-		return err
-	}
-	if len(containers) == 0 {
-		return ApplicationNotFoundError(name)
-	}
-	return startParallel(err, containers, func(c *container.Container) error { return c.Stop(br.ctx) })
-}
-
-func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container) error {
-	return startContainers(containers, func(c *container.Container) error { return c.Start(ctx) })
-}
-
 func (br *UserBroker) startApplication(name string, fn func(*container.Container) error) error {
 	namespace := br.User.Basic().Namespace
 	containers, err := br.FindAll(br.ctx, name, namespace)
@@ -462,6 +455,22 @@ func (br *UserBroker) startApplication(name string, fn func(*container.Container
 	return startContainers(containers, fn)
 }
 
+func (br *UserBroker) StopApplication(name string) error {
+	namespace := br.User.Basic().Namespace
+	containers, err := br.FindAll(br.ctx, name, namespace)
+	if err != nil {
+		return err
+	}
+	if len(containers) == 0 {
+		return ApplicationNotFoundError(name)
+	}
+	return runParallel(err, containers, func(c *container.Container) error { return c.Stop(br.ctx) })
+}
+
+func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container) error {
+	return startContainers(containers, func(c *container.Container) error { return c.Start(ctx) })
+}
+
 func startContainers(containers []*container.Container, fn func(*container.Container) error) error {
 	err := container.ResolveServiceDependencies(containers)
 	if err != nil {
@@ -469,9 +478,9 @@ func startContainers(containers []*container.Container, fn func(*container.Conta
 	}
 
 	sch := makeSchedule(containers)
-	err = startParallel(nil, sch.parallel, fn)
-	err = startSerial(err, sch.serial, fn)
-	err = startParallel(err, sch.final, fn)
+	err = runParallel(nil, sch.parallel, fn)
+	err = runSerial(err, sch.serial, fn)
+	err = runParallel(err, sch.final, fn)
 	return err
 }
 
@@ -497,7 +506,7 @@ func makeSchedule(containers []*container.Container) *schedule {
 	return sch
 }
 
-func startParallel(err error, cs []*container.Container, fn func(*container.Container) error) error {
+func runParallel(err error, cs []*container.Container, fn func(*container.Container) error) error {
 	if err != nil {
 		return err
 	}
@@ -529,7 +538,7 @@ func startParallel(err error, cs []*container.Container, fn func(*container.Cont
 	return errors.Err()
 }
 
-func startSerial(err error, cs []*container.Container, fn func(*container.Container) error) error {
+func runSerial(err error, cs []*container.Container, fn func(*container.Container) error) error {
 	if err == nil {
 		for _, c := range cs {
 			if err = fn(c); err != nil {
