@@ -53,10 +53,11 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	}
 
 	// check plugins
+	names := make([]string, len(tags))
 	plugins := make([]*manifest.Plugin, len(tags))
 	var framework *manifest.Plugin
 	for i, tag := range tags {
-		p, err := br.Hub.GetPluginInfo(tag)
+		n, p, err := br.Hub.GetPluginInfoWithName(tag)
 		if err != nil {
 			return nil, err
 		}
@@ -65,9 +66,11 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 				return nil, fmt.Errorf("Multiple framework plugins specified: %s and %s", p.Name, framework.Name)
 			}
 			framework = p
+			n = ""
 		} else if !p.IsService() {
 			return nil, fmt.Errorf("'%s' must be a framework or service plugin", tag)
 		}
+		names[i] = n
 		plugins[i] = p
 		tags[i] = p.Name + ":" + p.Version
 	}
@@ -124,7 +127,7 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	repoCreated = true
 
 	// create all containers
-	containers, err = br.createContainers(opts, plugins)
+	containers, err = br.createContainers(opts, names, plugins)
 	if err != nil {
 		return
 	}
@@ -166,15 +169,17 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
 	}
 
 	// check service plugins
+	names := make([]string, len(tags))
 	plugins := make([]*manifest.Plugin, len(tags))
 	for i, tag := range tags {
-		p, err := br.Hub.GetPluginInfo(tag)
+		n, p, err := br.Hub.GetPluginInfoWithName(tag)
 		if err != nil {
 			return nil, err
 		}
 		if !p.IsService() {
 			return nil, fmt.Errorf("'%s' is not a service plugin", tag)
 		}
+		names[i] = n
 		plugins[i] = p
 		tags[i] = p.Name + ":" + p.Version
 	}
@@ -183,7 +188,7 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
 	opts.Secret = app.Secret
 	opts.Hosts = app.Hosts
 
-	containers, err = br.createContainers(opts, plugins)
+	containers, err = br.createContainers(opts, names, plugins)
 	if err != nil {
 		return nil, err
 	}
@@ -193,9 +198,10 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
 	return containers, err
 }
 
-func (br *UserBroker) createContainers(opts container.CreateOptions, plugins []*manifest.Plugin) (containers []*container.Container, err error) {
-	for _, plugin := range plugins {
+func (br *UserBroker) createContainers(opts container.CreateOptions, serviceNames []string, plugins []*manifest.Plugin) (containers []*container.Container, err error) {
+	for i, plugin := range plugins {
 		opts.Plugin = plugin
+		opts.ServiceName = serviceNames[i]
 		var cs []*container.Container
 		cs, err = br.Create(br.ctx, br.SCM, opts)
 		containers = append(containers, cs...)

@@ -58,8 +58,11 @@ func (a byDisplayName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byDisplayName) Less(i, j int) bool { return a[i].DisplayName < a[j].DisplayName }
 
 func (hub *PluginHub) GetPluginPath(tag string) (string, error) {
-	namespace, name, version := splitTag(tag)
+	_, namespace, name, version := parseTag(tag)
+	return hub.pluginPath(namespace, name, version)
+}
 
+func (hub *PluginHub) pluginPath(namespace, name, version string) (string, error) {
 	base := hub.getBaseDir(namespace, name)
 	versions, err := getAllVersions(base)
 	if err != nil {
@@ -77,11 +80,19 @@ func (hub *PluginHub) GetPluginPath(tag string) (string, error) {
 }
 
 func (hub *PluginHub) GetPluginInfo(tag string) (*manifest.Plugin, error) {
-	path, err := hub.GetPluginPath(tag)
+	_, plugin, err := hub.GetPluginInfoWithName(tag)
+	return plugin, err
+}
+
+func (hub *PluginHub) GetPluginInfoWithName(tag string) (string, *manifest.Plugin, error) {
+	service, namespace, name, version := parseTag(tag)
+	path, err := hub.pluginPath(namespace, name, version)
 	if err != nil {
-		return nil, err
+		return "", nil, err
+	} else {
+		plugin, err := archive.ReadManifest(path)
+		return service, plugin, err
 	}
-	return archive.ReadManifest(path)
 }
 
 func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
@@ -106,7 +117,7 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 }
 
 func (hub *PluginHub) RemovePlugin(tag string) error {
-	namespace, name, version := splitTag(tag)
+	_, namespace, name, version := parseTag(tag)
 	base := hub.getBaseDir(namespace, name)
 	if version == "" {
 		return os.RemoveAll(base)
@@ -126,11 +137,15 @@ func (hub *PluginHub) getBaseDir(namespace, name string) string {
 	return dir
 }
 
-func splitTag(tag string) (namespace, name, version string) {
-	parts := strings.SplitN(tag, "/", 2)
+func parseTag(tag string) (service, namespace, name, version string) {
+	parts := strings.SplitN(tag, "=", 2)
 	if len(parts) == 2 {
-		namespace = parts[0]
-		tag = parts[1]
+		service, tag = parts[0], parts[1]
+	}
+
+	parts = strings.SplitN(tag, "/", 2)
+	if len(parts) == 2 {
+		namespace, tag = parts[0], parts[1]
 	}
 
 	parts = strings.SplitN(tag, ":", 2)

@@ -40,7 +40,7 @@ var _ = Describe("Service", func() {
 			Ω(cli.CreateService(ctx, nil, "test", "mysql")).ShouldNot(Succeed())
 		})
 
-		PIt("should success to create two service with different name", func() {
+		It("should success to create two service with different name", func() {
 			Ω(cli.CreateService(ctx, nil, "test", "db1=mysql")).Should(Succeed())
 			Ω(cli.CreateService(ctx, nil, "test", "db2=mysql")).Should(Succeed())
 		})

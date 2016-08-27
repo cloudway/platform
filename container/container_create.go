@@ -205,6 +205,18 @@ func populateFromTemplate(scm SCM, cfg *createConfig) error {
 	return err
 }
 
+type serviceExistsError struct {
+	service, app string
+}
+
+func (e serviceExistsError) Error() string {
+	return fmt.Sprintf("%s: service already exists in '%s' application", e.service, e.app)
+}
+
+func (e serviceExistsError) HTTPErrorStatusCode() int {
+	return http.StatusConflict
+}
+
 func createServiceContainer(cli DockerClient, ctx context.Context, cfg *createConfig) ([]*Container, error) {
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = cfg.Plugin.Name
@@ -221,7 +233,7 @@ func createServiceContainer(cli DockerClient, ctx context.Context, cfg *createCo
 		return nil, err
 	}
 	if len(cs) != 0 {
-		return nil, fmt.Errorf("Service already installed: %s", service)
+		return nil, serviceExistsError{service: service, app: name}
 	}
 
 	image, err := buildImage(cli, ctx, dockerfileTemplate, cfg)
