@@ -30,6 +30,7 @@ func (hub *PluginHub) ListPlugins(namespace string, category manifest.Category) 
 	if err != nil {
 		return nil
 	}
+	defer dir.Close()
 
 	names, err := dir.Readdirnames(0)
 	if err != nil {
@@ -57,20 +58,7 @@ func (a byDisplayName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byDisplayName) Less(i, j int) bool { return a[i].DisplayName < a[j].DisplayName }
 
 func (hub *PluginHub) GetPluginPath(tag string) (string, error) {
-	var namespace, name, version string
-
-	parts := strings.SplitN(tag, "/", 2)
-	if len(parts) == 2 {
-		namespace = parts[0]
-		tag = parts[1]
-	}
-
-	parts = strings.SplitN(tag, ":", 2)
-	if len(parts) == 2 {
-		name, version = parts[0], parts[1]
-	} else {
-		name, version = parts[0], ""
-	}
+	namespace, name, version := splitTag(tag)
 
 	base := hub.getBaseDir(namespace, name)
 	versions, err := getAllVersions(base)
@@ -117,6 +105,16 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 	}
 }
 
+func (hub *PluginHub) RemovePlugin(tag string) error {
+	namespace, name, version := splitTag(tag)
+	base := hub.getBaseDir(namespace, name)
+	if version == "" {
+		return os.RemoveAll(base)
+	} else {
+		return os.RemoveAll(filepath.Join(base, version))
+	}
+}
+
 func (hub *PluginHub) getBaseDir(namespace, name string) string {
 	if namespace == "" {
 		namespace = "_"
@@ -126,4 +124,21 @@ func (hub *PluginHub) getBaseDir(namespace, name string) string {
 		dir = filepath.Join(dir, name)
 	}
 	return dir
+}
+
+func splitTag(tag string) (namespace, name, version string) {
+	parts := strings.SplitN(tag, "/", 2)
+	if len(parts) == 2 {
+		namespace = parts[0]
+		tag = parts[1]
+	}
+
+	parts = strings.SplitN(tag, ":", 2)
+	if len(parts) == 2 {
+		name, version = parts[0], parts[1]
+	} else {
+		name, version = parts[0], ""
+	}
+
+	return
 }
