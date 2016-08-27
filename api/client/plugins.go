@@ -40,11 +40,8 @@ func (api *APIClient) GetPluginInfo(ctx context.Context, tag string) (*manifest.
 		return nil, err
 	}
 
-	var plugins []*manifest.Plugin
-	err = json.NewDecoder(resp.Body).Decode(&plugins)
+	var plugin *manifest.Plugin
+	err = json.NewDecoder(resp.Body).Decode(&plugin)
 	resp.EnsureClosed()
-	if err != nil {
-		return nil, err
-	}
-	return plugins[0], err
+	return plugin, err
 }

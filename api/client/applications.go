@@ -22,7 +22,7 @@ func (api *APIClient) GetApplications(ctx context.Context) ([]string, error) {
 
 func (api *APIClient) GetApplicationInfo(ctx context.Context, name string) (*types.ApplicationInfo, error) {
 	var info types.ApplicationInfo
-	resp, err := api.cli.Get(ctx, "/applications/"+name+"/info", nil, nil)
+	resp, err := api.cli.Get(ctx, "/applications/"+name, nil, nil)
 	if err == nil {
 		err = json.NewDecoder(resp.Body).Decode(&info)
 		resp.EnsureClosed()
@@ -49,6 +49,26 @@ func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateAp
 
 func (api *APIClient) RemoveApplication(ctx context.Context, name string) error {
 	resp, err := api.cli.Delete(ctx, "/applications/"+name, nil, nil)
+	resp.EnsureClosed()
+	return err
+}
+
+func (api *APIClient) CreateService(ctx context.Context, log io.Writer, app string, tags ...string) error {
+	resp, err := api.cli.Post(ctx, "/applications/"+app+"/services/", nil, tags, nil)
+	if err != nil {
+		return err
+	}
+	if log != nil {
+		_, err = io.Copy(log, resp.Body)
+	} else {
+		_, err = io.Copy(ioutil.Discard, resp.Body)
+	}
+	resp.Body.Close()
+	return err
+}
+
+func (api *APIClient) RemoveService(ctx context.Context, app, service string) error {
+	resp, err := api.cli.Delete(ctx, "/applications/"+app+"/services/"+service, nil, nil)
 	resp.EnsureClosed()
 	return err
 }

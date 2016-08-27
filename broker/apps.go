@@ -260,6 +260,9 @@ func (br *UserBroker) RemoveService(name, service string) (err error) {
 	if err != nil {
 		return err
 	}
+	if len(containers) == 0 {
+		return fmt.Errorf("service '%s' not found in application '%s'", service, name)
+	}
 
 	for _, c := range containers {
 		errors.Add(c.Destroy(br.ctx))
@@ -434,22 +437,6 @@ func (br *UserBroker) RestartApplication(name string) error {
 	return br.startApplication(name, func(c *container.Container) error { return c.Restart(br.ctx) })
 }
 
-func (br *UserBroker) StopApplication(name string) error {
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
-	if err != nil {
-		return err
-	}
-	if len(containers) == 0 {
-		return ApplicationNotFoundError(name)
-	}
-	return startParallel(err, containers, func(c *container.Container) error { return c.Stop(br.ctx) })
-}
-
-func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container) error {
-	return startContainers(containers, func(c *container.Container) error { return c.Start(ctx) })
-}
-
 func (br *UserBroker) startApplication(name string, fn func(*container.Container) error) error {
 	namespace := br.User.Basic().Namespace
 	containers, err := br.FindAll(br.ctx, name, namespace)
@@ -462,6 +449,22 @@ func (br *UserBroker) startApplication(name string, fn func(*container.Container
 	return startContainers(containers, fn)
 }
 
+func (br *UserBroker) StopApplication(name string) error {
+	namespace := br.User.Basic().Namespace
+	containers, err := br.FindAll(br.ctx, name, namespace)
+	if err != nil {
+		return err
+	}
+	if len(containers) == 0 {
+		return ApplicationNotFoundError(name)
+	}
+	return runParallel(err, containers, func(c *container.Container) error { return c.Stop(br.ctx) })
+}
+
+func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container) error {
+	return startContainers(containers, func(c *container.Container) error { return c.Start(ctx) })
+}
+
 func startContainers(containers []*container.Container, fn func(*container.Container) error) error {
 	err := container.ResolveServiceDependencies(containers)
 	if err != nil {
@@ -469,9 +472,9 @@ func startContainers(containers []*container.Container, fn func(*container.Conta
 	}
 
 	sch := makeSchedule(containers)
-	err = startParallel(nil, sch.parallel, fn)
-	err = startSerial(err, sch.serial, fn)
-	err = startParallel(err, sch.final, fn)
+	err = runParallel(nil, sch.parallel, fn)
+	err = runSerial(err, sch.serial, fn)
+	err = runParallel(err, sch.final, fn)
 	return err
 }
 
@@ -497,7 +500,7 @@ func makeSchedule(containers []*container.Container) *schedule {
 	return sch
 }
 
-func startParallel(err error, cs []*container.Container, fn func(*container.Container) error) error {
+func runParallel(err error, cs []*container.Container, fn func(*container.Container) error) error {
 	if err != nil {
 		return err
 	}
@@ -529,7 +532,7 @@ func startParallel(err error, cs []*container.Container, fn func(*container.Cont
 	return errors.Err()
 }
 
-func startSerial(err error, cs []*container.Container, fn func(*container.Container) error) error {
+func runSerial(err error, cs []*container.Container, fn func(*container.Container) error) error {
 	if err == nil {
 		for _, c := range cs {
 			if err = fn(c); err != nil {
