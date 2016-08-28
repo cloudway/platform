@@ -62,3 +62,21 @@ type Deployments struct {
 	// All deployment branches
 	Branches []*Branch
 }
+
+// ServerLog describes log messages generated from server and should display
+// in client. It also contains a error message to indicate server failure.
+type ServerLog struct {
+	Message string       `json:"message,omitempty"`
+	Error   *ServerError `json:"error,omitempty"`
+}
+
+// ServerError describes the error that occurred in server. `Code` is a integer
+// error code, `Message` is the error message.
+type ServerError struct {
+	Code    int    `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+func (e *ServerError) Error() string {
+	return e.Message
+}

@@ -3,7 +3,6 @@ package client
 import (
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/url"
 
 	"github.com/cloudway/platform/api/types"
@@ -35,16 +34,33 @@ func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateAp
 	if err != nil {
 		return nil, err
 	}
-	if log != nil {
-		_, err = io.Copy(log, resp.Body)
-	} else {
-		_, err = io.Copy(ioutil.Discard, resp.Body)
-	}
+
+	err = drainServerLog(resp.Body, log)
 	resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
 	return api.GetApplicationInfo(ctx, opts.Name)
+}
+
+func drainServerLog(in io.Reader, out io.Writer) (err error) {
+	var dec = json.NewDecoder(in)
+	for {
+		var serverLog types.ServerLog
+		if er := dec.Decode(&serverLog); er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+		if out != nil && serverLog.Message != "" {
+			out.Write([]byte(serverLog.Message))
+		}
+		if serverLog.Error != nil {
+			err = serverLog.Error
+		}
+	}
+	return err
 }
 
 func (api *APIClient) RemoveApplication(ctx context.Context, name string) error {
@@ -58,11 +74,8 @@ func (api *APIClient) CreateService(ctx context.Context, log io.Writer, app stri
 	if err != nil {
 		return err
 	}
-	if log != nil {
-		_, err = io.Copy(log, resp.Body)
-	} else {
-		_, err = io.Copy(ioutil.Discard, resp.Body)
-	}
+
+	err = drainServerLog(resp.Body, log)
 	resp.Body.Close()
 	return err
 }

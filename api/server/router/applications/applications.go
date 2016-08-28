@@ -159,7 +159,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		Name:    req.Name,
 		Repo:    req.Repo,
 		Scaling: 1,
-		Logout:  w,
+		Log:     w,
 	}
 
 	if !namePattern.MatchString(opts.Name) {
@@ -178,14 +178,25 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 
 	cs, err := br.CreateApplication(opts, tags)
 	if err != nil {
-		return err
+		sendErrorMessage(w, err)
+		return nil
 	}
 
 	if err = br.StartContainers(ctx, cs); err != nil {
-		return err
+		sendErrorMessage(w, err)
+		return nil
 	}
 
 	return nil
+}
+
+func sendErrorMessage(w io.Writer, err error) {
+	log := types.ServerLog{
+		Error: &types.ServerError{
+			Message: err.Error(),
+		},
+	}
+	json.NewEncoder(w).Encode(&log)
 }
 
 func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -214,17 +225,19 @@ func (ar *applicationsRouter) createService(ctx context.Context, w http.Response
 	}
 
 	opts := container.CreateOptions{
-		Name:   vars["name"],
-		Logout: w,
+		Name: vars["name"],
+		Log:  w,
 	}
 
 	cs, err := br.CreateServices(opts, tags)
 	if err != nil {
-		return err
+		sendErrorMessage(w, err)
+		return nil
 	}
 
 	if err := br.StartContainers(ctx, cs); err != nil {
-		return err
+		sendErrorMessage(w, err)
+		return nil
 	}
 
 	return nil

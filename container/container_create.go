@@ -2,7 +2,6 @@ package container
 
 import (
 	"archive/tar"
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -23,6 +22,7 @@ import (
 	"github.com/docker/engine-api/types/strslice"
 	"golang.org/x/net/context"
 
+	apitypes "github.com/cloudway/platform/api/types"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/pkg/archive"
@@ -45,7 +45,7 @@ type CreateOptions struct {
 	Hosts       []string
 	Env         map[string]string
 	Repo        string
-	Logout      io.Writer
+	Log         io.Writer
 }
 
 type createConfig struct {
@@ -293,7 +293,7 @@ func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg
 	// read image ID from build response
 	if err == nil {
 		defer response.Body.Close()
-		imageId, err = readBuildStream(response.Body, cfg.Logout)
+		imageId, err = readBuildStream(response.Body, cfg.Log)
 	}
 
 	// get actual image ID
@@ -310,6 +310,19 @@ func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg
 func readBuildStream(in io.Reader, out io.Writer) (id string, err error) {
 	const SUCCESS = "Successfully built "
 
+	type Flusher interface {
+		Flush()
+	}
+
+	type ErrFlusher interface {
+		Flush() error
+	}
+
+	var enc *json.Encoder
+	if out != nil {
+		enc = json.NewEncoder(out)
+	}
+
 	var dec = json.NewDecoder(in)
 	for {
 		var jm JSONMessage
@@ -323,12 +336,17 @@ func readBuildStream(in io.Reader, out io.Writer) (id string, err error) {
 		if jm.Stream != "" {
 			os.Stdout.WriteString(jm.Stream)
 			if out != nil {
-				out.Write([]byte(jm.Stream))
-				switch b := out.(type) {
-				case *bufio.Writer:
-					b.Flush()
-				case http.Flusher:
-					b.Flush()
+				err = enc.Encode(&apitypes.ServerLog{Message: jm.Stream})
+				if err == nil {
+					switch b := out.(type) {
+					case Flusher:
+						b.Flush()
+					case ErrFlusher:
+						err = b.Flush()
+					}
+				}
+				if err != nil {
+					break
 				}
 			}
 		}
