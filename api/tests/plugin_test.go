@@ -99,9 +99,11 @@ var _ = Describe("Plugins", func() {
 
 	BeforeEach(func() {
 		cli = NewTestClientWithNamespace(true)
+		installMockPlugins()
 	})
 
 	AfterEach(func() {
+		removeMockPlugins()
 		cli.Close()
 	})
 

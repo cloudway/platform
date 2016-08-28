@@ -51,6 +51,9 @@ func (br *Broker) RemoveUser(username string) (err error) {
 
 		// remove the namespace from SCM
 		errors.Add(br.SCM.RemoveNamespace(user.Namespace))
+
+		// remove the namespace from the plugin hub
+		br.Hub.RemoveNamespace(user.Namespace)
 	}
 
 	// remove user from user database

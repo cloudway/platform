@@ -135,6 +135,13 @@ func (hub *PluginHub) RemovePlugin(tag string) error {
 	return os.RemoveAll(dir)
 }
 
+func (hub *PluginHub) RemoveNamespace(namespace string) {
+	if namespace == "" || namespace == "_" {
+		return
+	}
+	os.RemoveAll(filepath.Join(hub.installDir, namespace))
+}
+
 func (hub *PluginHub) getBaseDir(namespace, name, version string) string {
 	if namespace == "" {
 		namespace = "_"
