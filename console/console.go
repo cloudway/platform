@@ -23,7 +23,6 @@ import (
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/console/auth"
-	"github.com/cloudway/platform/container"
 
 	"gopkg.in/authboss.v0"
 	_ "gopkg.in/authboss.v0/auth"
@@ -170,7 +169,7 @@ func initMailer() authboss.Mailer {
 
 	if host == "" || username == "" || password == "" {
 		logrus.Warn("No SMTP server configured")
-		if container.DEBUG {
+		if config.Debug {
 			return authboss.LogMailer(os.Stdout)
 		} else {
 			return nil

@@ -89,7 +89,7 @@ func (cli DockerClient) Create(ctx context.Context, scm SCM, opts CreateOptions)
 	cfg.PluginInstallPath = meta.Name + "-" + meta.Version
 	cfg.BaseImage = meta.BaseImage
 	cfg.DependsOn = meta.DependsOn
-	cfg.Debug = DEBUG
+	cfg.Debug = config.Debug
 
 	cfg.Env["CLOUDWAY_APP_NAME"] = cfg.Name
 	cfg.Env["CLOUDWAY_APP_NAMESPACE"] = cfg.Namespace
@@ -379,7 +379,7 @@ func createDockerfile(t *template.Template, cfg *createConfig) []byte {
 	if err = t.Execute(&buf, cfg); err != nil {
 		panic(err)
 	}
-	if DEBUG {
+	if cfg.Debug {
 		fmt.Println(buf.String())
 	}
 	return buf.Bytes()

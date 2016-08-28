@@ -11,6 +11,9 @@ import (
 // The root directory of cloudway installation.
 var RootDir string
 
+// The global debug flag
+var Debug bool
+
 // The global configuration file
 var global *Config
 

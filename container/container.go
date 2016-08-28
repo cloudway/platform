@@ -24,8 +24,6 @@ const (
 	SERVICE_DEPENDS_KEY = "com.cloudway.service.depends"
 )
 
-var DEBUG bool
-
 type Container struct {
 	Name      string
 	Namespace string
