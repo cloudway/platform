@@ -41,24 +41,48 @@ func (br *UserBroker) GetUserPlugins(category manifest.Category) (plugins []*man
 
 // GetPluginInfo returns a installed plugin meta data.
 func (br *UserBroker) GetPluginInfo(tag string) (plugin *manifest.Plugin, err error) {
-	_, namespace, _, _, err := hub.ParseTag(tag)
+	_, plugin, err = br.getPluginInfoWithNames(&tag)
+	return
+}
+
+// GetPluginInfoWithName is a helper method to get plugin info with service name.
+func (br *UserBroker) getPluginInfoWithNames(tag *string) (service string, plugin *manifest.Plugin, err error) {
+	service, namespace, name, version, err := hub.ParseTag(*tag)
 	if err != nil {
-		return nil, err
+		return
+	}
+
+	cleanTag := name
+	if namespace != "" {
+		cleanTag = namespace + "/" + cleanTag
+	}
+	if version != "" {
+		cleanTag += ":" + version
 	}
 
 	if namespace != "" {
 		// get the shared user defined plugin
-		plugin, err = br.Hub.GetPluginInfo(tag)
-		if err == nil && !plugin.Shared {
-			err = fmt.Errorf("%s: plugin not found", tag)
+		plugin, err = br.Hub.GetPluginInfo(cleanTag)
+		if err == nil && !plugin.Shared && namespace != br.Namespace() {
+			err = fmt.Errorf("%s: plugin not found", cleanTag)
 		}
 	} else {
 		// get the user defined plugin, if it's not found then get system plugin
-		plugin, err = br.Hub.GetPluginInfo(br.Namespace() + "/" + tag)
+		namespace = br.Namespace()
+		plugin, err = br.Hub.GetPluginInfo(namespace + "/" + cleanTag)
 		if err != nil {
-			plugin, err = br.Hub.GetPluginInfo("_/" + tag)
+			namespace = ""
+			plugin, err = br.Hub.GetPluginInfo("_/" + cleanTag)
 		}
 	}
+
+	if err == nil {
+		*tag = plugin.Name + ":" + plugin.Version
+		if namespace != "" {
+			*tag = namespace + "/" + *tag
+		}
+	}
+
 	return
 }
 

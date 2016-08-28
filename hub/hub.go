@@ -84,22 +84,17 @@ func (hub *PluginHub) pluginPath(namespace, name, version string) (string, error
 }
 
 func (hub *PluginHub) GetPluginInfo(tag string) (*manifest.Plugin, error) {
-	_, plugin, err := hub.GetPluginInfoWithName(tag)
-	return plugin, err
-}
-
-func (hub *PluginHub) GetPluginInfoWithName(tag string) (string, *manifest.Plugin, error) {
-	service, namespace, name, version, err := ParseTag(tag)
+	_, namespace, name, version, err := ParseTag(tag)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	path, err := hub.pluginPath(namespace, name, version)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	} else {
 		plugin, err := archive.ReadManifest(path)
-		return service, plugin, err
+		return plugin, err
 	}
 }
 
