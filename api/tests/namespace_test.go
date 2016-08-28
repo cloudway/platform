@@ -52,7 +52,7 @@ var _ = Describe("Namespace", func() {
 				cli = NewTestClientWithNamespace(true)
 				opts := types.CreateApplication{
 					Name:      "test",
-					Framework: "php",
+					Framework: "mock",
 				}
 				_, err := cli.CreateApplication(ctx, opts, nil)
 				Expect(err).NotTo(HaveOccurred())
@@ -93,7 +93,7 @@ var _ = Describe("Namespace", func() {
 				cli = NewTestClientWithNamespace(true)
 				opts := types.CreateApplication{
 					Name:      "test",
-					Framework: "php",
+					Framework: "mock",
 				}
 				_, err := cli.CreateApplication(ctx, opts, nil)
 				Expect(err).NotTo(HaveOccurred())

@@ -46,7 +46,7 @@ var _ = Describe("Deploy", func() {
 
 		// Create the application
 		options := container.CreateOptions{Name: "test"}
-		tags := []string{"php"}
+		tags := []string{"mock"}
 
 		containers, err := br.CreateApplication(options, tags)
 		Expect(err).NotTo(HaveOccurred())

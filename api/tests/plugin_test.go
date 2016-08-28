@@ -15,13 +15,13 @@ import (
 )
 
 const (
-	PUBLIC_PLUGIN  = "public"
-	PRIVATE_PLUGIN = "private"
+	PUBLIC_PLUGIN  = "api_test_public"
+	PRIVATE_PLUGIN = "api_test_private"
 )
 
 func installMockPlugins() {
 	meta := &manifest.Plugin{
-		Name:        "mock",
+		Name:        "api_test",
 		DisplayName: "Mock plugin",
 		Description: "A mock plugin for testing purposes",
 		Version:     "1.0",

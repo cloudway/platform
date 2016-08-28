@@ -6,6 +6,8 @@ bundle_test_setup() {
     git config --system user.name 'Test User'
     git config --system push.default simple
 
+    "$DEST/../binary-server/cwman-$VERSION" install "${MAKEDIR}/../plugins/"*
+
     mkdir -p /data/db
     chown -R mongodb /data/db
     local logfile=/var/log/mongodb/mongod.log

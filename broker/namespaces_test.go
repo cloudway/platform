@@ -29,7 +29,7 @@ var _ = Describe("Namespaces", func() {
 		ExpectWithOffset(1, br.CreateNamespace(NAMESPACE)).To(Succeed())
 
 		opts := container.CreateOptions{Name: "test"}
-		_, err := br.CreateApplication(opts, []string{"php"})
+		_, err := br.CreateApplication(opts, []string{"mock"})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	}
 

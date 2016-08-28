@@ -30,7 +30,7 @@ var _ = Describe("Create Container", func() {
 		Expect(mockScm.CreateNamespace(NAMESPACE)).To(Succeed())
 		Expect(mockScm.CreateRepo(NAMESPACE, "test")).To(Succeed())
 
-		plugin, err = pluginHub.GetPluginInfo("php")
+		plugin, err = pluginHub.GetPluginInfo("mock")
 		Expect(err).NotTo(HaveOccurred())
 
 		options = container.CreateOptions{
@@ -89,7 +89,7 @@ var _ = Describe("Create Container", func() {
 	})
 
 	It("should fail to create multiple service containers", func() {
-		service, err := pluginHub.GetPluginInfo("mysql")
+		service, err := pluginHub.GetPluginInfo("mockdb")
 		Expect(err).NotTo(HaveOccurred())
 		options.Plugin = service
 
@@ -103,7 +103,7 @@ var _ = Describe("Create Container", func() {
 	})
 
 	It("should success to create multiple service container with different name", func() {
-		service, err := pluginHub.GetPluginInfo("mysql")
+		service, err := pluginHub.GetPluginInfo("mockdb")
 		Expect(err).NotTo(HaveOccurred())
 		options.Plugin = service
 
@@ -178,7 +178,7 @@ var _ = Describe("Create Container", func() {
 		})
 
 		var assertTestFileExist = func() {
-			content, err := ioutil.ReadFile(filepath.Join(tempdir, "index.php"))
+			content, err := ioutil.ReadFile(filepath.Join(tempdir, "index.html"))
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			ExpectWithOffset(1, content).To(ContainSubstring("It works!"))
 		}

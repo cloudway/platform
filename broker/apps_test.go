@@ -30,7 +30,7 @@ var _ = Describe("Applications", func() {
 			options := container.CreateOptions{
 				Name: "test",
 			}
-			tags := []string{"php", "mysql"}
+			tags := []string{"mock", "mockdb"}
 
 			containers, err := br.CreateApplication(options, tags)
 			Expect(err).NotTo(HaveOccurred())
@@ -40,17 +40,17 @@ var _ = Describe("Applications", func() {
 				Expect(c.Name).To(Equal("test"))
 				Expect(c.Namespace).To(Equal(NAMESPACE))
 				if c.Category().IsFramework() {
-					Expect(c.PluginTag()).To(HavePrefix("php:"))
+					Expect(c.PluginTag()).To(HavePrefix("mock:"))
 				} else {
-					Expect(c.PluginTag()).To(HavePrefix("mysql:"))
-					Expect(c.ServiceName()).To(Equal("mysql"))
+					Expect(c.PluginTag()).To(HavePrefix("mockdb:"))
+					Expect(c.ServiceName()).To(Equal("mockdb"))
 				}
 			}
 
 			apps, err := br.GetApplications()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(apps).To(HaveKey("test"))
-			Expect(apps["test"].Plugins).To(ConsistOf(HavePrefix("php:"), HavePrefix("mysql:")))
+			Expect(apps["test"].Plugins).To(ConsistOf(HavePrefix("mock:"), HavePrefix("mockdb:")))
 
 			Expect(br.RemoveApplication("test")).To(Succeed())
 		})
