@@ -54,6 +54,8 @@ var CommandUsage = []Command{
 	{"app:service:add", "Add new service to the application"},
 	{"app:service:rm", "Remove service from the application"},
 	{"plugin", "Show plugin information"},
+	{"plugin:install", "Install a user defined plugin"},
+	{"plugin:remove", "Remove a user defined plugin"},
 	{"version", "Show the version information"},
 }
 
@@ -98,6 +100,8 @@ func Init(host string, stdout, stderr io.Writer) *CWCli {
 		"app:service:add": c.CmdAppServiceAdd,
 		"app:service:rm":  c.CmdAppServiceRemove,
 		"plugin":          c.CmdPlugin,
+		"plugin:install":  c.CmdPluginInstall,
+		"plugin:remove":   c.CmdPluginRemove,
 		"version":         c.CmdVersion,
 	}
 
