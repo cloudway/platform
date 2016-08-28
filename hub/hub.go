@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/archive"
@@ -48,15 +47,8 @@ func (hub *PluginHub) ListPlugins(namespace string, category manifest.Category) 
 			result = append(result, meta)
 		}
 	}
-	sort.Sort(byDisplayName(result))
 	return result
 }
-
-type byDisplayName []*manifest.Plugin
-
-func (a byDisplayName) Len() int           { return len(a) }
-func (a byDisplayName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byDisplayName) Less(i, j int) bool { return a[i].DisplayName < a[j].DisplayName }
 
 func (hub *PluginHub) GetPluginPath(tag string) (string, error) {
 	_, namespace, name, version, err := ParseTag(tag)

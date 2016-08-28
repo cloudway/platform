@@ -101,7 +101,7 @@ func (con *Console) InitRoutes(s *server.Server) {
 	gets.HandleFunc("/password", con.password)
 	posts.HandleFunc("/password", con.changePassword)
 
-	gets.HandleFunc("/images/plugin/{tag}", con.getPluginLogo)
+	gets.HandleFunc("/images/plugin/{tag:.*}", con.getPluginLogo)
 
 	con.initSettingsRoutes(gets, posts)
 	con.initApplicationsRoutes(gets, posts)

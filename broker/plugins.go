@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sort"
 
 	"github.com/cloudway/platform/hub"
 	"github.com/cloudway/platform/pkg/manifest"
@@ -31,8 +32,18 @@ func (br *UserBroker) GetInstalledPlugins(category manifest.Category) (plugins [
 			}
 		}
 	}
-	return append(plugins, user...)
+
+	// sort plugins by display name
+	plugins = append(plugins, user...)
+	sort.Sort(byDisplayName(plugins))
+	return plugins
 }
+
+type byDisplayName []*manifest.Plugin
+
+func (a byDisplayName) Len() int           { return len(a) }
+func (a byDisplayName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byDisplayName) Less(i, j int) bool { return a[i].DisplayName < a[j].DisplayName }
 
 // GetUserPlugins returns a list of user defined plugins.
 func (br *UserBroker) GetUserPlugins(category manifest.Category) (plugins []*manifest.Plugin) {

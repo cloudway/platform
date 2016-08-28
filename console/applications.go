@@ -116,7 +116,7 @@ func (con *Console) createApplicationForm(w http.ResponseWriter, r *http.Request
 
 	data := con.layoutUserData(w, r, user)
 	data.MergeKV("domain", defaults.Domain())
-	data.MergeKV("available_plugins", con.Hub.ListPlugins("", ""))
+	data.MergeKV("available_plugins", con.NewUserBroker(user).GetInstalledPlugins(""))
 	con.mustRender(w, r, "createapp", data)
 }
 
@@ -140,7 +140,7 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
 		data.MergeKV("services", r.PostForm.Get("services"))
 		data.MergeKV("repo", r.PostForm.Get("repo"))
 		data.MergeKV("domain", defaults.Domain())
-		data.MergeKV("available_plugins", con.Hub.ListPlugins("", ""))
+		data.MergeKV("available_plugins", con.NewUserBroker(user).GetInstalledPlugins(""))
 		con.mustRender(w, r, "createapp", data)
 		return
 	}
@@ -346,7 +346,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 	}
 
 	var plugins []*manifest.Plugin
-	for _, meta := range con.Hub.ListPlugins("", manifest.Service) {
+	for _, meta := range con.NewUserBroker(user).GetInstalledPlugins(manifest.Service) {
 		var remove bool
 		for _, s := range services {
 			if meta.Name == s.PluginName {
