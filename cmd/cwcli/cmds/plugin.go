@@ -19,7 +19,7 @@ func (cli *CWCli) CmdPlugin(args ...string) error {
 	cmd.BoolVar(&service, []string{"s"}, false, "Show service plugins")
 	cmd.ParseFlags(args, true)
 
-	if err := cli.Connect(); err != nil {
+	if err := cli.ConnectAndLogin(); err != nil {
 		return err
 	}
 
@@ -30,7 +30,7 @@ func (cli *CWCli) CmdPlugin(args ...string) error {
 			category = manifest.Service
 		}
 
-		plugins, err := cli.ListPlugins(context.Background(), "", category)
+		plugins, err := cli.GetInstalledPlugins(context.Background(), category)
 		if err != nil {
 			return err
 		}

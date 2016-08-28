@@ -98,33 +98,33 @@ var _ = Describe("Plugins", func() {
 	var ctx = context.Background()
 
 	BeforeEach(func() {
-		cli = NewTestClient()
+		cli = NewTestClientWithNamespace(true)
 	})
 
 	AfterEach(func() {
 		cli.Close()
 	})
 
-	It("should success to list all public plugins", func() {
-		plugins, err := cli.ListPlugins(ctx, "", "")
+	It("should success to list all installed plugins", func() {
+		plugins, err := cli.GetInstalledPlugins(ctx, "")
 		Ω(err).ShouldNot(HaveOccurred())
-		Ω(getTags(plugins)).Should(ConsistOf(PUBLIC_PLUGIN))
+		Ω(getTags(plugins)).Should(ConsistOf(PUBLIC_PLUGIN, PRIVATE_PLUGIN))
 	})
 
-	It("should success to list all private plugins", func() {
-		plugins, err := cli.ListPlugins(ctx, TEST_NAMESPACE, "")
+	It("should success to list all user defined plugins", func() {
+		plugins, err := cli.GetUserPlugins(ctx, "")
 		Ω(err).ShouldNot(HaveOccurred())
 		Ω(getTags(plugins)).Should(ConsistOf(PRIVATE_PLUGIN))
 	})
 
-	It("should success to get public plugin info", func() {
+	It("should success to get system plugin info", func() {
 		plugin, err := cli.GetPluginInfo(ctx, PUBLIC_PLUGIN)
 		Ω(err).ShouldNot(HaveOccurred())
 		Ω(plugin.Name).Should(Equal(PUBLIC_PLUGIN))
 		Ω(plugin.Vendor).Should(Equal("public"))
 	})
 
-	It("should success to get private plugin info", func() {
+	It("should success to get user defined plugin info", func() {
 		plugin, err := cli.GetPluginInfo(ctx, TEST_NAMESPACE+"/"+PRIVATE_PLUGIN)
 		Ω(err).ShouldNot(HaveOccurred())
 		Ω(plugin.Name).Should(Equal(PRIVATE_PLUGIN))
