@@ -1,10 +1,12 @@
 package broker
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 
+	"github.com/cloudway/platform/hub"
 	"github.com/cloudway/platform/pkg/manifest"
 )
 
@@ -39,10 +41,23 @@ func (br *UserBroker) GetUserPlugins(category manifest.Category) (plugins []*man
 
 // GetPluginInfo returns a installed plugin meta data.
 func (br *UserBroker) GetPluginInfo(tag string) (plugin *manifest.Plugin, err error) {
-	// get the user defined plugin, if it's not found then get system plugin
-	plugin, err = br.Hub.GetPluginInfo(br.Namespace() + "/" + tag)
+	_, namespace, _, _, err := hub.ParseTag(tag)
 	if err != nil {
-		plugin, err = br.Hub.GetPluginInfo("_/" + tag)
+		return nil, err
+	}
+
+	if namespace != "" {
+		// get the shared user defined plugin
+		plugin, err = br.Hub.GetPluginInfo(tag)
+		if err == nil && !plugin.Shared {
+			err = fmt.Errorf("%s: plugin not found", tag)
+		}
+	} else {
+		// get the user defined plugin, if it's not found then get system plugin
+		plugin, err = br.Hub.GetPluginInfo(br.Namespace() + "/" + tag)
+		if err != nil {
+			plugin, err = br.Hub.GetPluginInfo("_/" + tag)
+		}
 	}
 	return
 }

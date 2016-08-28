@@ -59,7 +59,7 @@ func (a byDisplayName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byDisplayName) Less(i, j int) bool { return a[i].DisplayName < a[j].DisplayName }
 
 func (hub *PluginHub) GetPluginPath(tag string) (string, error) {
-	_, namespace, name, version, err := parseTag(tag)
+	_, namespace, name, version, err := ParseTag(tag)
 	if err != nil {
 		return "", err
 	}
@@ -89,7 +89,7 @@ func (hub *PluginHub) GetPluginInfo(tag string) (*manifest.Plugin, error) {
 }
 
 func (hub *PluginHub) GetPluginInfoWithName(tag string) (string, *manifest.Plugin, error) {
-	service, namespace, name, version, err := parseTag(tag)
+	service, namespace, name, version, err := ParseTag(tag)
 	if err != nil {
 		return "", nil, err
 	}
@@ -117,7 +117,7 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 	if namespace != "" {
 		tag = namespace + "/" + tag
 	}
-	if _, _, _, _, err = parseTag(tag); err != nil {
+	if _, _, _, _, err = ParseTag(tag); err != nil {
 		return invalidManifestErr{}
 	}
 
@@ -137,7 +137,7 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 }
 
 func (hub *PluginHub) RemovePlugin(tag string) error {
-	_, namespace, name, version, err := parseTag(tag)
+	_, namespace, name, version, err := ParseTag(tag)
 	if err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func (hub *PluginHub) getBaseDir(namespace, name, version string) string {
 
 var tagPattern = regexp.MustCompile(`^([a-zA-Z_0-9]+=)?([a-zA-Z_0-9]+/)?([a-zA-Z_0-9]+)(:[0-9][[0-9.]*)?$`)
 
-func parseTag(tag string) (service, namespace, name, version string, err error) {
+func ParseTag(tag string) (service, namespace, name, version string, err error) {
 	m := tagPattern.FindStringSubmatch(tag)
 	if len(m) == 0 {
 		err = malformedTagError(tag)

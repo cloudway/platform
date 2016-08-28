@@ -134,6 +134,17 @@ var _ = Describe("Plugins", func() {
 			BaseImage:   "busybox",
 		}
 		Ω(installPlugin("other", &meta)).Should(Succeed())
+
+		meta = manifest.Plugin{
+			Name:        "shared",
+			DisplayName: "Shared Plugin",
+			Version:     "1.0",
+			Vendor:      "other",
+			Shared:      true,
+			Category:    manifest.Framework,
+			BaseImage:   "busybox",
+		}
+		Ω(installPlugin("other", &meta)).Should(Succeed())
 	}
 
 	var getTags = func(plugins []*manifest.Plugin) []string {
@@ -206,6 +217,12 @@ var _ = Describe("Plugins", func() {
 			It("should not see other user's plugin", func() {
 				_, err := br.GetPluginInfo("other/mock")
 				Ω(err).Should(HaveOccurred())
+			})
+
+			It("should see other user's shared plugin", func() {
+				plugin, err := br.GetPluginInfo("other/shared")
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(plugin.Vendor).Should(Equal("other"))
 			})
 		})
 	})
@@ -299,6 +316,7 @@ var _ = Describe("Plugins", func() {
 
 		It("should fail to remove other user's plugin", func() {
 			Ω(br.RemovePlugin("other/mock")).ShouldNot(Succeed())
+			Ω(br.RemovePlugin("other/shared")).ShouldNot(Succeed())
 		})
 
 		It("should global plugin no longer override by user defined plugin", func() {
