@@ -4,14 +4,11 @@ import (
 	"archive/tar"
 	"bytes"
 	"os"
-	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/engine-api/types"
 	"golang.org/x/net/context"
 )
-
-var _WAIT_SECONDS = time.Second * 60
 
 // Start the application container.
 func (c *Container) Start(ctx context.Context) error {
@@ -24,7 +21,7 @@ func (c *Container) Start(ctx context.Context) error {
 
 // Restart the application container.
 func (c *Container) Restart(ctx context.Context) error {
-	err := c.ContainerRestart(ctx, c.ID, &_WAIT_SECONDS)
+	err := c.ContainerRestart(ctx, c.ID, nil)
 	if err != nil {
 		return err
 	}
@@ -33,7 +30,7 @@ func (c *Container) Restart(ctx context.Context) error {
 
 // Stop the application container.
 func (c *Container) Stop(ctx context.Context) error {
-	return c.ContainerStop(ctx, c.ID, &_WAIT_SECONDS)
+	return c.ContainerStop(ctx, c.ID, nil)
 }
 
 func startSandbox(ctx context.Context, c *Container) error {

@@ -5,13 +5,13 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/docker/engine-api/types"
+	"github.com/docker/engine-api/types/filters"
 	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/pkg/manifest"
-	"github.com/docker/engine-api/types"
-	"github.com/docker/engine-api/types/filters"
 )
 
 const (
@@ -29,7 +29,6 @@ var DEBUG bool
 type Container struct {
 	Name      string
 	Namespace string
-	State     ContainerState
 
 	DockerClient
 	*types.ContainerJSON
@@ -63,46 +62,9 @@ func (cli DockerClient) Inspect(ctx context.Context, id string) (*Container, err
 	return &Container{
 		Name:          name,
 		Namespace:     namespace,
-		State:         ContainerState{info.State},
 		DockerClient:  cli,
 		ContainerJSON: &info,
 	}, nil
-}
-
-// Returns a list of ids for every cloudway container in the system.
-func (cli DockerClient) IDs(ctx context.Context) (ids []string, err error) {
-	args := filters.NewArgs()
-	args.Add("label", APP_NAME_KEY)
-	args.Add("label", APP_NAMESPACE_KEY)
-	options := types.ContainerListOptions{All: true, Filter: args}
-
-	containers, err := cli.ContainerList(ctx, options)
-	if err == nil {
-		ids = make([]string, len(containers))
-		for i, c := range containers {
-			ids[i] = c.ID
-		}
-	}
-	return ids, err
-}
-
-// Returns a list of application container objects for every cloudway
-// container in the system.
-func (cli DockerClient) ListAll(ctx context.Context) ([]*Container, error) {
-	ids, err := cli.IDs(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	containers := make([]*Container, 0, len(ids))
-	for _, id := range ids {
-		c, err := cli.Inspect(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		containers = append(containers, c)
-	}
-	return containers, nil
 }
 
 // Find all containers with the given name and namespace.
@@ -113,11 +75,6 @@ func (cli DockerClient) FindAll(ctx context.Context, name, namespace string) ([]
 // Find all application containers with the given name and namespace.
 func (cli DockerClient) FindApplications(ctx context.Context, name, namespace string) ([]*Container, error) {
 	return find(cli, ctx, manifest.Framework, "", name, namespace)
-}
-
-// Find all service containers associated with the given name and namespace.
-func (cli DockerClient) FindServices(ctx context.Context, name, namespace string) ([]*Container, error) {
-	return find(cli, ctx, manifest.Service, "", name, namespace)
 }
 
 // Find service container with the give name, namespace and service name.
