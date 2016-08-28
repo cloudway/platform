@@ -109,6 +109,18 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 		return err
 	}
 
+	if meta.Name == "" || meta.Version == "" || meta.Category == "" || meta.BaseImage == "" {
+		return invalidManifestErr{}
+	}
+
+	tag := meta.Name + ":" + meta.Version
+	if namespace != "" {
+		tag = namespace + "/" + tag
+	}
+	if _, _, _, _, err = parseTag(tag); err != nil {
+		return invalidManifestErr{}
+	}
+
 	installDir := hub.getBaseDir(namespace, meta.Name, meta.Version)
 	if err = os.RemoveAll(installDir); err != nil {
 		return err
@@ -129,7 +141,11 @@ func (hub *PluginHub) RemovePlugin(tag string) error {
 	if err != nil {
 		return err
 	}
-	return os.RemoveAll(hub.getBaseDir(namespace, name, version))
+	dir := hub.getBaseDir(namespace, name, version)
+	if _, err := os.Stat(dir); err != nil {
+		return err
+	}
+	return os.RemoveAll(dir)
 }
 
 func (hub *PluginHub) getBaseDir(namespace, name, version string) string {
@@ -147,16 +163,6 @@ func (hub *PluginHub) getBaseDir(namespace, name, version string) string {
 }
 
 var tagPattern = regexp.MustCompile(`^([a-zA-Z_0-9]+=)?([a-zA-Z_0-9]+/)?([a-zA-Z_0-9]+)(:[0-9][[0-9.]*)?$`)
-
-type malformedTagError string
-
-func (e malformedTagError) Error() string {
-	return fmt.Sprintf("%s: malformed service tag", string(e))
-}
-
-func (e malformedTagError) HTTPErrorStatusCode() int {
-	return http.StatusBadRequest
-}
 
 func parseTag(tag string) (service, namespace, name, version string, err error) {
 	m := tagPattern.FindStringSubmatch(tag)
@@ -176,4 +182,26 @@ func parseTag(tag string) (service, namespace, name, version string, err error) 
 		version = version[1:]
 	}
 	return
+}
+
+// Errors
+
+type invalidManifestErr struct{}
+
+func (e invalidManifestErr) Error() string {
+	return "invalid plugin manifest"
+}
+
+func (e invalidManifestErr) HTTPErrorStatusCode() int {
+	return http.StatusBadRequest
+}
+
+type malformedTagError string
+
+func (e malformedTagError) Error() string {
+	return fmt.Sprintf("%s: malformed plugin tag", string(e))
+}
+
+func (e malformedTagError) HTTPErrorStatusCode() int {
+	return http.StatusBadRequest
 }

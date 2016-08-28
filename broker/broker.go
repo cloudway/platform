@@ -73,3 +73,7 @@ func (br *UserBroker) Refresh() error {
 	p.Set(reflect.Zero(p.Type()))
 	return br.Users.Find(username, br.User)
 }
+
+func (br *UserBroker) Namespace() string {
+	return br.User.Basic().Namespace
+}

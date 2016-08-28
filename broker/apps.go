@@ -444,8 +444,7 @@ func (br *UserBroker) RestartApplication(name string) error {
 }
 
 func (br *UserBroker) startApplication(name string, fn func(*container.Container) error) error {
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
 	}
@@ -456,8 +455,7 @@ func (br *UserBroker) startApplication(name string, fn func(*container.Container
 }
 
 func (br *UserBroker) StopApplication(name string) error {
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
 	}
@@ -551,8 +549,7 @@ func runSerial(err error, cs []*container.Container, fn func(*container.Containe
 
 // Download application repository as a archive file.
 func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindApplications(br.ctx, name, namespace)
+	containers, err := br.FindApplications(br.ctx, name, br.Namespace())
 	if err != nil {
 		return nil, err
 	}
@@ -587,8 +584,7 @@ func (br *UserBroker) Upload(name string, content io.Reader) error {
 	}
 
 	// deploy to containers
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindApplications(br.ctx, name, namespace)
+	containers, err := br.FindApplications(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
 	}
@@ -606,8 +602,7 @@ func (br *UserBroker) Upload(name string, content io.Reader) error {
 
 func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {
 	// find all containers
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return nil, err
 	}
@@ -658,8 +653,7 @@ func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {
 
 func (br *UserBroker) Restore(name string, source io.Reader) error {
 	// find all containers
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
 	}
