@@ -9,7 +9,7 @@ import (
 )
 
 const namespaceCmdUsage = `Usage: cwcli namespace
-   or: cwcli namespace:set NAMESPACE]
+   or: cwcli namespace:set NAMESPACE
    or: cwcli namespace:rm [-force]
 `
 

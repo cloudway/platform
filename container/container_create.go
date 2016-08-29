@@ -402,7 +402,7 @@ func createContainer(cli DockerClient, ctx context.Context, imageId string, cfg 
 		Image: imageId,
 		Labels: map[string]string{
 			CATEGORY_KEY:      string(cfg.Category),
-			PLUGIN_KEY:        cfg.Plugin.Name + ":" + cfg.Plugin.Version,
+			PLUGIN_KEY:        cfg.Plugin.Tag,
 			APP_NAME_KEY:      cfg.Name,
 			APP_NAMESPACE_KEY: cfg.Namespace,
 			APP_HOME_KEY:      cfg.Home,

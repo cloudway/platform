@@ -38,12 +38,12 @@ var _ = Describe("Namespace", func() {
 				br := cli.NewUserBroker()
 
 				Expect(br.Refresh()).To(Succeed())
-				Expect(br.User.Basic().Namespace).To(BeEmpty())
+				Expect(br.Namespace()).To(BeEmpty())
 
 				Expect(cli.SetNamespace(ctx, TEST_NAMESPACE)).To(Succeed())
 
 				Expect(br.Refresh()).To(Succeed())
-				Expect(br.User.Basic().Namespace).To(Equal(TEST_NAMESPACE))
+				Expect(br.Namespace()).To(Equal(TEST_NAMESPACE))
 			})
 		})
 
@@ -70,13 +70,13 @@ var _ = Describe("Namespace", func() {
 				cli = NewTestClientWithNamespace(true)
 				br := cli.NewUserBroker()
 				Expect(br.Refresh()).To(Succeed())
-				Expect(br.User.Basic().Namespace).To(Equal(TEST_NAMESPACE))
+				Expect(br.Namespace()).To(Equal(TEST_NAMESPACE))
 			})
 
 			AfterEach(func() {
 				br := cli.NewUserBroker()
 				Expect(br.Refresh()).To(Succeed())
-				Expect(br.User.Basic().Namespace).To(BeEmpty())
+				Expect(br.Namespace()).To(BeEmpty())
 			})
 
 			It("should success without forced remove", func() {

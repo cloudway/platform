@@ -61,8 +61,6 @@ var _ = BeforeSuite(func() {
 	broker, err = br.New(cli)
 	Ω(err).ShouldNot(HaveOccurred())
 
-	installMockPlugins()
-
 	apiServer = server.New("/api")
 
 	laddr := "127.0.0.1:0"
@@ -91,7 +89,6 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	broker.RemoveUser(TEST_USER)
 	os.RemoveAll(REPO_ROOT)
-	removeMockPlugins()
 
 	// Close server and wait for serve API to complete
 	apiServer.Close()

@@ -53,11 +53,13 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	}
 
 	// check plugins
-	names := make([]string, len(tags))
-	plugins := make([]*manifest.Plugin, len(tags))
-	var framework *manifest.Plugin
+	var (
+		names     = make([]string, len(tags))
+		plugins   = make([]*manifest.Plugin, len(tags))
+		framework *manifest.Plugin
+	)
 	for i, tag := range tags {
-		n, p, err := br.Hub.GetPluginInfoWithName(tag)
+		n, p, err := br.getPluginInfoWithNames(tag)
 		if err != nil {
 			return nil, err
 		}
@@ -70,9 +72,7 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 		} else if !p.IsService() {
 			return nil, fmt.Errorf("'%s' must be a framework or service plugin", tag)
 		}
-		names[i] = n
-		plugins[i] = p
-		tags[i] = p.Name + ":" + p.Version
+		names[i], plugins[i], tags[i] = n, p, p.Tag
 	}
 	if framework == nil {
 		return nil, fmt.Errorf("No framework plugin specified")
@@ -169,19 +169,19 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
 	}
 
 	// check service plugins
-	names := make([]string, len(tags))
-	plugins := make([]*manifest.Plugin, len(tags))
+	var (
+		names   = make([]string, len(tags))
+		plugins = make([]*manifest.Plugin, len(tags))
+	)
 	for i, tag := range tags {
-		n, p, err := br.Hub.GetPluginInfoWithName(tag)
+		n, p, err := br.getPluginInfoWithNames(tag)
 		if err != nil {
 			return nil, err
 		}
 		if !p.IsService() {
 			return nil, fmt.Errorf("'%s' is not a service plugin", tag)
 		}
-		names[i] = n
-		plugins[i] = p
-		tags[i] = p.Name + ":" + p.Version
+		names[i], plugins[i], tags[i] = n, p, p.Tag
 	}
 
 	opts.Namespace = user.Namespace
@@ -444,8 +444,7 @@ func (br *UserBroker) RestartApplication(name string) error {
 }
 
 func (br *UserBroker) startApplication(name string, fn func(*container.Container) error) error {
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
 	}
@@ -456,8 +455,7 @@ func (br *UserBroker) startApplication(name string, fn func(*container.Container
 }
 
 func (br *UserBroker) StopApplication(name string) error {
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
 	}
@@ -551,8 +549,7 @@ func runSerial(err error, cs []*container.Container, fn func(*container.Containe
 
 // Download application repository as a archive file.
 func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindApplications(br.ctx, name, namespace)
+	containers, err := br.FindApplications(br.ctx, name, br.Namespace())
 	if err != nil {
 		return nil, err
 	}
@@ -587,8 +584,7 @@ func (br *UserBroker) Upload(name string, content io.Reader) error {
 	}
 
 	// deploy to containers
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindApplications(br.ctx, name, namespace)
+	containers, err := br.FindApplications(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
 	}
@@ -606,8 +602,7 @@ func (br *UserBroker) Upload(name string, content io.Reader) error {
 
 func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {
 	// find all containers
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return nil, err
 	}
@@ -658,8 +653,7 @@ func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {
 
 func (br *UserBroker) Restore(name string, source io.Reader) error {
 	// find all containers
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
 	}

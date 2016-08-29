@@ -83,6 +83,9 @@ func (br *UserBroker) RemoveNamespace(force bool) (err error) {
 		return err
 	}
 
+	// remove the namespace from plugin hub
+	br.Hub.RemoveNamespace(user.Namespace)
+
 	// update namespace in the user database
 	err = br.Users.SetNamespace(user.Name, "")
 	if err != nil {

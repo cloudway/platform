@@ -43,8 +43,10 @@ paths:
   /plugins/:
     get:
       summary: List Plugins
-      description: Get a list of plugins
-      operationId: listPlugins
+      description: Get all installed plugins
+      operationId: getInstalledPlugins
+      security:
+        - apiKey: []
       produces:
         - application/json
       parameters:
@@ -53,6 +55,11 @@ paths:
           description: plugin category
           required: false
           type: string
+        - name: user
+          in: query
+          description: show user defined plugins
+          required: false
+          type: boolean
       responses:
         200:
           description: list of plugin meta data
@@ -60,6 +67,31 @@ paths:
             type: array
             items:
               $ref: '#/definitions/Plugin'
+        401:
+          description: unauthorized
+    post:
+      summary: Install Plugin
+      description: Install a user defined plugin
+      operationId: installPlugin
+      security:
+        - apiKey: []
+      consumes:
+        - application/tar
+      parameters:
+        - name: body
+          in: body
+          description: plugin archive
+          required: true
+          schema:
+            type: string
+            format: binary
+      responses:
+        200:
+          description: plugin installed
+        400:
+          description: invalid plugin manifest
+        401:
+          description: unauthorized
 
   /plugins/{tag}:
     get:
@@ -81,6 +113,23 @@ paths:
             type: array
             items:
               $ref: '#/definitions/Plugin'
+        404:
+          description: plugin not found
+    delete:
+      summary: Remove Plugin
+      description: Remove a user defined plugin
+      operationId: removePlugin
+      parameters:
+        - name: tag
+          in: path
+          description: plugin tag
+          required: true
+          type: string
+      responses:
+        200:
+          description: plugin removed
+        401:
+          description: unauthorized
         404:
           description: plugin not found
 

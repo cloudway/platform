@@ -203,6 +203,7 @@ var _ = Describe("Hub", func() {
 			plugin, err := pluginHub.GetPluginInfo("mock")
 			Ω(err).ShouldNot(HaveOccurred())
 			plugin.Path = ""
+			plugin.Tag = ""
 			Ω(plugin).Should(Equal(meta))
 		})
 
@@ -302,8 +303,8 @@ var _ = Describe("Hub", func() {
 			Ω(err).Should(HaveOccurred())
 		})
 
-		It("should not fail if plugin not found", func() {
-			Ω(pluginHub.RemovePlugin("mock")).Should(Succeed())
+		It("should fail if plugin not found", func() {
+			Ω(pluginHub.RemovePlugin("mock")).ShouldNot(Succeed())
 		})
 
 		It("should remove given version of a plugin", func() {
@@ -327,9 +328,9 @@ var _ = Describe("Hub", func() {
 			Ω(plugin.Version).Should(Equal("1.0.2"))
 		})
 
-		It("should not fail if the given version of a plugin not found", func() {
+		It("should fail if the given version of a plugin not found", func() {
 			install("", meta)
-			Ω(pluginHub.RemovePlugin("mock:2.0")).Should(Succeed())
+			Ω(pluginHub.RemovePlugin("mock:2.0")).ShouldNot(Succeed())
 		})
 
 		It("should remove all versions of a plugin", func() {

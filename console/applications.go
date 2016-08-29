@@ -116,7 +116,7 @@ func (con *Console) createApplicationForm(w http.ResponseWriter, r *http.Request
 
 	data := con.layoutUserData(w, r, user)
 	data.MergeKV("domain", defaults.Domain())
-	data.MergeKV("available_plugins", con.Hub.ListPlugins("", ""))
+	data.MergeKV("available_plugins", con.NewUserBroker(user).GetInstalledPlugins(""))
 	con.mustRender(w, r, "createapp", data)
 }
 
@@ -140,7 +140,7 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
 		data.MergeKV("services", r.PostForm.Get("services"))
 		data.MergeKV("repo", r.PostForm.Get("repo"))
 		data.MergeKV("domain", defaults.Domain())
-		data.MergeKV("available_plugins", con.Hub.ListPlugins("", ""))
+		data.MergeKV("available_plugins", con.NewUserBroker(user).GetInstalledPlugins(""))
 		con.mustRender(w, r, "createapp", data)
 		return
 	}
@@ -264,6 +264,7 @@ type serviceData struct {
 	Name        string
 	DisplayName string
 	Logo        string
+	PluginTag   string
 	PluginName  string
 	Category    manifest.Category
 	IP          string
@@ -325,14 +326,15 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 			State:    c.ActiveState(ctx).String(),
 		}
 
-		meta, err := con.Hub.GetPluginInfo(c.PluginTag())
-		if err == nil {
+		tag := c.PluginTag()
+		if meta, err := con.Hub.GetPluginInfo(tag); err == nil {
+			service.PluginTag = meta.Tag
 			service.PluginName = meta.Name
 			service.DisplayName = meta.DisplayName
 			service.Logo = meta.Logo
 			service.Ports = getPrivatePorts(meta)
 		} else {
-			tag := c.PluginTag()
+			service.PluginTag = tag
 			service.PluginName = strings.SplitN(tag, ":", 2)[0]
 			service.DisplayName = tag
 		}
@@ -346,7 +348,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 	}
 
 	var plugins []*manifest.Plugin
-	for _, meta := range con.Hub.ListPlugins("", manifest.Service) {
+	for _, meta := range con.NewUserBroker(user).GetInstalledPlugins(manifest.Service) {
 		var remove bool
 		for _, s := range services {
 			if meta.Name == s.PluginName {

@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/archive"
@@ -45,21 +44,14 @@ func (hub *PluginHub) ListPlugins(namespace string, category manifest.Category) 
 		}
 		meta, err := hub.GetPluginInfo(tag)
 		if err == nil && (category == "" || category == meta.Category) {
-			result = append(result, meta)
+			result = append(result, tagged(namespace, meta))
 		}
 	}
-	sort.Sort(byDisplayName(result))
 	return result
 }
 
-type byDisplayName []*manifest.Plugin
-
-func (a byDisplayName) Len() int           { return len(a) }
-func (a byDisplayName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byDisplayName) Less(i, j int) bool { return a[i].DisplayName < a[j].DisplayName }
-
 func (hub *PluginHub) GetPluginPath(tag string) (string, error) {
-	_, namespace, name, version, err := parseTag(tag)
+	_, namespace, name, version, err := ParseTag(tag)
 	if err != nil {
 		return "", err
 	}
@@ -84,29 +76,44 @@ func (hub *PluginHub) pluginPath(namespace, name, version string) (string, error
 }
 
 func (hub *PluginHub) GetPluginInfo(tag string) (*manifest.Plugin, error) {
-	_, plugin, err := hub.GetPluginInfoWithName(tag)
-	return plugin, err
-}
-
-func (hub *PluginHub) GetPluginInfoWithName(tag string) (string, *manifest.Plugin, error) {
-	service, namespace, name, version, err := parseTag(tag)
+	_, namespace, name, version, err := ParseTag(tag)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	path, err := hub.pluginPath(namespace, name, version)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	} else {
 		plugin, err := archive.ReadManifest(path)
-		return service, plugin, err
+		return tagged(namespace, plugin), err
 	}
+}
+
+func tagged(namespace string, plugin *manifest.Plugin) *manifest.Plugin {
+	plugin.Tag = plugin.Name + ":" + plugin.Version
+	if namespace != "" {
+		plugin.Tag = namespace + "/" + plugin.Tag
+	}
+	return plugin
 }
 
 func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 	meta, err := archive.ReadManifest(path)
 	if err != nil {
 		return err
+	}
+
+	if meta.Name == "" || meta.Version == "" || meta.Category == "" || meta.BaseImage == "" {
+		return invalidManifestErr{}
+	}
+
+	tag := meta.Name + ":" + meta.Version
+	if namespace != "" {
+		tag = namespace + "/" + tag
+	}
+	if _, _, _, _, err = ParseTag(tag); err != nil {
+		return invalidManifestErr{}
 	}
 
 	installDir := hub.getBaseDir(namespace, meta.Name, meta.Version)
@@ -125,11 +132,22 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 }
 
 func (hub *PluginHub) RemovePlugin(tag string) error {
-	_, namespace, name, version, err := parseTag(tag)
+	_, namespace, name, version, err := ParseTag(tag)
 	if err != nil {
 		return err
 	}
-	return os.RemoveAll(hub.getBaseDir(namespace, name, version))
+	dir := hub.getBaseDir(namespace, name, version)
+	if _, err := os.Stat(dir); err != nil {
+		return err
+	}
+	return os.RemoveAll(dir)
+}
+
+func (hub *PluginHub) RemoveNamespace(namespace string) {
+	if namespace == "" || namespace == "_" {
+		return
+	}
+	os.RemoveAll(filepath.Join(hub.installDir, namespace))
 }
 
 func (hub *PluginHub) getBaseDir(namespace, name, version string) string {
@@ -148,17 +166,7 @@ func (hub *PluginHub) getBaseDir(namespace, name, version string) string {
 
 var tagPattern = regexp.MustCompile(`^([a-zA-Z_0-9]+=)?([a-zA-Z_0-9]+/)?([a-zA-Z_0-9]+)(:[0-9][[0-9.]*)?$`)
 
-type malformedTagError string
-
-func (e malformedTagError) Error() string {
-	return fmt.Sprintf("%s: malformed service tag", string(e))
-}
-
-func (e malformedTagError) HTTPErrorStatusCode() int {
-	return http.StatusBadRequest
-}
-
-func parseTag(tag string) (service, namespace, name, version string, err error) {
+func ParseTag(tag string) (service, namespace, name, version string, err error) {
 	m := tagPattern.FindStringSubmatch(tag)
 	if len(m) == 0 {
 		err = malformedTagError(tag)
@@ -176,4 +184,26 @@ func parseTag(tag string) (service, namespace, name, version string, err error) 
 		version = version[1:]
 	}
 	return
+}
+
+// Errors
+
+type invalidManifestErr struct{}
+
+func (e invalidManifestErr) Error() string {
+	return "invalid plugin manifest"
+}
+
+func (e invalidManifestErr) HTTPErrorStatusCode() int {
+	return http.StatusBadRequest
+}
+
+type malformedTagError string
+
+func (e malformedTagError) Error() string {
+	return fmt.Sprintf("%s: malformed plugin tag", string(e))
+}
+
+func (e malformedTagError) HTTPErrorStatusCode() int {
+	return http.StatusBadRequest
 }

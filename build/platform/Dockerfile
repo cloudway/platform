@@ -69,20 +69,18 @@ RUN git clone https://github.com/cloudway/hipache $HIPACHE_ROOT \
 ENV CLOUDWAY_ROOT /usr/local/cloudway
 ENV CLOUDWAY_DOMAIN example.com
 
+WORKDIR $CLOUDWAY_ROOT
+
 COPY cloudway-broker.tar.gz cloudway-broker.tar.gz
 RUN tar -xf cloudway-broker.tar.gz --strip-components=1 -C / \
  && rm cloudway-broker.tar.gz \
- && cp -f /usr/bin/scp /usr/local/cloudway/sandbox/usr/bin/scp
-
-RUN git clone git://github.com/cloudway/plugins.git \
- && ( cd plugins && ./install.sh ) \
- && rm -rf plugins
+ && cp -f /usr/bin/scp $CLOUDWAY_ROOT/sandbox/usr/bin/scp \
+ && git clone git://github.com/cloudway/plugins.git
 
 COPY supervisord.conf /etc/supervisor/conf.d/
 COPY sbin/ ${CLOUDWAY_ROOT}/sbin/
 
 VOLUME /data
-WORKDIR $CLOUDWAY_ROOT
 EXPOSE 80 7999 2200
 
 ENTRYPOINT ["/usr/local/cloudway/sbin/entrypoint.sh"]
