@@ -203,6 +203,7 @@ var _ = Describe("Hub", func() {
 			plugin, err := pluginHub.GetPluginInfo("mock")
 			Ω(err).ShouldNot(HaveOccurred())
 			plugin.Path = ""
+			plugin.Tag = ""
 			Ω(plugin).Should(Equal(meta))
 		})
 

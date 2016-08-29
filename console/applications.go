@@ -264,6 +264,7 @@ type serviceData struct {
 	Name        string
 	DisplayName string
 	Logo        string
+	PluginTag   string
 	PluginName  string
 	Category    manifest.Category
 	IP          string
@@ -325,14 +326,15 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 			State:    c.ActiveState(ctx).String(),
 		}
 
-		meta, err := con.Hub.GetPluginInfo(c.PluginTag())
-		if err == nil {
+		tag := c.PluginTag()
+		if meta, err := con.Hub.GetPluginInfo(tag); err == nil {
+			service.PluginTag = meta.Tag
 			service.PluginName = meta.Name
 			service.DisplayName = meta.DisplayName
 			service.Logo = meta.Logo
 			service.Ports = getPrivatePorts(meta)
 		} else {
-			tag := c.PluginTag()
+			service.PluginTag = tag
 			service.PluginName = strings.SplitN(tag, ":", 2)[0]
 			service.DisplayName = tag
 		}

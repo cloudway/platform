@@ -36,6 +36,7 @@ func (cat Category) IsLibrary() bool {
 
 type Plugin struct {
 	Path        string      `yaml:"-" json:",omitempty"`
+	Tag         string      `yaml:"-" json:",omitempty"`
 	Name        string      `yaml:"Name"`
 	DisplayName string      `yaml:"Display-Name"`
 	Description string      `yaml:"Description,omitempty"`

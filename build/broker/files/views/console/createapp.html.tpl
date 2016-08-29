@@ -32,7 +32,7 @@
                 {{- range .}}
                 {{- if eq .Category "Framework"}}
                 <li class="plugin-select" data-input="#framework" data-single-select="true">
-                  <a name="{{.Name}}:{{.Version}}" href="#"><img src="{{logo .Name .Logo}}"/> {{.DisplayName}}</a>
+                  <a name="{{.Name}}:{{.Version}}" href="#"><img src="{{logo .Tag .Logo}}"/> {{.DisplayName}}</a>
                 </li>
                 {{- end}}
                 {{- end}}
@@ -52,7 +52,7 @@
                 {{- range .}}
                 {{- if eq .Category "Service"}}
                 <li class="plugin-select" data-input="#services">
-                  <a name="{{.Name}}:{{.Version}}" href="#"><img src="{{logo .Name .Logo}}"/> {{.DisplayName}}</a>
+                  <a name="{{.Name}}:{{.Version}}" href="#"><img src="{{logo .Tag .Logo}}"/> {{.DisplayName}}</a>
                 </li>
                 {{- end}}
                 {{- end}}

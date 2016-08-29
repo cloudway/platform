@@ -56,13 +56,13 @@ func (a byDisplayName) Less(i, j int) bool { return a[i].DisplayName < a[j].Disp
 
 // GetPluginInfo returns a installed plugin meta data.
 func (br *UserBroker) GetPluginInfo(tag string) (plugin *manifest.Plugin, err error) {
-	_, plugin, err = br.getPluginInfoWithNames(&tag)
+	_, plugin, err = br.getPluginInfoWithNames(tag)
 	return
 }
 
 // GetPluginInfoWithName is a helper method to get plugin info with service name.
-func (br *UserBroker) getPluginInfoWithNames(tag *string) (service string, plugin *manifest.Plugin, err error) {
-	service, namespace, name, version, err := hub.ParseTag(*tag)
+func (br *UserBroker) getPluginInfoWithNames(tag string) (service string, plugin *manifest.Plugin, err error) {
+	service, namespace, name, version, err := hub.ParseTag(tag)
 	if err != nil {
 		return
 	}
@@ -93,13 +93,6 @@ func (br *UserBroker) getPluginInfoWithNames(tag *string) (service string, plugi
 		if err != nil {
 			namespace = ""
 			plugin, err = br.Hub.GetPluginInfo(cleanTag)
-		}
-	}
-
-	if err == nil {
-		*tag = plugin.Name + ":" + plugin.Version
-		if namespace != "" {
-			*tag = namespace + "/" + *tag
 		}
 	}
 

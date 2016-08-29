@@ -31,7 +31,7 @@
     {{- range .app.Frameworks}}
     <tr>
       <td>{{printf "%.12s" .ID}}</td>
-      <td><img class="plugin-logo" src="{{logo .PluginName .Logo}}"/> {{.DisplayName}}</td>
+      <td><img class="plugin-logo" src="{{logo .PluginTag .Logo}}"/> {{.DisplayName}}</td>
       <td>{{.IP}}</td>
       <td>{{.Ports}}</td>
       <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
@@ -73,7 +73,7 @@
     {{- range .}}
     <tr>
       <td>{{printf "%.12s" .ID}}</td>
-      <td><img class="plugin-logo" src="{{logo .PluginName .Logo}}"/> {{.DisplayName}}</td>
+      <td><img class="plugin-logo" src="{{logo .PluginTag .Logo}}"/> {{.DisplayName}}</td>
       <td>{{.IP}}</td>
       <td>{{.Ports}}</td>
       <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
@@ -104,7 +104,7 @@
               <ul class="dropdown-menu">
                 {{- range .}}
                 <li class="plugin-select" data-input="#services">
-                  <a name="{{.Name}}:{{.Version}}" href="#"><img src="{{logo .Name .Logo}}"/> {{.DisplayName}}</a>
+                  <a name="{{.Name}}:{{.Version}}" href="#"><img src="{{logo .Tag .Logo}}"/> {{.DisplayName}}</a>
                 </li>
                 {{- end}}
               </ul>

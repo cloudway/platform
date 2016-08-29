@@ -44,7 +44,7 @@ func (hub *PluginHub) ListPlugins(namespace string, category manifest.Category) 
 		}
 		meta, err := hub.GetPluginInfo(tag)
 		if err == nil && (category == "" || category == meta.Category) {
-			result = append(result, meta)
+			result = append(result, tagged(namespace, meta))
 		}
 	}
 	return result
@@ -86,8 +86,16 @@ func (hub *PluginHub) GetPluginInfo(tag string) (*manifest.Plugin, error) {
 		return nil, err
 	} else {
 		plugin, err := archive.ReadManifest(path)
-		return plugin, err
+		return tagged(namespace, plugin), err
 	}
+}
+
+func tagged(namespace string, plugin *manifest.Plugin) *manifest.Plugin {
+	plugin.Tag = plugin.Name + ":" + plugin.Version
+	if namespace != "" {
+		plugin.Tag = namespace + "/" + plugin.Tag
+	}
+	return plugin
 }
 
 func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
