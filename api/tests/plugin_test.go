@@ -98,58 +98,100 @@ var _ = Describe("Plugins", func() {
 	var ctx = context.Background()
 
 	BeforeEach(func() {
-		cli = NewTestClientWithNamespace(true)
 		installMockPlugins()
 	})
 
 	AfterEach(func() {
 		removeMockPlugins()
-		cli.Close()
 	})
 
-	It("should success to list all installed plugins", func() {
-		plugins, err := cli.GetInstalledPlugins(ctx, "")
-		Ω(err).ShouldNot(HaveOccurred())
-		Ω(getTags(plugins)).Should(ConsistOf(PUBLIC_PLUGIN, PRIVATE_PLUGIN))
+	Context("with namespace", func() {
+		BeforeEach(func() {
+			cli = NewTestClientWithNamespace(true)
+		})
+
+		AfterEach(func() {
+			cli.Close()
+		})
+
+		It("should success to list all installed plugins", func() {
+			plugins, err := cli.GetInstalledPlugins(ctx, "")
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(getTags(plugins)).Should(ConsistOf(PUBLIC_PLUGIN, PRIVATE_PLUGIN))
+		})
+
+		It("should success to list all user defined plugins", func() {
+			plugins, err := cli.GetUserPlugins(ctx, "")
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(getTags(plugins)).Should(ConsistOf(PRIVATE_PLUGIN))
+		})
+
+		It("should success to get system plugin info", func() {
+			plugin, err := cli.GetPluginInfo(ctx, PUBLIC_PLUGIN)
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(plugin.Name).Should(Equal(PUBLIC_PLUGIN))
+			Ω(plugin.Vendor).Should(Equal("public"))
+		})
+
+		It("should success to get user defined plugin info", func() {
+			plugin, err := cli.GetPluginInfo(ctx, TEST_NAMESPACE+"/"+PRIVATE_PLUGIN)
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(plugin.Name).Should(Equal(PRIVATE_PLUGIN))
+			Ω(plugin.Vendor).Should(Equal("private"))
+		})
+
+		It("should success to get highest version of plugin", func() {
+			plugin, err := cli.GetPluginInfo(ctx, PUBLIC_PLUGIN+":1.0")
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(plugin.Version).Should(Equal("1.0.3"))
+
+			plugin, err = cli.GetPluginInfo(ctx, PUBLIC_PLUGIN+":1")
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(plugin.Version).Should(Equal("1.10.1"))
+		})
+
+		It("should fail if plugin not found", func() {
+			_, err := cli.GetPluginInfo(ctx, "nonexist")
+			Ω(err).Should(HaveOccurred())
+		})
+
+		It("should fail if the given version of plugin not found", func() {
+			_, err := cli.GetPluginInfo(ctx, PUBLIC_PLUGIN+":10")
+			Ω(err).Should(HaveOccurred())
+		})
 	})
 
-	It("should success to list all user defined plugins", func() {
-		plugins, err := cli.GetUserPlugins(ctx, "")
-		Ω(err).ShouldNot(HaveOccurred())
-		Ω(getTags(plugins)).Should(ConsistOf(PRIVATE_PLUGIN))
-	})
+	Context("with no namespace", func() {
+		BeforeEach(func() {
+			cli = NewTestClientWithUser(true)
+		})
 
-	It("should success to get system plugin info", func() {
-		plugin, err := cli.GetPluginInfo(ctx, PUBLIC_PLUGIN)
-		Ω(err).ShouldNot(HaveOccurred())
-		Ω(plugin.Name).Should(Equal(PUBLIC_PLUGIN))
-		Ω(plugin.Vendor).Should(Equal("public"))
-	})
+		AfterEach(func() {
+			cli.Close()
+		})
 
-	It("should success to get user defined plugin info", func() {
-		plugin, err := cli.GetPluginInfo(ctx, TEST_NAMESPACE+"/"+PRIVATE_PLUGIN)
-		Ω(err).ShouldNot(HaveOccurred())
-		Ω(plugin.Name).Should(Equal(PRIVATE_PLUGIN))
-		Ω(plugin.Vendor).Should(Equal("private"))
-	})
+		It("should success to list all system plugins", func() {
+			plugins, err := cli.GetInstalledPlugins(ctx, "")
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(getTags(plugins)).Should(ConsistOf(PUBLIC_PLUGIN))
+		})
 
-	It("should success to get highest version of plugin", func() {
-		plugin, err := cli.GetPluginInfo(ctx, PUBLIC_PLUGIN+":1.0")
-		Ω(err).ShouldNot(HaveOccurred())
-		Ω(plugin.Version).Should(Equal("1.0.3"))
+		It("should fail to list user defined plugins", func() {
+			plugins, err := cli.GetUserPlugins(ctx, "")
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(plugins).Should(BeEmpty())
+		})
 
-		plugin, err = cli.GetPluginInfo(ctx, PUBLIC_PLUGIN+":1")
-		Ω(err).ShouldNot(HaveOccurred())
-		Ω(plugin.Version).Should(Equal("1.10.1"))
-	})
+		It("should success to get system plugin info", func() {
+			plugin, err := cli.GetPluginInfo(ctx, PUBLIC_PLUGIN)
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(plugin.Name).Should(Equal(PUBLIC_PLUGIN))
+			Ω(plugin.Vendor).Should(Equal("public"))
+		})
 
-	It("should fail if plugin not found", func() {
-		_, err := cli.GetPluginInfo(ctx, "nonexist")
-		Ω(err).Should(HaveOccurred())
-	})
-
-	It("should fail if the given version of plugin not found", func() {
-		_, err := cli.GetPluginInfo(ctx, PUBLIC_PLUGIN+":10")
-		Ω(err).Should(HaveOccurred())
+		It("should fail to get user defined plugin info", func() {
+			_, err := cli.GetPluginInfo(ctx, TEST_NAMESPACE+"/"+PRIVATE_PLUGIN)
+			Ω(err).Should(HaveOccurred())
+		})
 	})
 })

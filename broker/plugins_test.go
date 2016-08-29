@@ -147,6 +147,23 @@ var _ = Describe("Plugins", func() {
 		Ω(installPlugin("other", &meta)).Should(Succeed())
 	}
 
+	var install = func(meta *manifest.Plugin) error {
+		path, err := preparePlugin(meta)
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(path)
+
+		buf := &bytes.Buffer{}
+		tw := tar.NewWriter(buf)
+		if err = archive.CopyFileTree(tw, "", path, nil, false); err != nil {
+			return err
+		}
+		tw.Close()
+
+		return br.InstallPlugin(buf)
+	}
+
 	var getTags = func(plugins []*manifest.Plugin) []string {
 		var tags []string
 		for _, p := range plugins {
@@ -241,23 +258,6 @@ var _ = Describe("Plugins", func() {
 			}
 		})
 
-		var install = func(meta *manifest.Plugin) error {
-			path, err := preparePlugin(meta)
-			if err != nil {
-				return err
-			}
-			defer os.RemoveAll(path)
-
-			buf := &bytes.Buffer{}
-			tw := tar.NewWriter(buf)
-			if err = archive.CopyFileTree(tw, "", path, nil, false); err != nil {
-				return err
-			}
-			tw.Close()
-
-			return br.InstallPlugin(buf)
-		}
-
 		It("should success to install user defined plugin", func() {
 			Ω(getTags(br.GetInstalledPlugins(""))).Should(ConsistOf("mock", "mockdb"))
 			Ω(install(meta)).Should(Succeed())
@@ -325,6 +325,56 @@ var _ = Describe("Plugins", func() {
 			plugin, err := br.GetPluginInfo("mock")
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(plugin.Vendor).ShouldNot(Equal("test"))
+		})
+	})
+
+	Context("when namespace was not set", func() {
+		BeforeEach(func() {
+			br.User.Basic().Namespace = ""
+			installTestPlugins()
+		})
+
+		It("should success to get system plugins", func() {
+			plugins := br.GetInstalledPlugins("")
+			Ω(getTags(plugins)).Should(ConsistOf("mock", "mockdb"))
+		})
+
+		It("should fail to get user defined plugins", func() {
+			plugins := br.GetUserPlugins("")
+			Ω(plugins).Should(BeEmpty())
+		})
+
+		It("should success to get system plugin info", func() {
+			_, err := br.GetPluginInfo("mock")
+			Ω(err).ShouldNot(HaveOccurred())
+		})
+
+		It("should not see other user's plugin", func() {
+			_, err := br.GetPluginInfo("other/mock")
+			Ω(err).Should(HaveOccurred())
+		})
+
+		It("should see other user's shared plugin", func() {
+			plugin, err := br.GetPluginInfo("other/shared")
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(plugin.Vendor).Should(Equal("other"))
+		})
+
+		It("should fail to install plugin", func() {
+			meta := &manifest.Plugin{
+				Name:        "test",
+				DisplayName: "Test Plugin",
+				Version:     "1.0",
+				Vendor:      "test",
+				Category:    manifest.Framework,
+				BaseImage:   "busybox",
+			}
+
+			Ω(install(meta)).ShouldNot(Succeed())
+		})
+
+		It("should fail to remove plugin", func() {
+			Ω(br.RemovePlugin("mock")).ShouldNot(Succeed())
 		})
 	})
 })

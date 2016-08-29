@@ -17,26 +17,35 @@ func (br *UserBroker) GetInstalledPlugins(category manifest.Category) (plugins [
 	plugins = br.Hub.ListPlugins("", category)
 
 	// get user defined plugins
-	user := br.Hub.ListPlugins(br.Namespace(), category)
-	if len(user) == 0 {
-		return
-	}
-
-	// override system plugin with user defined plugin
-	for i, p := range plugins {
-		for j, pp := range user {
-			if pp.Name == p.Name {
-				plugins[i] = pp
-				user = append(user[:j], user[j+1:]...)
-				break
+	if namespace := br.Namespace(); namespace != "" {
+		user := br.Hub.ListPlugins(namespace, category)
+		if len(user) != 0 {
+			// override system plugin with user defined plugin
+			for i, p := range plugins {
+				for j, pp := range user {
+					if pp.Name == p.Name {
+						plugins[i] = pp
+						user = append(user[:j], user[j+1:]...)
+						break
+					}
+				}
 			}
 		}
+		plugins = append(plugins, user...)
 	}
 
 	// sort plugins by display name
-	plugins = append(plugins, user...)
 	sort.Sort(byDisplayName(plugins))
 	return plugins
+}
+
+// GetUserPlugins returns a list of user defined plugins.
+func (br *UserBroker) GetUserPlugins(category manifest.Category) (plugins []*manifest.Plugin) {
+	if namespace := br.Namespace(); namespace != "" {
+		plugins = br.Hub.ListPlugins(namespace, category)
+		sort.Sort(byDisplayName(plugins))
+	}
+	return
 }
 
 type byDisplayName []*manifest.Plugin
@@ -44,11 +53,6 @@ type byDisplayName []*manifest.Plugin
 func (a byDisplayName) Len() int           { return len(a) }
 func (a byDisplayName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byDisplayName) Less(i, j int) bool { return a[i].DisplayName < a[j].DisplayName }
-
-// GetUserPlugins returns a list of user defined plugins.
-func (br *UserBroker) GetUserPlugins(category manifest.Category) (plugins []*manifest.Plugin) {
-	return br.Hub.ListPlugins(br.Namespace(), category)
-}
 
 // GetPluginInfo returns a installed plugin meta data.
 func (br *UserBroker) GetPluginInfo(tag string) (plugin *manifest.Plugin, err error) {
@@ -78,12 +82,17 @@ func (br *UserBroker) getPluginInfoWithNames(tag *string) (service string, plugi
 			err = fmt.Errorf("%s: plugin not found", cleanTag)
 		}
 	} else {
-		// get the user defined plugin, if it's not found then get system plugin
-		namespace = br.Namespace()
-		plugin, err = br.Hub.GetPluginInfo(namespace + "/" + cleanTag)
+		// get the user defined plugin
+		if namespace = br.Namespace(); namespace != "" {
+			plugin, err = br.Hub.GetPluginInfo(namespace + "/" + cleanTag)
+		} else {
+			err = NoNamespaceError("")
+		}
+
+		// if it's not found then get system plugin
 		if err != nil {
 			namespace = ""
-			plugin, err = br.Hub.GetPluginInfo("_/" + cleanTag)
+			plugin, err = br.Hub.GetPluginInfo(cleanTag)
 		}
 	}
 
@@ -99,6 +108,10 @@ func (br *UserBroker) getPluginInfoWithNames(tag *string) (service string, plugi
 
 // InstallPlugin installs a user defined plugin.
 func (br *UserBroker) InstallPlugin(ar io.Reader) error {
+	if br.Namespace() == "" {
+		return NoNamespaceError(br.User.Basic().Name)
+	}
+
 	tempfile, err := ioutil.TempFile("", "plugin")
 	if err != nil {
 		return err
@@ -115,5 +128,8 @@ func (br *UserBroker) InstallPlugin(ar io.Reader) error {
 
 // RemovePlugin removes a user defined plugin.
 func (br *UserBroker) RemovePlugin(tag string) error {
+	if br.Namespace() == "" {
+		return NoNamespaceError(br.User.Basic().Name)
+	}
 	return br.Hub.RemovePlugin(br.Namespace() + "/" + tag)
 }
