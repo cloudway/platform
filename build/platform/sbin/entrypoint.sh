@@ -24,6 +24,12 @@ cwman config "scm.type" mock
 cwman config "scm.url" "file:///data/git"
 cwman config "scm.clone_url" "git clone ssh://git@${GIT_DOMAIN}:7999/<namespace>/<repo>.git"
 
+# Install plugins
+cwman config "hub.dir" /data/plugins
+for d in $CLOUDWAY_ROOT/plugins/*; do
+    [ -f $d/manifest/plugin.yml ] && cwman install $d
+done
+
 # Initialize mongodb data directory
 mkdir -p /data/db /data/configdb
 chown -R mongodb /data/db /data/configdb

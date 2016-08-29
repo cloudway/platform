@@ -8,6 +8,18 @@ cwman config "console.url" ${CONSOLE_URL}
 
 export CLOUDWAY_DOMAIN
 
+# install plugins
+cwman config "hub.dir" /data/plugins
+for d in $CLOUDWAY_ROOT/plugins/*; do
+    [ -f $d/manifest/plugin.yml ] && cwman install $d
+done
+
+# initialize mongodb data directory
+mkdir -p /data/db /data/configdb
+chown -R mongodb /data/db /data/configdb
+
+cwman config userdb.url mongodb://127.0.0.1:27017/cloudway
+
 # configure bitbucket
 if [ -z "$CLOUDWAY_SCM_URL" -a -n "$BITBUCKET_ENV_BITBUCKET_URL" ]; then
     BITBUCKET_HOST=$BITBUCKET_PORT_7990_TCP_ADDR

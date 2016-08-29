@@ -40,7 +40,7 @@ docker run -d --name=cloudway-bitbucket --restart=always \
 # start broker
 docker run -d --name=cloudway-broker --restart=always \
            -v /var/run/docker.sock:/var/run/docker.sock:ro \
-           -v userdb:/data/db \
+           -v broker-data:/data \
            -e VIRTUAL_HOST=$console_dns \
            -e VIRTUAL_PORT=6616 \
            -e CLOUDWAY_DOMAIN=$domain \
