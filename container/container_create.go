@@ -35,6 +35,7 @@ type CreateOptions struct {
 	ServiceName string
 	Plugin      *manifest.Plugin
 	Image       string
+	Flags       uint32
 	Secret      string
 	Home        string
 	User        string
@@ -139,6 +140,11 @@ func createApplicationContainer(cli DockerClient, ctx context.Context, cfg *crea
 	cfg.Hostname = cfg.Name + "-" + cfg.Namespace
 	cfg.FQDN = cfg.Hostname + "." + defaults.Domain()
 	cfg.Env["CLOUDWAY_APP_DNS"] = cfg.FQDN
+
+	if _, e := os.Stat(filepath.Join(cfg.Plugin.Path, "bin", "build")); os.IsNotExist(e) {
+		// If the framework has no build script, the application ca be hot deployed
+		cfg.Flags |= HotDeployable
+	}
 
 	scale, err := getScaling(cli, ctx, cfg.Name, cfg.Namespace, cfg.Scaling)
 	if err != nil {
@@ -381,14 +387,16 @@ func addPluginFiles(tw *tar.Writer, dst, path string) error {
 
 func createContainer(cli DockerClient, ctx context.Context, cfg *createConfig) (*Container, error) {
 	config := &container.Config{
-		Image: cfg.Image,
 		Labels: map[string]string{
 			CATEGORY_KEY:      string(cfg.Category),
 			PLUGIN_KEY:        cfg.Plugin.Tag,
+			FLAGS_KEY:         strconv.FormatUint(uint64(cfg.Flags), 10),
 			APP_NAME_KEY:      cfg.Name,
 			APP_NAMESPACE_KEY: cfg.Namespace,
 			APP_HOME_KEY:      cfg.Home,
 		},
+
+		Image:      cfg.Image,
 		User:       cfg.User,
 		Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "run"},
 	}

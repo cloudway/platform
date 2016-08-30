@@ -3,6 +3,7 @@ package container
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/docker/engine-api/types"
@@ -20,8 +21,13 @@ const (
 	APP_HOME_KEY        = "com.cloudway.app.home"
 	CATEGORY_KEY        = "com.cloudway.container.category"
 	PLUGIN_KEY          = "com.cloudway.container.plugin"
+	FLAGS_KEY           = "com.cloudway.container.flags"
 	SERVICE_NAME_KEY    = "com.cloudway.service.name"
 	SERVICE_DEPENDS_KEY = "com.cloudway.service.depends"
+)
+
+const (
+	HotDeployable uint32 = 1 << iota
 )
 
 type Container struct {
@@ -114,6 +120,11 @@ func find(cli DockerClient, ctx context.Context, category manifest.Category, ser
 		containers = append(containers, cc)
 	}
 	return containers, nil
+}
+
+func (c *Container) Flags() uint32 {
+	flags, _ := strconv.ParseUint(c.Config.Labels[FLAGS_KEY], 10, 32)
+	return uint32(flags)
 }
 
 func (c *Container) Category() manifest.Category {

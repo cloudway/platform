@@ -36,6 +36,26 @@ func DeployRepository(cli container.DockerClient, ctx context.Context, name, nam
 		base = containers[rand.Intn(len(containers))]
 	}
 
+	// save or build repository archive
+	var repodir string
+	if base.Flags()&container.HotDeployable != 0 {
+		repodir, err = save(repo, false)
+	} else {
+		repodir, err = build(cli, ctx, base, repo)
+	}
+
+	if repodir != "" {
+		defer os.RemoveAll(repodir)
+	}
+	if err != nil {
+		return err
+	}
+
+	// distribute the repository archive
+	return distribute(cli, ctx, containers, ids, repodir)
+}
+
+func build(cli container.DockerClient, ctx context.Context, base *container.Container, repo io.Reader) (repodir string, err error) {
 	// make a fake plugin (you can make a real plugin from base container if you want)
 	_, _, pn, pv, _ := hub.ParseTag(base.PluginTag())
 	plugin := &manifest.Plugin{
@@ -47,8 +67,8 @@ func DeployRepository(cli container.DockerClient, ctx context.Context, name, nam
 
 	// create a builder container
 	opts := container.CreateOptions{
-		Name:      name,
-		Namespace: namespace,
+		Name:      base.Name,
+		Namespace: base.Namespace,
 		Plugin:    plugin,
 		Image:     base.Config.Image,
 		Home:      base.Home(),
@@ -57,35 +77,34 @@ func DeployRepository(cli container.DockerClient, ctx context.Context, name, nam
 	}
 	builder, err := cli.CreateBuilder(ctx, opts)
 	if err != nil {
-		return err
+		return
 	}
 	defer builder.Destroy(ctx)
 
 	// start builder container and build the application
 	err = builder.ContainerStart(ctx, builder.ID, types.ContainerStartOptions{})
 	if err != nil {
-		return err
+		return
 	}
 	err = builder.Exec(ctx, "", repo, os.Stdout, os.Stderr, "/usr/bin/cwctl", "build")
 	if err != nil {
-		return err
+		return
 	}
 
 	// download application repository from builder container
-	repodir, err := download(cli, ctx, builder)
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(repodir)
-
-	// distribute the repository archive
-	return distribute(cli, ctx, containers, ids, repodir)
-}
-
-func download(cli container.DockerClient, ctx context.Context, builder *container.Container) (repodir string, err error) {
-	repodir, err = ioutil.TempDir("", "deploy")
+	r, _, err := builder.CopyFromContainer(ctx, builder.ID, builder.RepoDir()+"/.")
 	if err != nil {
 		return
+	}
+	defer r.Close()
+
+	return save(r, true)
+}
+
+func save(r io.Reader, zip bool) (repodir string, err error) {
+	repodir, err = ioutil.TempDir("", "deploy")
+	if err != nil {
+		return "", err
 	}
 
 	repofile, err := os.Create(filepath.Join(repodir, filepath.Base(repodir)+".tar.gz"))
@@ -94,15 +113,14 @@ func download(cli container.DockerClient, ctx context.Context, builder *containe
 	}
 	defer repofile.Close()
 
-	r, _, err := builder.CopyFromContainer(ctx, builder.ID, builder.RepoDir()+"/.")
-	if err != nil {
-		return
-	}
-
-	w := gzip.NewWriter(repofile)
-	_, err = io.Copy(w, r)
-	if err == nil {
-		err = w.Close()
+	if zip {
+		w := gzip.NewWriter(repofile)
+		_, err = io.Copy(w, r)
+		if err == nil {
+			err = w.Close()
+		}
+	} else {
+		_, err = io.Copy(repofile, r)
 	}
 	return
 }
@@ -119,9 +137,11 @@ func distribute(cli container.DockerClient, ctx context.Context, containers []*c
 	}
 
 	for _, c := range containers {
-		er := c.Deploy(ctx, path)
-		if er != nil {
-			err = er
+		if c.Category().IsFramework() {
+			er := c.Deploy(ctx, path)
+			if er != nil {
+				err = er
+			}
 		}
 	}
 
