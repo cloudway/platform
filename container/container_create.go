@@ -26,9 +26,7 @@ import (
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/pkg/archive"
-	"github.com/cloudway/platform/pkg/files"
 	"github.com/cloudway/platform/pkg/manifest"
-	. "github.com/cloudway/platform/scm"
 )
 
 type CreateOptions struct {
@@ -62,7 +60,7 @@ type createConfig struct {
 }
 
 // Create new application containers.
-func (cli DockerClient) Create(ctx context.Context, scm SCM, opts CreateOptions) ([]*Container, error) {
+func (cli DockerClient) Create(ctx context.Context, opts CreateOptions) ([]*Container, error) {
 	cfg := &createConfig{CreateOptions: &opts}
 	cfg.Env = make(map[string]string)
 	for k, v := range opts.Env {
@@ -102,7 +100,7 @@ func (cli DockerClient) Create(ctx context.Context, scm SCM, opts CreateOptions)
 
 	switch cfg.Category {
 	case manifest.Framework:
-		return createApplicationContainer(cli, ctx, scm, cfg)
+		return createApplicationContainer(cli, ctx, cfg)
 	case manifest.Service:
 		return createServiceContainer(cli, ctx, cfg)
 	default:
@@ -110,7 +108,7 @@ func (cli DockerClient) Create(ctx context.Context, scm SCM, opts CreateOptions)
 	}
 }
 
-func createApplicationContainer(cli DockerClient, ctx context.Context, scm SCM, cfg *createConfig) ([]*Container, error) {
+func createApplicationContainer(cli DockerClient, ctx context.Context, cfg *createConfig) ([]*Container, error) {
 	if cfg.ServiceName != "" {
 		return nil, fmt.Errorf("The application name cannot contains a serivce name: %s", cfg.ServiceName)
 	}
@@ -138,12 +136,6 @@ func createApplicationContainer(cli DockerClient, ctx context.Context, scm SCM, 
 		}
 	}
 
-	// populate repository if needed
-	err = populateRepo(scm, cfg)
-	if err == nil {
-		err = scm.Deploy(cfg.Namespace, cfg.Name, "")
-	}
-
 	return containers, err
 }
 
@@ -164,45 +156,6 @@ func getScaling(cli DockerClient, ctx context.Context, name, namespace string, s
 	}
 
 	return scale - n, nil
-}
-
-func populateRepo(scm SCM, cfg *createConfig) error {
-	if strings.ToLower(cfg.Repo) == "empty" {
-		return nil
-	} else if cfg.Repo == "" {
-		return populateFromTemplate(scm, cfg)
-	} else {
-		return scm.PopulateURL(cfg.Namespace, cfg.Name, cfg.Repo)
-	}
-}
-
-func populateFromTemplate(scm SCM, cfg *createConfig) error {
-	tpl := filepath.Join(cfg.Plugin.Path, "template")
-	if fi, err := os.Stat(tpl); err != nil || !fi.IsDir() {
-		return nil
-	}
-
-	f, err := files.TempFile("", "repo", ".tar")
-	if err != nil {
-		return err
-	}
-	defer func() {
-		f.Close()
-		os.Remove(f.Name())
-	}()
-
-	tw := tar.NewWriter(f)
-	if err = archive.CopyFileTree(tw, "", tpl, nil, false); err != nil {
-		return err
-	}
-	tw.Close()
-
-	size, err := f.Seek(0, os.SEEK_CUR)
-	f.Seek(0, os.SEEK_SET)
-	if err == nil {
-		err = scm.Populate(cfg.Namespace, cfg.Name, f, size)
-	}
-	return err
 }
 
 type serviceExistsError struct {

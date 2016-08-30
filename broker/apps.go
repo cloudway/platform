@@ -25,7 +25,9 @@ import (
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/errors"
+	"github.com/cloudway/platform/pkg/files"
 	"github.com/cloudway/platform/pkg/manifest"
+	"github.com/cloudway/platform/scm"
 )
 
 func (br *UserBroker) GetApplications() (apps map[string]*userdb.Application, err error) {
@@ -119,6 +121,12 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 		opts.Namespace = user.Namespace
 	}
 
+	// create all containers
+	containers, err = br.createContainers(opts, names, plugins)
+	if err != nil {
+		return
+	}
+
 	// create repository for the application
 	err = br.SCM.CreateRepo(opts.Namespace, opts.Name)
 	if err != nil {
@@ -126,9 +134,11 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	}
 	repoCreated = true
 
-	// create all containers
-	containers, err = br.createContainers(opts, names, plugins)
-	if err != nil {
+	// populate and deploy application
+	if err = populateRepo(br.SCM, &opts, framework); err != nil {
+		return
+	}
+	if err = br.SCM.Deploy(opts.Namespace, opts.Name, ""); err != nil {
 		return
 	}
 
@@ -145,6 +155,44 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 
 	success = true
 	return
+}
+
+func populateRepo(scm scm.SCM, opts *container.CreateOptions, framework *manifest.Plugin) error {
+	if strings.ToLower(opts.Repo) == "empty" {
+		return nil
+	} else if opts.Repo == "" {
+		return populateFromTemplate(scm, opts, filepath.Join(framework.Path, "template"))
+	} else {
+		return scm.PopulateURL(opts.Namespace, opts.Name, opts.Repo)
+	}
+}
+
+func populateFromTemplate(scm scm.SCM, opts *container.CreateOptions, template string) error {
+	if fi, err := os.Stat(template); err != nil || !fi.IsDir() {
+		return nil
+	}
+
+	f, err := files.TempFile("", "repo", ".tar")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		f.Close()
+		os.Remove(f.Name())
+	}()
+
+	tw := tar.NewWriter(f)
+	if err = archive.CopyFileTree(tw, "", template, nil, false); err != nil {
+		return err
+	}
+	tw.Close()
+
+	size, err := f.Seek(0, os.SEEK_CUR)
+	f.Seek(0, os.SEEK_SET)
+	if err == nil {
+		err = scm.Populate(opts.Namespace, opts.Name, f, size)
+	}
+	return err
 }
 
 func generateSharedSecret() (string, error) {
@@ -203,7 +251,7 @@ func (br *UserBroker) createContainers(opts container.CreateOptions, serviceName
 		opts.Plugin = plugin
 		opts.ServiceName = serviceNames[i]
 		var cs []*container.Container
-		cs, err = br.Create(br.ctx, br.SCM, opts)
+		cs, err = br.Create(br.ctx, opts)
 		containers = append(containers, cs...)
 		if err != nil {
 			return
@@ -347,7 +395,7 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int, secret stri
 		Repo:      "empty",
 	}
 
-	return br.Create(br.ctx, br.SCM, opts)
+	return br.Create(br.ctx, opts)
 }
 
 func (br *UserBroker) scaleDown(containers []*container.Container, num int) error {
