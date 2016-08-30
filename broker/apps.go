@@ -138,7 +138,7 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	if err = populateRepo(br.SCM, &opts, framework); err != nil {
 		return
 	}
-	if err = br.SCM.Deploy(opts.Namespace, opts.Name, ""); err != nil {
+	if err = br.SCM.Deploy(opts.Namespace, opts.Name, "", containers...); err != nil {
 		return
 	}
 
@@ -392,10 +392,13 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int, secret stri
 		User:      replica.User(),
 		Secret:    secret,
 		Scaling:   num,
-		Repo:      "empty",
 	}
 
-	return br.Create(br.ctx, opts)
+	containers, err := br.Create(br.ctx, opts)
+	if err == nil {
+		err = br.SCM.Deploy(opts.Namespace, opts.Name, "", containers...)
+	}
+	return containers, err
 }
 
 func (br *UserBroker) scaleDown(containers []*container.Container, num int) error {

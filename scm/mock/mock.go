@@ -246,7 +246,7 @@ func (mock mockSCM) PopulateURL(namespace, name string, url string) error {
 	return repo.Run("push", "--mirror", repodir)
 }
 
-func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
+func (mock mockSCM) Deploy(namespace, name string, branch string, containers ...*container.Container) (err error) {
 	empty, err := mock.isEmptyRepository(namespace, name)
 	if err != nil {
 		return err
@@ -297,9 +297,11 @@ func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
 
 	// Deploy the archive
 	ctx := context.Background()
-	containers, err := cli.FindApplications(ctx, name, namespace)
-	if err != nil {
-		return err
+	if len(containers) == 0 {
+		containers, err = cli.FindApplications(ctx, name, namespace)
+		if err != nil {
+			return err
+		}
 	}
 	for _, c := range containers {
 		err = c.Deploy(ctx, tempdir)

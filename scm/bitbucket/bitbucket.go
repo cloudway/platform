@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/config"
+	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/rest"
 	"github.com/cloudway/platform/scm"
 )
@@ -207,10 +208,15 @@ func (cli *bitbucketClient) PopulateURL(namespace, name, remote string) error {
 	return checkNamespaceError(namespace, resp, err)
 }
 
-func (cli *bitbucketClient) Deploy(namespace, name string, branch string) error {
+func (cli *bitbucketClient) Deploy(namespace, name string, branch string, containers ...*container.Container) error {
+	var ids = make([]string, len(containers))
+	for i, c := range containers {
+		ids[i] = c.ID
+	}
+
 	path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/deploy", namespace, name)
 	query := url.Values{"branch": []string{branch}}
-	resp, err := cli.Post(context.Background(), path, query, nil, nil)
+	resp, err := cli.Post(context.Background(), path, query, ids, nil)
 	return checkNamespaceError(namespace, resp, err)
 }
 
