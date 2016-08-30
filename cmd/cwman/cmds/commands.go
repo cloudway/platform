@@ -23,7 +23,6 @@ var CommandUsage = []Command{
 	{"api-server", "Start the API server"},
 	{"config", "Get or set a configuration value"},
 	{"install", "Install one or more plugins"},
-	{"run", "Run one-off command in a running container"},
 	{"upgrade", "Upgrade application containers"},
 	{"useradd", "Add a user"},
 	{"userdel", "Remove a user"},

@@ -9,8 +9,18 @@ import (
 
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/files"
-	"github.com/cloudway/platform/pkg/manifest"
 )
+
+func (box *Sandbox) Build() (err error) {
+	primary, err := box.PrimaryPlugin()
+	if err != nil {
+		return err
+	}
+	if err = processTemplates(primary.Path, box.Environ()); err != nil {
+		return err
+	}
+	return runPluginAction(primary.Path, makeExecEnv(box.Environ()), "build")
+}
 
 func (box *Sandbox) Deploy() error {
 	base := box.DeployDir()
@@ -25,10 +35,20 @@ func (box *Sandbox) Deploy() error {
 	defer removeDeployments(base, deployments)
 
 	latest := latestDeployment(deployments)
-	if err = box.checkout(latest.Name()); err == nil {
-		err = box.deploy()
+	err = box.checkout(latest.Name())
+	if err != nil {
+		return err
 	}
-	return err
+
+	primary, err := box.PrimaryPlugin()
+	if err != nil {
+		return err
+	}
+	err = processTemplates(primary.Path, box.Environ())
+	if err != nil {
+		return err
+	}
+	return runPluginAction(primary.Path, makeExecEnv(box.Environ()), "deploy")
 }
 
 func (box *Sandbox) hasDeployments() bool {
@@ -104,24 +124,4 @@ func (box *Sandbox) checkout(name string) (err error) {
 	}
 
 	return nil
-}
-
-func (box *Sandbox) deploy() (err error) {
-	primary, err := box.PrimaryPlugin()
-	if err != nil {
-		return err
-	}
-	if err := processTemplates(primary.Path, box.Environ()); err != nil {
-		return err
-	}
-
-	state := box.ActiveState()
-	box.SetActiveState(manifest.StateBuilding)
-	err = runPluginAction(primary.Path, makeExecEnv(box.Environ()), "build")
-	if err != nil {
-		box.SetActiveState(manifest.StateFailed)
-	} else {
-		box.SetActiveState(state)
-	}
-	return err
 }

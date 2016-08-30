@@ -34,6 +34,7 @@ type CreateOptions struct {
 	Namespace   string
 	ServiceName string
 	Plugin      *manifest.Plugin
+	Image       string
 	Secret      string
 	Home        string
 	User        string
@@ -61,7 +62,20 @@ type createConfig struct {
 
 // Create new application containers.
 func (cli DockerClient) Create(ctx context.Context, opts CreateOptions) ([]*Container, error) {
-	cfg := &createConfig{CreateOptions: &opts}
+	cfg := configure(&opts)
+
+	switch cfg.Category {
+	case manifest.Framework:
+		return createApplicationContainer(cli, ctx, cfg)
+	case manifest.Service:
+		return createServiceContainer(cli, ctx, cfg)
+	default:
+		return nil, fmt.Errorf("%s:%s is not a valid plugin", cfg.Plugin.Name, cfg.Plugin.Version)
+	}
+}
+
+func configure(opts *CreateOptions) *createConfig {
+	cfg := &createConfig{CreateOptions: opts}
 	cfg.Env = make(map[string]string)
 	for k, v := range opts.Env {
 		cfg.Env[k] = v
@@ -98,14 +112,23 @@ func (cli DockerClient) Create(ctx context.Context, opts CreateOptions) ([]*Cont
 	cfg.Env["CLOUDWAY_DATA_DIR"] = cfg.Home + "/data"
 	cfg.Env["CLOUDWAY_LOG_DIR"] = cfg.Home + "/logs"
 
-	switch cfg.Category {
-	case manifest.Framework:
-		return createApplicationContainer(cli, ctx, cfg)
-	case manifest.Service:
-		return createServiceContainer(cli, ctx, cfg)
-	default:
-		return nil, fmt.Errorf("%s:%s is not a valid plugin", meta.Name, meta.Version)
+	return cfg
+}
+
+// Create a builder container.
+func (cli DockerClient) CreateBuilder(ctx context.Context, opts CreateOptions) (c *Container, err error) {
+	cfg := configure(&opts)
+
+	cfg.Hostname = cfg.Name + "-" + cfg.Namespace
+	cfg.FQDN = cfg.Hostname + "." + defaults.Domain()
+	cfg.Env["CLOUDWAY_APP_DNS"] = cfg.FQDN
+
+	err = buildImage(cli, ctx, dockerfileTemplate, cfg)
+	if err != nil {
+		return nil, err
 	}
+
+	return createBuilderContainer(cli, ctx, cfg)
 }
 
 func createApplicationContainer(cli DockerClient, ctx context.Context, cfg *createConfig) ([]*Container, error) {
@@ -122,14 +145,14 @@ func createApplicationContainer(cli DockerClient, ctx context.Context, cfg *crea
 		return nil, err
 	}
 
-	image, err := buildImage(cli, ctx, dockerfileTemplate, cfg)
+	err = buildImage(cli, ctx, dockerfileTemplate, cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	var containers []*Container
 	for i := 0; i < scale; i++ {
-		if c, err := createContainer(cli, ctx, image, cfg); err != nil {
+		if c, err := createContainer(cli, ctx, cfg); err != nil {
 			return containers, err
 		} else {
 			containers = append(containers, c)
@@ -189,12 +212,12 @@ func createServiceContainer(cli DockerClient, ctx context.Context, cfg *createCo
 		return nil, serviceExistsError{service: service, app: name}
 	}
 
-	image, err := buildImage(cli, ctx, dockerfileTemplate, cfg)
+	err = buildImage(cli, ctx, dockerfileTemplate, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	c, err := createContainer(cli, ctx, image, cfg)
+	c, err := createContainer(cli, ctx, cfg)
 	if err != nil {
 		return nil, err
 	} else {
@@ -202,7 +225,11 @@ func createServiceContainer(cli DockerClient, ctx context.Context, cfg *createCo
 	}
 }
 
-func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg *createConfig) (imageId string, err error) {
+func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg *createConfig) (err error) {
+	if cfg.Image != "" {
+		return
+	}
+
 	// Create temporary tar archive to create build context
 	tarFile, err := ioutil.TempFile("", "docker")
 	if err != nil {
@@ -244,6 +271,7 @@ func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg
 	response, err := cli.ImageBuild(ctx, tarFile, options)
 
 	// read image ID from build response
+	var imageId string
 	if err == nil {
 		defer response.Body.Close()
 		imageId, err = readBuildStream(response.Body, cfg.Log)
@@ -257,6 +285,7 @@ func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg
 		}
 	}
 
+	cfg.Image = imageId
 	return
 }
 
@@ -350,9 +379,9 @@ func addPluginFiles(tw *tar.Writer, dst, path string) error {
 	}
 }
 
-func createContainer(cli DockerClient, ctx context.Context, imageId string, cfg *createConfig) (*Container, error) {
+func createContainer(cli DockerClient, ctx context.Context, cfg *createConfig) (*Container, error) {
 	config := &container.Config{
-		Image: imageId,
+		Image: cfg.Image,
 		Labels: map[string]string{
 			CATEGORY_KEY:      string(cfg.Category),
 			PLUGIN_KEY:        cfg.Plugin.Tag,
@@ -361,7 +390,7 @@ func createContainer(cli DockerClient, ctx context.Context, imageId string, cfg 
 			APP_HOME_KEY:      cfg.Home,
 		},
 		User:       cfg.User,
-		Entrypoint: strslice.StrSlice([]string{"/usr/bin/cwctl", "run"}),
+		Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "run"},
 	}
 
 	if cfg.Category.IsService() {
@@ -417,4 +446,37 @@ func createContainer(cli DockerClient, ctx context.Context, imageId string, cfg 
 	}
 
 	return c, nil
+}
+
+func createBuilderContainer(cli DockerClient, ctx context.Context, cfg *createConfig) (*Container, error) {
+	config := &container.Config{
+		Image:      cfg.Image,
+		User:       cfg.User,
+		Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "run"},
+	}
+
+	hostConfig := &container.HostConfig{}
+	netConfig := &network.NetworkingConfig{}
+
+	if cfg.Network != "" {
+		hostConfig.NetworkMode = container.NetworkMode(cfg.Network)
+	}
+
+	resp, err := cli.ContainerCreate(ctx, config, hostConfig, netConfig, "")
+	if err != nil {
+		logrus.WithError(err).Error("failed to create container")
+		return nil, err
+	}
+
+	info, err := cli.ContainerInspect(ctx, resp.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Container{
+		Name:          cfg.Name,
+		Namespace:     cfg.Namespace,
+		DockerClient:  cli,
+		ContainerJSON: &info,
+	}, nil
 }

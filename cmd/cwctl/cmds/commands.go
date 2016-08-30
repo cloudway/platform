@@ -37,12 +37,13 @@ func Init() *CWCtl {
 		"start":   cli.CmdStart,
 		"stop":    cli.CmdStop,
 		"restart": cli.CmdRestart,
+		"build":   cli.CmdBuild,
 		"status":  cli.CmdStatus,
-		"dump":    cli.CmdDump,    // HIDDEN
-		"restore": cli.CmdRestore, // HIDDEN
-		"run":     cli.CmdRun,     // HIDDEN
-		"sh":      cli.CmdSh,      // HIDDEN
-		"pwgen":   cli.CmdPwgen,   // HIDDEN
+		"dump":    cli.CmdDump,
+		"restore": cli.CmdRestore,
+		"run":     cli.CmdRun,
+		"sh":      cli.CmdSh,
+		"pwgen":   cli.CmdPwgen,
 	}
 
 	if os.Getuid() == 0 {

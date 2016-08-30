@@ -138,7 +138,7 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	if err = populateRepo(br.SCM, &opts, framework); err != nil {
 		return
 	}
-	if err = br.SCM.Deploy(opts.Namespace, opts.Name, "", containers...); err != nil {
+	if err = deployRepo(br.SCM, &opts, containers); err != nil {
 		return
 	}
 
@@ -193,6 +193,14 @@ func populateFromTemplate(scm scm.SCM, opts *container.CreateOptions, template s
 		err = scm.Populate(opts.Namespace, opts.Name, f, size)
 	}
 	return err
+}
+
+func deployRepo(scm scm.SCM, opts *container.CreateOptions, containers []*container.Container) error {
+	var ids = make([]string, len(containers))
+	for i, c := range containers {
+		ids[i] = c.ID
+	}
+	return scm.Deploy(opts.Namespace, opts.Name, "", ids...)
 }
 
 func generateSharedSecret() (string, error) {
@@ -396,7 +404,7 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int, secret stri
 
 	containers, err := br.Create(br.ctx, opts)
 	if err == nil {
-		err = br.SCM.Deploy(opts.Namespace, opts.Name, "", containers...)
+		err = deployRepo(br.SCM, &opts, containers)
 	}
 	return containers, err
 }

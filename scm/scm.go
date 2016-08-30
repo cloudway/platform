@@ -5,7 +5,6 @@ import (
 	"io"
 
 	"github.com/cloudway/platform/config"
-	"github.com/cloudway/platform/container"
 )
 
 // Source Code Management interface.
@@ -37,7 +36,7 @@ type SCM interface {
 	PopulateURL(namespace, name string, url string) error
 
 	// Deploy application with new commit.
-	Deploy(namespace, name string, branch string, containers ...*container.Container) error
+	Deploy(namespace, name string, branch string, ids ...string) error
 
 	// Get the current deployment branch.
 	GetDeploymentBranch(namespace, name string) (*Branch, error)
