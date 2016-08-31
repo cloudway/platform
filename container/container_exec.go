@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
@@ -33,7 +32,7 @@ func (c *Container) Exec(ctx context.Context, user string, stdin io.Reader, stdo
 	// To workaround this problem always attach the stdin. This problem
 	// just occurres in docker swarm cluster, so it may be a docker bug.
 	if stdin == nil {
-		stdin = os.Stdin
+		stdin = bytes.NewReader(nil)
 	}
 
 	execConfig := types.ExecConfig{

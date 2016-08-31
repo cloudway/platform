@@ -150,7 +150,7 @@ func copyCache(ctx context.Context, plugin *manifest.Plugin, from, to *container
 
 	if chown {
 		args := append([]string{"chown", "-R", to.User()}, paths...)
-		to.ExecQ(ctx, "root", args...)
+		to.Exec(ctx, "root", nil, nil, nil, args...)
 	}
 }
 

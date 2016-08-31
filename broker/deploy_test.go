@@ -177,26 +177,28 @@ var _ = Describe("Deploy", func() {
 		})
 	})
 
+	var pushToDeploy = func() {
+		var (
+			repodir = filepath.Join(REPOROOT, NAMESPACE, "test")
+			repo    = mock.NewGitRepo(tempdir)
+			text    = "changed"
+		)
+
+		By("Clone the application repository")
+		Expect(repo.Run("clone", repodir, tempdir)).To(Succeed())
+
+		By("Make change to local repository")
+		Expect(ioutil.WriteFile(testfile, []byte(text), 0644)).To(Succeed())
+		Expect(repo.Run("add", "track")).To(Succeed())
+		Expect(repo.Commit("make change")).To(Succeed())
+
+		By("New commit should be deployed")
+		Expect(repo.Run("push")).To(Succeed())
+		Eventually(fetchCommittedFile, deployTimeout).Should(Equal(text))
+	}
+
 	Describe("Push to deploy", func() {
-		It("should deploy after git push", func() {
-			var (
-				repodir = filepath.Join(REPOROOT, NAMESPACE, "test")
-				repo    = mock.NewGitRepo(tempdir)
-				text    = "changed"
-			)
-
-			By("Clone the application repository")
-			Expect(repo.Run("clone", repodir, tempdir)).To(Succeed())
-
-			By("Make change to local repository")
-			Expect(ioutil.WriteFile(testfile, []byte(text), 0644)).To(Succeed())
-			Expect(repo.Run("add", "track")).To(Succeed())
-			Expect(repo.Commit("make change")).To(Succeed())
-
-			By("New commit should be deployed")
-			Expect(repo.Run("push")).To(Succeed())
-			Eventually(fetchCommittedFile, deployTimeout).Should(Equal(text))
-		})
+		It("should deploy after git push", pushToDeploy)
 
 		It("should deploy to given branch", func() {
 			var (
@@ -272,5 +274,7 @@ var _ = Describe("Deploy", func() {
 				return strings.TrimSpace(content), err
 			}, deployTimeout).Should(Equal("cached"))
 		})
+
+		It("should success push to deploy", pushToDeploy)
 	})
 })
