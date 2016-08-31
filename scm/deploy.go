@@ -1,6 +1,7 @@
 package scm
 
 import (
+	"archive/tar"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/docker/engine-api/types"
 	"golang.org/x/net/context"
+	"gopkg.in/yaml.v2"
 
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/hub"
@@ -56,13 +58,9 @@ func DeployRepository(cli container.DockerClient, ctx context.Context, name, nam
 }
 
 func build(cli container.DockerClient, ctx context.Context, base *container.Container, in io.Reader, stdout, stderr io.Writer) (repodir string, err error) {
-	// make a fake plugin (you can make a real plugin from base container if you want)
-	_, _, pn, pv, _ := hub.ParseTag(base.PluginTag())
-	plugin := &manifest.Plugin{
-		Tag:      base.PluginTag(),
-		Name:     pn,
-		Version:  pv,
-		Category: base.Category(),
+	plugin, err := readPluginManifestFromContainer(ctx, base)
+	if err != nil {
+		return
 	}
 
 	// create a builder container
@@ -80,15 +78,19 @@ func build(cli container.DockerClient, ctx context.Context, base *container.Cont
 	}
 	defer builder.Destroy(ctx)
 
-	// start builder container and build the application
+	// start builder container
 	err = builder.ContainerStart(ctx, builder.ID, types.ContainerStartOptions{})
 	if err != nil {
 		return
 	}
+
+	// build the application, use cache during build
+	copyCache(ctx, plugin, base, builder, true)
 	err = builder.Exec(ctx, "", in, stdout, stderr, "/usr/bin/cwctl", "build")
 	if err != nil {
 		return
 	}
+	copyCache(ctx, plugin, builder, base, false)
 
 	// download application repository from builder container
 	r, _, err := builder.CopyFromContainer(ctx, builder.ID, builder.RepoDir()+"/.")
@@ -98,6 +100,59 @@ func build(cli container.DockerClient, ctx context.Context, base *container.Cont
 	defer r.Close()
 
 	return save(r, true)
+}
+
+func readPluginManifestFromContainer(ctx context.Context, base *container.Container) (meta *manifest.Plugin, err error) {
+	_, _, pn, _, _ := hub.ParseTag(base.PluginTag())
+	path := fmt.Sprintf("%s/%s/manifest/plugin.yml", base.Home(), pn)
+	r, _, err := base.CopyFromContainer(ctx, base.ID, path)
+	if err != nil {
+		return
+	}
+	defer r.Close()
+
+	var content []byte
+	tr := tar.NewReader(r)
+	if _, err = tr.Next(); err != nil {
+		return
+	}
+	if content, err = ioutil.ReadAll(tr); err != nil {
+		return
+	}
+
+	var plugin manifest.Plugin
+	err = yaml.Unmarshal(content, &plugin)
+	if err != nil {
+		return
+	}
+
+	plugin.Tag = base.PluginTag()
+	return &plugin, err
+}
+
+func copyCache(ctx context.Context, plugin *manifest.Plugin, from, to *container.Container, chown bool) {
+	if len(plugin.BuildCache) == 0 {
+		return
+	}
+
+	var paths = make([]string, len(plugin.BuildCache))
+	for i, cache := range plugin.BuildCache {
+		paths[i] = from.Home() + "/" + cache
+	}
+
+	opts := types.CopyToContainerOptions{AllowOverwriteDirWithFile: true}
+	for _, path := range paths {
+		content, _, err := from.CopyFromContainer(ctx, from.ID, path+"/.")
+		if err == nil {
+			to.CopyToContainer(ctx, to.ID, path+"/", content, opts)
+			content.Close()
+		}
+	}
+
+	if chown {
+		args := append([]string{"chown", "-R", to.User()}, paths...)
+		to.ExecQ(ctx, "root", args...)
+	}
 }
 
 func save(r io.Reader, zip bool) (repodir string, err error) {

@@ -46,6 +46,7 @@ type Plugin struct {
 	Logo        string      `yaml:"Logo,omitempty" json:",omitempty"`
 	Category    Category    `yaml:"Category"`
 	BaseImage   string      `yaml:"Base-Image"`
+	BuildCache  []string    `yaml:"Build-Cache" json:",omitempty"`
 	DependsOn   []string    `yaml:"Depends-On,omitempty" json:",omitempty"`
 	User        string      `yaml:"User,omitempty" json:",omitempty"`
 	Endpoints   []*Endpoint `yaml:"Endpoints,omitempty" json:",omitempty"`

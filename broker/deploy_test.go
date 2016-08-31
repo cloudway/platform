@@ -30,9 +30,17 @@ var _ = Describe("Deploy", func() {
 		testfile string
 		checkdir string
 		app      *container.Container
+
+		options container.CreateOptions
+		tags    []string
 	)
 
 	BeforeEach(func() {
+		options = container.CreateOptions{Name: "test"}
+		tags = []string{"mock"}
+	})
+
+	JustBeforeEach(func() {
 		var err error
 
 		tempdir, err = ioutil.TempDir("", "repo")
@@ -46,9 +54,6 @@ var _ = Describe("Deploy", func() {
 		br := broker.NewUserBroker(&user, context.Background())
 
 		// Create the application
-		options := container.CreateOptions{Name: "test"}
-		tags := []string{"mock"}
-
 		containers, err := br.CreateApplication(options, tags)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(containers).To(HaveLen(1))
@@ -79,8 +84,8 @@ var _ = Describe("Deploy", func() {
 		ExpectWithOffset(1, repo.Run("tag", tag)).To(Succeed())
 	}
 
-	var fetchFile = func(filename string) (string, error) {
-		r, _, err := broker.CopyFromContainer(context.Background(), app.ID, app.RepoDir()+"/"+filename)
+	var fetchFile = func(dir, filename string) (string, error) {
+		r, _, err := broker.CopyFromContainer(context.Background(), app.ID, dir+"/"+filename)
 		if err != nil {
 			return "", err
 		}
@@ -88,12 +93,12 @@ var _ = Describe("Deploy", func() {
 		if err := archive.ExtractFiles(checkdir, r); err != nil {
 			return "", err
 		}
-		content, err := ioutil.ReadFile(filepath.Join(checkdir, filename))
+		content, err := ioutil.ReadFile(filepath.Join(checkdir, filepath.Base(filename)))
 		return string(content), err
 	}
 
 	var fetchCommittedFile = func() (string, error) {
-		return fetchFile("track")
+		return fetchFile(app.RepoDir(), "track")
 	}
 
 	Describe("Manual deploy", func() {
@@ -242,17 +247,30 @@ var _ = Describe("Deploy", func() {
 		})
 	})
 
-	Describe("Build script", func() {
-		It("should run build and deploy script", func() {
+	Describe("Build scripts", func() {
+		BeforeEach(func() {
+			tags = []string{"mockb"}
+		})
+
+		It("should run build script", func() {
 			Eventually(func() (string, error) {
-				content, err := fetchFile("built")
+				content, err := fetchFile(app.RepoDir(), "built")
 				return strings.TrimSpace(content), err
 			}, deployTimeout).Should(Equal("built"))
+		})
 
+		It("should run deploy script", func() {
 			Eventually(func() (string, error) {
-				content, err := fetchFile("deployed")
+				content, err := fetchFile(app.RepoDir(), "deployed")
 				return strings.TrimSpace(content), err
 			}, deployTimeout).Should(Equal("deployed"))
+		})
+
+		It("should save cached data", func() {
+			Eventually(func() (string, error) {
+				content, err := fetchFile(app.Home(), ".cache/data")
+				return strings.TrimSpace(content), err
+			}, deployTimeout).Should(Equal("cached"))
 		})
 	})
 })
