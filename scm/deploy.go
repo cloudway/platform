@@ -2,13 +2,11 @@ package scm
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
-	"path/filepath"
 
 	"github.com/docker/engine-api/types"
 	"golang.org/x/net/context"
@@ -16,6 +14,7 @@ import (
 
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/hub"
+	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/manifest"
 )
 
@@ -41,7 +40,7 @@ func DeployRepository(cli container.DockerClient, ctx context.Context, name, nam
 	// save or build repository archive
 	var repodir string
 	if base.Flags()&container.HotDeployable != 0 {
-		repodir, err = save(in, false)
+		repodir, err = archive.PrepareRepo(in, false)
 	} else {
 		repodir, err = build(cli, ctx, base, in, stdout, stderr)
 	}
@@ -99,7 +98,7 @@ func build(cli container.DockerClient, ctx context.Context, base *container.Cont
 	}
 	defer r.Close()
 
-	return save(r, true)
+	return archive.PrepareRepo(r, true)
 }
 
 func readPluginManifestFromContainer(ctx context.Context, base *container.Container) (meta *manifest.Plugin, err error) {
@@ -153,30 +152,6 @@ func copyCache(ctx context.Context, plugin *manifest.Plugin, from, to *container
 		args := append([]string{"chown", "-R", to.User()}, paths...)
 		to.ExecQ(ctx, "root", args...)
 	}
-}
-
-func save(r io.Reader, zip bool) (repodir string, err error) {
-	repodir, err = ioutil.TempDir("", "deploy")
-	if err != nil {
-		return "", err
-	}
-
-	repofile, err := os.Create(filepath.Join(repodir, filepath.Base(repodir)+".tar.gz"))
-	if err != nil {
-		return
-	}
-	defer repofile.Close()
-
-	if zip {
-		w := gzip.NewWriter(repofile)
-		_, err = io.Copy(w, r)
-		if err == nil {
-			err = w.Close()
-		}
-	} else {
-		_, err = io.Copy(repofile, r)
-	}
-	return
 }
 
 func distribute(cli container.DockerClient, ctx context.Context, containers []*container.Container, ids []string, path string) (err error) {

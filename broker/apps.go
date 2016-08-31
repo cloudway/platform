@@ -428,10 +428,10 @@ func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Conta
 	}
 }
 
-func (br *UserBroker) scaleUp(replica *container.Container, num int, secret string, hosts []string) ([]*container.Container, error) {
+func (br *UserBroker) scaleUp(replica *container.Container, num int, secret string, hosts []string) (containers []*container.Container, err error) {
 	meta, err := br.Hub.GetPluginInfo(replica.PluginTag())
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	opts := container.CreateOptions{
@@ -445,11 +445,31 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int, secret stri
 		Scaling:   num,
 	}
 
-	containers, err := br.Create(br.ctx, opts)
-	if err == nil {
-		err = deployRepo(br.SCM, &opts, containers)
+	containers, err = br.Create(br.ctx, opts)
+	if err != nil {
+		return
 	}
-	return containers, err
+
+	repo, _, err := replica.CopyFromContainer(br.ctx, replica.ID, replica.RepoDir()+"/.")
+	if err != nil {
+		return
+	}
+	defer repo.Close()
+
+	repodir, err := archive.PrepareRepo(repo, true)
+	if repodir != "" {
+		defer os.RemoveAll(repodir)
+	}
+	if err != nil {
+		return
+	}
+	for _, c := range containers {
+		err = c.Deploy(br.ctx, repodir)
+		if err != nil {
+			break
+		}
+	}
+	return
 }
 
 func (br *UserBroker) scaleDown(containers []*container.Container, num int) error {
@@ -665,22 +685,10 @@ func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
 
 // Upload application repository from a archive file.
 func (br *UserBroker) Upload(name string, content io.Reader) error {
-	// create a temporary directory to hold deployment archive
-	tempdir, err := ioutil.TempDir("", "deploy")
-	if err != nil {
-		return err
+	repodir, err := archive.PrepareRepo(content, false)
+	if repodir != "" {
+		defer os.RemoveAll(repodir)
 	}
-	defer os.RemoveAll(tempdir)
-
-	// save archive to a temporary file
-	tempfilename := filepath.Base(tempdir) + ".tar.gz"
-	tempfile, err := os.Create(filepath.Join(tempdir, tempfilename))
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(tempfile, content)
-	tempfile.Close()
 	if err != nil {
 		return err
 	}
@@ -694,12 +702,12 @@ func (br *UserBroker) Upload(name string, content io.Reader) error {
 		return ApplicationNotFoundError(name)
 	}
 	for _, c := range containers {
-		err = c.Deploy(br.ctx, tempdir)
-		if err != nil {
-			return err
+		er := c.Deploy(br.ctx, repodir)
+		if er != nil {
+			err = er
 		}
 	}
-	return nil
+	return err
 }
 
 func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {
