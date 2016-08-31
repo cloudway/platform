@@ -109,12 +109,15 @@ func (cli *CWCli) getAppConfig(key string) string {
 	return cfg.Get(key)
 }
 
-func (cli *CWCli) getAppRoot() (string, error) {
-	root, err := searchFile(".cwapp")
-	if err != nil {
-		root, err = searchFile(".git")
+func (cli *CWCli) getAppRoot() (root string, binary bool, err error) {
+	root, err = searchFile(".git")
+	if err == nil {
+		return
 	}
-	return root, err
+
+	root, err = searchFile(".cwapp")
+	binary = true
+	return
 }
 
 func searchFile(name string) (string, error) {
@@ -205,7 +208,7 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
 	cmd.Require(mflag.Exact, 1)
 	cmd.BoolVar(&binary, []string{"-binary"}, false, "Download binary repository")
 	cmd.ParseFlags(args, true)
-	name := args[0]
+	name := cmd.Arg(0)
 
 	if _, err := os.Stat(name); !os.IsNotExist(err) {
 		if err == nil {
@@ -236,7 +239,7 @@ func (cli *CWCli) CmdAppUpload(args ...string) error {
 	cmd.ParseFlags(args, true)
 
 	name := cli.getAppName(cmd)
-	path, err := cli.getAppRoot()
+	path, binary, err := cli.getAppRoot()
 	if err != nil {
 		return err
 	}
@@ -245,7 +248,7 @@ func (cli *CWCli) CmdAppUpload(args ...string) error {
 		return err
 	}
 
-	return cli.upload(name, path)
+	return cli.upload(name, path, binary)
 }
 
 func (cli *CWCli) download(name string) error {
@@ -277,7 +280,7 @@ func (cli *CWCli) download(name string) error {
 	return cfg.Save()
 }
 
-func (cli *CWCli) upload(name, path string) error {
+func (cli *CWCli) upload(name, path string, binary bool) error {
 	// create temporary archive file containing upload files
 	tempfile, err := ioutil.TempFile("", "deploy")
 	if err != nil {
@@ -302,7 +305,7 @@ func (cli *CWCli) upload(name, path string) error {
 		return err
 	}
 
-	return cli.Upload(context.Background(), name, tempfile)
+	return cli.Upload(context.Background(), name, tempfile, binary, cli.stdout)
 }
 
 func (cli *CWCli) CmdAppDump(args ...string) (err error) {
@@ -566,7 +569,7 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
 
 		return nil
 	} else {
-		return cli.DeployApplication(context.Background(), name, branch)
+		return cli.DeployApplication(context.Background(), name, branch, cli.stdout)
 	}
 }
 

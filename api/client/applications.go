@@ -6,6 +6,7 @@ import (
 	"net/url"
 
 	"github.com/cloudway/platform/api/types"
+	"github.com/cloudway/platform/pkg/serverlog"
 	"golang.org/x/net/context"
 )
 
@@ -35,32 +36,12 @@ func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateAp
 		return nil, err
 	}
 
-	err = drainServerLog(resp.Body, log)
+	err = serverlog.Drain(resp.Body, log)
 	resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
 	return api.GetApplicationInfo(ctx, opts.Name)
-}
-
-func drainServerLog(in io.Reader, out io.Writer) (err error) {
-	var dec = json.NewDecoder(in)
-	for {
-		var serverLog types.ServerLog
-		if er := dec.Decode(&serverLog); er != nil {
-			if er != io.EOF {
-				err = er
-			}
-			break
-		}
-		if out != nil && serverLog.Message != "" {
-			out.Write([]byte(serverLog.Message))
-		}
-		if serverLog.Error != nil {
-			err = serverLog.Error
-		}
-	}
-	return err
 }
 
 func (api *APIClient) RemoveApplication(ctx context.Context, name string) error {
@@ -75,7 +56,7 @@ func (api *APIClient) CreateService(ctx context.Context, log io.Writer, app stri
 		return err
 	}
 
-	err = drainServerLog(resp.Body, log)
+	err = serverlog.Drain(resp.Body, log)
 	resp.Body.Close()
 	return err
 }
@@ -104,14 +85,19 @@ func (api *APIClient) RestartApplication(ctx context.Context, name string) error
 	return err
 }
 
-func (api *APIClient) DeployApplication(ctx context.Context, name, branch string) error {
+func (api *APIClient) DeployApplication(ctx context.Context, name, branch string, logger io.Writer) error {
 	var query url.Values
 	if branch != "" {
 		query = url.Values{"branch": []string{branch}}
 	}
 
 	resp, err := api.cli.Post(ctx, "/applications/"+name+"/deploy", query, nil, nil)
-	resp.EnsureClosed()
+	if err != nil {
+		return err
+	}
+
+	err = serverlog.Drain(resp.Body, logger)
+	resp.Body.Close()
 	return err
 }
 
@@ -131,10 +117,21 @@ func (api *APIClient) Download(ctx context.Context, name string) (io.ReadCloser,
 	return resp.Body, err
 }
 
-func (api *APIClient) Upload(ctx context.Context, name string, content io.Reader) error {
+func (api *APIClient) Upload(ctx context.Context, name string, content io.Reader, binary bool, logger io.Writer) error {
+	var query url.Values
+	if binary {
+		query = url.Values{}
+		query.Set("binary", "true")
+	}
+
 	headers := map[string][]string{"Content-Type": {"application/tar+gzip"}}
-	resp, err := api.cli.PutRaw(ctx, "/applications/"+name+"/repo", nil, content, headers)
-	resp.EnsureClosed()
+	resp, err := api.cli.PutRaw(ctx, "/applications/"+name+"/repo", query, content, headers)
+	if err != nil {
+		return err
+	}
+
+	err = serverlog.Drain(resp.Body, logger)
+	resp.Body.Close()
 	return err
 }
 

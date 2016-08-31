@@ -18,6 +18,7 @@ import (
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/container"
+	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
 	"golang.org/x/net/context"
 )
@@ -178,25 +179,16 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 
 	cs, err := br.CreateApplication(opts, tags)
 	if err != nil {
-		sendErrorMessage(w, err)
+		serverlog.SendError(w, err)
 		return nil
 	}
 
 	if err = br.StartContainers(ctx, cs); err != nil {
-		sendErrorMessage(w, err)
+		serverlog.SendError(w, err)
 		return nil
 	}
 
 	return nil
-}
-
-func sendErrorMessage(w io.Writer, err error) {
-	log := types.ServerLog{
-		Error: &types.ServerError{
-			Message: err.Error(),
-		},
-	}
-	json.NewEncoder(w).Encode(&log)
 }
 
 func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -231,12 +223,12 @@ func (ar *applicationsRouter) createService(ctx context.Context, w http.Response
 
 	cs, err := br.CreateServices(opts, tags)
 	if err != nil {
-		sendErrorMessage(w, err)
+		serverlog.SendError(w, err)
 		return nil
 	}
 
 	if err := br.StartContainers(ctx, cs); err != nil {
-		sendErrorMessage(w, err)
+		serverlog.SendError(w, err)
 		return nil
 	}
 
@@ -275,11 +267,10 @@ func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter,
 	user := httputils.UserFromContext(ctx)
 	name, branch := vars["name"], r.FormValue("branch")
 
-	err := ar.SCM.Deploy(user.Namespace, name, branch)
+	logger := serverlog.NewLogWriter(w)
+	err := ar.SCM.DeployWithLog(user.Namespace, name, branch, logger, logger)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	} else {
-		w.WriteHeader(http.StatusNoContent)
+		serverlog.SendError(w, err)
 	}
 	return nil
 }
@@ -341,8 +332,19 @@ func (ar *applicationsRouter) download(ctx context.Context, w http.ResponseWrite
 }
 
 func (ar *applicationsRouter) upload(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := httputils.ParseForm(r); err != nil {
+		return err
+	}
+
 	user := httputils.UserFromContext(ctx)
-	return ar.NewUserBroker(user, ctx).Upload(vars["name"], r.Body)
+	_, binary := r.Form["binary"]
+	logger := serverlog.NewLogWriter(w)
+
+	err := ar.NewUserBroker(user, ctx).Upload(vars["name"], r.Body, binary, logger)
+	if err != nil {
+		serverlog.SendError(w, err)
+	}
+	return nil
 }
 
 func (ar *applicationsRouter) dump(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {

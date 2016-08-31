@@ -213,7 +213,7 @@ paths:
       consumes:
         - application/json
       produces:
-        - application/octet-stream
+        - application/x-json-stream
       parameters:
         - in: body
           name: options
@@ -224,8 +224,6 @@ paths:
       responses:
         200:
           description: application created
-          schema:
-            type: file
         400:
           description: invalid parameters
         401:
@@ -345,6 +343,8 @@ paths:
       operationId: deployApplication
       security:
         - apiKey: []
+      produces:
+        - application/x-json-stream
       parameters:
         - name: name
           in: path
@@ -419,6 +419,8 @@ paths:
       operationId: upload
       consumes:
         - application/tar+gzip
+      produces:
+        - application/x-json-stream
       security:
         - apiKey: []
       parameters:
@@ -427,6 +429,11 @@ paths:
           description: application name
           required: true
           type: string
+        - name: binary
+          in: query
+          description: upload binary repository
+          required: false
+          type: boolean
         - name: body
           in: body
           description: repository archive
