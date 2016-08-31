@@ -27,7 +27,6 @@ import (
 	"github.com/cloudway/platform/pkg/errors"
 	"github.com/cloudway/platform/pkg/files"
 	"github.com/cloudway/platform/pkg/manifest"
-	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
 )
 
@@ -38,9 +37,9 @@ func (br *UserBroker) GetApplications() (apps map[string]*userdb.Application, er
 	return br.User.Basic().Applications, nil
 }
 
-func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []string) (containers []*container.Container, err error) {
+func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []string) (app *userdb.Application, containers []*container.Container, err error) {
 	if err = br.Refresh(); err != nil {
-		return nil, err
+		return
 	}
 
 	user := br.User.Basic()
@@ -48,7 +47,8 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 
 	// check if the application already exists
 	if apps[opts.Name] != nil {
-		return nil, ApplicationExistError{opts.Name, user.Namespace}
+		err = ApplicationExistError{opts.Name, user.Namespace}
+		return
 	}
 
 	if opts.Scaling == 0 {
@@ -62,23 +62,27 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 		framework *manifest.Plugin
 	)
 	for i, tag := range tags {
-		n, p, err := br.getPluginInfoWithNames(tag)
-		if err != nil {
-			return nil, err
+		n, p, er := br.getPluginInfoWithNames(tag)
+		if er != nil {
+			err = er
+			return
 		}
 		if p.IsFramework() {
 			if framework != nil {
-				return nil, fmt.Errorf("Multiple framework plugins specified: %s and %s", p.Name, framework.Name)
+				err = fmt.Errorf("Multiple framework plugins specified: %s and %s", p.Name, framework.Name)
+				return
 			}
 			framework = p
 			n = ""
 		} else if !p.IsService() {
-			return nil, fmt.Errorf("'%s' must be a framework or service plugin", tag)
+			err = fmt.Errorf("'%s' must be a framework or service plugin", tag)
+			return
 		}
 		names[i], plugins[i], tags[i] = n, p, p.Tag
 	}
 	if framework == nil {
-		return nil, fmt.Errorf("No framework plugin specified")
+		err = fmt.Errorf("No framework plugin specified")
+		return
 	}
 
 	// Generate shared secret for application. The shared secret is a simple
@@ -86,7 +90,7 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	// containers, or used as a randomize seed to generate shared tokens.
 	opts.Secret, err = generateSharedSecret()
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// cleanup on failure
@@ -110,7 +114,8 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	//   namespace cannot be empty
 	//   if namespace not exists then create one
 	if user.Namespace == "" && opts.Namespace == "" {
-		return nil, NoNamespaceError(user.Name)
+		err = NoNamespaceError(user.Name)
+		return
 	}
 	if user.Namespace == "" {
 		err = br.CreateNamespace(opts.Namespace)
@@ -144,11 +149,12 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	}
 
 	// add application to the user database
-	apps[opts.Name] = &userdb.Application{
+	app = &userdb.Application{
 		CreatedAt: time.Now(),
 		Plugins:   tags,
 		Secret:    opts.Secret,
 	}
+	apps[opts.Name] = app
 	err = br.Users.Update(user.Name, userdb.Args{"applications": apps})
 	if err != nil {
 		return
@@ -197,11 +203,10 @@ func populateFromTemplate(scm scm.SCM, opts *container.CreateOptions, template s
 }
 
 func deployRepo(scm scm.SCM, opts *container.CreateOptions, containers []*container.Container) error {
-	if opts.Log == nil {
+	if opts.Logger == nil {
 		return scm.Deploy(opts.Namespace, opts.Name, "")
 	} else {
-		var log = serverlog.NewLogWriter(opts.Log)
-		return scm.DeployWithLog(opts.Namespace, opts.Name, "", log, log)
+		return scm.DeployWithLog(opts.Namespace, opts.Name, "", opts.Logger, opts.Logger)
 	}
 }
 

@@ -54,7 +54,7 @@ var _ = Describe("Deploy", func() {
 		br := broker.NewUserBroker(&user, context.Background())
 
 		// Create the application
-		containers, err := br.CreateApplication(options, tags)
+		_, containers, err := br.CreateApplication(options, tags)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(containers).To(HaveLen(1))
 		app = containers[0]

@@ -30,18 +30,16 @@ func (api *APIClient) GetApplicationInfo(ctx context.Context, name string) (*typ
 	return &info, err
 }
 
-func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateApplication, log io.Writer) (*types.ApplicationInfo, error) {
+func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateApplication, logger io.Writer) (*types.ApplicationInfo, error) {
 	resp, err := api.cli.Post(ctx, "/applications/", nil, &opts, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	err = serverlog.Drain(resp.Body, log)
+	var info types.ApplicationInfo
+	err = serverlog.Drain(resp.Body, logger, &info)
 	resp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-	return api.GetApplicationInfo(ctx, opts.Name)
+	return &info, err
 }
 
 func (api *APIClient) RemoveApplication(ctx context.Context, name string) error {
@@ -50,13 +48,13 @@ func (api *APIClient) RemoveApplication(ctx context.Context, name string) error 
 	return err
 }
 
-func (api *APIClient) CreateService(ctx context.Context, log io.Writer, app string, tags ...string) error {
+func (api *APIClient) CreateService(ctx context.Context, logger io.Writer, app string, tags ...string) error {
 	resp, err := api.cli.Post(ctx, "/applications/"+app+"/services/", nil, tags, nil)
 	if err != nil {
 		return err
 	}
 
-	err = serverlog.Drain(resp.Body, log)
+	err = serverlog.Drain(resp.Body, logger, nil)
 	resp.Body.Close()
 	return err
 }
@@ -96,7 +94,7 @@ func (api *APIClient) DeployApplication(ctx context.Context, name, branch string
 		return err
 	}
 
-	err = serverlog.Drain(resp.Body, logger)
+	err = serverlog.Drain(resp.Body, logger, nil)
 	resp.Body.Close()
 	return err
 }
@@ -130,7 +128,7 @@ func (api *APIClient) Upload(ctx context.Context, name string, content io.Reader
 		return err
 	}
 
-	err = serverlog.Drain(resp.Body, logger)
+	err = serverlog.Drain(resp.Body, logger, nil)
 	resp.Body.Close()
 	return err
 }

@@ -2,9 +2,27 @@ package serverlog
 
 import (
 	"encoding/json"
-	"github.com/cloudway/platform/api/types"
 	"io"
 )
+
+// ServerLog describes log messages generated from server and should display
+// in client. It also contains a error message to indicate server failure.
+type ServerLog struct {
+	Message string       `json:"msg,omitempty"`
+	Error   *ServerError `json:"err,omitempty"`
+	Object  interface{}  `json:"obj,omitempty"`
+}
+
+// ServerError describes the error that occurred in server. `Code` is a integer
+// error code, `Message` is the error message.
+type ServerError struct {
+	Code    int    `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+func (e *ServerError) Error() string {
+	return e.Message
+}
 
 type logWriter struct {
 	out io.Writer
@@ -19,7 +37,7 @@ func NewLogWriter(out io.Writer) io.Writer {
 }
 
 func (log *logWriter) Write(p []byte) (n int, err error) {
-	stream := types.ServerLog{Message: string(p)}
+	stream := ServerLog{Message: string(p)}
 	if err = log.enc.Encode(&stream); err != nil {
 		return 0, err
 	}
@@ -41,19 +59,28 @@ func (log *logWriter) Write(p []byte) (n int, err error) {
 	return len(p), err
 }
 
-func SendError(w io.Writer, err error) {
-	log := types.ServerLog{
-		Error: &types.ServerError{
+func SendError(w io.Writer, err error) error {
+	log := ServerLog{
+		Error: &ServerError{
 			Message: err.Error(),
 		},
 	}
-	json.NewEncoder(w).Encode(&log)
+	return json.NewEncoder(w).Encode(&log)
 }
 
-func Drain(in io.Reader, out io.Writer) (err error) {
+func SendObject(w io.Writer, obj interface{}) error {
+	log := ServerLog{
+		Object: obj,
+	}
+	return json.NewEncoder(w).Encode(&log)
+}
+
+func Drain(in io.Reader, out io.Writer, result interface{}) (err error) {
 	var dec = json.NewDecoder(in)
 	for {
-		var serverLog types.ServerLog
+		serverLog := ServerLog{
+			Object: result,
+		}
 		if er := dec.Decode(&serverLog); er != nil {
 			if er != io.EOF {
 				err = er

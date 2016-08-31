@@ -14,6 +14,7 @@ import (
 	"github.com/cloudway/platform/api/server/httputils"
 	"github.com/cloudway/platform/api/server/router"
 	"github.com/cloudway/platform/api/types"
+	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/broker"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
@@ -81,41 +82,55 @@ func (ar *applicationsRouter) list(ctx context.Context, w http.ResponseWriter, r
 func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	var (
 		user = httputils.UserFromContext(ctx)
+		br   = ar.NewUserBroker(user, ctx)
 		name = vars["name"]
+		app  *userdb.Application
 	)
 
-	apps, err := ar.NewUserBroker(user, ctx).GetApplications()
+	apps, err := br.GetApplications()
 	if err != nil {
 		return err
 	}
 
-	app := apps[name]
-	if app == nil {
+	if app = apps[name]; app == nil {
 		return httputils.NewStatusError(http.StatusNotFound)
 	}
 
-	info := types.ApplicationInfo{
+	info, err := ar.getInfo(name, user.Namespace, app)
+	if err != nil {
+		return err
+	}
+
+	cs, _ := ar.FindApplications(ctx, name, user.Namespace)
+	info.Scaling = len(cs)
+
+	return httputils.WriteJSON(w, http.StatusOK, &info)
+}
+
+func (ar *applicationsRouter) getInfo(name, namespace string, app *userdb.Application) (info *types.ApplicationInfo, err error) {
+	info = &types.ApplicationInfo{
 		Name:      name,
-		Namespace: user.Namespace,
+		Namespace: namespace,
 		CreatedAt: app.CreatedAt,
+		Scaling:   1,
 	}
 
 	base, err := url.Parse(config.GetOrDefault("console.url", "http://api."+defaults.Domain()))
 	if err != nil {
-		return err
+		return
 	}
 
 	host, port := base.Host, ""
 	if i := strings.IndexRune(host, ':'); i != -1 {
 		host, port = host[:i], host[i:]
 	}
-	info.URL = fmt.Sprintf("%s://%s-%s.%s%s", base.Scheme, name, user.Namespace, defaults.Domain(), port)
-	info.SSHURL = fmt.Sprintf("ssh://%s-%s@%s%s", name, user.Namespace, host, ":2200") // FIXME
+	info.URL = fmt.Sprintf("%s://%s-%s.%s%s", base.Scheme, name, namespace, defaults.Domain(), port)
+	info.SSHURL = fmt.Sprintf("ssh://%s-%s@%s%s", name, namespace, host, ":2200") // FIXME
 
 	info.SCMType = ar.SCM.Type()
 	cloneURL := config.Get("scm.clone_url")
 	if cloneURL != "" {
-		cloneURL = strings.Replace(cloneURL, "<namespace>", user.Namespace, -1)
+		cloneURL = strings.Replace(cloneURL, "<namespace>", namespace, -1)
 		cloneURL = strings.Replace(cloneURL, "<repo>", name, -1)
 		info.CloneURL = cloneURL
 	}
@@ -132,10 +147,7 @@ func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	cs, _ := ar.FindApplications(ctx, name, user.Namespace)
-	info.Scaling = len(cs)
-
-	return httputils.WriteJSON(w, http.StatusOK, &info)
+	return
 }
 
 var namePattern = regexp.MustCompile("^[a-z][a-z_0-9]*$")
@@ -160,7 +172,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		Name:    req.Name,
 		Repo:    req.Repo,
 		Scaling: 1,
-		Log:     w,
+		Logger:  serverlog.NewLogWriter(w),
 	}
 
 	if !namePattern.MatchString(opts.Name) {
@@ -177,7 +189,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 
 	tags := append([]string{req.Framework}, req.Services...)
 
-	cs, err := br.CreateApplication(opts, tags)
+	app, cs, err := br.CreateApplication(opts, tags)
 	if err != nil {
 		serverlog.SendError(w, err)
 		return nil
@@ -186,6 +198,12 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 	if err = br.StartContainers(ctx, cs); err != nil {
 		serverlog.SendError(w, err)
 		return nil
+	}
+
+	if info, err := ar.getInfo(req.Name, user.Namespace, app); err != nil {
+		serverlog.SendError(w, err)
+	} else {
+		serverlog.SendObject(w, info)
 	}
 
 	return nil
@@ -217,8 +235,8 @@ func (ar *applicationsRouter) createService(ctx context.Context, w http.Response
 	}
 
 	opts := container.CreateOptions{
-		Name: vars["name"],
-		Log:  w,
+		Name:   vars["name"],
+		Logger: serverlog.NewLogWriter(w),
 	}
 
 	cs, err := br.CreateServices(opts, tags)

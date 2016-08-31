@@ -32,7 +32,7 @@ var _ = Describe("Applications", func() {
 			}
 			tags := []string{"mock", "mockdb"}
 
-			containers, err := br.CreateApplication(options, tags)
+			_, containers, err := br.CreateApplication(options, tags)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(containers).To(HaveLen(2))

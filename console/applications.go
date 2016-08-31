@@ -129,7 +129,7 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
 	var cs []*container.Container
 	opts, tags, err := parseCreateOptions(r)
 	if err == nil {
-		cs, err = con.NewUserBroker(user).CreateApplication(opts, tags)
+		_, cs, err = con.NewUserBroker(user).CreateApplication(opts, tags)
 	}
 
 	if err != nil {
