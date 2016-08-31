@@ -321,21 +321,18 @@ func readBuildStream(in io.Reader, out io.Writer) (id string, err error) {
 			break
 		}
 
-		if jm.Stream != "" {
-			os.Stdout.WriteString(jm.Stream)
-			if out != nil {
-				err = enc.Encode(&apitypes.ServerLog{Message: jm.Stream})
-				if err == nil {
-					switch b := out.(type) {
-					case Flusher:
-						b.Flush()
-					case ErrFlusher:
-						err = b.Flush()
-					}
+		if jm.Stream != "" && out != nil {
+			err = enc.Encode(&apitypes.ServerLog{Message: jm.Stream})
+			if err == nil {
+				switch b := out.(type) {
+				case Flusher:
+					b.Flush()
+				case ErrFlusher:
+					err = b.Flush()
 				}
-				if err != nil {
-					break
-				}
+			}
+			if err != nil {
+				break
 			}
 		}
 

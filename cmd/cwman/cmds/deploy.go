@@ -14,5 +14,5 @@ func (cli *CWMan) CmdDeploy(args ...string) (err error) {
 	cmd.ParseFlags(args, true)
 
 	name, namespace, ids := cmd.Arg(0), cmd.Arg(1), cmd.Args()[2:]
-	return scm.DeployRepository(cli.DockerClient, context.Background(), name, namespace, ids, os.Stdin)
+	return scm.DeployRepository(cli.DockerClient, context.Background(), name, namespace, ids, os.Stdin, os.Stdout, os.Stderr)
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	errs "errors"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"golang.org/x/net/context"
 
+	"github.com/cloudway/platform/api/types"
 	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/container"
@@ -195,12 +197,53 @@ func populateFromTemplate(scm scm.SCM, opts *container.CreateOptions, template s
 	return err
 }
 
+type logWriter struct {
+	out io.Writer
+	enc *json.Encoder
+}
+
+func newLogWriter(out io.Writer) *logWriter {
+	return &logWriter{
+		out: out,
+		enc: json.NewEncoder(out),
+	}
+}
+
+func (log *logWriter) Write(p []byte) (n int, err error) {
+	stream := types.ServerLog{Message: string(p)}
+	if err = log.enc.Encode(&stream); err != nil {
+		return 0, err
+	}
+
+	type Flusher interface {
+		Flush()
+	}
+
+	type ErrFlusher interface {
+		Flush() error
+	}
+
+	switch b := log.out.(type) {
+	case Flusher:
+		b.Flush()
+	case ErrFlusher:
+		err = b.Flush()
+	}
+	return len(p), err
+}
+
 func deployRepo(scm scm.SCM, opts *container.CreateOptions, containers []*container.Container) error {
 	var ids = make([]string, len(containers))
 	for i, c := range containers {
 		ids[i] = c.ID
 	}
-	return scm.Deploy(opts.Namespace, opts.Name, "", ids...)
+
+	if opts.Log == nil {
+		return scm.Deploy(opts.Namespace, opts.Name, "", ids...)
+	} else {
+		var log = newLogWriter(opts.Log)
+		return scm.DeployWithLog(opts.Namespace, opts.Name, "", log, log, ids...)
+	}
 }
 
 func generateSharedSecret() (string, error) {

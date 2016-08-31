@@ -19,7 +19,7 @@ import (
 
 // DeployRepository is a helper function used by SCM implementations
 // to deploy an application repository.
-func DeployRepository(cli container.DockerClient, ctx context.Context, name, namespace string, ids []string, repo io.Reader) error {
+func DeployRepository(cli container.DockerClient, ctx context.Context, name, namespace string, ids []string, in io.Reader, stdout, stderr io.Writer) error {
 	containers, err := cli.FindApplications(ctx, name, namespace)
 	if err != nil {
 		return err
@@ -39,9 +39,9 @@ func DeployRepository(cli container.DockerClient, ctx context.Context, name, nam
 	// save or build repository archive
 	var repodir string
 	if base.Flags()&container.HotDeployable != 0 {
-		repodir, err = save(repo, false)
+		repodir, err = save(in, false)
 	} else {
-		repodir, err = build(cli, ctx, base, repo)
+		repodir, err = build(cli, ctx, base, in, stdout, stderr)
 	}
 
 	if repodir != "" {
@@ -55,7 +55,7 @@ func DeployRepository(cli container.DockerClient, ctx context.Context, name, nam
 	return distribute(cli, ctx, containers, ids, repodir)
 }
 
-func build(cli container.DockerClient, ctx context.Context, base *container.Container, repo io.Reader) (repodir string, err error) {
+func build(cli container.DockerClient, ctx context.Context, base *container.Container, in io.Reader, stdout, stderr io.Writer) (repodir string, err error) {
 	// make a fake plugin (you can make a real plugin from base container if you want)
 	_, _, pn, pv, _ := hub.ParseTag(base.PluginTag())
 	plugin := &manifest.Plugin{
@@ -73,7 +73,6 @@ func build(cli container.DockerClient, ctx context.Context, base *container.Cont
 		Image:     base.Config.Image,
 		Home:      base.Home(),
 		User:      base.User(),
-		Log:       os.Stdout,
 	}
 	builder, err := cli.CreateBuilder(ctx, opts)
 	if err != nil {
@@ -86,7 +85,7 @@ func build(cli container.DockerClient, ctx context.Context, base *container.Cont
 	if err != nil {
 		return
 	}
-	err = builder.Exec(ctx, "", repo, os.Stdout, os.Stderr, "/usr/bin/cwctl", "build")
+	err = builder.Exec(ctx, "", in, stdout, stderr, "/usr/bin/cwctl", "build")
 	if err != nil {
 		return
 	}

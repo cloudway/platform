@@ -254,6 +254,10 @@ func (mock mockSCM) PopulateURL(namespace, name string, url string) error {
 }
 
 func (mock mockSCM) Deploy(namespace, name string, branch string, ids ...string) (err error) {
+	return mock.DeployWithLog(namespace, name, branch, ioutil.Discard, ioutil.Discard, ids...)
+}
+
+func (mock mockSCM) DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer, ids ...string) (err error) {
 	empty, err := mock.isEmptyRepository(namespace, name)
 	if err != nil {
 		return err
@@ -304,7 +308,7 @@ func (mock mockSCM) Deploy(namespace, name string, branch string, ids ...string)
 		return err
 	}
 
-	return scm.DeployRepository(cli, context.Background(), name, namespace, ids, repofile)
+	return scm.DeployRepository(cli, context.Background(), name, namespace, ids, repofile, stdout, stderr)
 }
 
 const _DEFAULT_BRANCH = "refs/heads/master"
