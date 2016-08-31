@@ -20,7 +20,7 @@ import (
 
 // DeployRepository is a helper function used by SCM implementations
 // to deploy an application repository.
-func DeployRepository(cli container.DockerClient, ctx context.Context, name, namespace string, ids []string, in io.Reader, stdout, stderr io.Writer) error {
+func DeployRepository(cli container.DockerClient, ctx context.Context, name, namespace string, in io.Reader, stdout, stderr io.Writer) error {
 	containers, err := cli.FindApplications(ctx, name, namespace)
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func DeployRepository(cli container.DockerClient, ctx context.Context, name, nam
 	}
 
 	// distribute the repository archive
-	return distribute(cli, ctx, containers, ids, repodir)
+	return distribute(cli, ctx, containers, repodir)
 }
 
 func build(cli container.DockerClient, ctx context.Context, base *container.Container, in io.Reader, stdout, stderr io.Writer) (repodir string, err error) {
@@ -154,17 +154,7 @@ func copyCache(ctx context.Context, plugin *manifest.Plugin, from, to *container
 	}
 }
 
-func distribute(cli container.DockerClient, ctx context.Context, containers []*container.Container, ids []string, path string) (err error) {
-	if len(ids) != 0 {
-		containers = make([]*container.Container, len(ids))
-		for i, id := range ids {
-			containers[i], err = cli.Inspect(ctx, id)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
+func distribute(cli container.DockerClient, ctx context.Context, containers []*container.Container, path string) (err error) {
 	for _, c := range containers {
 		if c.Category().IsFramework() {
 			er := c.Deploy(ctx, path)
@@ -173,6 +163,5 @@ func distribute(cli container.DockerClient, ctx context.Context, containers []*c
 			}
 		}
 	}
-
 	return err
 }

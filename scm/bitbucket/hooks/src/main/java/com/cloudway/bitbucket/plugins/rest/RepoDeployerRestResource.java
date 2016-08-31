@@ -73,9 +73,7 @@ public class RepoDeployerRestResource {
 
     @POST
     @Path("/deploy")
-    public Response deploy(@Context Repository repository,
-                           @QueryParam("branch") String branch,
-                           String[] ids) {
+    public Response deploy(@Context Repository repository, @QueryParam("branch") String branch) {
         validator.validateForRepository(repository, Permission.REPO_READ);
 
         try {
@@ -84,7 +82,7 @@ public class RepoDeployerRestResource {
             }
 
             Ref ref = deployer.getDeploymentBranch(repository);
-            deployer.deploy(repository, ref, ids);
+            deployer.deploy(repository, ref);
             return Response.ok().build();
         } catch (Exception ex) {
             return Response.serverError().build();

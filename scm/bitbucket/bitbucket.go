@@ -207,15 +207,15 @@ func (cli *bitbucketClient) PopulateURL(namespace, name, remote string) error {
 	return checkNamespaceError(namespace, resp, err)
 }
 
-func (cli *bitbucketClient) Deploy(namespace, name string, branch string, ids ...string) error {
+func (cli *bitbucketClient) Deploy(namespace, name string, branch string) error {
 	path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/deploy", namespace, name)
 	query := url.Values{"branch": []string{branch}}
-	resp, err := cli.Post(context.Background(), path, query, ids, nil)
+	resp, err := cli.Post(context.Background(), path, query, nil, nil)
 	return checkNamespaceError(namespace, resp, err)
 }
 
-func (cli *bitbucketClient) DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer, ids ...string) error {
-	return cli.Deploy(namespace, name, branch, ids...) // FIXME
+func (cli *bitbucketClient) DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer) error {
+	return cli.Deploy(namespace, name, branch) // FIXME
 }
 
 func (cli *bitbucketClient) GetDeploymentBranch(namespace, name string) (*scm.Branch, error) {

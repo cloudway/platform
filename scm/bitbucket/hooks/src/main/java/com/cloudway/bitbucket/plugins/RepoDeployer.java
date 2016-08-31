@@ -16,7 +16,6 @@ import java.nio.channels.Pipe;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.logging.Level;
@@ -134,7 +133,7 @@ public class RepoDeployer
         return ref;
     }
 
-    public void deploy(Repository repository, Ref ref, String ...ids) throws IOException {
+    public void deploy(Repository repository, Ref ref) throws IOException {
         // Retrieve namespace and name from repository
         String namespace = repository.getProject().getKey().toLowerCase();
         String name = repository.getSlug().toLowerCase();
@@ -142,7 +141,7 @@ public class RepoDeployer
 
         // Create a temporary file to save the repository archive
         Path archiveFile = Files.createTempFile("repo", ".tar");
-        DeploymentHandler handler = new DeploymentHandler(name, namespace, archiveFile, ids);
+        DeploymentHandler handler = new DeploymentHandler(name, namespace, archiveFile);
 
         if (repoService.isEmpty(repository)) {
             // Create empty archive file
@@ -177,14 +176,12 @@ public class RepoDeployer
     static class DeploymentHandler extends LoggingHandler {
         private final String name, namespace;
         private final Path repo;
-        private final String[] ids;
 
-        DeploymentHandler(String name, String namespace, Path repo, String[] ids) {
+        DeploymentHandler(String name, String namespace, Path repo) {
             super(System.err);
             this.name = name;
             this.namespace = namespace;
             this.repo = repo;
-            this.ids = ids;
         }
 
         @Override
@@ -192,12 +189,7 @@ public class RepoDeployer
             try {
                 // Run cwman to deploy the archive
                 ProcessBuilder builder = new ProcessBuilder();
-
                 builder.command("/usr/bin/cwman", "deploy", name, namespace);
-                if (ids != null) {
-                    builder.command().addAll(Arrays.asList(ids));
-                }
-
                 builder.redirectInput(repo.toFile());
                 builder.redirectError(ProcessBuilder.Redirect.INHERIT);
                 builder.redirectOutput(ProcessBuilder.Redirect.INHERIT);

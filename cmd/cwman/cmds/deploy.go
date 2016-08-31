@@ -9,10 +9,10 @@ import (
 )
 
 func (cli *CWMan) CmdDeploy(args ...string) (err error) {
-	cmd := cli.Subcmd("deploy", "NAME NAMESPACE [ID]...")
-	cmd.Require(mflag.Min, 2)
+	cmd := cli.Subcmd("deploy", "NAME NAMESPACE")
+	cmd.Require(mflag.Exact, 2)
 	cmd.ParseFlags(args, true)
 
-	name, namespace, ids := cmd.Arg(0), cmd.Arg(1), cmd.Args()[2:]
-	return scm.DeployRepository(cli.DockerClient, context.Background(), name, namespace, ids, os.Stdin, os.Stdout, os.Stderr)
+	name, namespace := cmd.Arg(0), cmd.Arg(1)
+	return scm.DeployRepository(cli.DockerClient, context.Background(), name, namespace, os.Stdin, os.Stdout, os.Stderr)
 }

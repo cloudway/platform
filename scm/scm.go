@@ -36,10 +36,10 @@ type SCM interface {
 	PopulateURL(namespace, name string, url string) error
 
 	// Deploy application with new commit.
-	Deploy(namespace, name string, branch string, ids ...string) error
+	Deploy(namespace, name string, branch string) error
 
 	// Deploy application with new commit. Log build output to the give writer.
-	DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer, ids ...string) error
+	DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer) error
 
 	// Get the current deployment branch.
 	GetDeploymentBranch(namespace, name string) (*Branch, error)

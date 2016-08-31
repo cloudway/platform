@@ -233,16 +233,11 @@ func (log *logWriter) Write(p []byte) (n int, err error) {
 }
 
 func deployRepo(scm scm.SCM, opts *container.CreateOptions, containers []*container.Container) error {
-	var ids = make([]string, len(containers))
-	for i, c := range containers {
-		ids[i] = c.ID
-	}
-
 	if opts.Log == nil {
-		return scm.Deploy(opts.Namespace, opts.Name, "", ids...)
+		return scm.Deploy(opts.Namespace, opts.Name, "")
 	} else {
 		var log = newLogWriter(opts.Log)
-		return scm.DeployWithLog(opts.Namespace, opts.Name, "", log, log, ids...)
+		return scm.DeployWithLog(opts.Namespace, opts.Name, "", log, log)
 	}
 }
 
