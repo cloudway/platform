@@ -202,9 +202,13 @@ var _ = Describe("Hub", func() {
 
 			plugin, err := pluginHub.GetPluginInfo("mock")
 			Ω(err).ShouldNot(HaveOccurred())
-			plugin.Path = ""
-			plugin.Tag = ""
-			Ω(plugin).Should(Equal(meta))
+			Ω(plugin.Name).Should(Equal(meta.Name))
+			Ω(plugin.DisplayName).Should(Equal(meta.DisplayName))
+			Ω(plugin.Description).Should(Equal(meta.Description))
+			Ω(plugin.Version).Should(Equal(meta.Version))
+			Ω(plugin.Vendor).Should(Equal(meta.Vendor))
+			Ω(plugin.Category).Should(Equal(meta.Category))
+			Ω(plugin.BaseImage).Should(Equal(meta.BaseImage))
 		})
 
 		It("should fail if the plugin not found", func() {

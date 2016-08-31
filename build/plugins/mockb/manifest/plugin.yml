@@ -1,0 +1,17 @@
+---
+Name: mockb
+Display-Name: Mock Build 1.0
+Description: A mock plugin for build test.
+Version: '1.0'
+Vendor: cloudway
+Category: Framework
+Base-Image: debian:jessie
+Build-Cache:
+- .cache
+Endpoints:
+- Private-Host-Name: HOST
+  Private-Port-Name: PORT
+  Private-Port: 8080
+  Proxy-Mappings:
+  - Frontend: /
+    Backend: /

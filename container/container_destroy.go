@@ -20,7 +20,7 @@ func (c *Container) Destroy(ctx context.Context) error {
 
 	// remove associated image
 	if image != "" {
-		options := types.ImageRemoveOptions{Force: true, PruneChildren: true}
+		options := types.ImageRemoveOptions{Force: false, PruneChildren: true}
 		c.ImageRemove(ctx, image, options)
 		logrus.Debugf("Removed image %s", image)
 	}

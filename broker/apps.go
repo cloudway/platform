@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	errs "errors"
 	"fmt"
 	"io"
@@ -20,12 +21,15 @@ import (
 	"github.com/Sirupsen/logrus"
 	"golang.org/x/net/context"
 
+	"github.com/cloudway/platform/api/types"
 	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/errors"
+	"github.com/cloudway/platform/pkg/files"
 	"github.com/cloudway/platform/pkg/manifest"
+	"github.com/cloudway/platform/scm"
 )
 
 func (br *UserBroker) GetApplications() (apps map[string]*userdb.Application, err error) {
@@ -119,6 +123,12 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 		opts.Namespace = user.Namespace
 	}
 
+	// create all containers
+	containers, err = br.createContainers(opts, names, plugins)
+	if err != nil {
+		return
+	}
+
 	// create repository for the application
 	err = br.SCM.CreateRepo(opts.Namespace, opts.Name)
 	if err != nil {
@@ -126,9 +136,11 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	}
 	repoCreated = true
 
-	// create all containers
-	containers, err = br.createContainers(opts, names, plugins)
-	if err != nil {
+	// populate and deploy application
+	if err = populateRepo(br.SCM, &opts, framework); err != nil {
+		return
+	}
+	if err = deployRepo(br.SCM, &opts, containers); err != nil {
 		return
 	}
 
@@ -145,6 +157,93 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 
 	success = true
 	return
+}
+
+func populateRepo(scm scm.SCM, opts *container.CreateOptions, framework *manifest.Plugin) error {
+	if strings.ToLower(opts.Repo) == "empty" {
+		return nil
+	} else if opts.Repo == "" {
+		return populateFromTemplate(scm, opts, filepath.Join(framework.Path, "template"))
+	} else {
+		return scm.PopulateURL(opts.Namespace, opts.Name, opts.Repo)
+	}
+}
+
+func populateFromTemplate(scm scm.SCM, opts *container.CreateOptions, template string) error {
+	if fi, err := os.Stat(template); err != nil || !fi.IsDir() {
+		return nil
+	}
+
+	f, err := files.TempFile("", "repo", ".tar")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		f.Close()
+		os.Remove(f.Name())
+	}()
+
+	tw := tar.NewWriter(f)
+	if err = archive.CopyFileTree(tw, "", template, nil, false); err != nil {
+		return err
+	}
+	tw.Close()
+
+	size, err := f.Seek(0, os.SEEK_CUR)
+	f.Seek(0, os.SEEK_SET)
+	if err == nil {
+		err = scm.Populate(opts.Namespace, opts.Name, f, size)
+	}
+	return err
+}
+
+type logWriter struct {
+	out io.Writer
+	enc *json.Encoder
+}
+
+func newLogWriter(out io.Writer) *logWriter {
+	return &logWriter{
+		out: out,
+		enc: json.NewEncoder(out),
+	}
+}
+
+func (log *logWriter) Write(p []byte) (n int, err error) {
+	stream := types.ServerLog{Message: string(p)}
+	if err = log.enc.Encode(&stream); err != nil {
+		return 0, err
+	}
+
+	type Flusher interface {
+		Flush()
+	}
+
+	type ErrFlusher interface {
+		Flush() error
+	}
+
+	switch b := log.out.(type) {
+	case Flusher:
+		b.Flush()
+	case ErrFlusher:
+		err = b.Flush()
+	}
+	return len(p), err
+}
+
+func deployRepo(scm scm.SCM, opts *container.CreateOptions, containers []*container.Container) error {
+	var ids = make([]string, len(containers))
+	for i, c := range containers {
+		ids[i] = c.ID
+	}
+
+	if opts.Log == nil {
+		return scm.Deploy(opts.Namespace, opts.Name, "", ids...)
+	} else {
+		var log = newLogWriter(opts.Log)
+		return scm.DeployWithLog(opts.Namespace, opts.Name, "", log, log, ids...)
+	}
 }
 
 func generateSharedSecret() (string, error) {
@@ -203,7 +302,7 @@ func (br *UserBroker) createContainers(opts container.CreateOptions, serviceName
 		opts.Plugin = plugin
 		opts.ServiceName = serviceNames[i]
 		var cs []*container.Container
-		cs, err = br.Create(br.ctx, br.SCM, opts)
+		cs, err = br.Create(br.ctx, opts)
 		containers = append(containers, cs...)
 		if err != nil {
 			return
@@ -329,10 +428,10 @@ func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Conta
 	}
 }
 
-func (br *UserBroker) scaleUp(replica *container.Container, num int, secret string, hosts []string) ([]*container.Container, error) {
+func (br *UserBroker) scaleUp(replica *container.Container, num int, secret string, hosts []string) (containers []*container.Container, err error) {
 	meta, err := br.Hub.GetPluginInfo(replica.PluginTag())
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	opts := container.CreateOptions{
@@ -344,10 +443,33 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int, secret stri
 		User:      replica.User(),
 		Secret:    secret,
 		Scaling:   num,
-		Repo:      "empty",
 	}
 
-	return br.Create(br.ctx, br.SCM, opts)
+	containers, err = br.Create(br.ctx, opts)
+	if err != nil {
+		return
+	}
+
+	repo, _, err := replica.CopyFromContainer(br.ctx, replica.ID, replica.RepoDir()+"/.")
+	if err != nil {
+		return
+	}
+	defer repo.Close()
+
+	repodir, err := archive.PrepareRepo(repo, true)
+	if repodir != "" {
+		defer os.RemoveAll(repodir)
+	}
+	if err != nil {
+		return
+	}
+	for _, c := range containers {
+		err = c.Deploy(br.ctx, repodir)
+		if err != nil {
+			break
+		}
+	}
+	return
 }
 
 func (br *UserBroker) scaleDown(containers []*container.Container, num int) error {
@@ -563,22 +685,10 @@ func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
 
 // Upload application repository from a archive file.
 func (br *UserBroker) Upload(name string, content io.Reader) error {
-	// create a temporary directory to hold deployment archive
-	tempdir, err := ioutil.TempDir("", "deploy")
-	if err != nil {
-		return err
+	repodir, err := archive.PrepareRepo(content, false)
+	if repodir != "" {
+		defer os.RemoveAll(repodir)
 	}
-	defer os.RemoveAll(tempdir)
-
-	// save archive to a temporary file
-	tempfilename := filepath.Base(tempdir) + ".tar.gz"
-	tempfile, err := os.Create(filepath.Join(tempdir, tempfilename))
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(tempfile, content)
-	tempfile.Close()
 	if err != nil {
 		return err
 	}
@@ -592,12 +702,12 @@ func (br *UserBroker) Upload(name string, content io.Reader) error {
 		return ApplicationNotFoundError(name)
 	}
 	for _, c := range containers {
-		err = c.Deploy(br.ctx, tempdir)
-		if err != nil {
-			return err
+		er := c.Deploy(br.ctx, repodir)
+		if er != nil {
+			err = er
 		}
 	}
-	return nil
+	return err
 }
 
 func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {

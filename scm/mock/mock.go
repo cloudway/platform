@@ -137,21 +137,20 @@ func (mock mockSCM) RemoveNamespace(namespace string) error {
 }
 
 const postReceiveHook = `#!/bin/bash
-set -e
+
+if git config cloudway.disablehook 2>/dev/null; then
+	exit 0
+fi
 
 target_branch=$(git config cloudway.deploy || true)
 target_ref=$(git rev-parse --symbolic-full-name $target_branch 2>/dev/null)
 : ${target_ref:=/refs/heads/master}
 
-tempdir=$(mktemp -d /tmp/deployXXXXXX) || exit 1
-archive="$tempdir/$(basename $tempdir).tar.gz"
-trap "rm -rf $tempdir" EXIT
-
 while read oldrev newrev refname; do
 	ref=$(git rev-parse --symbolic-full-name $refname 2>/dev/null)
 	if [ "$ref" = "$target_ref" ]; then
-		git archive --format=tar.gz -o "$archive" "$ref"
-		/usr/bin/cwman deploy %s %s "$tempdir"
+		git archive --format=tar.gz "$ref" | /usr/bin/cwman deploy %s %s
+		exit $?
 	fi
 done
 `
@@ -219,6 +218,10 @@ func (mock mockSCM) Populate(namespace, name string, payload io.Reader, size int
 		return err
 	}
 
+	// temporarily disable post-receive hook
+	repo.Config("cloudway.disablehook", "1")
+	defer repo.Run("config", "--unset", "cloudway.disablehook")
+
 	// Push the temporary repository into destination
 	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
 	return repo.Run("push", "--mirror", repodir)
@@ -241,12 +244,20 @@ func (mock mockSCM) PopulateURL(namespace, name string, url string) error {
 		return err
 	}
 
+	// temporarily disable post-receive hook
+	repo.Config("cloudway.disablehook", "1")
+	defer repo.Run("config", "--unset", "cloudway.disablehook")
+
 	// Push the temporary repository into destination
 	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
 	return repo.Run("push", "--mirror", repodir)
 }
 
-func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
+func (mock mockSCM) Deploy(namespace, name string, branch string, ids ...string) (err error) {
+	return mock.DeployWithLog(namespace, name, branch, ioutil.Discard, ioutil.Discard, ids...)
+}
+
+func (mock mockSCM) DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer, ids ...string) (err error) {
 	empty, err := mock.isEmptyRepository(namespace, name)
 	if err != nil {
 		return err
@@ -257,25 +268,22 @@ func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
 		return err
 	}
 
-	// Create temporary directory to save deployment archive
-	tempdir, err := ioutil.TempDir("", "deploy")
+	// Create temporary repository archive
+	repofile, err := ioutil.TempFile("", "repo")
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tempdir)
-	archiveFile := filepath.Join(tempdir, filepath.Base(tempdir)+".tar.gz")
+	defer func() {
+		repofile.Close()
+		os.Remove(repofile.Name())
+	}()
 
 	if empty {
 		// create empty archive
-		var file *os.File
-		file, err = os.Create(archiveFile)
-		if err == nil {
-			zw := gzip.NewWriter(file)
-			tw := tar.NewWriter(zw)
-			if err = tw.Close(); err == nil {
-				err = zw.Close()
-			}
-			file.Close()
+		zw := gzip.NewWriter(repofile)
+		tw := tar.NewWriter(zw)
+		if err = tw.Close(); err == nil {
+			err = zw.Close()
 		}
 	} else {
 		// run git command to generate an archive file
@@ -289,25 +297,18 @@ func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
 			repo.Config("cloudway.deploy", current.Id)
 		}
 
-		err = repo.Run("archive", "--format=tar.gz", "-o", archiveFile, current.Id)
+		err = repo.Run("archive", "--format=tar.gz", "-o", repofile.Name(), current.Id)
 	}
 	if err != nil {
 		return err
 	}
 
-	// Deploy the archive
-	ctx := context.Background()
-	containers, err := cli.FindApplications(ctx, name, namespace)
-	if err != nil {
+	// Deploy the repository archive
+	if _, err = repofile.Seek(0, os.SEEK_SET); err != nil {
 		return err
 	}
-	for _, c := range containers {
-		err = c.Deploy(ctx, tempdir)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+
+	return scm.DeployRepository(cli, context.Background(), name, namespace, ids, repofile, stdout, stderr)
 }
 
 const _DEFAULT_BRANCH = "refs/heads/master"

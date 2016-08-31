@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo built > built
+echo cached > $CLOUDWAY_HOME_DIR/.cache/data
