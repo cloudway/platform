@@ -71,16 +71,23 @@ func (box *Sandbox) installPlugin(target string) error {
 	os.Chown(logdir, box.uid, box.gid)
 	box.Setenv("CLOUDWAY_"+strings.ToUpper(name)+"_LOG_DIR", logdir, false)
 
+	// create cache directories
+	for _, cache := range meta.BuildCache {
+		cachedir := filepath.Join(box.HomeDir(), cache)
+		os.MkdirAll(cachedir, 0750)
+		os.Chown(cachedir, box.uid, box.gid)
+	}
+
 	// run install script for non-framework plugin
 	if meta.IsLibrary() {
-		if err = runPluginAction(target, nil, "install"); err != nil {
+		if err = runPluginAction(target, target, nil, "install"); err != nil {
 			logrus.WithError(err).Error("run install script failed")
 			return err
 		}
 	}
 
 	// run setup script to setup the plugin
-	if err = runPluginAction(target, makeExecEnv(box.Environ()), "setup"); err != nil {
+	if err = runPluginAction(target, target, makeExecEnv(box.Environ()), "setup"); err != nil {
 		logrus.WithError(err).Error("run setup script failed")
 		return err
 	}

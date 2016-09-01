@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
@@ -14,12 +13,17 @@ import (
 
 // StatusError reports an unsuccessful exit by a command
 type StatusError struct {
+	Command []string
 	Code    int
 	Message string
 }
 
 func (e StatusError) Error() string {
-	return fmt.Sprintf("%s, Code: %d", e.Message, e.Code)
+	if e.Message != "" {
+		return e.Message
+	} else {
+		return fmt.Sprintf("exec command '%s' failed, Code: %d", strings.Join(e.Command, " "), e.Code)
+	}
 }
 
 // Execute command in application container.
@@ -28,7 +32,7 @@ func (c *Container) Exec(ctx context.Context, user string, stdin io.Reader, stdo
 	// To workaround this problem always attach the stdin. This problem
 	// just occurres in docker swarm cluster, so it may be a docker bug.
 	if stdin == nil {
-		stdin = os.Stdin
+		stdin = bytes.NewReader(nil)
 	}
 
 	execConfig := types.ExecConfig{
@@ -61,7 +65,10 @@ func (c *Container) Exec(ctx context.Context, user string, stdin io.Reader, stdo
 	if err != nil {
 		return err
 	} else if inspectResp.ExitCode != 0 {
-		return StatusError{Code: inspectResp.ExitCode}
+		return StatusError{
+			Command: cmd,
+			Code:    inspectResp.ExitCode,
+		}
 	} else {
 		return nil
 	}
@@ -118,7 +125,7 @@ func (c *Container) ExecE(ctx context.Context, user string, in io.Reader, out io
 	var errbuf bytes.Buffer
 	err := c.Exec(ctx, user, in, out, &errbuf, cmd...)
 	if se, ok := err.(StatusError); ok && se.Message == "" {
-		err = StatusError{Message: chomp(&errbuf), Code: se.Code}
+		se.Message = chomp(&errbuf)
 	}
 	return err
 }
@@ -138,7 +145,7 @@ func (c *Container) Subst(ctx context.Context, user string, in io.Reader, cmd ..
 	var outbuf, errbuf bytes.Buffer
 	err := c.Exec(ctx, user, in, &outbuf, &errbuf, cmd...)
 	if se, ok := err.(StatusError); ok && se.Message == "" {
-		err = StatusError{Message: chomp(&errbuf), Code: se.Code}
+		se.Message = chomp(&errbuf)
 	}
 	return chomp(&outbuf), err
 }

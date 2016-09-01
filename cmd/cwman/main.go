@@ -51,7 +51,7 @@ func main() {
 	}
 
 	if *flgDebug {
-		container.DEBUG = true
+		config.Debug = true
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 

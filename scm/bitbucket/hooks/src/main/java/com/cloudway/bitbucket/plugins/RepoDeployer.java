@@ -139,10 +139,9 @@ public class RepoDeployer
         String name = repository.getSlug().toLowerCase();
         logger.fine("Deploy the repository " + name + "-" + namespace + " from branch " + ref.getDisplayId());
 
-        // Create a temporary directory to save the repository archive
-        Path archiveDir = Files.createTempDirectory("deploy");
-        Path archiveFile = archiveDir.resolve(archiveDir.getFileName() + ".tar.gz");
-        DeploymentHandler handler = new DeploymentHandler(name, namespace, archiveDir);
+        // Create a temporary file to save the repository archive
+        Path archiveFile = Files.createTempFile("repo", ".tar");
+        DeploymentHandler handler = new DeploymentHandler(name, namespace, archiveFile);
 
         if (repoService.isEmpty(repository)) {
             // Create empty archive file
@@ -176,13 +175,13 @@ public class RepoDeployer
 
     static class DeploymentHandler extends LoggingHandler {
         private final String name, namespace;
-        private final Path archiveDir;
+        private final Path repo;
 
-        DeploymentHandler(String name, String namespace, Path archiveDir) {
+        DeploymentHandler(String name, String namespace, Path repo) {
             super(System.err);
             this.name = name;
             this.namespace = namespace;
-            this.archiveDir = archiveDir;
+            this.repo = repo;
         }
 
         @Override
@@ -190,7 +189,8 @@ public class RepoDeployer
             try {
                 // Run cwman to deploy the archive
                 ProcessBuilder builder = new ProcessBuilder();
-                builder.command("/usr/bin/cwman", "deploy", name, namespace, archiveDir.toString());
+                builder.command("/usr/bin/cwman", "deploy", name, namespace);
+                builder.redirectInput(repo.toFile());
                 builder.redirectError(ProcessBuilder.Redirect.INHERIT);
                 builder.redirectOutput(ProcessBuilder.Redirect.INHERIT);
 
@@ -210,7 +210,7 @@ public class RepoDeployer
 
         private void cleanup() throws ProcessException {
             try {
-                FileUtils.deleteDirectory(archiveDir.toFile());
+                Files.delete(repo);
             } catch (IOException ex) {
                 throw new ProcessException(ex);
             }

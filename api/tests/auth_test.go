@@ -5,16 +5,19 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudway/platform/api/client"
 	"golang.org/x/net/context"
 )
 
 var _ = Describe("Security", func() {
-	var cli *client.APIClient
+	var cli *TestClient
 	var ctx = context.Background()
 
 	BeforeEach(func() {
-		cli = NewTestClient(false)
+		cli = NewTestClientWithUser(false)
+	})
+
+	AfterEach(func() {
+		cli.Close()
 	})
 
 	Describe("Authentication", func() {

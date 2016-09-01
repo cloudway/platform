@@ -1,7 +1,6 @@
 package container_test
 
 import (
-	"os"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -10,16 +9,13 @@ import (
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/hub"
-	"github.com/cloudway/platform/scm"
 	_ "github.com/cloudway/platform/scm/mock"
 	"golang.org/x/net/context"
 )
 
 var (
-	dockerCli      container.DockerClient
-	repositoryRoot string = "/var/git/container_test"
-	mockScm        scm.SCM
-	pluginHub      *hub.PluginHub
+	dockerCli container.DockerClient
+	pluginHub *hub.PluginHub
 )
 
 func TestContainer(t *testing.T) {
@@ -31,10 +27,6 @@ var _ = BeforeSuite(func() {
 	var err error
 
 	Expect(config.Initialize()).To(Succeed())
-	config.Set("scm.type", "mock")
-	config.Set("scm.url", "file://"+repositoryRoot)
-	mockScm, err = scm.New()
-	Expect(err).NotTo(HaveOccurred())
 
 	dockerCli, err = container.NewEnvClient()
 	Expect(err).NotTo(HaveOccurred())
@@ -44,8 +36,4 @@ var _ = BeforeSuite(func() {
 
 	pluginHub, err = hub.New()
 	Expect(err).NotTo(HaveOccurred())
-})
-
-var _ = AfterSuite(func() {
-	os.RemoveAll(repositoryRoot)
 })

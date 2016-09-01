@@ -36,14 +36,17 @@ func (cat Category) IsLibrary() bool {
 
 type Plugin struct {
 	Path        string      `yaml:"-" json:",omitempty"`
+	Tag         string      `yaml:"-" json:",omitempty"`
 	Name        string      `yaml:"Name"`
 	DisplayName string      `yaml:"Display-Name"`
 	Description string      `yaml:"Description,omitempty"`
 	Version     string      `yaml:"Version"`
 	Vendor      string      `yaml:"Vendor"`
-	Logo        string      `yaml:"Logo"`
+	Shared      bool        `yaml:"Shared,omitempty" json:",omitempty"`
+	Logo        string      `yaml:"Logo,omitempty" json:",omitempty"`
 	Category    Category    `yaml:"Category"`
 	BaseImage   string      `yaml:"Base-Image"`
+	BuildCache  []string    `yaml:"Build-Cache" json:",omitempty"`
 	DependsOn   []string    `yaml:"Depends-On,omitempty" json:",omitempty"`
 	User        string      `yaml:"User,omitempty" json:",omitempty"`
 	Endpoints   []*Endpoint `yaml:"Endpoints,omitempty" json:",omitempty"`

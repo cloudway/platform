@@ -38,19 +38,22 @@ func (br *Broker) RemoveUser(username string) (err error) {
 
 	var errors errors.Errors
 
-	// remove all containers belongs to the user
-	cs, err := br.FindAll(ctx, "", user.Namespace)
-	if err != nil {
-		errors.Add(err)
-	} else {
-		for _, c := range cs {
-			errors.Add(c.Destroy(ctx))
-		}
-	}
-
-	// remove the namespace from SCM
 	if user.Namespace != "" {
+		// remove all containers belongs to the user
+		cs, err := br.FindAll(ctx, "", user.Namespace)
+		if err != nil {
+			errors.Add(err)
+		} else {
+			for _, c := range cs {
+				errors.Add(c.Destroy(ctx))
+			}
+		}
+
+		// remove the namespace from SCM
 		errors.Add(br.SCM.RemoveNamespace(user.Namespace))
+
+		// remove the namespace from the plugin hub
+		br.Hub.RemoveNamespace(user.Namespace)
 	}
 
 	// remove user from user database

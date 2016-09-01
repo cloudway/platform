@@ -2,9 +2,7 @@
 set -e
 
 images=(
-    icloudway/php:5.6
-    mysql:5.5
-    icloudway/redis:3.2
+    debian:jessie
 )
 
 if ! docker inspect "${images[@]}" &> /dev/null; then

@@ -2,10 +2,10 @@ package hub
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
+	"regexp"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/archive"
@@ -26,10 +26,11 @@ func New() (*PluginHub, error) {
 }
 
 func (hub *PluginHub) ListPlugins(namespace string, category manifest.Category) []*manifest.Plugin {
-	dir, err := os.Open(hub.getBaseDir(namespace, ""))
+	dir, err := os.Open(hub.getBaseDir(namespace, "", ""))
 	if err != nil {
 		return nil
 	}
+	defer dir.Close()
 
 	names, err := dir.Readdirnames(0)
 	if err != nil {
@@ -43,36 +44,22 @@ func (hub *PluginHub) ListPlugins(namespace string, category manifest.Category) 
 		}
 		meta, err := hub.GetPluginInfo(tag)
 		if err == nil && (category == "" || category == meta.Category) {
-			result = append(result, meta)
+			result = append(result, tagged(namespace, meta))
 		}
 	}
-	sort.Sort(byDisplayName(result))
 	return result
 }
 
-type byDisplayName []*manifest.Plugin
-
-func (a byDisplayName) Len() int           { return len(a) }
-func (a byDisplayName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byDisplayName) Less(i, j int) bool { return a[i].DisplayName < a[j].DisplayName }
-
 func (hub *PluginHub) GetPluginPath(tag string) (string, error) {
-	var namespace, name, version string
-
-	parts := strings.SplitN(tag, "/", 2)
-	if len(parts) == 2 {
-		namespace = parts[0]
-		tag = parts[1]
+	_, namespace, name, version, err := ParseTag(tag)
+	if err != nil {
+		return "", err
 	}
+	return hub.pluginPath(namespace, name, version)
+}
 
-	parts = strings.SplitN(tag, ":", 2)
-	if len(parts) == 2 {
-		name, version = parts[0], parts[1]
-	} else {
-		name, version = parts[0], ""
-	}
-
-	base := hub.getBaseDir(namespace, name)
+func (hub *PluginHub) pluginPath(namespace, name, version string) (string, error) {
+	base := hub.getBaseDir(namespace, name, "")
 	versions, err := getAllVersions(base)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -89,11 +76,26 @@ func (hub *PluginHub) GetPluginPath(tag string) (string, error) {
 }
 
 func (hub *PluginHub) GetPluginInfo(tag string) (*manifest.Plugin, error) {
-	path, err := hub.GetPluginPath(tag)
+	_, namespace, name, version, err := ParseTag(tag)
 	if err != nil {
 		return nil, err
 	}
-	return archive.ReadManifest(path)
+
+	path, err := hub.pluginPath(namespace, name, version)
+	if err != nil {
+		return nil, err
+	} else {
+		plugin, err := archive.ReadManifest(path)
+		return tagged(namespace, plugin), err
+	}
+}
+
+func tagged(namespace string, plugin *manifest.Plugin) *manifest.Plugin {
+	plugin.Tag = plugin.Name + ":" + plugin.Version
+	if namespace != "" {
+		plugin.Tag = namespace + "/" + plugin.Tag
+	}
+	return plugin
 }
 
 func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
@@ -102,7 +104,19 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 		return err
 	}
 
-	installDir := filepath.Join(hub.getBaseDir(namespace, meta.Name), meta.Version)
+	if meta.Name == "" || meta.Version == "" || meta.Category == "" || meta.BaseImage == "" {
+		return invalidManifestErr{}
+	}
+
+	tag := meta.Name + ":" + meta.Version
+	if namespace != "" {
+		tag = namespace + "/" + tag
+	}
+	if _, _, _, _, err = ParseTag(tag); err != nil {
+		return invalidManifestErr{}
+	}
+
+	installDir := hub.getBaseDir(namespace, meta.Name, meta.Version)
 	if err = os.RemoveAll(installDir); err != nil {
 		return err
 	}
@@ -117,7 +131,26 @@ func (hub *PluginHub) InstallPlugin(namespace string, path string) (err error) {
 	}
 }
 
-func (hub *PluginHub) getBaseDir(namespace, name string) string {
+func (hub *PluginHub) RemovePlugin(tag string) error {
+	_, namespace, name, version, err := ParseTag(tag)
+	if err != nil {
+		return err
+	}
+	dir := hub.getBaseDir(namespace, name, version)
+	if _, err := os.Stat(dir); err != nil {
+		return err
+	}
+	return os.RemoveAll(dir)
+}
+
+func (hub *PluginHub) RemoveNamespace(namespace string) {
+	if namespace == "" || namespace == "_" {
+		return
+	}
+	os.RemoveAll(filepath.Join(hub.installDir, namespace))
+}
+
+func (hub *PluginHub) getBaseDir(namespace, name, version string) string {
 	if namespace == "" {
 		namespace = "_"
 	}
@@ -125,5 +158,52 @@ func (hub *PluginHub) getBaseDir(namespace, name string) string {
 	if name != "" {
 		dir = filepath.Join(dir, name)
 	}
+	if version != "" {
+		dir = filepath.Join(dir, version)
+	}
 	return dir
+}
+
+var tagPattern = regexp.MustCompile(`^([a-zA-Z_0-9]+=)?([a-zA-Z_0-9]+/)?([a-zA-Z_0-9]+)(:[0-9][[0-9.]*)?$`)
+
+func ParseTag(tag string) (service, namespace, name, version string, err error) {
+	m := tagPattern.FindStringSubmatch(tag)
+	if len(m) == 0 {
+		err = malformedTagError(tag)
+		return
+	}
+
+	service, namespace, name, version = m[1], m[2], m[3], m[4]
+	if service != "" {
+		service = service[:len(service)-1]
+	}
+	if namespace != "" {
+		namespace = namespace[:len(namespace)-1]
+	}
+	if version != "" {
+		version = version[1:]
+	}
+	return
+}
+
+// Errors
+
+type invalidManifestErr struct{}
+
+func (e invalidManifestErr) Error() string {
+	return "invalid plugin manifest"
+}
+
+func (e invalidManifestErr) HTTPErrorStatusCode() int {
+	return http.StatusBadRequest
+}
+
+type malformedTagError string
+
+func (e malformedTagError) Error() string {
+	return fmt.Sprintf("%s: malformed plugin tag", string(e))
+}
+
+func (e malformedTagError) HTTPErrorStatusCode() int {
+	return http.StatusBadRequest
 }

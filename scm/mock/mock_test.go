@@ -132,7 +132,7 @@ var _ = Describe("SCM", func() {
 
 			repodir := filepath.Join(repoRoot, "demo", "test")
 			repo := mockscm.NewGitRepo(tempdir)
-			Expect(repo.Command("clone", repodir, tempdir).Run()).To(Succeed())
+			Expect(repo.Run("clone", repodir, tempdir)).To(Succeed())
 
 			// Compare with test files
 			testfile := filepath.Join(tempdir, "README")
@@ -171,7 +171,7 @@ var _ = Describe("SCM", func() {
 
 			// Initialize the git repository
 			repo := mockscm.NewGitRepo(tempdir)
-			Expect(repo.Init(false)).To(Succeed())
+			Expect(repo.Init()).To(Succeed())
 			Expect(repo.Run("add", "-f", ".")).To(Succeed())
 			Expect(repo.Commit("Initial commit")).To(Succeed())
 
@@ -202,73 +202,90 @@ var _ = Describe("SCM", func() {
 	})
 
 	Describe("Deployment branches", func() {
-		var tempdir string
-		var repo mockscm.Git
+		Context("with non-empty repository", func() {
+			var tempdir string
+			var repo mockscm.Git
 
-		BeforeEach(func() {
-			var err error
+			BeforeEach(func() {
+				var err error
 
-			// Create a temporary git repository and commit
-			tempdir, err = ioutil.TempDir("", "repo")
-			Expect(err).NotTo(HaveOccurred())
-			testfile := filepath.Join(tempdir, "README")
-			Expect(ioutil.WriteFile(testfile, []byte("This is a test file"), 0644)).To(Succeed())
+				// Create a temporary git repository and commit
+				tempdir, err = ioutil.TempDir("", "repo")
+				Expect(err).NotTo(HaveOccurred())
+				testfile := filepath.Join(tempdir, "README")
+				Expect(ioutil.WriteFile(testfile, []byte("This is a test file"), 0644)).To(Succeed())
 
-			// Initialize the git repository
-			repo = mockscm.NewGitRepo(tempdir)
-			Expect(repo.Init(false)).To(Succeed())
-			Expect(repo.Run("add", "-f", ".")).To(Succeed())
-			Expect(repo.Commit("Initial commit")).To(Succeed())
+				// Initialize the git repository
+				repo = mockscm.NewGitRepo(tempdir)
+				Expect(repo.Init()).To(Succeed())
+				Expect(repo.Run("add", "-f", ".")).To(Succeed())
+				Expect(repo.Commit("Initial commit")).To(Succeed())
+			})
+
+			AfterEach(func() {
+				os.RemoveAll(tempdir)
+			})
+
+			It("should return all available deployment branches", func() {
+				// Create some branches and tags in the git repository
+				Expect(repo.Run("branch", "develop")).To(Succeed())
+				Expect(repo.Run("branch", "hotfix")).To(Succeed())
+				Expect(repo.Run("tag", "v1.0")).To(Succeed())
+				Expect(repo.Run("tag", "v1.1")).To(Succeed())
+
+				// Push the local git repository
+				Expect(mock.CreateNamespace("demo")).To(Succeed())
+				Expect(mock.CreateRepo("demo", "test")).To(Succeed())
+				Expect(mock.PopulateURL("demo", "test", tempdir)).To(Succeed())
+
+				// Check to see the branches and tags are returned correctly
+				expected := []*scm.Branch{
+					{
+						Id:        "refs/heads/master",
+						DisplayId: "master",
+						Type:      "BRANCH",
+					},
+					{
+						Id:        "refs/heads/develop",
+						DisplayId: "develop",
+						Type:      "BRANCH",
+					},
+					{
+						Id:        "refs/heads/hotfix",
+						DisplayId: "hotfix",
+						Type:      "BRANCH",
+					},
+					{
+						Id:        "refs/tags/v1.0",
+						DisplayId: "v1.0",
+						Type:      "TAG",
+					},
+					{
+						Id:        "refs/tags/v1.1",
+						DisplayId: "v1.1",
+						Type:      "TAG",
+					},
+				}
+
+				actual, err := mock.GetDeploymentBranches("demo", "test")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).To(ConsistOf(expected))
+			})
 		})
 
-		AfterEach(func() {
-			os.RemoveAll(tempdir)
-		})
+		Context("with empty repository", func() {
+			It("should return default deployment branch", func() {
+				Expect(mock.CreateNamespace("demo")).To(Succeed())
+				Expect(mock.CreateRepo("demo", "test")).To(Succeed())
 
-		It("should return all available deployment branches", func() {
-			// Create some branches and tags in the git repository
-			Expect(repo.Run("branch", "develop")).To(Succeed())
-			Expect(repo.Run("branch", "hotfix")).To(Succeed())
-			Expect(repo.Run("tag", "v1.0")).To(Succeed())
-			Expect(repo.Run("tag", "v1.1")).To(Succeed())
+				branch, err := mock.GetDeploymentBranch("demo", "test")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(branch.Id).To(Equal("refs/heads/master"))
 
-			// Push the local git repository
-			Expect(mock.CreateNamespace("demo")).To(Succeed())
-			Expect(mock.CreateRepo("demo", "test")).To(Succeed())
-			Expect(mock.PopulateURL("demo", "test", tempdir)).To(Succeed())
-
-			// Check to see the branches and tags are returned correctly
-			expected := []*scm.Branch{
-				{
-					Id:        "refs/heads/master",
-					DisplayId: "master",
-					Type:      "BRANCH",
-				},
-				{
-					Id:        "refs/heads/develop",
-					DisplayId: "develop",
-					Type:      "BRANCH",
-				},
-				{
-					Id:        "refs/heads/hotfix",
-					DisplayId: "hotfix",
-					Type:      "BRANCH",
-				},
-				{
-					Id:        "refs/tags/v1.0",
-					DisplayId: "v1.0",
-					Type:      "TAG",
-				},
-				{
-					Id:        "refs/tags/v1.1",
-					DisplayId: "v1.1",
-					Type:      "TAG",
-				},
-			}
-
-			actual, err := mock.GetDeploymentBranches("demo", "test")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(actual).To(ConsistOf(expected))
+				branches, err := mock.GetDeploymentBranches("demo", "test")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(branches).To(BeEmpty())
+			})
 		})
 	})
 
@@ -388,10 +405,10 @@ var _ = Describe("SCM", func() {
 
 		var initLocalRepo = func(dir string) {
 			testfile := filepath.Join(dir, "testfile")
-			git := mockscm.NewGitRepo(dir)
-
-			ExpectWithOffset(1, git.Init(false)).To(Succeed())
 			ExpectWithOffset(1, ioutil.WriteFile(testfile, []byte("this is a test"), 0644)).To(Succeed())
+
+			git := mockscm.NewGitRepo(dir)
+			ExpectWithOffset(1, git.Init()).To(Succeed())
 			ExpectWithOffset(1, git.Run("add", ".")).To(Succeed())
 			ExpectWithOffset(1, git.Commit("initial commit")).To(Succeed())
 		}
@@ -421,21 +438,28 @@ var _ = Describe("SCM", func() {
 			os.Remove(wrapper)
 		})
 
+		var clone = func(remote string) error {
+			git := mockscm.NewGitRepo(tempdir)
+			cmd := git.Command("clone", remote, tempdir)
+			cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
+			return cmd.Run()
+		}
+
+		var push = func(remote string) error {
+			git := mockscm.NewGitRepo(tempdir)
+			cmd := git.Command("push", "--set-upstream", remote, "master")
+			cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
+			return cmd.Run()
+		}
+
 		Context("with ssh key", func() {
 			It("should success to clone", func() {
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("clone", repourl, tempdir)
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).To(Succeed())
+				Expect(clone(repourl)).To(Succeed())
 			})
 
 			It("should success to push", func() {
 				initLocalRepo(tempdir)
-
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("push", "--set-upstream", repourl, "master")
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).To(Succeed())
+				Expect(push(repourl)).To(Succeed())
 			})
 		})
 
@@ -445,19 +469,12 @@ var _ = Describe("SCM", func() {
 			})
 
 			It("should fail to clone", func() {
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("clone", repourl, tempdir)
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).NotTo(Succeed())
+				Expect(clone(repourl)).NotTo(Succeed())
 			})
 
 			It("should fail to push", func() {
 				initLocalRepo(tempdir)
-
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("push", "--set-upstream", repourl, "master")
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).NotTo(Succeed())
+				Expect(push(repourl)).NotTo(Succeed())
 			})
 		})
 
@@ -469,19 +486,12 @@ var _ = Describe("SCM", func() {
 			})
 
 			It("should fail to clone", func() {
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("clone", other_repourl, tempdir)
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).NotTo(Succeed())
+				Expect(clone(other_repourl)).NotTo(Succeed())
 			})
 
 			It("should fail to push", func() {
 				initLocalRepo(tempdir)
-
-				git := mockscm.NewGitRepo(tempdir)
-				cmd := git.Command("push", "--set-upstream", other_repourl, "master")
-				cmd.Env = append(os.Environ(), "GIT_SSH="+wrapper)
-				Expect(cmd.Run()).NotTo(Succeed())
+				Expect(push(other_repourl)).NotTo(Succeed())
 			})
 		})
 	})

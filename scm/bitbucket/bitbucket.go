@@ -214,6 +214,10 @@ func (cli *bitbucketClient) Deploy(namespace, name string, branch string) error 
 	return checkNamespaceError(namespace, resp, err)
 }
 
+func (cli *bitbucketClient) DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer) error {
+	return cli.Deploy(namespace, name, branch) // FIXME
+}
+
 func (cli *bitbucketClient) GetDeploymentBranch(namespace, name string) (*scm.Branch, error) {
 	path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/settings", namespace, name)
 	resp, err := cli.Get(context.Background(), path, nil, nil)

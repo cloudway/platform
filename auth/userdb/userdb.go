@@ -139,6 +139,8 @@ func (db *UserDatabase) Create(user User, password string) error {
 		return err
 	}
 
+	basic.Inactive = false
+	basic.Applications = nil
 	basic.Password = hashedPassword
 	return db.plugin.Create(user)
 }

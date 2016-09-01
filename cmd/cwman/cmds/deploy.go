@@ -1,27 +1,18 @@
 package cmds
 
 import (
+	"os"
+
 	"github.com/cloudway/platform/pkg/mflag"
+	"github.com/cloudway/platform/scm"
 	"golang.org/x/net/context"
 )
 
-func (cli *CWMan) CmdDeploy(args ...string) error {
-	cmd := cli.Subcmd("deploy", "NAME NAMESPACE PATH")
-	cmd.Require(mflag.Exact, 3)
+func (cli *CWMan) CmdDeploy(args ...string) (err error) {
+	cmd := cli.Subcmd("deploy", "NAME NAMESPACE")
+	cmd.Require(mflag.Exact, 2)
 	cmd.ParseFlags(args, true)
 
-	ctx := context.Background()
-	name, namespace, path := cmd.Arg(0), cmd.Arg(1), cmd.Arg(2)
-
-	containers, err := cli.FindApplications(ctx, name, namespace)
-	if err != nil {
-		return err
-	}
-	for _, c := range containers {
-		err = c.Deploy(ctx, path)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	name, namespace := cmd.Arg(0), cmd.Arg(1)
+	return scm.DeployRepository(cli.DockerClient, context.Background(), name, namespace, os.Stdin, os.Stdout, os.Stderr)
 }

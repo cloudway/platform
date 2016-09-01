@@ -1,8 +1,12 @@
 package cmds
 
 import (
+	"bufio"
 	"errors"
+	"fmt"
 	"io"
+	"os"
+	"strings"
 
 	"github.com/cloudway/platform/api/client"
 	"github.com/cloudway/platform/config"
@@ -28,6 +32,9 @@ type CWCli struct {
 var CommandUsage = []Command{
 	{"login", "Login to a Cloudway server"},
 	{"logout", "Log out from a Cloudway server"},
+	{"namespace", "Get or set application namespace"},
+	{"namespace:set", "Set to a new namespace"},
+	{"namespace:rm", "Remove the namespace"},
 	{"app", "Manage applications"},
 	{"app:create", "Create application"},
 	{"app:remove", "Permanently remove an application"},
@@ -44,6 +51,11 @@ var CommandUsage = []Command{
 	{"app:env", "Get or set application environment variables"},
 	{"app:open", "Open the application in a web brower"},
 	{"app:ssh", "Log into application console via SSH"},
+	{"app:service:add", "Add new service to the application"},
+	{"app:service:rm", "Remove service from the application"},
+	{"plugin", "Show plugin information"},
+	{"plugin:install", "Install a user defined plugin"},
+	{"plugin:remove", "Remove a user defined plugin"},
 	{"version", "Show the version information"},
 }
 
@@ -64,25 +76,33 @@ func Init(host string, stdout, stderr io.Writer) *CWCli {
 	c.stderr = stderr
 
 	c.handlers = map[string]func(...string) error{
-		"login":       c.CmdLogin,
-		"logout":      c.CmdLogout,
-		"app":         c.CmdApps,
-		"app:create":  c.CmdAppCreate,
-		"app:remove":  c.CmdAppRemove,
-		"app:start":   c.CmdAppStart,
-		"app:stop":    c.CmdAppStop,
-		"app:restart": c.CmdAppRestart,
-		"app:clone":   c.CmdAppClone,
-		"app:deploy":  c.CmdAppDeploy,
-		"app:upload":  c.CmdAppUpload,
-		"app:dump":    c.CmdAppDump,
-		"app:restore": c.CmdAppRestore,
-		"app:scale":   c.CmdAppScale,
-		"app:info":    c.CmdAppInfo,
-		"app:env":     c.CmdAppEnv,
-		"app:open":    c.CmdAppOpen,
-		"app:ssh":     c.CmdAppSSH,
-		"version":     c.CmdVersion,
+		"login":           c.CmdLogin,
+		"logout":          c.CmdLogout,
+		"namespace":       c.CmdNamespace,
+		"namespace:set":   c.cmdNamespaceSet,
+		"namespace:rm":    c.CmdNamespaceRm,
+		"app":             c.CmdApps,
+		"app:create":      c.CmdAppCreate,
+		"app:remove":      c.CmdAppRemove,
+		"app:start":       c.CmdAppStart,
+		"app:stop":        c.CmdAppStop,
+		"app:restart":     c.CmdAppRestart,
+		"app:clone":       c.CmdAppClone,
+		"app:deploy":      c.CmdAppDeploy,
+		"app:upload":      c.CmdAppUpload,
+		"app:dump":        c.CmdAppDump,
+		"app:restore":     c.CmdAppRestore,
+		"app:scale":       c.CmdAppScale,
+		"app:info":        c.CmdAppInfo,
+		"app:env":         c.CmdAppEnv,
+		"app:open":        c.CmdAppOpen,
+		"app:ssh":         c.CmdAppSSH,
+		"app:service:add": c.CmdAppServiceAdd,
+		"app:service:rm":  c.CmdAppServiceRemove,
+		"plugin":          c.CmdPlugin,
+		"plugin:install":  c.CmdPluginInstall,
+		"plugin:remove":   c.CmdPluginRemove,
+		"version":         c.CmdVersion,
 	}
 
 	return c
@@ -138,4 +158,26 @@ func (c *CWCli) ConnectAndLogin() (err error) {
 		err = c.authenticate("You must login.", "", "")
 	}
 	return err
+}
+
+func (cli *CWCli) confirm(prompt string) bool {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Fprintf(cli.stdout, alert("WARNING")+": "+prompt+", continue (yes/no)? ")
+		answer, err := reader.ReadString('\n')
+		if err == io.EOF {
+			return false
+		}
+		if err != nil {
+			return false
+		}
+		answer = strings.TrimSpace(answer)
+		if answer == "no" || answer == "" {
+			return false
+		}
+		if answer == "yes" {
+			return true
+		}
+		fmt.Fprintln(cli.stdout, "Please answer yes or no.")
+	}
 }

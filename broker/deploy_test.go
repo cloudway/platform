@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -16,6 +17,8 @@ import (
 	"golang.org/x/net/context"
 )
 
+const deployTimeout = "10s"
+
 var _ = Describe("Deploy", func() {
 	var user = userdb.BasicUser{
 		Name:      TESTUSER,
@@ -27,9 +30,17 @@ var _ = Describe("Deploy", func() {
 		testfile string
 		checkdir string
 		app      *container.Container
+
+		options container.CreateOptions
+		tags    []string
 	)
 
 	BeforeEach(func() {
+		options = container.CreateOptions{Name: "test"}
+		tags = []string{"mock"}
+	})
+
+	JustBeforeEach(func() {
 		var err error
 
 		tempdir, err = ioutil.TempDir("", "repo")
@@ -43,10 +54,7 @@ var _ = Describe("Deploy", func() {
 		br := broker.NewUserBroker(&user, context.Background())
 
 		// Create the application
-		options := container.CreateOptions{Name: "test"}
-		tags := []string{"php"}
-
-		containers, err := br.CreateApplication(options, tags)
+		_, containers, err := br.CreateApplication(options, tags)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(containers).To(HaveLen(1))
 		app = containers[0]
@@ -76,8 +84,8 @@ var _ = Describe("Deploy", func() {
 		ExpectWithOffset(1, repo.Run("tag", tag)).To(Succeed())
 	}
 
-	var fetchDeployedFile = func() (string, error) {
-		r, _, err := broker.CopyFromContainer(context.Background(), app.ID, app.RepoDir()+"/track")
+	var fetchFile = func(dir, filename string) (string, error) {
+		r, _, err := broker.CopyFromContainer(context.Background(), app.ID, dir+"/"+filename)
 		if err != nil {
 			return "", err
 		}
@@ -85,8 +93,12 @@ var _ = Describe("Deploy", func() {
 		if err := archive.ExtractFiles(checkdir, r); err != nil {
 			return "", err
 		}
-		content, err := ioutil.ReadFile(filepath.Join(checkdir, "track"))
+		content, err := ioutil.ReadFile(filepath.Join(checkdir, filepath.Base(filename)))
 		return string(content), err
+	}
+
+	var fetchCommittedFile = func() (string, error) {
+		return fetchFile(app.RepoDir(), "track")
 	}
 
 	Describe("Manual deploy", func() {
@@ -125,7 +137,7 @@ var _ = Describe("Deploy", func() {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			ExpectWithOffset(1, ref.DisplayId).To(Equal(actual))
 
-			EventuallyWithOffset(1, fetchDeployedFile, "5s").Should(Equal(actual))
+			EventuallyWithOffset(1, fetchCommittedFile, deployTimeout).Should(Equal(actual))
 		}
 
 		It("should success to deploy the given branch", func() {
@@ -165,26 +177,28 @@ var _ = Describe("Deploy", func() {
 		})
 	})
 
+	var pushToDeploy = func() {
+		var (
+			repodir = filepath.Join(REPOROOT, NAMESPACE, "test")
+			repo    = mock.NewGitRepo(tempdir)
+			text    = "changed"
+		)
+
+		By("Clone the application repository")
+		Expect(repo.Run("clone", repodir, tempdir)).To(Succeed())
+
+		By("Make change to local repository")
+		Expect(ioutil.WriteFile(testfile, []byte(text), 0644)).To(Succeed())
+		Expect(repo.Run("add", "track")).To(Succeed())
+		Expect(repo.Commit("make change")).To(Succeed())
+
+		By("New commit should be deployed")
+		Expect(repo.Run("push")).To(Succeed())
+		Eventually(fetchCommittedFile, deployTimeout).Should(Equal(text))
+	}
+
 	Describe("Push to deploy", func() {
-		It("should deploy after git push", func() {
-			var (
-				repodir = filepath.Join(REPOROOT, NAMESPACE, "test")
-				repo    = mock.NewGitRepo(tempdir)
-				text    = "changed"
-			)
-
-			By("Clone the application repository")
-			Expect(repo.Run("clone", repodir, tempdir)).To(Succeed())
-
-			By("Make change to local repository")
-			Expect(ioutil.WriteFile(testfile, []byte(text), 0644)).To(Succeed())
-			Expect(repo.Run("add", "track")).To(Succeed())
-			Expect(repo.Commit("make change")).To(Succeed())
-
-			By("New commit should be deployed")
-			Expect(repo.Run("push")).To(Succeed())
-			Eventually(fetchDeployedFile, "5s").Should(Equal(text))
-		})
+		It("should deploy after git push", pushToDeploy)
 
 		It("should deploy to given branch", func() {
 			var (
@@ -211,11 +225,11 @@ var _ = Describe("Deploy", func() {
 			Expect(repo.Run("push", "--mirror")).To(Succeed())
 
 			By("Current deployment should stay on master branch")
-			Eventually(fetchDeployedFile, "5s").Should(Equal("master"))
+			Eventually(fetchCommittedFile, deployTimeout).Should(Equal("master"))
 
 			By("Switch deployment branch to develop")
 			Expect(broker.SCM.Deploy(NAMESPACE, "test", "develop"))
-			Eventually(fetchDeployedFile, "5s").Should(Equal("develop"))
+			Eventually(fetchCommittedFile, deployTimeout).Should(Equal("develop"))
 
 			By("Switch local repository to develop branch")
 			Expect(repo.Run("checkout", "develop")).To(Succeed())
@@ -223,7 +237,7 @@ var _ = Describe("Deploy", func() {
 			Expect(repo.Run("add", "track")).To(Succeed())
 			Expect(repo.Commit("develop new feature")).To(Succeed())
 			Expect(repo.Run("push", "origin", "develop")).To(Succeed())
-			Eventually(fetchDeployedFile, "5s").Should(Equal("new feature"))
+			Eventually(fetchCommittedFile, deployTimeout).Should(Equal("new feature"))
 
 			By("Switch local repository to master branch (deployment branch should stay on develop branch)")
 			Expect(repo.Run("checkout", "master")).To(Succeed())
@@ -231,7 +245,36 @@ var _ = Describe("Deploy", func() {
 			Expect(repo.Run("add", "track")).To(Succeed())
 			Expect(repo.Commit("create new release")).To(Succeed())
 			Expect(repo.Run("push", "origin", "master")).To(Succeed())
-			Eventually(fetchDeployedFile, "5s").Should(Equal("new feature"))
+			Eventually(fetchCommittedFile, deployTimeout).Should(Equal("new feature"))
 		})
+	})
+
+	Describe("Build scripts", func() {
+		BeforeEach(func() {
+			tags = []string{"mockb"}
+		})
+
+		It("should run build script", func() {
+			Eventually(func() (string, error) {
+				content, err := fetchFile(app.RepoDir(), "built")
+				return strings.TrimSpace(content), err
+			}, deployTimeout).Should(Equal("built"))
+		})
+
+		It("should run deploy script", func() {
+			Eventually(func() (string, error) {
+				content, err := fetchFile(app.RepoDir(), "deployed")
+				return strings.TrimSpace(content), err
+			}, deployTimeout).Should(Equal("deployed"))
+		})
+
+		It("should save cached data", func() {
+			Eventually(func() (string, error) {
+				content, err := fetchFile(app.Home(), ".cache/data")
+				return strings.TrimSpace(content), err
+			}, deployTimeout).Should(Equal("cached"))
+		})
+
+		It("should success push to deploy", pushToDeploy)
 	})
 })

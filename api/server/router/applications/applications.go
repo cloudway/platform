@@ -19,9 +19,13 @@ import (
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/container"
+	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
 	"golang.org/x/net/context"
 )
+
+const appPath = "/applications/{name:[^/]+}"
+const servicePath = appPath + "/services/{service:[^/]+}"
 
 type applicationsRouter struct {
 	*broker.Broker
@@ -33,22 +37,24 @@ func NewRouter(broker *broker.Broker) router.Router {
 
 	r.routes = []router.Route{
 		router.NewGetRoute("/applications/", r.list),
-		router.NewGetRoute("/applications/{name:.*}/info", r.info),
 		router.NewPostRoute("/applications/", r.create),
-		router.NewDeleteRoute("/applications/{name:.*}", r.delete),
-		router.NewPostRoute("/applications/{name:.*}/start", r.start),
-		router.NewPostRoute("/applications/{name:.*}/stop", r.stop),
-		router.NewPostRoute("/applications/{name:.*}/restart", r.restart),
-		router.NewPostRoute("/applications/{name:.*}/deploy", r.deploy),
-		router.NewGetRoute("/applications/{name:.*}/deploy", r.getDeployments),
-		router.NewGetRoute("/applications/{name:.*}/repo", r.download),
-		router.NewPutRoute("/applications/{name:.*}/repo", r.upload),
-		router.NewGetRoute("/applications/{name:.*}/data", r.dump),
-		router.NewPutRoute("/applications/{name:.*}/data", r.restore),
-		router.NewPostRoute("/applications/{name:.*}/scale", r.scale),
-		router.NewGetRoute("/applications/{name:.*}/services/{service:.*}/env/", r.environ),
-		router.NewPostRoute("/applications/{name:.*}/services/{service:.*}/env/", r.setenv),
-		router.NewGetRoute("/applications/{name:.*}/services/{service:.*}/env/{key:.*}", r.getenv),
+		router.NewGetRoute(appPath, r.info),
+		router.NewDeleteRoute(appPath, r.delete),
+		router.NewPostRoute(appPath+"/start", r.start),
+		router.NewPostRoute(appPath+"/stop", r.stop),
+		router.NewPostRoute(appPath+"/restart", r.restart),
+		router.NewPostRoute(appPath+"/deploy", r.deploy),
+		router.NewGetRoute(appPath+"/deploy", r.getDeployments),
+		router.NewGetRoute(appPath+"/repo", r.download),
+		router.NewPutRoute(appPath+"/repo", r.upload),
+		router.NewGetRoute(appPath+"/data", r.dump),
+		router.NewPutRoute(appPath+"/data", r.restore),
+		router.NewPostRoute(appPath+"/scale", r.scale),
+		router.NewPostRoute(appPath+"/services/", r.createService),
+		router.NewDeleteRoute(servicePath, r.removeService),
+		router.NewGetRoute(servicePath+"/env/", r.environ),
+		router.NewPostRoute(servicePath+"/env/", r.setenv),
+		router.NewGetRoute(servicePath+"/env/{key:.*}", r.getenv),
 	}
 
 	return r
@@ -58,12 +64,8 @@ func (ar *applicationsRouter) Routes() []router.Route {
 	return ar.routes
 }
 
-func (ar *applicationsRouter) currentUser(ctx context.Context) *userdb.BasicUser {
-	return ctx.Value(httputils.UserKey).(*userdb.BasicUser)
-}
-
 func (ar *applicationsRouter) list(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	apps, err := ar.NewUserBroker(user, ctx).GetApplications()
 	if err != nil {
@@ -79,42 +81,56 @@ func (ar *applicationsRouter) list(ctx context.Context, w http.ResponseWriter, r
 
 func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	var (
-		user = ar.currentUser(ctx)
+		user = httputils.UserFromContext(ctx)
+		br   = ar.NewUserBroker(user, ctx)
 		name = vars["name"]
+		app  *userdb.Application
 	)
 
-	apps, err := ar.NewUserBroker(user, ctx).GetApplications()
+	apps, err := br.GetApplications()
 	if err != nil {
 		return err
 	}
 
-	app := apps[name]
-	if app == nil {
+	if app = apps[name]; app == nil {
 		return httputils.NewStatusError(http.StatusNotFound)
 	}
 
-	info := types.ApplicationInfo{
+	info, err := ar.getInfo(name, user.Namespace, app)
+	if err != nil {
+		return err
+	}
+
+	cs, _ := ar.FindApplications(ctx, name, user.Namespace)
+	info.Scaling = len(cs)
+
+	return httputils.WriteJSON(w, http.StatusOK, &info)
+}
+
+func (ar *applicationsRouter) getInfo(name, namespace string, app *userdb.Application) (info *types.ApplicationInfo, err error) {
+	info = &types.ApplicationInfo{
 		Name:      name,
-		Namespace: user.Namespace,
+		Namespace: namespace,
 		CreatedAt: app.CreatedAt,
+		Scaling:   1,
 	}
 
 	base, err := url.Parse(config.GetOrDefault("console.url", "http://api."+defaults.Domain()))
 	if err != nil {
-		return err
+		return
 	}
 
 	host, port := base.Host, ""
 	if i := strings.IndexRune(host, ':'); i != -1 {
 		host, port = host[:i], host[i:]
 	}
-	info.URL = fmt.Sprintf("%s://%s-%s.%s%s", base.Scheme, name, user.Namespace, defaults.Domain(), port)
-	info.SSHURL = fmt.Sprintf("ssh://%s-%s@%s%s", name, user.Namespace, host, ":2200") // FIXME
+	info.URL = fmt.Sprintf("%s://%s-%s.%s%s", base.Scheme, name, namespace, defaults.Domain(), port)
+	info.SSHURL = fmt.Sprintf("ssh://%s-%s@%s%s", name, namespace, host, ":2200") // FIXME
 
 	info.SCMType = ar.SCM.Type()
 	cloneURL := config.Get("scm.clone_url")
 	if cloneURL != "" {
-		cloneURL = strings.Replace(cloneURL, "<namespace>", user.Namespace, -1)
+		cloneURL = strings.Replace(cloneURL, "<namespace>", namespace, -1)
 		cloneURL = strings.Replace(cloneURL, "<repo>", name, -1)
 		info.CloneURL = cloneURL
 	}
@@ -131,10 +147,7 @@ func (ar *applicationsRouter) info(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	cs, _ := ar.FindApplications(ctx, name, user.Namespace)
-	info.Scaling = len(cs)
-
-	return httputils.WriteJSON(w, http.StatusOK, &info)
+	return
 }
 
 var namePattern = regexp.MustCompile("^[a-z][a-z_0-9]*$")
@@ -147,7 +160,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		return err
 	}
 
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	br := ar.NewUserBroker(user, ctx)
 
 	var req types.CreateApplication
@@ -159,7 +172,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		Name:    req.Name,
 		Repo:    req.Repo,
 		Scaling: 1,
-		Logout:  w,
+		Logger:  serverlog.NewLogWriter(w),
 	}
 
 	if !namePattern.MatchString(opts.Name) {
@@ -176,20 +189,28 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 
 	tags := append([]string{req.Framework}, req.Services...)
 
-	cs, err := br.CreateApplication(opts, tags)
+	app, cs, err := br.CreateApplication(opts, tags)
 	if err != nil {
-		return err
+		serverlog.SendError(w, err)
+		return nil
 	}
 
 	if err = br.StartContainers(ctx, cs); err != nil {
-		return err
+		serverlog.SendError(w, err)
+		return nil
+	}
+
+	if info, err := ar.getInfo(req.Name, user.Namespace, app); err != nil {
+		serverlog.SendError(w, err)
+	} else {
+		serverlog.SendObject(w, info)
 	}
 
 	return nil
 }
 
 func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	br := ar.NewUserBroker(user, ctx)
 
 	if err := br.RemoveApplication(vars["name"]); err != nil {
@@ -200,36 +221,80 @@ func (ar *applicationsRouter) delete(ctx context.Context, w http.ResponseWriter,
 	}
 }
 
+func (ar *applicationsRouter) createService(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := httputils.CheckForJSON(r); err != nil {
+		return err
+	}
+
+	user := httputils.UserFromContext(ctx)
+	br := ar.NewUserBroker(user, ctx)
+
+	var tags []string
+	if err := json.NewDecoder(r.Body).Decode(&tags); err != nil {
+		return err
+	}
+
+	opts := container.CreateOptions{
+		Name:   vars["name"],
+		Logger: serverlog.NewLogWriter(w),
+	}
+
+	cs, err := br.CreateServices(opts, tags)
+	if err != nil {
+		serverlog.SendError(w, err)
+		return nil
+	}
+
+	if err := br.StartContainers(ctx, cs); err != nil {
+		serverlog.SendError(w, err)
+		return nil
+	}
+
+	return nil
+}
+
+func (ar *applicationsRouter) removeService(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	user := httputils.UserFromContext(ctx)
+	br := ar.NewUserBroker(user, ctx)
+
+	name, service := vars["name"], vars["service"]
+	if err := br.RemoveService(name, service); err != nil {
+		return err
+	} else {
+		w.WriteHeader(http.StatusNoContent)
+		return nil
+	}
+}
+
 func (ar *applicationsRouter) start(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	return ar.NewUserBroker(user, ctx).StartApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) stop(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	return ar.NewUserBroker(user, ctx).StopApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) restart(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	return ar.NewUserBroker(user, ctx).RestartApplication(vars["name"])
 }
 
 func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	name, branch := vars["name"], r.FormValue("branch")
 
-	err := ar.SCM.Deploy(user.Namespace, name, branch)
+	logger := serverlog.NewLogWriter(w)
+	err := ar.SCM.DeployWithLog(user.Namespace, name, branch, logger, logger)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	} else {
-		w.WriteHeader(http.StatusNoContent)
+		serverlog.SendError(w, err)
 	}
 	return nil
 }
 
 func (ar *applicationsRouter) getDeployments(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	name := vars["name"]
 
 	current, err := ar.SCM.GetDeploymentBranch(user.Namespace, name)
@@ -266,7 +331,7 @@ func convertBranchesJson(branches []*scm.Branch) []*types.Branch {
 }
 
 func (ar *applicationsRouter) download(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	tr, err := ar.NewUserBroker(user, ctx).Download(vars["name"])
 	if err != nil {
@@ -285,12 +350,23 @@ func (ar *applicationsRouter) download(ctx context.Context, w http.ResponseWrite
 }
 
 func (ar *applicationsRouter) upload(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
-	return ar.NewUserBroker(user, ctx).Upload(vars["name"], r.Body)
+	if err := httputils.ParseForm(r); err != nil {
+		return err
+	}
+
+	user := httputils.UserFromContext(ctx)
+	_, binary := r.Form["binary"]
+	logger := serverlog.NewLogWriter(w)
+
+	err := ar.NewUserBroker(user, ctx).Upload(vars["name"], r.Body, binary, logger)
+	if err != nil {
+		serverlog.SendError(w, err)
+	}
+	return nil
 }
 
 func (ar *applicationsRouter) dump(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	tr, err := ar.NewUserBroker(user, ctx).Dump(vars["name"])
 	if err != nil {
@@ -309,12 +385,12 @@ func (ar *applicationsRouter) dump(ctx context.Context, w http.ResponseWriter, r
 }
 
 func (ar *applicationsRouter) restore(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	return ar.NewUserBroker(user, ctx).Restore(vars["name"], r.Body)
 }
 
 func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 	name := vars["name"]
 	scaling := r.FormValue("scale")
 
@@ -380,7 +456,7 @@ func (ar *applicationsRouter) getContainer(ctx context.Context, namespace string
 }
 
 func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	container, err := ar.getContainer(ctx, user.Namespace, vars)
 	if err != nil {
@@ -394,7 +470,7 @@ func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter
 }
 
 func (ar *applicationsRouter) getenv(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	container, err := ar.getContainer(ctx, user.Namespace, vars)
 	if err != nil {
@@ -425,7 +501,7 @@ func (ar *applicationsRouter) setenv(ctx context.Context, w http.ResponseWriter,
 		return err
 	}
 
-	user := ar.currentUser(ctx)
+	user := httputils.UserFromContext(ctx)
 
 	cs, err := ar.getContainers(ctx, user.Namespace, vars)
 	if err != nil {

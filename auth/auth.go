@@ -63,7 +63,7 @@ func (auth *Authenticator) Authenticate(username, password string) (*userdb.Basi
 }
 
 // Verify the current http request is authorized.
-func (auth *Authenticator) Verify(w http.ResponseWriter, r *http.Request) (*userdb.BasicUser, error) {
+func (auth *Authenticator) Verify(r *http.Request) (*userdb.BasicUser, error) {
 	var claims customClaims
 
 	// Get token from request

@@ -25,7 +25,9 @@ import (
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/errors"
+	"github.com/cloudway/platform/pkg/files"
 	"github.com/cloudway/platform/pkg/manifest"
+	"github.com/cloudway/platform/scm"
 )
 
 func (br *UserBroker) GetApplications() (apps map[string]*userdb.Application, err error) {
@@ -35,9 +37,9 @@ func (br *UserBroker) GetApplications() (apps map[string]*userdb.Application, er
 	return br.User.Basic().Applications, nil
 }
 
-func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []string) (containers []*container.Container, err error) {
+func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []string) (app *userdb.Application, containers []*container.Container, err error) {
 	if err = br.Refresh(); err != nil {
-		return nil, err
+		return
 	}
 
 	user := br.User.Basic()
@@ -45,7 +47,8 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 
 	// check if the application already exists
 	if apps[opts.Name] != nil {
-		return nil, ApplicationExistError{opts.Name, user.Namespace}
+		err = ApplicationExistError{opts.Name, user.Namespace}
+		return
 	}
 
 	if opts.Scaling == 0 {
@@ -53,26 +56,33 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	}
 
 	// check plugins
-	plugins := make([]*manifest.Plugin, len(tags))
-	var framework *manifest.Plugin
+	var (
+		names     = make([]string, len(tags))
+		plugins   = make([]*manifest.Plugin, len(tags))
+		framework *manifest.Plugin
+	)
 	for i, tag := range tags {
-		p, err := br.Hub.GetPluginInfo(tag)
-		if err != nil {
-			return nil, err
+		n, p, er := br.getPluginInfoWithNames(tag)
+		if er != nil {
+			err = er
+			return
 		}
 		if p.IsFramework() {
 			if framework != nil {
-				return nil, fmt.Errorf("Multiple framework plugins specified: %s and %s", p.Name, framework.Name)
+				err = fmt.Errorf("Multiple framework plugins specified: %s and %s", p.Name, framework.Name)
+				return
 			}
 			framework = p
+			n = ""
 		} else if !p.IsService() {
-			return nil, fmt.Errorf("'%s' must be a framework or service plugin", tag)
+			err = fmt.Errorf("'%s' must be a framework or service plugin", tag)
+			return
 		}
-		plugins[i] = p
-		tags[i] = p.Name + ":" + p.Version
+		names[i], plugins[i], tags[i] = n, p, p.Tag
 	}
 	if framework == nil {
-		return nil, fmt.Errorf("No framework plugin specified")
+		err = fmt.Errorf("No framework plugin specified")
+		return
 	}
 
 	// Generate shared secret for application. The shared secret is a simple
@@ -80,7 +90,7 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	// containers, or used as a randomize seed to generate shared tokens.
 	opts.Secret, err = generateSharedSecret()
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// cleanup on failure
@@ -104,7 +114,8 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	//   namespace cannot be empty
 	//   if namespace not exists then create one
 	if user.Namespace == "" && opts.Namespace == "" {
-		return nil, NoNamespaceError(user.Name)
+		err = NoNamespaceError(user.Name)
+		return
 	}
 	if user.Namespace == "" {
 		err = br.CreateNamespace(opts.Namespace)
@@ -116,6 +127,12 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 		opts.Namespace = user.Namespace
 	}
 
+	// create all containers
+	containers, err = br.createContainers(opts, names, plugins)
+	if err != nil {
+		return
+	}
+
 	// create repository for the application
 	err = br.SCM.CreateRepo(opts.Namespace, opts.Name)
 	if err != nil {
@@ -123,18 +140,21 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	}
 	repoCreated = true
 
-	// create all containers
-	containers, err = br.createContainers(opts, plugins)
-	if err != nil {
+	// populate and deploy application
+	if err = populateRepo(br.SCM, &opts, framework); err != nil {
+		return
+	}
+	if err = deployRepo(br.SCM, &opts, containers); err != nil {
 		return
 	}
 
 	// add application to the user database
-	apps[opts.Name] = &userdb.Application{
+	app = &userdb.Application{
 		CreatedAt: time.Now(),
 		Plugins:   tags,
 		Secret:    opts.Secret,
 	}
+	apps[opts.Name] = app
 	err = br.Users.Update(user.Name, userdb.Args{"applications": apps})
 	if err != nil {
 		return
@@ -142,6 +162,52 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 
 	success = true
 	return
+}
+
+func populateRepo(scm scm.SCM, opts *container.CreateOptions, framework *manifest.Plugin) error {
+	if strings.ToLower(opts.Repo) == "empty" {
+		return nil
+	} else if opts.Repo == "" {
+		return populateFromTemplate(scm, opts, filepath.Join(framework.Path, "template"))
+	} else {
+		return scm.PopulateURL(opts.Namespace, opts.Name, opts.Repo)
+	}
+}
+
+func populateFromTemplate(scm scm.SCM, opts *container.CreateOptions, template string) error {
+	if fi, err := os.Stat(template); err != nil || !fi.IsDir() {
+		return nil
+	}
+
+	f, err := files.TempFile("", "repo", ".tar")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		f.Close()
+		os.Remove(f.Name())
+	}()
+
+	tw := tar.NewWriter(f)
+	if err = archive.CopyFileTree(tw, "", template, nil, false); err != nil {
+		return err
+	}
+	tw.Close()
+
+	size, err := f.Seek(0, os.SEEK_CUR)
+	f.Seek(0, os.SEEK_SET)
+	if err == nil {
+		err = scm.Populate(opts.Namespace, opts.Name, f, size)
+	}
+	return err
+}
+
+func deployRepo(scm scm.SCM, opts *container.CreateOptions, containers []*container.Container) error {
+	if opts.Logger == nil {
+		return scm.Deploy(opts.Namespace, opts.Name, "")
+	} else {
+		return scm.DeployWithLog(opts.Namespace, opts.Name, "", opts.Logger, opts.Logger)
+	}
 }
 
 func generateSharedSecret() (string, error) {
@@ -166,24 +232,26 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
 	}
 
 	// check service plugins
-	plugins := make([]*manifest.Plugin, len(tags))
+	var (
+		names   = make([]string, len(tags))
+		plugins = make([]*manifest.Plugin, len(tags))
+	)
 	for i, tag := range tags {
-		p, err := br.Hub.GetPluginInfo(tag)
+		n, p, err := br.getPluginInfoWithNames(tag)
 		if err != nil {
 			return nil, err
 		}
 		if !p.IsService() {
 			return nil, fmt.Errorf("'%s' is not a service plugin", tag)
 		}
-		plugins[i] = p
-		tags[i] = p.Name + ":" + p.Version
+		names[i], plugins[i], tags[i] = n, p, p.Tag
 	}
 
 	opts.Namespace = user.Namespace
 	opts.Secret = app.Secret
 	opts.Hosts = app.Hosts
 
-	containers, err = br.createContainers(opts, plugins)
+	containers, err = br.createContainers(opts, names, plugins)
 	if err != nil {
 		return nil, err
 	}
@@ -193,11 +261,12 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
 	return containers, err
 }
 
-func (br *UserBroker) createContainers(opts container.CreateOptions, plugins []*manifest.Plugin) (containers []*container.Container, err error) {
-	for _, plugin := range plugins {
+func (br *UserBroker) createContainers(opts container.CreateOptions, serviceNames []string, plugins []*manifest.Plugin) (containers []*container.Container, err error) {
+	for i, plugin := range plugins {
 		opts.Plugin = plugin
+		opts.ServiceName = serviceNames[i]
 		var cs []*container.Container
-		cs, err = br.Create(br.ctx, br.SCM, opts)
+		cs, err = br.Create(br.ctx, opts)
 		containers = append(containers, cs...)
 		if err != nil {
 			return
@@ -260,6 +329,9 @@ func (br *UserBroker) RemoveService(name, service string) (err error) {
 	if err != nil {
 		return err
 	}
+	if len(containers) == 0 {
+		return fmt.Errorf("service '%s' not found in application '%s'", service, name)
+	}
 
 	for _, c := range containers {
 		errors.Add(c.Destroy(br.ctx))
@@ -320,10 +392,10 @@ func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Conta
 	}
 }
 
-func (br *UserBroker) scaleUp(replica *container.Container, num int, secret string, hosts []string) ([]*container.Container, error) {
+func (br *UserBroker) scaleUp(replica *container.Container, num int, secret string, hosts []string) (containers []*container.Container, err error) {
 	meta, err := br.Hub.GetPluginInfo(replica.PluginTag())
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	opts := container.CreateOptions{
@@ -335,10 +407,33 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int, secret stri
 		User:      replica.User(),
 		Secret:    secret,
 		Scaling:   num,
-		Repo:      "empty",
 	}
 
-	return br.Create(br.ctx, br.SCM, opts)
+	containers, err = br.Create(br.ctx, opts)
+	if err != nil {
+		return
+	}
+
+	repo, _, err := replica.CopyFromContainer(br.ctx, replica.ID, replica.RepoDir()+"/.")
+	if err != nil {
+		return
+	}
+	defer repo.Close()
+
+	repodir, err := archive.PrepareRepo(repo, true)
+	if repodir != "" {
+		defer os.RemoveAll(repodir)
+	}
+	if err != nil {
+		return
+	}
+	for _, c := range containers {
+		err = c.Deploy(br.ctx, repodir)
+		if err != nil {
+			break
+		}
+	}
+	return
 }
 
 func (br *UserBroker) scaleDown(containers []*container.Container, num int) error {
@@ -434,25 +529,8 @@ func (br *UserBroker) RestartApplication(name string) error {
 	return br.startApplication(name, func(c *container.Container) error { return c.Restart(br.ctx) })
 }
 
-func (br *UserBroker) StopApplication(name string) error {
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
-	if err != nil {
-		return err
-	}
-	if len(containers) == 0 {
-		return ApplicationNotFoundError(name)
-	}
-	return startParallel(err, containers, func(c *container.Container) error { return c.Stop(br.ctx) })
-}
-
-func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container) error {
-	return startContainers(containers, func(c *container.Container) error { return c.Start(ctx) })
-}
-
 func (br *UserBroker) startApplication(name string, fn func(*container.Container) error) error {
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
 	}
@@ -462,6 +540,21 @@ func (br *UserBroker) startApplication(name string, fn func(*container.Container
 	return startContainers(containers, fn)
 }
 
+func (br *UserBroker) StopApplication(name string) error {
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
+	if err != nil {
+		return err
+	}
+	if len(containers) == 0 {
+		return ApplicationNotFoundError(name)
+	}
+	return runParallel(err, containers, func(c *container.Container) error { return c.Stop(br.ctx) })
+}
+
+func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container) error {
+	return startContainers(containers, func(c *container.Container) error { return c.Start(ctx) })
+}
+
 func startContainers(containers []*container.Container, fn func(*container.Container) error) error {
 	err := container.ResolveServiceDependencies(containers)
 	if err != nil {
@@ -469,9 +562,9 @@ func startContainers(containers []*container.Container, fn func(*container.Conta
 	}
 
 	sch := makeSchedule(containers)
-	err = startParallel(nil, sch.parallel, fn)
-	err = startSerial(err, sch.serial, fn)
-	err = startParallel(err, sch.final, fn)
+	err = runParallel(nil, sch.parallel, fn)
+	err = runSerial(err, sch.serial, fn)
+	err = runParallel(err, sch.final, fn)
 	return err
 }
 
@@ -497,7 +590,7 @@ func makeSchedule(containers []*container.Container) *schedule {
 	return sch
 }
 
-func startParallel(err error, cs []*container.Container, fn func(*container.Container) error) error {
+func runParallel(err error, cs []*container.Container, fn func(*container.Container) error) error {
 	if err != nil {
 		return err
 	}
@@ -529,7 +622,7 @@ func startParallel(err error, cs []*container.Container, fn func(*container.Cont
 	return errors.Err()
 }
 
-func startSerial(err error, cs []*container.Container, fn func(*container.Container) error) error {
+func runSerial(err error, cs []*container.Container, fn func(*container.Container) error) error {
 	if err == nil {
 		for _, c := range cs {
 			if err = fn(c); err != nil {
@@ -542,8 +635,7 @@ func startSerial(err error, cs []*container.Container, fn func(*container.Contai
 
 // Download application repository as a archive file.
 func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindApplications(br.ctx, name, namespace)
+	containers, err := br.FindApplications(br.ctx, name, br.Namespace())
 	if err != nil {
 		return nil, err
 	}
@@ -556,49 +648,40 @@ func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
 }
 
 // Upload application repository from a archive file.
-func (br *UserBroker) Upload(name string, content io.Reader) error {
-	// create a temporary directory to hold deployment archive
-	tempdir, err := ioutil.TempDir("", "deploy")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tempdir)
-
-	// save archive to a temporary file
-	tempfilename := filepath.Base(tempdir) + ".tar.gz"
-	tempfile, err := os.Create(filepath.Join(tempdir, tempfilename))
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(tempfile, content)
-	tempfile.Close()
-	if err != nil {
-		return err
-	}
-
-	// deploy to containers
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindApplications(br.ctx, name, namespace)
-	if err != nil {
-		return err
-	}
-	if len(containers) == 0 {
-		return ApplicationNotFoundError(name)
-	}
-	for _, c := range containers {
-		err = c.Deploy(br.ctx, tempdir)
+func (br *UserBroker) Upload(name string, content io.Reader, binary bool, logger io.Writer) error {
+	if binary {
+		repodir, err := archive.PrepareRepo(content, false)
+		if repodir != "" {
+			defer os.RemoveAll(repodir)
+		}
 		if err != nil {
 			return err
 		}
+
+		// deploy to containers
+		containers, err := br.FindApplications(br.ctx, name, br.Namespace())
+		if err != nil {
+			return err
+		}
+		if len(containers) == 0 {
+			return ApplicationNotFoundError(name)
+		}
+		for _, c := range containers {
+			er := c.Deploy(br.ctx, repodir)
+			if er != nil {
+				err = er
+			}
+		}
+		return err
+	} else {
+		// deploy the repository
+		return scm.DeployRepository(br.DockerClient, br.ctx, name, br.Namespace(), content, logger, logger)
 	}
-	return nil
 }
 
 func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {
 	// find all containers
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return nil, err
 	}
@@ -649,8 +732,7 @@ func (br *UserBroker) Dump(name string) (io.ReadCloser, error) {
 
 func (br *UserBroker) Restore(name string, source io.Reader) error {
 	// find all containers
-	namespace := br.User.Basic().Namespace
-	containers, err := br.FindAll(br.ctx, name, namespace)
+	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
 	}

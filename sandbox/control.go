@@ -82,7 +82,7 @@ func (box *Sandbox) Control(action string, enable_action_hooks, process_template
 	}
 
 	for _, p := range plugins {
-		if err := runPluginAction(p.Path, eenv, "control", action); err != nil {
+		if err := runPluginAction(p.Path, p.Path, eenv, "control", action); err != nil {
 			return err
 		}
 	}
@@ -126,7 +126,7 @@ func processTemplates(root string, env map[string]string) error {
 	})
 }
 
-func runPluginAction(path string, env []string, action string, args ...string) error {
+func runPluginAction(path, dir string, env []string, action string, args ...string) error {
 	filename := filepath.Join(path, "bin", action)
 	if _, err := os.Stat(filename); err != nil {
 		if os.IsNotExist(err) {
@@ -140,7 +140,7 @@ func runPluginAction(path string, env []string, action string, args ...string) e
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = env
-	cmd.Dir = path
+	cmd.Dir = dir
 	return RunCommand(cmd)
 }
 

@@ -2,7 +2,6 @@ package cmds
 
 import (
 	"archive/tar"
-	"bufio"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -44,6 +43,9 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:env            Get or set application environment variables
   app:open           Open the application in a web brower
   app:ssh            Log into application console via SSH
+
+  app:service:add    Add new service to the application
+  app:service:rm     Remove service from the application
 `
 
 func (cli *CWCli) CmdApps(args ...string) error {
@@ -107,12 +109,15 @@ func (cli *CWCli) getAppConfig(key string) string {
 	return cfg.Get(key)
 }
 
-func (cli *CWCli) getAppRoot() (string, error) {
-	root, err := searchFile(".cwapp")
-	if err != nil {
-		root, err = searchFile(".git")
+func (cli *CWCli) getAppRoot() (root string, binary bool, err error) {
+	root, err = searchFile(".git")
+	if err == nil {
+		return
 	}
-	return root, err
+
+	root, err = searchFile(".cwapp")
+	binary = true
+	return
 }
 
 func searchFile(name string) (string, error) {
@@ -203,7 +208,7 @@ func (cli *CWCli) CmdAppClone(args ...string) error {
 	cmd.Require(mflag.Exact, 1)
 	cmd.BoolVar(&binary, []string{"-binary"}, false, "Download binary repository")
 	cmd.ParseFlags(args, true)
-	name := args[0]
+	name := cmd.Arg(0)
 
 	if _, err := os.Stat(name); !os.IsNotExist(err) {
 		if err == nil {
@@ -234,7 +239,7 @@ func (cli *CWCli) CmdAppUpload(args ...string) error {
 	cmd.ParseFlags(args, true)
 
 	name := cli.getAppName(cmd)
-	path, err := cli.getAppRoot()
+	path, binary, err := cli.getAppRoot()
 	if err != nil {
 		return err
 	}
@@ -243,7 +248,7 @@ func (cli *CWCli) CmdAppUpload(args ...string) error {
 		return err
 	}
 
-	return cli.upload(name, path)
+	return cli.upload(name, path, binary)
 }
 
 func (cli *CWCli) download(name string) error {
@@ -275,7 +280,7 @@ func (cli *CWCli) download(name string) error {
 	return cfg.Save()
 }
 
-func (cli *CWCli) upload(name, path string) error {
+func (cli *CWCli) upload(name, path string, binary bool) error {
 	// create temporary archive file containing upload files
 	tempfile, err := ioutil.TempFile("", "deploy")
 	if err != nil {
@@ -300,7 +305,7 @@ func (cli *CWCli) upload(name, path string) error {
 		return err
 	}
 
-	return cli.Upload(context.Background(), name, tempfile)
+	return cli.Upload(context.Background(), name, tempfile, binary, cli.stdout)
 }
 
 func (cli *CWCli) CmdAppDump(args ...string) (err error) {
@@ -467,28 +472,9 @@ func (cli *CWCli) CmdAppRemove(args ...string) error {
 	cmd.BoolVar(&yes, []string{"y"}, false, "Confirm 'yes' to remove the application")
 	cmd.ParseFlags(args, true)
 
-	if !yes {
-		reader := bufio.NewReader(os.Stdin)
-		for {
-			fmt.Fprintf(cli.stdout, alert("WARNING")+": You will lost all your application data, continue (yes/no)? ")
-			answer, err := reader.ReadString('\n')
-			if err == io.EOF {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			answer = strings.TrimSpace(answer)
-			if answer == "no" || answer == "" {
-				return nil
-			}
-			if answer == "yes" {
-				break
-			}
-			fmt.Fprintln(cli.stdout, "Please answer yes or no.")
-		}
+	if !yes && !cli.confirm("You will lost all your application data") {
+		return nil
 	}
-
 	if err := cli.ConnectAndLogin(); err != nil {
 		return err
 	}
@@ -583,7 +569,7 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
 
 		return nil
 	} else {
-		return cli.DeployApplication(context.Background(), name, branch)
+		return cli.DeployApplication(context.Background(), name, branch, cli.stdout)
 	}
 }
 
@@ -659,4 +645,43 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 	}
 
 	return nil
+}
+
+func (cli *CWCli) CmdAppServiceAdd(args ...string) error {
+	cmd := cli.Subcmd("app:service:add", "SERVICES...")
+	cmd.Require(mflag.Min, 1)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.ParseFlags(args, true)
+
+	name := cli.getAppName(cmd)
+	tags := cmd.Args()
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	return cli.CreateService(context.Background(), cli.stdout, name, tags...)
+}
+
+func (cli *CWCli) CmdAppServiceRemove(args ...string) error {
+	var yes bool
+
+	cmd := cli.Subcmd("app:service:rm", "SERVICE")
+	cmd.Require(mflag.Exact, 1)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.BoolVar(&yes, []string{"y"}, false, "Confirm 'yes' to remove the service")
+	cmd.ParseFlags(args, true)
+
+	name := cli.getAppName(cmd)
+	service := cmd.Arg(0)
+
+	if !yes && !cli.confirm("You will lost all your service data") {
+		return nil
+	}
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	return cli.RemoveService(context.Background(), name, service)
 }

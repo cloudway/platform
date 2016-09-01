@@ -1,0 +1,15 @@
+---
+Name: mock
+Display-Name: Mock 1.0
+Description: A mock plugin for testing.
+Version: '1.0'
+Vendor: cloudway
+Category: Framework
+Base-Image: debian:jessie
+Endpoints:
+- Private-Host-Name: HOST
+  Private-Port-Name: PORT
+  Private-Port: 8080
+  Proxy-Mappings:
+  - Frontend: /
+    Backend: /
