@@ -112,6 +112,24 @@ func configure(opts *CreateOptions) *createConfig {
 	cfg.Env["CLOUDWAY_DATA_DIR"] = cfg.Home + "/data"
 	cfg.Env["CLOUDWAY_LOG_DIR"] = cfg.Home + "/logs"
 
+	// passthrough plugin specific environment variables from broker
+	prefix := "CLOUDWAY_PLUGIN_" + strings.ToUpper(cfg.Plugin.Name) + "_"
+	for _, e := range os.Environ() {
+		kv := strings.SplitN(e, "=", 2)
+		if strings.HasPrefix(kv[0], prefix) {
+			k := kv[0][len(prefix):]
+			if _, exists := cfg.Env[k]; !exists {
+				cfg.Env[k] = kv[1]
+			}
+		}
+	}
+	for k, v := range config.GetSection("plugin:" + cfg.Plugin.Name) {
+		k = strings.ToUpper(k)
+		if _, exists := cfg.Env[k]; !exists {
+			cfg.Env[k] = v
+		}
+	}
+
 	return cfg
 }
 
@@ -296,14 +314,6 @@ func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg
 
 func readBuildStream(in io.Reader, out io.Writer) (id string, err error) {
 	const SUCCESS = "Successfully built "
-
-	type Flusher interface {
-		Flush()
-	}
-
-	type ErrFlusher interface {
-		Flush() error
-	}
 
 	var dec = json.NewDecoder(in)
 	for {

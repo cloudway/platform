@@ -30,7 +30,10 @@ if [ -z "$CLOUDWAY_SCM_URL" -a -n "$BITBUCKET_ENV_BITBUCKET_URL" ]; then
 
     cwman config "scm.type" "bitbucket"
     cwman config "scm.url" "$BITBUCKET_URL"
-    cwman config "scm.clone_url" "git clone ssh://git@git.${CLOUDWAY_DOMAIN}:7999/<namespace>/<repo>.git"
+
+    if [ -z "$(cwman config scm.clone_url)" ]; then
+        cwman config "scm.clone_url" "git clone ssh://git@git.${CLOUDWAY_DOMAIN}:7999/<namespace>/<repo>.git"
+    fi
 fi
 
 # configure postfix
