@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -215,7 +216,38 @@ func (cli *bitbucketClient) Deploy(namespace, name string, branch string) error 
 }
 
 func (cli *bitbucketClient) DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer) error {
-	return cli.Deploy(namespace, name, branch) // FIXME
+	errCh := make(chan error)
+	go func() {
+		errCh <- cli.Deploy(namespace, name, branch)
+	}()
+
+	var (
+		tiker     = time.NewTicker(500 * time.Millisecond)
+		ticked    = false
+		spinChars = `-\|/`
+		spinning  = 0
+	)
+	for {
+		select {
+		case err := <-errCh:
+			tiker.Stop()
+			if ticked {
+				fmt.Fprint(stdout, "\033[?25h\bdone.\n")
+			}
+			return err
+		case <-tiker.C:
+			if !ticked {
+				ticked = true
+				fmt.Fprint(stdout, "\033[?25lLoading...  ")
+			} else {
+				fmt.Fprint(stdout, "\b"+spinChars[spinning:spinning+1])
+				spinning++
+				if spinning == len(spinChars) {
+					spinning = 0
+				}
+			}
+		}
+	}
 }
 
 func (cli *bitbucketClient) GetDeploymentBranch(namespace, name string) (*scm.Branch, error) {
