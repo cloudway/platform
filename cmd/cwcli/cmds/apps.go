@@ -33,6 +33,7 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:start          Start an application
   app:stop           Stop an application
   app:restart        Restart an application
+  app:service        Manage application services
   app:clone          Clone application source code
   app:deploy         Deploy an application
   app:upload         Upload an application repository
@@ -43,9 +44,6 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:env            Get or set application environment variables
   app:open           Open the application in a web brower
   app:ssh            Log into application console via SSH
-
-  app:service:add    Add new service to the application
-  app:service:rm     Remove service from the application
 `
 
 func (cli *CWCli) CmdApps(args ...string) error {
@@ -647,8 +645,48 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 	return nil
 }
 
+const appServiceUsage = `Usage: cwcli app:service [COMMAND]
+
+Manage application services.
+
+Additional commands, type "cwcli help app:service COMMAND" for more details:
+
+  add                Add services to the application
+  remove             Remove a service from the applicaiton
+`
+
+func (cli *CWCli) CmdAppService(args ...string) error {
+	var help bool
+
+	cmd := cli.Subcmd("app:service", "")
+	cmd.Require(mflag.Exact, 0)
+	cmd.BoolVar(&help, []string{"-help"}, false, "Print usage")
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.ParseFlags(args, false)
+
+	if help {
+		fmt.Fprintln(cli.stdout, appServiceUsage)
+		os.Exit(0)
+	}
+
+	name := cli.getAppName(cmd)
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	app, err := cli.GetApplicationInfo(context.Background(), name)
+	if err != nil {
+		return err
+	}
+	for _, p := range app.Services {
+		fmt.Fprintf(cli.stdout, "%-12.12s%s\n", p.Name, p.DisplayName)
+	}
+	return nil
+}
+
 func (cli *CWCli) CmdAppServiceAdd(args ...string) error {
-	cmd := cli.Subcmd("app:service:add", "SERVICES...")
+	cmd := cli.Subcmd("app:service add", "SERVICES...")
 	cmd.Require(mflag.Min, 1)
 	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
 	cmd.ParseFlags(args, true)
@@ -666,7 +704,7 @@ func (cli *CWCli) CmdAppServiceAdd(args ...string) error {
 func (cli *CWCli) CmdAppServiceRemove(args ...string) error {
 	var yes bool
 
-	cmd := cli.Subcmd("app:service:rm", "SERVICE")
+	cmd := cli.Subcmd("app:service remove", "SERVICE")
 	cmd.Require(mflag.Exact, 1)
 	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
 	cmd.BoolVar(&yes, []string{"y"}, false, "Confirm 'yes' to remove the service")
