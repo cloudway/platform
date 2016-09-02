@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/cloudway/platform/api/client"
+	"github.com/cloudway/platform/cmd/cwcli/cmds/ansi"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/cli"
 	flag "github.com/cloudway/platform/pkg/mflag"
@@ -161,7 +162,7 @@ func (c *CWCli) ConnectAndLogin() (err error) {
 func (cli *CWCli) confirm(prompt string) bool {
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Fprintf(cli.stdout, alert("WARNING")+": "+prompt+", continue (yes/no)? ")
+		fmt.Fprintf(cli.stdout, ansi.Danger("WARNING")+": "+prompt+", continue (yes/no)? ")
 		answer, err := reader.ReadString('\n')
 		if err == io.EOF {
 			return false

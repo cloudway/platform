@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/cloudway/platform/api/types"
+	"github.com/cloudway/platform/cmd/cwcli/cmds/ansi"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/mflag"
@@ -543,7 +544,7 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
 		var display = func(ref *types.Branch) {
 			display := ref.DisplayId
 			if ref.Id == deployments.Current.Id {
-				display = "* " + hilite(display)
+				display = "* " + ansi.Hilite(display)
 			} else {
 				display = "  " + display
 			}
