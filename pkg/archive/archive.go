@@ -292,30 +292,3 @@ func ExtractFiles(extractDir string, r io.Reader) error {
 		}
 	}
 }
-
-func PrepareRepo(content io.Reader, zip bool) (repodir string, err error) {
-	// create a temporary directory to hold deployment archive
-	repodir, err = ioutil.TempDir("", "deploy")
-	if err != nil {
-		return "", err
-	}
-
-	// save archive to a temporary file
-	filename := filepath.Join(repodir, filepath.Base(repodir)+".tar.gz")
-	repofile, err := os.Create(filename)
-	if err != nil {
-		return
-	}
-	defer repofile.Close()
-
-	if zip {
-		w := gzip.NewWriter(repofile)
-		_, err = io.Copy(w, content)
-		if err == nil {
-			err = w.Close()
-		}
-	} else {
-		_, err = io.Copy(repofile, content)
-	}
-	return
-}

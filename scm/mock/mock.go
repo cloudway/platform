@@ -308,7 +308,7 @@ func (mock mockSCM) DeployWithLog(namespace, name string, branch string, stdout,
 		return err
 	}
 
-	return scm.DeployRepository(cli, context.Background(), name, namespace, repofile, stdout, stderr)
+	return cli.DeployRepo(context.Background(), name, namespace, repofile, stdout, stderr)
 }
 
 const _DEFAULT_BRANCH = "refs/heads/master"
