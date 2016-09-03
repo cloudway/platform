@@ -41,6 +41,29 @@ type CreateApplication struct {
 	Repo      string
 }
 
+// ContainerStatus contains response of remote API:
+// Get "/applications/{name}/status"
+type ContainerStatus struct {
+	ID          string
+	Category    manifest.Category
+	Name        string
+	DisplayName string
+	IPAddress   string
+	Ports       []string
+	State       manifest.ActiveState
+}
+
+// ProcessList contains response of remote API:
+// Get "/applications/{name}/procs"
+type ProcessList struct {
+	ID          string
+	Category    manifest.Category
+	Name        string
+	DisplayName string
+	Headers     []string
+	Processes   [][]string
+}
+
 // Branch is a branch of deployment.
 type Branch struct {
 	// The branch identifier.

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/cloudway/platform/api/client"
+	"github.com/cloudway/platform/cmd/cwcli/cmds/ansi"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/cli"
 	flag "github.com/cloudway/platform/pkg/mflag"
@@ -39,6 +40,8 @@ var CommandUsage = []Command{
 	{"app:start", "Start an application"},
 	{"app:stop", "Stop an application"},
 	{"app:restart", "Restart an application"},
+	{"app:status", "Show application status"},
+	{"app:ps", "Show application processes"},
 	{"app:service", "Manage application services"},
 	{"app:service add", "Add services to the application"},
 	{"app:service remove", "Remove service from the application"},
@@ -84,6 +87,8 @@ func Init(host string, stdout, stderr io.Writer) *CWCli {
 		"app:start":          c.CmdAppStart,
 		"app:stop":           c.CmdAppStop,
 		"app:restart":        c.CmdAppRestart,
+		"app:status":         c.CmdAppStatus,
+		"app:ps":             c.CmdAppPs,
 		"app:service":        c.CmdAppService,
 		"app:service add":    c.CmdAppServiceAdd,
 		"app:service remove": c.CmdAppServiceRemove,
@@ -161,7 +166,7 @@ func (c *CWCli) ConnectAndLogin() (err error) {
 func (cli *CWCli) confirm(prompt string) bool {
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Fprintf(cli.stdout, alert("WARNING")+": "+prompt+", continue (yes/no)? ")
+		fmt.Fprintf(cli.stdout, ansi.Danger("WARNING")+": "+prompt+", continue (yes/no)? ")
 		answer, err := reader.ReadString('\n')
 		if err == io.EOF {
 			return false

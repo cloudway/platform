@@ -16,8 +16,10 @@ import (
 	"strings"
 
 	"github.com/cloudway/platform/api/types"
+	"github.com/cloudway/platform/cmd/cwcli/cmds/ansi"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/archive"
+	"github.com/cloudway/platform/pkg/manifest"
 	"github.com/cloudway/platform/pkg/mflag"
 	"github.com/cloudway/platform/pkg/opts"
 )
@@ -33,6 +35,8 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:start          Start an application
   app:stop           Stop an application
   app:restart        Restart an application
+  app:status         Show application status
+  app:ps             Show application processes
   app:service        Manage application services
   app:clone          Clone application source code
   app:deploy         Deploy an application
@@ -141,6 +145,16 @@ func searchFile(name string) (string, error) {
 	}
 }
 
+func (cli *CWCli) writeJson(obj interface{}) {
+	if ansi.IsTerminal {
+		b, _ := json.MarshalIndent(obj, "", "  ")
+		cli.stdout.Write(b)
+		fmt.Fprintln(cli.stdout)
+	} else {
+		json.NewEncoder(os.Stdout).Encode(obj)
+	}
+}
+
 func (cli *CWCli) CmdAppInfo(args ...string) error {
 	var js bool
 
@@ -161,8 +175,7 @@ func (cli *CWCli) CmdAppInfo(args ...string) error {
 	}
 
 	if js {
-		b, _ := json.MarshalIndent(&app, "", "   ")
-		fmt.Fprintln(cli.stdout, string(b))
+		cli.writeJson(&app)
 	} else {
 		fmt.Fprintf(cli.stdout, "Name:       %s\n", app.Name)
 		fmt.Fprintf(cli.stdout, "Namespace:  %s\n", app.Namespace)
@@ -518,6 +531,155 @@ func (cli *CWCli) CmdAppRestart(args ...string) error {
 	return cli.RestartApplication(context.Background(), name)
 }
 
+//noinspection GoPlaceholderCount
+func (cli *CWCli) CmdAppStatus(args ...string) error {
+	var js bool
+
+	cmd := cli.Subcmd("app:status", "")
+	cmd.Require(mflag.Exact, 0)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.BoolVar(&js, []string{"-json"}, false, "Display as JSON")
+	cmd.ParseFlags(args, true)
+	name := cli.getAppName(cmd)
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	status, err := cli.GetApplicationStatus(context.Background(), name)
+	if err != nil {
+		return err
+	}
+
+	if js {
+		cli.writeJson(status)
+		return nil
+	}
+
+	var maxNameLen, maxIPLen, maxPortsLen int = 4, 2, 5
+	var allPorts = make([]string, len(status))
+	for i, s := range status {
+		if len(s.DisplayName) > maxNameLen {
+			maxNameLen = len(s.DisplayName)
+		}
+		if len(s.IPAddress) > maxIPLen {
+			maxIPLen = len(s.IPAddress)
+		}
+		allPorts[i] = strings.Join(s.Ports, ",")
+		if len(allPorts[i]) > maxPortsLen {
+			maxPortsLen = len(allPorts)
+		}
+	}
+
+	format := fmt.Sprintf("%%-12.12s   %%-%ds   %%-%ds   %%-%ds   %%s\n", maxNameLen, maxIPLen, maxPortsLen)
+	fmt.Fprintf(cli.stdout, format, "ID", "NAME", "IP", "PORTS", "STATE")
+
+	for i, s := range status {
+		if s.Category.IsFramework() {
+			fmt.Fprintf(cli.stdout, format, s.ID, s.DisplayName, s.IPAddress, allPorts[i], wrapState(s.State))
+		}
+	}
+	for i, s := range status {
+		if !s.Category.IsFramework() {
+			fmt.Fprintf(cli.stdout, format, s.ID, s.DisplayName, s.IPAddress, allPorts[i], wrapState(s.State))
+		}
+	}
+
+	return nil
+}
+
+func wrapState(state manifest.ActiveState) string {
+	switch state {
+	case manifest.StateRunning:
+		return ansi.Success(state.String())
+	case manifest.StateStarting, manifest.StateRestarting, manifest.StateStopping:
+		return ansi.Warning(state.String())
+	case manifest.StateBuilding:
+		return ansi.Info(state.String())
+	default:
+		return ansi.Fail(state.String())
+	}
+}
+
+func (cli *CWCli) CmdAppPs(args ...string) error {
+	var js bool
+
+	cmd := cli.Subcmd("app:ps", "")
+	cmd.Require(mflag.Exact, 0)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.BoolVar(&js, []string{"-json"}, false, "Display as JSON")
+	cmd.ParseFlags(args, true)
+	name := cli.getAppName(cmd)
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	procs, err := cli.GetApplicationProcesses(context.Background(), name)
+	if err != nil {
+		return err
+	}
+
+	if len(procs) == 0 {
+		return nil
+	}
+
+	if js {
+		cli.writeJson(procs)
+		return nil
+	}
+
+	var widths = make([]int, len(procs[0].Headers))
+	for i, hdr := range procs[0].Headers {
+		widths[i] = len(hdr)
+	}
+	for _, pl := range procs {
+		for _, ps := range pl.Processes {
+			for i, p := range ps {
+				if len(p) > widths[i] {
+					widths[i] = len(ps)
+				}
+			}
+		}
+	}
+
+	var format string
+	for i := 0; i < len(widths)-1; i++ {
+		format += fmt.Sprintf("%%-%ds ", widths[i])
+	}
+	format += "%s\n"
+
+	for _, pl := range procs {
+		if pl.Category.IsFramework() {
+			formatProcessList(cli.stdout, format, pl)
+		}
+	}
+	for _, pl := range procs {
+		if !pl.Category.IsFramework() {
+			formatProcessList(cli.stdout, format, pl)
+		}
+	}
+
+	return nil
+}
+
+func formatProcessList(out io.Writer, format string, pl *types.ProcessList) {
+	fmt.Fprintln(out, ansi.Info(pl.ID[:12]+" "+pl.DisplayName))
+	formatStrings(out, format, pl.Headers)
+	for _, ps := range pl.Processes {
+		formatStrings(out, format, ps)
+	}
+	fmt.Fprintln(out)
+}
+
+func formatStrings(out io.Writer, format string, ps []string) {
+	var args = make([]interface{}, len(ps))
+	for i, p := range ps {
+		args[i] = p
+	}
+	fmt.Fprintf(out, format, args...)
+}
+
 func (cli *CWCli) CmdAppDeploy(args ...string) error {
 	var branch string
 	var show bool
@@ -543,7 +705,7 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
 		var display = func(ref *types.Branch) {
 			display := ref.DisplayId
 			if ref.Id == deployments.Current.Id {
-				display = "* " + hilite(display)
+				display = "* " + ansi.Hilite(display)
 			} else {
 				display = "  " + display
 			}
