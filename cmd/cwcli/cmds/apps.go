@@ -36,6 +36,7 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:stop           Stop an application
   app:restart        Restart an application
   app:status         Show application status
+  app:ps             Show application processes
   app:service        Manage application services
   app:clone          Clone application source code
   app:deploy         Deploy an application
@@ -144,6 +145,16 @@ func searchFile(name string) (string, error) {
 	}
 }
 
+func (cli *CWCli) writeJson(obj interface{}) {
+	if ansi.IsTerminal {
+		b, _ := json.MarshalIndent(obj, "", "  ")
+		cli.stdout.Write(b)
+		fmt.Fprintln(cli.stdout)
+	} else {
+		json.NewEncoder(os.Stdout).Encode(obj)
+	}
+}
+
 func (cli *CWCli) CmdAppInfo(args ...string) error {
 	var js bool
 
@@ -164,8 +175,7 @@ func (cli *CWCli) CmdAppInfo(args ...string) error {
 	}
 
 	if js {
-		b, _ := json.MarshalIndent(&app, "", "   ")
-		fmt.Fprintln(cli.stdout, string(b))
+		cli.writeJson(&app)
 	} else {
 		fmt.Fprintf(cli.stdout, "Name:       %s\n", app.Name)
 		fmt.Fprintf(cli.stdout, "Namespace:  %s\n", app.Namespace)
@@ -542,8 +552,7 @@ func (cli *CWCli) CmdAppStatus(args ...string) error {
 	}
 
 	if js {
-		b, _ := json.MarshalIndent(status, "", "  ")
-		fmt.Fprintln(cli.stdout, string(b))
+		cli.writeJson(status)
 		return nil
 	}
 
@@ -590,6 +599,85 @@ func wrapState(state manifest.ActiveState) string {
 	default:
 		return ansi.Fail(state.String())
 	}
+}
+
+func (cli *CWCli) CmdAppPs(args ...string) error {
+	var js bool
+
+	cmd := cli.Subcmd("app:ps", "")
+	cmd.Require(mflag.Exact, 0)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.BoolVar(&js, []string{"-json"}, false, "Display as JSON")
+	cmd.ParseFlags(args, true)
+	name := cli.getAppName(cmd)
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	procs, err := cli.GetApplicationProcesses(context.Background(), name)
+	if err != nil {
+		return err
+	}
+
+	if len(procs) == 0 {
+		return nil
+	}
+
+	if js {
+		cli.writeJson(procs)
+		return nil
+	}
+
+	var widths = make([]int, len(procs[0].Headers))
+	for i, hdr := range procs[0].Headers {
+		widths[i] = len(hdr)
+	}
+	for _, pl := range procs {
+		for _, ps := range pl.Processes {
+			for i, p := range ps {
+				if len(p) > widths[i] {
+					widths[i] = len(ps)
+				}
+			}
+		}
+	}
+
+	var format string
+	for i := 0; i < len(widths)-1; i++ {
+		format += fmt.Sprintf("%%-%ds ", widths[i])
+	}
+	format += "%s\n"
+
+	for _, pl := range procs {
+		if pl.Category.IsFramework() {
+			formatProcessList(cli.stdout, format, pl)
+		}
+	}
+	for _, pl := range procs {
+		if !pl.Category.IsFramework() {
+			formatProcessList(cli.stdout, format, pl)
+		}
+	}
+
+	return nil
+}
+
+func formatProcessList(out io.Writer, format string, pl *types.ProcessList) {
+	fmt.Fprintln(out, ansi.Info(pl.ID[:12]+" "+pl.DisplayName))
+	formatStrings(out, format, pl.Headers)
+	for _, ps := range pl.Processes {
+		formatStrings(out, format, ps)
+	}
+	fmt.Fprintln(out)
+}
+
+func formatStrings(out io.Writer, format string, ps []string) {
+	var args = make([]interface{}, len(ps))
+	for i, p := range ps {
+		args[i] = p
+	}
+	fmt.Fprintf(out, format, args...)
 }
 
 func (cli *CWCli) CmdAppDeploy(args ...string) error {

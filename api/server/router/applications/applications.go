@@ -46,6 +46,7 @@ func NewRouter(broker *broker.Broker) router.Router {
 		router.NewPostRoute(appPath+"/stop", r.stop),
 		router.NewPostRoute(appPath+"/restart", r.restart),
 		router.NewGetRoute(appPath+"/status", r.status),
+		router.NewGetRoute(appPath+"/procs", r.procs),
 		router.NewPostRoute(appPath+"/deploy", r.deploy),
 		router.NewGetRoute(appPath+"/deploy", r.getDeployments),
 		router.NewGetRoute(appPath+"/repo", r.download),
@@ -343,6 +344,53 @@ func getPrivatePorts(meta *manifest.Plugin) (ports []string) {
 		}
 	}
 	return
+}
+
+func (ar *applicationsRouter) procs(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var (
+		user = httputils.UserFromContext(ctx)
+		br   = ar.NewUserBroker(user, ctx)
+		name = vars["name"]
+	)
+
+	if err := br.Refresh(); err != nil {
+		return err
+	}
+
+	cs, err := ar.FindAll(ctx, name, br.Namespace())
+	if err != nil {
+		return err
+	}
+
+	procs := make([]*types.ProcessList, 0, len(cs))
+	for _, c := range cs {
+		proc := &types.ProcessList{
+			ID:       c.ID,
+			Category: c.Category(),
+		}
+
+		tag := c.PluginTag()
+		if meta, err := ar.Hub.GetPluginInfo(tag); err == nil {
+			proc.Name = meta.Name
+			proc.DisplayName = meta.DisplayName
+		} else {
+			_, _, pn, pv, _ := hub.ParseTag(tag)
+			proc.Name = pn
+			proc.DisplayName = pn + " " + pv
+		}
+
+		if c.ServiceName() != "" {
+			proc.Name = c.ServiceName()
+		}
+
+		if top, err := c.ContainerTop(ctx, c.ID, nil); err == nil {
+			proc.Processes = top.Processes
+			proc.Headers = top.Titles
+			procs = append(procs, proc)
+		}
+	}
+
+	return httputils.WriteJSON(w, http.StatusOK, procs)
 }
 
 func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
