@@ -123,42 +123,12 @@ func (c *Color) unescape() string {
 	return "\033[0m"
 }
 
-// -------------------------------------------------------------------
-
 var (
-	primary = NewColor(FgBlue)
-	success = NewColor(FgHiGreen)
-	info    = NewColor(FgHiCyan)
-	warning = NewColor(FgYellow)
-	danger  = NewColor(FgHiRed)
-	fail    = NewColor(FgRed)
-	hilite  = NewColor(Bold)
+	Primary = NewColor(FgBlue).Wrap
+	Success = NewColor(FgHiGreen).Wrap
+	Info    = NewColor(FgHiCyan).Wrap
+	Warning = NewColor(FgYellow).Wrap
+	Danger  = NewColor(FgHiRed).Wrap
+	Fail    = NewColor(FgRed).Wrap
+	Hilite  = NewColor(Bold).Wrap
 )
-
-func Primary(s string) string {
-	return primary.Wrap(s)
-}
-
-func Success(s string) string {
-	return success.Wrap(s)
-}
-
-func Info(s string) string {
-	return info.Wrap(s)
-}
-
-func Warning(s string) string {
-	return warning.Wrap(s)
-}
-
-func Danger(s string) string {
-	return danger.Wrap(s)
-}
-
-func Fail(s string) string {
-	return fail.Wrap(s)
-}
-
-func Hilite(s string) string {
-	return hilite.Wrap(s)
-}
