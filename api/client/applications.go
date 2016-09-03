@@ -83,6 +83,15 @@ func (api *APIClient) RestartApplication(ctx context.Context, name string) error
 	return err
 }
 
+func (api *APIClient) GetApplicationStatus(ctx context.Context, name string) (status []*types.ContainerStatus, err error) {
+	resp, err := api.cli.Get(ctx, "/applications/"+name+"/status", nil, nil)
+	if err == nil {
+		err = json.NewDecoder(resp.Body).Decode(&status)
+		resp.EnsureClosed()
+	}
+	return
+}
+
 func (api *APIClient) DeployApplication(ctx context.Context, name, branch string, logger io.Writer) error {
 	var query url.Values
 	if branch != "" {

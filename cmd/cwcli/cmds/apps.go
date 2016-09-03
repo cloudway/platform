@@ -19,6 +19,7 @@ import (
 	"github.com/cloudway/platform/cmd/cwcli/cmds/ansi"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/archive"
+	"github.com/cloudway/platform/pkg/manifest"
 	"github.com/cloudway/platform/pkg/mflag"
 	"github.com/cloudway/platform/pkg/opts"
 )
@@ -34,6 +35,7 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:start          Start an application
   app:stop           Stop an application
   app:restart        Restart an application
+  app:status         Show application status
   app:service        Manage application services
   app:clone          Clone application source code
   app:deploy         Deploy an application
@@ -517,6 +519,77 @@ func (cli *CWCli) CmdAppRestart(args ...string) error {
 		return err
 	}
 	return cli.RestartApplication(context.Background(), name)
+}
+
+//noinspection GoPlaceholderCount
+func (cli *CWCli) CmdAppStatus(args ...string) error {
+	var js bool
+
+	cmd := cli.Subcmd("app:status", "")
+	cmd.Require(mflag.Exact, 0)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.BoolVar(&js, []string{"-json"}, false, "Display as JSON")
+	cmd.ParseFlags(args, true)
+	name := cli.getAppName(cmd)
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	status, err := cli.GetApplicationStatus(context.Background(), name)
+	if err != nil {
+		return err
+	}
+
+	if js {
+		b, _ := json.MarshalIndent(status, "", "  ")
+		fmt.Fprintln(cli.stdout, string(b))
+		return nil
+	}
+
+	var maxNameLen, maxIPLen, maxPortsLen int = 4, 2, 5
+	var allPorts = make([]string, len(status))
+	for i, s := range status {
+		if len(s.DisplayName) > maxNameLen {
+			maxNameLen = len(s.DisplayName)
+		}
+		if len(s.IPAddress) > maxIPLen {
+			maxIPLen = len(s.IPAddress)
+		}
+		allPorts[i] = strings.Join(s.Ports, ",")
+		if len(allPorts[i]) > maxPortsLen {
+			maxPortsLen = len(allPorts)
+		}
+	}
+
+	format := fmt.Sprintf("%%-12.12s   %%-%ds   %%-%ds   %%-%ds   %%s\n", maxNameLen, maxIPLen, maxPortsLen)
+	fmt.Fprintf(cli.stdout, format, "ID", "NAME", "IP", "PORTS", "STATE")
+
+	for i, s := range status {
+		if s.Category.IsFramework() {
+			fmt.Fprintf(cli.stdout, format, s.ID, s.DisplayName, s.IPAddress, allPorts[i], wrapState(s.State))
+		}
+	}
+	for i, s := range status {
+		if !s.Category.IsFramework() {
+			fmt.Fprintf(cli.stdout, format, s.ID, s.DisplayName, s.IPAddress, allPorts[i], wrapState(s.State))
+		}
+	}
+
+	return nil
+}
+
+func wrapState(state manifest.ActiveState) string {
+	switch state {
+	case manifest.StateRunning:
+		return ansi.Success(state.String())
+	case manifest.StateStarting, manifest.StateRestarting, manifest.StateStopping:
+		return ansi.Warning(state.String())
+	case manifest.StateBuilding:
+		return ansi.Info(state.String())
+	default:
+		return ansi.Fail(state.String())
+	}
 }
 
 func (cli *CWCli) CmdAppDeploy(args ...string) error {

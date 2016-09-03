@@ -22,9 +22,9 @@ func (cli *CWCtl) CmdRun(args ...string) error {
 
 	for {
 		sig := <-sigchan
-		logrus.Infof("Received signal: %s", sig)
 		switch sig {
 		case syscall.SIGHUP:
+			logrus.Infof("Received signal: %s", sig)
 			err := box.Restart()
 			if err == nil {
 				logrus.Info("Application restarted")
@@ -36,6 +36,7 @@ func (cli *CWCtl) CmdRun(args ...string) error {
 			sandbox.UpdateActiveState(box.ActiveState())
 
 		default:
+			logrus.Infof("Received signal: %s", sig)
 			err := box.Stop()
 			if err == nil {
 				logrus.Info("Application stopped")

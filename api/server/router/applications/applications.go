@@ -19,6 +19,8 @@ import (
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/container"
+	"github.com/cloudway/platform/hub"
+	"github.com/cloudway/platform/pkg/manifest"
 	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
 	"golang.org/x/net/context"
@@ -43,6 +45,7 @@ func NewRouter(broker *broker.Broker) router.Router {
 		router.NewPostRoute(appPath+"/start", r.start),
 		router.NewPostRoute(appPath+"/stop", r.stop),
 		router.NewPostRoute(appPath+"/restart", r.restart),
+		router.NewGetRoute(appPath+"/status", r.status),
 		router.NewPostRoute(appPath+"/deploy", r.deploy),
 		router.NewGetRoute(appPath+"/deploy", r.getDeployments),
 		router.NewGetRoute(appPath+"/repo", r.download),
@@ -279,6 +282,67 @@ func (ar *applicationsRouter) stop(ctx context.Context, w http.ResponseWriter, r
 func (ar *applicationsRouter) restart(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := httputils.UserFromContext(ctx)
 	return ar.NewUserBroker(user, ctx).RestartApplication(vars["name"])
+}
+
+func (ar *applicationsRouter) status(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var (
+		user = httputils.UserFromContext(ctx)
+		br   = ar.NewUserBroker(user, ctx)
+		name = vars["name"]
+	)
+
+	if err := br.Refresh(); err != nil {
+		return err
+	}
+
+	cs, err := ar.FindAll(ctx, name, br.Namespace())
+	if err != nil {
+		return err
+	}
+
+	status := make([]*types.ContainerStatus, len(cs))
+	for i, c := range cs {
+		status[i] = &types.ContainerStatus{
+			ID:        c.ID,
+			Category:  c.Category(),
+			IPAddress: c.IP(),
+			State:     c.ActiveState(ctx),
+		}
+
+		tag := c.PluginTag()
+		if meta, err := ar.Hub.GetPluginInfo(tag); err == nil {
+			status[i].Name = meta.Name
+			status[i].DisplayName = meta.DisplayName
+			status[i].Ports = getPrivatePorts(meta)
+		} else {
+			_, _, pn, pv, _ := hub.ParseTag(tag)
+			status[i].Name = pn
+			status[i].DisplayName = pn + " " + pv
+		}
+
+		if c.ServiceName() != "" {
+			status[i].Name = c.ServiceName()
+		}
+	}
+
+	return httputils.WriteJSON(w, http.StatusOK, status)
+}
+
+func getPrivatePorts(meta *manifest.Plugin) (ports []string) {
+	for _, ep := range meta.GetEndpoints("", "", "") {
+		port := strconv.FormatInt(int64(ep.PrivatePort), 10)
+		exists := false
+		for _, p := range ports {
+			if p == port {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			ports = append(ports, port)
+		}
+	}
+	return
 }
 
 func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
