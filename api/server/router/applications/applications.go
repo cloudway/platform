@@ -301,18 +301,21 @@ func (ar *applicationsRouter) status(ctx context.Context, w http.ResponseWriter,
 	if err != nil {
 		return err
 	}
+	if len(cs) == 0 {
+		return broker.ApplicationNotFoundError(name)
+	}
 
 	status := make([]*types.ContainerStatus, len(cs))
 	for i, c := range cs {
 		st := &types.ContainerStatus{}
 		plugin := ar.initContainerJSON(c, &st.ContainerJSONBase)
+		status[i] = st
 
 		st.IPAddress = c.IP()
 		st.State = c.ActiveState(ctx)
 		if plugin != nil {
 			st.Ports = plugin.GetPrivatePorts()
 		}
-		status[i] = st
 	}
 	return httputils.WriteJSON(w, http.StatusOK, status)
 }
@@ -354,6 +357,9 @@ func (ar *applicationsRouter) procs(ctx context.Context, w http.ResponseWriter, 
 	cs, err := ar.FindAll(ctx, name, br.Namespace())
 	if err != nil {
 		return err
+	}
+	if len(cs) == 0 {
+		return broker.ApplicationNotFoundError(name)
 	}
 
 	procs := make([]*types.ProcessList, 0, len(cs))
