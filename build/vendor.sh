@@ -58,6 +58,7 @@ clone git github.com/gorilla/mux 9fa818a44c2bf1396a17f9d5a3c0f6dd39d2ff8e
 clone git github.com/gorilla/securecookie ff356348f74133a59d3e93aa24b5b4551b6fe90d
 clone git github.com/gorilla/sessions 56ba4b0a11da87516629a57408a5f7e4c8ea7b0b
 clone git github.com/justinas/nosurf 2e708f28095ba17463e41438bbfd53abae8b6794
+clone git github.com/kardianos/osext c2c54e542fb797ad986b31721e1baedf214ca413
 clone git github.com/opencontainers/runc 8e22b1d36b2ec794e16fb47cf662c50e2553cb9f
 clone git github.com/oxtoacart/bpool 4e1c5567d7c2dd59fa4c7c83d34c2f3528b025d6
 clone git github.com/Sirupsen/logrus v0.10.0
@@ -67,6 +68,7 @@ clone git golang.org/x/net 30db96677b74e24b967e23f911eb3364fc61a011 https://gith
 clone git golang.org/x/oauth2 65a8d08c6292395d47053be10b3c5e91960def76 https://github.com/golang/oauth2.git
 clone git golang.org/x/sys eb2c74142fd19a79b3f237334c7384d5167b1b46 https://github.com/golang/sys.git
 clone git gopkg.in/authboss.v0 586415a7db9d2b1538cd2c05ca2dbbce0ee9cc62
+clone git gopkg.in/cookieo9/resources-go.v2 d27c04069d0d5dfe11c202dacbf745ae8d1ab181
 clone git gopkg.in/mgo.v2 29cc868a5ca65f401ff318143f9408d02f4799cc
 clone git gopkg.in/yaml.v2 a83829b6f1293c91addabc89d0571c246397bbf4
 clean

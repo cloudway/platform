@@ -50,6 +50,14 @@ go build \
     $SOURCE_PATH
 )
 
+if [ -n "$ASSETS" ]; then
+    # embeded resources to executable
+    zip -rj assets.zip "$ASSETS"
+    cat assets.zip >> "$DEST/$BINARY_FULLNAME"
+    zip -A "$DEST/$BINARY_FULLNAME"
+    rm assets.zip
+fi
+
 ln -sf "$BINARY_FULLNAME" "$DEST/$BINARY_SHORT_NAME$BINARY_EXTENSION"
 
 hash_files "$DEST/$BINARY_FULLNAME"
