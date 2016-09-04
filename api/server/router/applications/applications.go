@@ -303,47 +303,40 @@ func (ar *applicationsRouter) status(ctx context.Context, w http.ResponseWriter,
 
 	status := make([]*types.ContainerStatus, len(cs))
 	for i, c := range cs {
-		status[i] = &types.ContainerStatus{
-			ID:        c.ID,
-			Category:  c.Category(),
-			IPAddress: c.IP(),
-			State:     c.ActiveState(ctx),
-		}
+		st := &types.ContainerStatus{}
+		plugin := ar.initContainerJSON(c, &st.ContainerJSONBase)
 
-		tag := c.PluginTag()
-		if meta, err := ar.Hub.GetPluginInfo(tag); err == nil {
-			status[i].Name = meta.Name
-			status[i].DisplayName = meta.DisplayName
-			status[i].Ports = getPrivatePorts(meta)
-		} else {
-			_, _, pn, pv, _ := hub.ParseTag(tag)
-			status[i].Name = pn
-			status[i].DisplayName = pn + " " + pv
+		st.IPAddress = c.IP()
+		st.State = c.ActiveState(ctx)
+		if plugin != nil {
+			st.Ports = plugin.GetPrivatePorts()
 		}
-
-		if c.ServiceName() != "" {
-			status[i].Name = c.ServiceName()
-		}
+		status[i] = st
 	}
-
 	return httputils.WriteJSON(w, http.StatusOK, status)
 }
 
-func getPrivatePorts(meta *manifest.Plugin) (ports []string) {
-	for _, ep := range meta.GetEndpoints("", "", "") {
-		port := strconv.FormatInt(int64(ep.PrivatePort), 10)
-		exists := false
-		for _, p := range ports {
-			if p == port {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			ports = append(ports, port)
-		}
+func (ar *applicationsRouter) initContainerJSON(c *container.Container, data *types.ContainerJSONBase) *manifest.Plugin {
+	data.ID = c.ID
+	data.Category = c.Category()
+
+	tag := c.PluginTag()
+	plugin, err := ar.Hub.GetPluginInfo(tag)
+
+	if err == nil {
+		data.Name = plugin.Name
+		data.DisplayName = plugin.DisplayName
+	} else {
+		_, _, pn, pv, _ := hub.ParseTag(tag)
+		data.Name = pn
+		data.DisplayName = pn + " " + pv
 	}
-	return
+
+	if c.ServiceName() != "" {
+		data.Name = c.ServiceName()
+	}
+
+	return plugin
 }
 
 func (ar *applicationsRouter) procs(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -364,32 +357,14 @@ func (ar *applicationsRouter) procs(ctx context.Context, w http.ResponseWriter, 
 
 	procs := make([]*types.ProcessList, 0, len(cs))
 	for _, c := range cs {
-		proc := &types.ProcessList{
-			ID:       c.ID,
-			Category: c.Category(),
-		}
-
-		tag := c.PluginTag()
-		if meta, err := ar.Hub.GetPluginInfo(tag); err == nil {
-			proc.Name = meta.Name
-			proc.DisplayName = meta.DisplayName
-		} else {
-			_, _, pn, pv, _ := hub.ParseTag(tag)
-			proc.Name = pn
-			proc.DisplayName = pn + " " + pv
-		}
-
-		if c.ServiceName() != "" {
-			proc.Name = c.ServiceName()
-		}
-
 		if top, err := c.ContainerTop(ctx, c.ID, nil); err == nil {
+			proc := &types.ProcessList{}
+			ar.initContainerJSON(c, &proc.ContainerJSONBase)
 			proc.Processes = top.Processes
 			proc.Headers = top.Titles
 			procs = append(procs, proc)
 		}
 	}
-
 	return httputils.WriteJSON(w, http.StatusOK, procs)
 }
 
