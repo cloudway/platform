@@ -390,6 +390,29 @@ paths:
         404:
           description: application not found
 
+  /applications/{name}/stats:
+    get:
+      summary: Application Stats
+      description: Get live resource usage statistics
+      operationId: getApplicationStats
+      security:
+        - apiKey: []
+      produces:
+        - application/x-json-stream
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        200:
+          description: application statistics
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
   /applications/{name}/deploy:
     post:
       summary: Deploy application

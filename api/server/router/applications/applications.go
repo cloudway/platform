@@ -47,6 +47,7 @@ func NewRouter(broker *broker.Broker) router.Router {
 		router.NewPostRoute(appPath+"/restart", r.restart),
 		router.NewGetRoute(appPath+"/status", r.status),
 		router.NewGetRoute(appPath+"/procs", r.procs),
+		router.NewGetRoute(appPath+"/stats", r.stats),
 		router.NewPostRoute(appPath+"/deploy", r.deploy),
 		router.NewGetRoute(appPath+"/deploy", r.getDeployments),
 		router.NewGetRoute(appPath+"/repo", r.download),
@@ -366,6 +367,22 @@ func (ar *applicationsRouter) procs(ctx context.Context, w http.ResponseWriter, 
 		}
 	}
 	return httputils.WriteJSON(w, http.StatusOK, procs)
+}
+
+func (ar *applicationsRouter) stats(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var (
+		user = httputils.UserFromContext(ctx)
+		br   = ar.NewUserBroker(user, ctx)
+		name = vars["name"]
+	)
+
+	w.Header().Set("Content-Type", "application/x-json-stream")
+	err := br.Stats(ctx, name, w)
+	if err != nil {
+		w.Header().Del("Content-Type")
+		return err
+	}
+	return nil
 }
 
 func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {

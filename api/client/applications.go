@@ -101,6 +101,11 @@ func (api *APIClient) GetApplicationProcesses(ctx context.Context, name string) 
 	return
 }
 
+func (api *APIClient) GetApplicationStats(ctx context.Context, name string) (io.ReadCloser, error) {
+	resp, err := api.cli.Get(ctx, "/applications/"+name+"/stats", nil, nil)
+	return resp.Body, err
+}
+
 func (api *APIClient) DeployApplication(ctx context.Context, name, branch string, logger io.Writer) error {
 	var query url.Values
 	if branch != "" {

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/net/context"
 	"io"
 	"io/ioutil"
 	"net/url"
@@ -14,6 +13,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/docker/go-units"
+	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/api/types"
 	"github.com/cloudway/platform/cmd/cwcli/cmds/ansi"
@@ -37,6 +39,7 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:restart        Restart an application
   app:status         Show application status
   app:ps             Show application processes
+  app:stats          Display application live resource usage statistics
   app:service        Manage application services
   app:clone          Clone application source code
   app:deploy         Deploy an application
@@ -665,19 +668,90 @@ func (cli *CWCli) CmdAppPs(args ...string) error {
 
 func formatProcessList(out io.Writer, format string, pl *types.ProcessList) {
 	fmt.Fprintln(out, ansi.Info(pl.ID[:12]+" "+pl.DisplayName))
-	formatStrings(out, format, pl.Headers)
+	io.WriteString(out, formatStrings(format, pl.Headers))
 	for _, ps := range pl.Processes {
-		formatStrings(out, format, ps)
+		io.WriteString(out, formatStrings(format, ps))
 	}
 	fmt.Fprintln(out)
 }
 
-func formatStrings(out io.Writer, format string, ps []string) {
+func formatStrings(format string, ps []string) string {
 	var args = make([]interface{}, len(ps))
 	for i, p := range ps {
 		args[i] = p
 	}
-	fmt.Fprintf(out, format, args...)
+	return fmt.Sprintf(format, args...)
+}
+
+func (cli *CWCli) CmdAppStats(args ...string) error {
+	cmd := cli.Subcmd("app:stats", "")
+	cmd.Require(mflag.Exact, 0)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.ParseFlags(args, true)
+	name := cli.getAppName(cmd)
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	resp, err := cli.GetApplicationStats(context.Background(), name)
+	if err != nil {
+		return err
+	}
+	defer resp.Close()
+
+	var dec = json.NewDecoder(resp)
+	for {
+		var stats []*types.ContainerStats
+		err = dec.Decode(&stats)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		titles := []string{"ID", "NAME", "CPU %", "MEM %", "MEM USAGE / LIMIT", "NET I/O R/W", "BLOCK I/O R/W"}
+		rows := make([][]string, len(stats))
+		for i, s := range stats {
+			rows[i] = []string{
+				s.ID[:12],
+				s.Name,
+				fmt.Sprintf("%.2f%%", s.CPUPercentage),
+				fmt.Sprintf("%.2f%%", s.MemoryPercentage),
+				units.HumanSize(float64(s.MemoryUsage)) + " / " + units.HumanSize(float64(s.MemoryLimit)),
+				units.HumanSize(float64(s.NetworkRx)) + " / " + units.HumanSize(float64(s.NetworkTx)),
+				units.HumanSize(float64(s.BlockRead)) + " / " + units.HumanSize(float64(s.BlockWrite)),
+			}
+		}
+
+		widths := make([]int, len(titles))
+		for i, t := range titles {
+			widths[i] = len(t)
+		}
+		for _, row := range rows {
+			for i, cell := range row {
+				if len(cell) > widths[i] {
+					widths[i] = len(cell)
+				}
+			}
+		}
+
+		format := ""
+		for _, w := range widths {
+			if format != "" {
+				format += "   "
+			}
+			format += fmt.Sprintf("%%-%ds", w)
+		}
+		format += "\n"
+
+		io.WriteString(cli.stdout, "\033[2J\033[H")
+		io.WriteString(cli.stdout, ansi.Hilite(formatStrings(format, titles)))
+		for _, line := range rows {
+			io.WriteString(cli.stdout, formatStrings(format, line))
+		}
+	}
 }
 
 func (cli *CWCli) CmdAppDeploy(args ...string) error {

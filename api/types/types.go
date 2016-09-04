@@ -66,6 +66,23 @@ type ProcessList struct {
 	Processes [][]string
 }
 
+// ContainerStats contains response of remote API:
+// Get "/applications/{name}/stats"
+type ContainerStats struct {
+	ID               string
+	Name             string
+	CPUTotalUsage    uint64
+	CPUSystemUsage   uint64
+	CPUPercentage    float64
+	MemoryUsage      uint64
+	MemoryLimit      uint64
+	MemoryPercentage float64
+	NetworkRx        uint64
+	NetworkTx        uint64
+	BlockRead        uint64
+	BlockWrite       uint64
+}
+
 // Branch is a branch of deployment.
 type Branch struct {
 	// The branch identifier.
