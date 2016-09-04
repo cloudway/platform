@@ -73,7 +73,26 @@ func (cli DockerClient) Inspect(ctx context.Context, id string) (*Container, err
 
 // Find all containers with the given name and namespace.
 func (cli DockerClient) FindAll(ctx context.Context, name, namespace string) ([]*Container, error) {
-	return find(cli, ctx, "", "", name, namespace)
+	cs, err := find(cli, ctx, "", "", name, namespace)
+	if err != nil {
+		return cs, err
+	}
+
+	// reorder the container list
+	var cs2, i = make([]*Container, len(cs)), 0
+	for _, c := range cs {
+		if c.Category().IsFramework() {
+			cs2[i] = c
+			i++
+		}
+	}
+	for _, c := range cs {
+		if !c.Category().IsFramework() {
+			cs2[i] = c
+			i++
+		}
+	}
+	return cs2, nil
 }
 
 // Find all application containers with the given name and namespace.

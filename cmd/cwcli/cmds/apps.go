@@ -560,14 +560,7 @@ func (cli *CWCli) CmdAppStatus(args ...string) error {
 
 	tab := NewTable("ID", "NAME", "IP", "PORTS", "STATE")
 	for _, s := range status {
-		if s.Category.IsFramework() {
-			tab.AddRow(s.ID[:12], s.DisplayName, s.IPAddress, strings.Join(s.Ports, ","), wrapState(s.State))
-		}
-	}
-	for _, s := range status {
-		if !s.Category.IsFramework() {
-			tab.AddRow(s.ID[:12], s.DisplayName, s.IPAddress, strings.Join(s.Ports, ","), wrapState(s.State))
-		}
+		tab.AddRow(s.ID[:12], s.DisplayName, s.IPAddress, strings.Join(s.Ports, ","), wrapState(s.State))
 	}
 	tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
 	tab.Display(cli.stdout, 3)

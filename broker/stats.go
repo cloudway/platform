@@ -199,18 +199,9 @@ func (br *UserBroker) Stats(ctx context.Context, name string, w io.Writer) error
 
 	var cStats = stats{}
 	for _, c := range cs {
-		if c.Category().IsFramework() {
-			s := br.newContainerStats(c)
-			cStats.cs = append(cStats.cs, s)
-			go s.Collect(br.DockerClient, ctx, stopChan, true)
-		}
-	}
-	for _, c := range cs {
-		if !c.Category().IsFramework() {
-			s := br.newContainerStats(c)
-			cStats.cs = append(cStats.cs, s)
-			go s.Collect(br.DockerClient, ctx, stopChan, true)
-		}
+		s := br.newContainerStats(c)
+		cStats.cs = append(cStats.cs, s)
+		go s.Collect(br.DockerClient, ctx, stopChan, true)
 	}
 
 	var errs []string
