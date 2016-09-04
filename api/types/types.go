@@ -41,27 +41,46 @@ type CreateApplication struct {
 	Repo      string
 }
 
-// ContainerStatus contains response of remote API:
-// Get "/applications/{name}/status"
-type ContainerStatus struct {
+// ContainerJSONBase identifies a container.
+type ContainerJSONBase struct {
 	ID          string
 	Category    manifest.Category
 	Name        string
 	DisplayName string
-	IPAddress   string
-	Ports       []string
-	State       manifest.ActiveState
+}
+
+// ContainerStatus contains response of remote API:
+// Get "/applications/{name}/status"
+type ContainerStatus struct {
+	ContainerJSONBase
+	IPAddress string
+	Ports     []string
+	State     manifest.ActiveState
 }
 
 // ProcessList contains response of remote API:
 // Get "/applications/{name}/procs"
 type ProcessList struct {
-	ID          string
-	Category    manifest.Category
-	Name        string
-	DisplayName string
-	Headers     []string
-	Processes   [][]string
+	ContainerJSONBase
+	Headers   []string
+	Processes [][]string
+}
+
+// ContainerStats contains response of remote API:
+// Get "/applications/{name}/stats"
+type ContainerStats struct {
+	ID               string
+	Name             string
+	CPUTotalUsage    uint64
+	CPUSystemUsage   uint64
+	CPUPercentage    float64
+	MemoryUsage      uint64
+	MemoryLimit      uint64
+	MemoryPercentage float64
+	NetworkRx        uint64
+	NetworkTx        uint64
+	BlockRead        uint64
+	BlockWrite       uint64
 }
 
 // Branch is a branch of deployment.

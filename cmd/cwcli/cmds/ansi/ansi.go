@@ -66,7 +66,7 @@ const (
 	BgBlue
 	BgMagenta
 	BgCyan
-	ByWhite
+	BgWhite
 )
 
 // Background Hi-Intensity text colors

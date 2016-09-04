@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/net/context"
 	"io"
 	"io/ioutil"
 	"net/url"
@@ -14,6 +13,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/docker/go-units"
+	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/api/types"
 	"github.com/cloudway/platform/cmd/cwcli/cmds/ansi"
@@ -37,6 +39,7 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:restart        Restart an application
   app:status         Show application status
   app:ps             Show application processes
+  app:stats          Display application live resource usage statistics
   app:service        Manage application services
   app:clone          Clone application source code
   app:deploy         Deploy an application
@@ -531,7 +534,6 @@ func (cli *CWCli) CmdAppRestart(args ...string) error {
 	return cli.RestartApplication(context.Background(), name)
 }
 
-//noinspection GoPlaceholderCount
 func (cli *CWCli) CmdAppStatus(args ...string) error {
 	var js bool
 
@@ -556,35 +558,19 @@ func (cli *CWCli) CmdAppStatus(args ...string) error {
 		return nil
 	}
 
-	var maxNameLen, maxIPLen, maxPortsLen int = 4, 2, 5
-	var allPorts = make([]string, len(status))
-	for i, s := range status {
-		if len(s.DisplayName) > maxNameLen {
-			maxNameLen = len(s.DisplayName)
-		}
-		if len(s.IPAddress) > maxIPLen {
-			maxIPLen = len(s.IPAddress)
-		}
-		allPorts[i] = strings.Join(s.Ports, ",")
-		if len(allPorts[i]) > maxPortsLen {
-			maxPortsLen = len(allPorts)
-		}
-	}
-
-	format := fmt.Sprintf("%%-12.12s   %%-%ds   %%-%ds   %%-%ds   %%s\n", maxNameLen, maxIPLen, maxPortsLen)
-	fmt.Fprintf(cli.stdout, format, "ID", "NAME", "IP", "PORTS", "STATE")
-
-	for i, s := range status {
+	tab := NewTable("ID", "NAME", "IP", "PORTS", "STATE")
+	for _, s := range status {
 		if s.Category.IsFramework() {
-			fmt.Fprintf(cli.stdout, format, s.ID, s.DisplayName, s.IPAddress, allPorts[i], wrapState(s.State))
+			tab.AddRow(s.ID[:12], s.DisplayName, s.IPAddress, strings.Join(s.Ports, ","), wrapState(s.State))
 		}
 	}
-	for i, s := range status {
+	for _, s := range status {
 		if !s.Category.IsFramework() {
-			fmt.Fprintf(cli.stdout, format, s.ID, s.DisplayName, s.IPAddress, allPorts[i], wrapState(s.State))
+			tab.AddRow(s.ID[:12], s.DisplayName, s.IPAddress, strings.Join(s.Ports, ","), wrapState(s.State))
 		}
 	}
-
+	tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
+	tab.Display(cli.stdout, 3)
 	return nil
 }
 
@@ -629,55 +615,62 @@ func (cli *CWCli) CmdAppPs(args ...string) error {
 		return nil
 	}
 
-	var widths = make([]int, len(procs[0].Headers))
-	for i, hdr := range procs[0].Headers {
-		widths[i] = len(hdr)
-	}
 	for _, pl := range procs {
-		for _, ps := range pl.Processes {
-			for i, p := range ps {
-				if len(p) > widths[i] {
-					widths[i] = len(ps)
-				}
-			}
+		io.WriteString(cli.stdout, ansi.Warning(pl.ID[:12])+" "+ansi.Info(pl.DisplayName+"\n"))
+		tab := NewTable(pl.Headers...)
+		for _, row := range pl.Processes {
+			tab.AddRow(row...)
 		}
+		tab.Display(cli.stdout, 1)
+		fmt.Fprintln(cli.stdout)
 	}
-
-	var format string
-	for i := 0; i < len(widths)-1; i++ {
-		format += fmt.Sprintf("%%-%ds ", widths[i])
-	}
-	format += "%s\n"
-
-	for _, pl := range procs {
-		if pl.Category.IsFramework() {
-			formatProcessList(cli.stdout, format, pl)
-		}
-	}
-	for _, pl := range procs {
-		if !pl.Category.IsFramework() {
-			formatProcessList(cli.stdout, format, pl)
-		}
-	}
-
 	return nil
 }
 
-func formatProcessList(out io.Writer, format string, pl *types.ProcessList) {
-	fmt.Fprintln(out, ansi.Info(pl.ID[:12]+" "+pl.DisplayName))
-	formatStrings(out, format, pl.Headers)
-	for _, ps := range pl.Processes {
-		formatStrings(out, format, ps)
-	}
-	fmt.Fprintln(out)
-}
+func (cli *CWCli) CmdAppStats(args ...string) error {
+	cmd := cli.Subcmd("app:stats", "")
+	cmd.Require(mflag.Exact, 0)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.ParseFlags(args, true)
+	name := cli.getAppName(cmd)
 
-func formatStrings(out io.Writer, format string, ps []string) {
-	var args = make([]interface{}, len(ps))
-	for i, p := range ps {
-		args[i] = p
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
 	}
-	fmt.Fprintf(out, format, args...)
+
+	resp, err := cli.GetApplicationStats(context.Background(), name)
+	if err != nil {
+		return err
+	}
+	defer resp.Close()
+
+	dec := json.NewDecoder(resp)
+	for {
+		var stats []*types.ContainerStats
+		err = dec.Decode(&stats)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		tab := NewTable("ID", "NAME", "%CPU", "%MEM", "MEM USAGE / LIMIT", "NET I/O R/W", "BLOCK I/O R/W")
+		tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
+		tab.SetColor(1, ansi.NewColor(ansi.FgCyan))
+		for _, s := range stats {
+			tab.AddRow(
+				s.ID[:12],
+				s.Name,
+				fmt.Sprintf("%.2f%%", s.CPUPercentage),
+				fmt.Sprintf("%.2f%%", s.MemoryPercentage),
+				units.BytesSize(float64(s.MemoryUsage))+" / "+units.BytesSize(float64(s.MemoryLimit)),
+				units.HumanSize(float64(s.NetworkRx))+" / "+units.HumanSize(float64(s.NetworkTx)),
+				units.HumanSize(float64(s.BlockRead))+" / "+units.HumanSize(float64(s.BlockWrite)))
+		}
+		io.WriteString(cli.stdout, "\033[2J\033[H")
+		tab.Display(cli.stdout, 2)
+	}
 }
 
 func (cli *CWCli) CmdAppDeploy(args ...string) error {
