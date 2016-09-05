@@ -30,7 +30,7 @@ func (cli *CWMan) CmdUpgrade(args ...string) error {
 
 	ctx := context.Background()
 
-	containers, err := cli.FindAll(ctx, "", "")
+	containers, err := cli.FindInNamespace(ctx, "")
 	if err != nil {
 		return err
 	}
@@ -42,9 +42,8 @@ func (cli *CWMan) CmdUpgrade(args ...string) error {
 		apps[key] = append(apps[key], c)
 	}
 
-	opts := types.CopyToContainerOptions{}
-
 	// Stop applications, copy support files, and restart applications
+	cpopts := types.CopyToContainerOptions{}
 	for app, cs := range apps {
 		logrus.Infof("upgrading application %s", app)
 		logError(container.ResolveServiceDependencies(cs))
@@ -55,7 +54,7 @@ func (cli *CWMan) CmdUpgrade(args ...string) error {
 			}
 			logrus.Infof("upgrading container %s.%s-%s", c.ServiceName(), c.Name, c.Namespace)
 			logError(c.Stop(ctx))
-			logError(c.CopyToContainer(ctx, c.ID, "/", file, opts))
+			logError(c.CopyToContainer(ctx, c.ID, "/", file, cpopts))
 			logError(c.Start(ctx))
 			file.Close()
 		}

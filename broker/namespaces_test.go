@@ -107,7 +107,7 @@ var _ = Describe("Namespaces", func() {
 		var assertNamespaceRemoved = func(namespace string) {
 			ctx := context.Background()
 
-			cs, err := broker.FindAll(ctx, "", namespace)
+			cs, err := broker.FindInNamespace(ctx, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cs).To(BeEmpty())
 

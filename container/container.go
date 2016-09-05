@@ -71,8 +71,17 @@ func (cli DockerClient) Inspect(ctx context.Context, id string) (*Container, err
 	}, nil
 }
 
+// FindInNamespace finds all containers in the given namespace. If the namespace
+// is an empty string, then returns all containers in the system.
+func (cli DockerClient) FindInNamespace(ctx context.Context, namespace string) ([]*Container, error) {
+	return find(cli, ctx, "", "", "", namespace)
+}
+
 // Find all containers with the given name and namespace.
 func (cli DockerClient) FindAll(ctx context.Context, name, namespace string) ([]*Container, error) {
+	if name == "" || namespace == "" {
+		return nil, nil
+	}
 	cs, err := find(cli, ctx, "", "", name, namespace)
 	if err != nil {
 		return cs, err
@@ -97,11 +106,17 @@ func (cli DockerClient) FindAll(ctx context.Context, name, namespace string) ([]
 
 // Find all application containers with the given name and namespace.
 func (cli DockerClient) FindApplications(ctx context.Context, name, namespace string) ([]*Container, error) {
+	if name == "" || namespace == "" {
+		return nil, nil
+	}
 	return find(cli, ctx, manifest.Framework, "", name, namespace)
 }
 
 // Find service container with the give name, namespace and service name.
 func (cli DockerClient) FindService(ctx context.Context, name, namespace, service string) ([]*Container, error) {
+	if name == "" || namespace == "" {
+		return nil, nil
+	}
 	return find(cli, ctx, manifest.Service, service, name, namespace)
 }
 
