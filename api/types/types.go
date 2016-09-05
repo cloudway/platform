@@ -55,6 +55,7 @@ type ContainerStatus struct {
 	ContainerJSONBase
 	IPAddress string
 	Ports     []string
+	Uptime    int64
 	State     manifest.ActiveState
 }
 

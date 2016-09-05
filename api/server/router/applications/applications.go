@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/cloudway/platform/api/server/httputils"
 	"github.com/cloudway/platform/api/server/router"
@@ -355,6 +356,11 @@ func (ar *applicationsRouter) getStatus(ctx context.Context, name, namespace str
 		st.State = c.ActiveState(ctx)
 		if plugin != nil {
 			st.Ports = plugin.GetPrivatePorts()
+		}
+
+		started, err := time.Parse(time.RFC3339Nano, c.State.StartedAt)
+		if err == nil {
+			st.Uptime = int64(time.Now().UTC().Sub(started))
 		}
 	}
 	return status, nil

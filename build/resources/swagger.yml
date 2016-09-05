@@ -919,6 +919,10 @@ definitions:
         items:
           type: string
         description: exported ports
+      Uptime:
+        type: integer
+        format: int64
+        description: container uptime in nanosecond
       State:
         type: integer
         description: active state

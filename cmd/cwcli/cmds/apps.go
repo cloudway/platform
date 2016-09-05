@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/docker/go-units"
 	"golang.org/x/net/context"
@@ -552,9 +553,11 @@ func (cli *CWCli) CmdAppStatus(args ...string) error {
 		return err
 	}
 
-	var header = []string{"ID", "NAME", "IP", "PORTS", "STATE"}
+	var header = []string{"ID", "NAME", "DISPLAY NAME", "IP ADDRESS", "PORTS", "UP TIME", "STATE"}
 	var addRow = func(tab *Table, s *types.ContainerStatus) {
-		tab.AddRow(s.ID[:12], s.DisplayName, s.IPAddress, strings.Join(s.Ports, ","), wrapState(s.State))
+		ports := strings.Join(s.Ports, ",")
+		uptime := units.HumanDuration(time.Duration(s.Uptime))
+		tab.AddRow(s.ID[:12], s.Name, s.DisplayName, s.IPAddress, ports, uptime, wrapState(s.State))
 	}
 
 	if all {
@@ -567,6 +570,7 @@ func (cli *CWCli) CmdAppStatus(args ...string) error {
 		} else {
 			tab := NewTable(header...)
 			tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
+			tab.SetColor(1, ansi.NewColor(ansi.FgCyan))
 			for name, st := range status {
 				tab.AddSubtitle(ansi.Info(name))
 				for _, s := range st {
@@ -585,6 +589,7 @@ func (cli *CWCli) CmdAppStatus(args ...string) error {
 		} else {
 			tab := NewTable(header...)
 			tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
+			tab.SetColor(1, ansi.NewColor(ansi.FgCyan))
 			for _, s := range st {
 				addRow(tab, s)
 			}
