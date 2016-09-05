@@ -552,6 +552,11 @@ func (cli *CWCli) CmdAppStatus(args ...string) error {
 		return err
 	}
 
+	var header = []string{"ID", "NAME", "IP", "PORTS", "STATE"}
+	var addRow = func(tab *Table, s *types.ContainerStatus) {
+		tab.AddRow(s.ID[:12], s.DisplayName, s.IPAddress, strings.Join(s.Ports, ","), wrapState(s.State))
+	}
+
 	if all {
 		status, err := cli.GetAllApplicationStatus(context.Background())
 		if err != nil {
@@ -560,11 +565,15 @@ func (cli *CWCli) CmdAppStatus(args ...string) error {
 		if js {
 			cli.writeJson(status)
 		} else {
+			tab := NewTable(header...)
+			tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
 			for name, st := range status {
-				io.WriteString(cli.stdout, ansi.Info(name)+"\n")
-				displayStatus(cli.stdout, st)
-				io.WriteString(cli.stdout, "\n")
+				tab.AddSubtitle(ansi.Info(name))
+				for _, s := range st {
+					addRow(tab, s)
+				}
 			}
+			tab.Display(cli.stdout, 3)
 		}
 	} else {
 		st, err := cli.GetApplicationStatus(context.Background(), name)
@@ -574,20 +583,16 @@ func (cli *CWCli) CmdAppStatus(args ...string) error {
 		if js {
 			cli.writeJson(st)
 		} else {
-			displayStatus(cli.stdout, st)
+			tab := NewTable(header...)
+			tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
+			for _, s := range st {
+				addRow(tab, s)
+			}
+			tab.Display(cli.stdout, 3)
 		}
 	}
 
 	return nil
-}
-
-func displayStatus(out io.Writer, status []*types.ContainerStatus) {
-	tab := NewTable("ID", "NAME", "IP", "PORTS", "STATE")
-	for _, s := range status {
-		tab.AddRow(s.ID[:12], s.DisplayName, s.IPAddress, strings.Join(s.Ports, ","), wrapState(s.State))
-	}
-	tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
-	tab.Display(out, 3)
 }
 
 func wrapState(state manifest.ActiveState) string {

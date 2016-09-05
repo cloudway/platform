@@ -30,22 +30,43 @@ func (tab *Table) AddRow(row ...string) {
 	tab.rows = append(tab.rows, row)
 }
 
+func (tab *Table) AddSubtitle(subtitle string) {
+	tab.rows = append(tab.rows, []string{subtitle})
+}
+
 func (tab *Table) Display(out io.Writer, gap int) {
+	// calculate column widths
 	widths := make([]int, len(tab.titles))
 	for i, t := range tab.titles {
 		widths[i] = len(t)
 	}
 	for _, row := range tab.rows {
-		for i, cell := range row {
-			if len(cell) > widths[i] {
-				widths[i] = len(cell)
+		if len(row) != 1 {
+			for i, cell := range row {
+				if len(cell) > widths[i] {
+					widths[i] = len(cell)
+				}
 			}
 		}
 	}
 
-	io.WriteString(out, tab.padding(widths, tab.titles, gap, true))
-	for _, row := range tab.rows {
-		io.WriteString(out, tab.padding(widths, row, gap, false))
+	var printHeader = true
+	for i, row := range tab.rows {
+		if len(row) == 1 {
+			// for a single cell row, treat this row as a subtitle
+			if i != 0 {
+				io.WriteString(out, "\n")
+			}
+			io.WriteString(out, row[0])
+			io.WriteString(out, "\n")
+			printHeader = true
+		} else {
+			if printHeader {
+				printHeader = false
+				io.WriteString(out, tab.padding(widths, tab.titles, gap, true))
+			}
+			io.WriteString(out, tab.padding(widths, row, gap, false))
+		}
 	}
 }
 
