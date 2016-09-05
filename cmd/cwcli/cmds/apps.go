@@ -535,36 +535,59 @@ func (cli *CWCli) CmdAppRestart(args ...string) error {
 }
 
 func (cli *CWCli) CmdAppStatus(args ...string) error {
-	var js bool
+	var all, js bool
+	var name string
 
 	cmd := cli.Subcmd("app:status", "")
 	cmd.Require(mflag.Exact, 0)
 	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.BoolVar(&all, []string{"-all"}, false, "Display all application status")
 	cmd.BoolVar(&js, []string{"-json"}, false, "Display as JSON")
 	cmd.ParseFlags(args, true)
-	name := cli.getAppName(cmd)
 
+	if !all {
+		name = cli.getAppName(cmd)
+	}
 	if err := cli.ConnectAndLogin(); err != nil {
 		return err
 	}
 
-	status, err := cli.GetApplicationStatus(context.Background(), name)
-	if err != nil {
-		return err
+	if all {
+		status, err := cli.GetAllApplicationStatus(context.Background())
+		if err != nil {
+			return err
+		}
+		if js {
+			cli.writeJson(status)
+		} else {
+			for name, st := range status {
+				io.WriteString(cli.stdout, ansi.Info(name)+"\n")
+				displayStatus(cli.stdout, st)
+				io.WriteString(cli.stdout, "\n")
+			}
+		}
+	} else {
+		st, err := cli.GetApplicationStatus(context.Background(), name)
+		if err != nil {
+			return err
+		}
+		if js {
+			cli.writeJson(st)
+		} else {
+			displayStatus(cli.stdout, st)
+		}
 	}
 
-	if js {
-		cli.writeJson(status)
-		return nil
-	}
+	return nil
+}
 
+func displayStatus(out io.Writer, status []*types.ContainerStatus) {
 	tab := NewTable("ID", "NAME", "IP", "PORTS", "STATE")
 	for _, s := range status {
 		tab.AddRow(s.ID[:12], s.DisplayName, s.IPAddress, strings.Join(s.Ports, ","), wrapState(s.State))
 	}
 	tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
-	tab.Display(cli.stdout, 3)
-	return nil
+	tab.Display(out, 3)
 }
 
 func wrapState(state manifest.ActiveState) string {

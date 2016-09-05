@@ -92,6 +92,15 @@ func (api *APIClient) GetApplicationStatus(ctx context.Context, name string) (st
 	return
 }
 
+func (api *APIClient) GetAllApplicationStatus(ctx context.Context) (status map[string][]*types.ContainerStatus, err error) {
+	resp, err := api.cli.Get(ctx, "/applications/status/", nil, nil)
+	if err == nil {
+		err = json.NewDecoder(resp.Body).Decode(&status)
+		resp.EnsureClosed()
+	}
+	return
+}
+
 func (api *APIClient) GetApplicationProcesses(ctx context.Context, name string) (procs []*types.ProcessList, err error) {
 	resp, err := api.cli.Get(ctx, "/applications/"+name+"/procs", nil, nil)
 	if err == nil {

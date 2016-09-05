@@ -363,6 +363,25 @@ paths:
         404:
           description: application not found
 
+  /applications/status/:
+    get:
+      summary: All Application Status
+      description: Get all application status
+      operationId: getAllApplicationStatus
+      security:
+        - apiKey: []
+      produces:
+        - application/json
+      responses:
+        200:
+          description: application status
+          schema:
+            type: object
+            additionalProperties:
+              $ref: '#/definitions/ContainerStatus'
+        401:
+          description: unauthorized
+
   /applications/{name}/procs:
     get:
       summary: Application Processes

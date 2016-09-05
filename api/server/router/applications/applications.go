@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/cloudway/platform/api/server/httputils"
 	"github.com/cloudway/platform/api/server/router"
@@ -46,6 +47,7 @@ func NewRouter(broker *broker.Broker) router.Router {
 		router.NewPostRoute(appPath+"/stop", r.stop),
 		router.NewPostRoute(appPath+"/restart", r.restart),
 		router.NewGetRoute(appPath+"/status", r.status),
+		router.NewGetRoute("/applications/status/", r.allStatus),
 		router.NewGetRoute(appPath+"/procs", r.procs),
 		router.NewGetRoute(appPath+"/stats", r.stats),
 		router.NewPostRoute(appPath+"/deploy", r.deploy),
@@ -292,17 +294,55 @@ func (ar *applicationsRouter) status(ctx context.Context, w http.ResponseWriter,
 		br   = ar.NewUserBroker(user, ctx)
 		name = vars["name"]
 	)
+	if err := br.Refresh(); err != nil {
+		return err
+	}
+	status, err := ar.getStatus(ctx, name, br.Namespace())
+	if err != nil {
+		return err
+	}
+	return httputils.WriteJSON(w, http.StatusOK, status)
+}
 
+func (ar *applicationsRouter) allStatus(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var (
+		user = httputils.UserFromContext(ctx)
+		br   = ar.NewUserBroker(user, ctx)
+	)
 	if err := br.Refresh(); err != nil {
 		return err
 	}
 
-	cs, err := ar.FindAll(ctx, name, br.Namespace())
+	var (
+		apps      = br.User.Basic().Applications
+		namespace = br.Namespace()
+		status    = map[string][]*types.ContainerStatus{}
+		mu        sync.Mutex
+		wg        sync.WaitGroup
+	)
+	wg.Add(len(apps))
+	for name := range apps {
+		go func(name string, wg *sync.WaitGroup) {
+			defer wg.Done()
+			st, err := ar.getStatus(ctx, name, namespace)
+			if err == nil {
+				mu.Lock()
+				status[name] = st
+				mu.Unlock()
+			}
+		}(name, &wg)
+	}
+	wg.Wait()
+	return httputils.WriteJSON(w, http.StatusOK, status)
+}
+
+func (ar *applicationsRouter) getStatus(ctx context.Context, name, namespace string) ([]*types.ContainerStatus, error) {
+	cs, err := ar.FindAll(ctx, name, namespace)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(cs) == 0 {
-		return broker.ApplicationNotFoundError(name)
+		return nil, broker.ApplicationNotFoundError(name)
 	}
 
 	status := make([]*types.ContainerStatus, len(cs))
@@ -317,7 +357,7 @@ func (ar *applicationsRouter) status(ctx context.Context, w http.ResponseWriter,
 			st.Ports = plugin.GetPrivatePorts()
 		}
 	}
-	return httputils.WriteJSON(w, http.StatusOK, status)
+	return status, nil
 }
 
 func (ar *applicationsRouter) initContainerJSON(c *container.Container, data *types.ContainerJSONBase) *manifest.Plugin {
