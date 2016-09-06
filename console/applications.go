@@ -105,7 +105,7 @@ func (con *Console) getApplications(w http.ResponseWriter, r *http.Request) {
 
 	data := con.layoutUserData(w, r, user)
 	data.MergeKV("apps", apps)
-	con.mustRender(w, r, "applications", data)
+	con.mustRender(w, r, "app_list", data)
 }
 
 func (con *Console) createApplicationForm(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +117,7 @@ func (con *Console) createApplicationForm(w http.ResponseWriter, r *http.Request
 	data := con.layoutUserData(w, r, user)
 	data.MergeKV("domain", defaults.Domain())
 	data.MergeKV("available_plugins", con.NewUserBroker(user).GetInstalledPlugins(""))
-	con.mustRender(w, r, "createapp", data)
+	con.mustRender(w, r, "app_create", data)
 }
 
 func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +141,7 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
 		data.MergeKV("repo", r.PostForm.Get("repo"))
 		data.MergeKV("domain", defaults.Domain())
 		data.MergeKV("available_plugins", con.NewUserBroker(user).GetInstalledPlugins(""))
-		con.mustRender(w, r, "createapp", data)
+		con.mustRender(w, r, "app_create", data)
 		return
 	}
 
@@ -367,7 +367,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 
 	data.MergeKV("app", appData)
 	data.MergeKV("available_plugins", plugins)
-	con.mustRender(w, r, "application", data)
+	con.mustRender(w, r, "app", data)
 }
 
 func getPrivatePorts(meta *manifest.Plugin) string {
@@ -471,7 +471,7 @@ func (con *Console) showApplicationSettings(w http.ResponseWriter, r *http.Reque
 	appData.Hosts = app.Hosts
 
 	data.MergeKV("app", appData)
-	con.mustRender(w, r, "application_settings", data)
+	con.mustRender(w, r, "app_settings", data)
 }
 
 func (con *Console) restartApplication(w http.ResponseWriter, r *http.Request) {
