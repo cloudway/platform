@@ -129,7 +129,7 @@ func (cli *bitbucketClient) purgeRepo(ctx context.Context, namespace, name strin
 	}
 }
 
-func (cli *bitbucketClient) CreateRepo(namespace, name string) error {
+func (cli *bitbucketClient) CreateRepo(namespace, name string, purge bool) error {
 	opts := CreateRepoOpts{
 		Name: name,
 	}
@@ -145,7 +145,7 @@ func (cli *bitbucketClient) CreateRepo(namespace, name string) error {
 		resp.EnsureClosed()
 
 		// remove the garbage repository
-		if !purged && resp.StatusCode == http.StatusConflict {
+		if purge && !purged && resp.StatusCode == http.StatusConflict {
 			err = cli.purgeRepo(ctx, namespace, name)
 			purged = true
 			if err == nil {

@@ -127,6 +127,14 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 		opts.Namespace = user.Namespace
 	}
 
+	// purge leftover containers
+	leftovers, err := br.FindAll(br.ctx, opts.Name, opts.Namespace)
+	if err == nil {
+		for _, c := range leftovers {
+			c.Destroy(br.ctx)
+		}
+	}
+
 	// create all containers
 	containers, err = br.createContainers(opts, names, plugins)
 	if err != nil {
@@ -134,7 +142,7 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	}
 
 	// create repository for the application
-	err = br.SCM.CreateRepo(opts.Namespace, opts.Name)
+	err = br.SCM.CreateRepo(opts.Namespace, opts.Name, true)
 	if err != nil {
 		return
 	}

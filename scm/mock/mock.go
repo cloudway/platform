@@ -155,12 +155,15 @@ while read oldrev newrev refname; do
 done
 `
 
-func (mock mockSCM) CreateRepo(namespace, name string) error {
+func (mock mockSCM) CreateRepo(namespace, name string, purge bool) error {
+	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
+
+	if purge {
+		os.RemoveAll(repodir)
+	}
 	if err := mock.ensureRepositoryNotExist(namespace, name); err != nil {
 		return err
 	}
-
-	repodir := filepath.Join(mock.repositoryRoot, namespace, name)
 	if err := os.Mkdir(repodir, 0700); err != nil {
 		return err
 	}

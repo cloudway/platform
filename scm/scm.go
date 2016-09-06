@@ -24,7 +24,7 @@ type SCM interface {
 	RemoveNamespace(namespace string) error
 
 	// Create a new repository with the given name in the given namespace.
-	CreateRepo(namespace, name string) error
+	CreateRepo(namespace, name string, purge bool) error
 
 	// Remove the repository with the given name in the given namespace.
 	RemoveRepo(namespace, name string) error
