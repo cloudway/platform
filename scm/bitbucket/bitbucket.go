@@ -274,15 +274,15 @@ func (cli *bitbucketClient) DeployWithLog(namespace, name string, branch string,
 		case err := <-errCh:
 			tiker.Stop()
 			if ticked {
-				fmt.Fprint(stdout, "\033[?25h\bdone.\n")
+				fmt.Fprint(stdout, "done.\n")
 			}
 			return err
 		case <-tiker.C:
 			if !ticked {
 				ticked = true
-				fmt.Fprint(stdout, "\033[?25lLoading...  ")
+				fmt.Fprint(stdout, "Loading... ")
 			} else {
-				fmt.Fprint(stdout, "\b"+spinChars[spinning:spinning+1])
+				fmt.Fprintf(stdout, "\033[34;1m%c\033[0m\033[D", spinChars[spinning])
 				spinning++
 				if spinning == len(spinChars) {
 					spinning = 0

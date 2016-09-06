@@ -109,16 +109,11 @@ func (cli DockerClient) DeployRepo(ctx context.Context, name, namespace string, 
 		return cli.DistributeRepo(ctx, containers, in, false)
 	} else {
 		// build and distribute the repository
-		repo, err := build(cli, ctx, base, in, stdout, stderr)
-		if err == nil {
-			defer repo.Close()
-			err = cli.DistributeRepo(ctx, containers, repo, true)
-		}
-		return err
+		return build(cli, ctx, containers, base, in, stdout, stderr)
 	}
 }
 
-func build(cli DockerClient, ctx context.Context, base *Container, in io.Reader, stdout, stderr io.Writer) (repo io.ReadCloser, err error) {
+func build(cli DockerClient, ctx context.Context, containers []*Container, base *Container, in io.Reader, stdout, stderr io.Writer) (err error) {
 	plugin, err := readPluginManifestFromContainer(ctx, base)
 	if err != nil {
 		return
@@ -137,7 +132,10 @@ func build(cli DockerClient, ctx context.Context, base *Container, in io.Reader,
 	if err != nil {
 		return
 	}
-	defer builder.Destroy(ctx)
+	defer func() {
+		rmopts := types.ContainerRemoveOptions{Force: true, RemoveVolumes: true}
+		cli.ContainerRemove(ctx, builder.ID, rmopts)
+	}()
 
 	// start builder container
 	err = builder.ContainerStart(ctx, builder.ID, types.ContainerStartOptions{})
@@ -154,8 +152,13 @@ func build(cli DockerClient, ctx context.Context, base *Container, in io.Reader,
 	copyCache(ctx, plugin, builder, base, false)
 
 	// download application repository from builder container
-	repo, _, err = builder.CopyFromContainer(ctx, builder.ID, builder.RepoDir()+"/.")
-	return repo, err
+	repo, _, err := builder.CopyFromContainer(ctx, builder.ID, builder.RepoDir()+"/.")
+	if err != nil {
+		return
+	}
+	defer repo.Close()
+
+	return cli.DistributeRepo(ctx, containers, repo, true)
 }
 
 func readPluginManifestFromContainer(ctx context.Context, base *Container) (meta *manifest.Plugin, err error) {
