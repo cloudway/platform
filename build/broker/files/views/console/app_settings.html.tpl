@@ -48,7 +48,7 @@
       <div class="col-md-6">
        <p>可以通过<code>git</code>推送来部署应用，使用以下命令获得应用代码的副本。</p>
        <pre>$ {{.app.CloneURL}}</pre>
-       <p>在完成对代码的修改后，使用以下命令将改动推送到云端，服务器将自动完成应用的构建与部署。</p>
+       <p>代码修改完成后，使用以下命令将改动推送到云端，服务器将自动完成应用的构建与部署。</p>
        <pre>$ git add .
 $ git commit -am "make change"
 $ git push origin master</pre>
@@ -99,6 +99,21 @@ $ git push origin master</pre>
           <span id="deploy-spinner" class="hidden"><i class="fa fa-spinner fa-spin"></i></span>
         </form>
         {{- end }}
+      </div>
+    </div>
+
+    <hr/>
+    <div class="row">
+      <div class="col-md-2">应用管理</div>
+      <div class="col-md-6">
+        <p>使用云途命令行工具可以完全控制应用运行环境。请从以下地址下载命令行工具：</p>
+        <ul>
+          <li><a href='{{download "linux"}}'>Linux</a></li>
+          <li><a href='{{download "darwin"}}'>Mac OS X</a></li>
+          <li><a href='{{download "freebsd"}}'>FreeBSD</a></li>
+          <li><a href='{{download "windows"}}'>Windows</a></li>
+        </ul>
+        <p>下载后运行<code>cwcli help</code>可查看命令帮助，运行<code>cwcli help app</code>可查看应用管理命令的更多帮助。</p>
       </div>
     </div>
 

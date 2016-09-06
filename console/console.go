@@ -85,6 +85,15 @@ func NewConsole(br *broker.Broker) (con *Console, err error) {
 		return nil, err
 	}
 
+	funcs["download"] = func(os string) template.URL {
+		dlurl := *con.baseURL
+		dlurl.Path = fmt.Sprintf("/dist/%s/amd64/cwcli", os)
+		if os == "windows" {
+			dlurl.Path += ".exe"
+		}
+		return template.URL(dlurl.String())
+	}
+
 	viewRoot := filepath.Join(config.RootDir, "views", "console")
 	con.templates = tpl.Must(tpl.Load(viewRoot, filepath.Join(viewRoot, "partials"), "layout.html.tpl", funcs))
 
