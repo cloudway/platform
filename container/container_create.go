@@ -22,6 +22,7 @@ import (
 	"github.com/docker/engine-api/types/strslice"
 	"golang.org/x/net/context"
 
+	"github.com/cloudway/platform/api"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/pkg/archive"
@@ -380,6 +381,7 @@ func addPluginFiles(tw *tar.Writer, dst, path string) error {
 func createContainer(cli DockerClient, ctx context.Context, cfg *createConfig) (*Container, error) {
 	config := &container.Config{
 		Labels: map[string]string{
+			VERSION_KEY:       api.Version,
 			CATEGORY_KEY:      string(cfg.Category),
 			PLUGIN_KEY:        cfg.Plugin.Tag,
 			FLAGS_KEY:         strconv.FormatUint(uint64(cfg.Flags), 10),

@@ -19,6 +19,7 @@ const (
 	APP_NAME_KEY        = "com.cloudway.app.name"
 	APP_NAMESPACE_KEY   = "com.cloudway.app.namespace"
 	APP_HOME_KEY        = "com.cloudway.app.home"
+	VERSION_KEY         = "com.cloudway.container.version"
 	CATEGORY_KEY        = "com.cloudway.container.category"
 	PLUGIN_KEY          = "com.cloudway.container.plugin"
 	FLAGS_KEY           = "com.cloudway.container.flags"
@@ -156,9 +157,8 @@ func find(cli DockerClient, ctx context.Context, category manifest.Category, ser
 	return containers, nil
 }
 
-func (c *Container) Flags() uint32 {
-	flags, _ := strconv.ParseUint(c.Config.Labels[FLAGS_KEY], 10, 32)
-	return uint32(flags)
+func (c *Container) Version() string {
+	return c.Config.Labels[VERSION_KEY]
 }
 
 func (c *Container) Category() manifest.Category {
@@ -167,6 +167,11 @@ func (c *Container) Category() manifest.Category {
 
 func (c *Container) PluginTag() string {
 	return c.Config.Labels[PLUGIN_KEY]
+}
+
+func (c *Container) Flags() uint32 {
+	flags, _ := strconv.ParseUint(c.Config.Labels[FLAGS_KEY], 10, 32)
+	return uint32(flags)
 }
 
 func (c *Container) ServiceName() string {
