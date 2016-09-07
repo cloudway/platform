@@ -8,9 +8,14 @@ import (
 )
 
 // Get application information from container.
-func (c *Container) GetInfo(ctx context.Context) (*manifest.SandboxInfo, error) {
+func (c *Container) GetInfo(ctx context.Context, options ...string) (*manifest.SandboxInfo, error) {
+	var args = []string{"/usr/bin/cwctl", "info", "--ip", c.IP()}
+	for _, opt := range options {
+		args = append(args, "--"+opt)
+	}
+
 	var buf bytes.Buffer
-	err := c.ExecE(ctx, "root", nil, &buf, "/usr/bin/cwctl", "info", "--ip", c.IP())
+	err := c.ExecE(ctx, "root", nil, &buf, args...)
 	if err != nil {
 		return nil, err
 	}

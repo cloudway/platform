@@ -617,7 +617,7 @@ func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter
 	if err != nil {
 		return err
 	}
-	if info, err := container.GetInfo(ctx); err != nil {
+	if info, err := container.GetInfo(ctx, "env"); err != nil {
 		return err
 	} else {
 		return httputils.WriteJSON(w, http.StatusOK, info.Env)
@@ -631,7 +631,7 @@ func (ar *applicationsRouter) getenv(ctx context.Context, w http.ResponseWriter,
 	if err != nil {
 		return err
 	}
-	if info, err := container.GetInfo(ctx); err != nil {
+	if info, err := container.GetInfo(ctx, "env"); err != nil {
 		return err
 	} else {
 		key := vars["key"]

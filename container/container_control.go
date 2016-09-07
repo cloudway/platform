@@ -42,7 +42,7 @@ func startSandbox(ctx context.Context, c *Container) error {
 		return err
 	}
 
-	info, err := c.GetInfo(ctx)
+	info, err := c.GetInfo(ctx, "env")
 	if err != nil {
 		return err
 	}
