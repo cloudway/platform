@@ -705,6 +705,11 @@ paths:
           description: name of the service
           required: true
           type: string
+        - name: all
+          in: query
+          description: return all environment variables
+          required: false
+          type: boolean
       responses:
         200:
           description: the application environment

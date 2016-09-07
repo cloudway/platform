@@ -611,13 +611,21 @@ func (ar *applicationsRouter) getContainer(ctx context.Context, namespace string
 }
 
 func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := httputils.UserFromContext(ctx)
+	if err := r.ParseForm(); err != nil {
+		return err
+	}
 
+	user := httputils.UserFromContext(ctx)
 	container, err := ar.getContainer(ctx, user.Namespace, vars)
 	if err != nil {
 		return err
 	}
-	if info, err := container.GetInfo(ctx, "env"); err != nil {
+
+	opt := "env"
+	if _, all := r.Form["all"]; all {
+		opt = "env-all"
+	}
+	if info, err := container.GetInfo(ctx, opt); err != nil {
 		return err
 	} else {
 		return httputils.WriteJSON(w, http.StatusOK, info.Env)

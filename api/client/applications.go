@@ -192,9 +192,15 @@ func envpath(name, service string) string {
 	return "/applications/" + name + "/services/" + service + "/env/"
 }
 
-func (api *APIClient) ApplicationEnviron(ctx context.Context, name, service string) (map[string]string, error) {
+func (api *APIClient) ApplicationEnviron(ctx context.Context, name, service string, all bool) (map[string]string, error) {
+	var query url.Values
+	if all {
+		query = url.Values{}
+		query.Set("all", "1")
+	}
+
 	var env map[string]string
-	resp, err := api.cli.Get(ctx, envpath(name, service), nil, nil)
+	resp, err := api.cli.Get(ctx, envpath(name, service), query, nil)
 	if err == nil {
 		err = json.NewDecoder(resp.Body).Decode(&env)
 		resp.EnsureClosed()

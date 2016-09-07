@@ -770,12 +770,14 @@ func (cli *CWCli) CmdAppScale(args ...string) error {
 func (cli *CWCli) CmdAppEnv(args ...string) error {
 	var service string
 	var del bool
+	var all bool
 	var showPassword bool
 
 	cmd := cli.Subcmd("app:env", "", "KEY", "KEY=VALUE...", "-d KEY...")
 	cmd.String([]string{"a", "-app"}, "", "Application name")
 	cmd.StringVar(&service, []string{"s", "-service"}, "", "Service name")
 	cmd.BoolVar(&del, []string{"d"}, false, "Remove the environment variable")
+	cmd.BoolVar(&all, []string{"A", "-all"}, false, "Show all environment variables")
 	cmd.BoolVar(&showPassword, []string{"p", "-show-password"}, false, "Show password environment variable values")
 	cmd.ParseFlags(args, true)
 	name := cli.getAppName(cmd)
@@ -794,7 +796,7 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 	switch {
 	case cmd.NArg() == 0:
 		// cwcli app:env
-		env, err := cli.ApplicationEnviron(ctx, name, service)
+		env, err := cli.ApplicationEnviron(ctx, name, service, all)
 		if err != nil {
 			return err
 		}
@@ -802,7 +804,7 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 		if !showPassword {
 			var passwords []string
 			for k, v := range env {
-				if strings.Contains(strings.ToLower(k), "password") {
+				if strings.Contains(strings.ToLower(k), "password") || strings.Contains(strings.ToLower(k), "secret") {
 					passwords = append(passwords, v)
 					env[k] = strings.Repeat("*", len(v))
 				}
