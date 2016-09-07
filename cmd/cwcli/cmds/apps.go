@@ -770,11 +770,13 @@ func (cli *CWCli) CmdAppScale(args ...string) error {
 func (cli *CWCli) CmdAppEnv(args ...string) error {
 	var service string
 	var del bool
+	var showPassword bool
 
 	cmd := cli.Subcmd("app:env", "", "KEY", "KEY=VALUE...", "-d KEY...")
 	cmd.String([]string{"a", "-app"}, "", "Application name")
 	cmd.StringVar(&service, []string{"s", "-service"}, "", "Service name")
 	cmd.BoolVar(&del, []string{"d"}, false, "Remove the environment variable")
+	cmd.BoolVar(&showPassword, []string{"p", "-show-password"}, false, "Show password environment variable values")
 	cmd.ParseFlags(args, true)
 	name := cli.getAppName(cmd)
 
@@ -796,6 +798,26 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 		if err != nil {
 			return err
 		}
+
+		if !showPassword {
+			var passwords []string
+			for k, v := range env {
+				if strings.Contains(strings.ToLower(k), "password") {
+					passwords = append(passwords, v)
+					env[k] = strings.Repeat("*", len(v))
+				}
+			}
+			if len(passwords) != 0 {
+				for k, v := range env {
+					for _, pass := range passwords {
+						if strings.Contains(v, pass) {
+							env[k] = strings.Replace(v, pass, strings.Repeat("*", len(pass)), -1)
+						}
+					}
+				}
+			}
+		}
+
 		for k, v := range env {
 			fmt.Fprintf(cli.stdout, "%s=%s\n", k, v)
 		}
