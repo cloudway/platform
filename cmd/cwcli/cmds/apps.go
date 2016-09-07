@@ -20,6 +20,7 @@ import (
 
 	"github.com/cloudway/platform/api/types"
 	"github.com/cloudway/platform/cmd/cwcli/cmds/ansi"
+	"github.com/cloudway/platform/cmd/cwcli/cmds/prettyjson"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/manifest"
@@ -151,7 +152,7 @@ func searchFile(name string) (string, error) {
 
 func (cli *CWCli) writeJson(obj interface{}) {
 	if ansi.IsTerminal {
-		b, _ := json.MarshalIndent(obj, "", "  ")
+		b, _ := prettyjson.Marshal(obj)
 		cli.stdout.Write(b)
 		fmt.Fprintln(cli.stdout)
 	} else {
@@ -187,8 +188,8 @@ func (cli *CWCli) CmdAppInfo(args ...string) error {
 		fmt.Fprintf(cli.stdout, "Framework:  %s\n", app.Framework.DisplayName)
 		fmt.Fprintf(cli.stdout, "Scaling:    %v\n", app.Scaling)
 		fmt.Fprintf(cli.stdout, "URL:        %s\n", app.URL)
-		fmt.Fprintf(cli.stdout, "Clone URL:  %s\n", app.CloneURL)
-		fmt.Fprintf(cli.stdout, "SSH URL:    %s\n", app.SSHURL)
+		fmt.Fprintf(cli.stdout, "Source:     %s\n", app.CloneURL)
+		fmt.Fprintf(cli.stdout, "SSH:        %s\n", app.SSHURL)
 		fmt.Fprintf(cli.stdout, "Services:\n")
 		for _, p := range app.Services {
 			fmt.Fprintf(cli.stdout, " - %s\n", p.DisplayName)
