@@ -22,6 +22,7 @@ import (
 	"github.com/docker/engine-api/types/strslice"
 	"golang.org/x/net/context"
 
+	"github.com/cloudway/platform/api"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/pkg/archive"
@@ -111,6 +112,24 @@ func configure(opts *CreateOptions) *createConfig {
 	cfg.Env["CLOUDWAY_REPO_DIR"] = cfg.Home + "/repo"
 	cfg.Env["CLOUDWAY_DATA_DIR"] = cfg.Home + "/data"
 	cfg.Env["CLOUDWAY_LOG_DIR"] = cfg.Home + "/logs"
+
+	// passthrough plugin specific environment variables from broker
+	prefix := "CLOUDWAY_PLUGIN_" + strings.ToUpper(cfg.Plugin.Name) + "_"
+	for _, e := range os.Environ() {
+		kv := strings.SplitN(e, "=", 2)
+		if strings.HasPrefix(kv[0], prefix) {
+			k := kv[0][len(prefix):]
+			if _, exists := cfg.Env[k]; !exists {
+				cfg.Env[k] = kv[1]
+			}
+		}
+	}
+	for k, v := range config.GetSection("plugin:" + cfg.Plugin.Name) {
+		k = strings.ToUpper(k)
+		if _, exists := cfg.Env[k]; !exists {
+			cfg.Env[k] = v
+		}
+	}
 
 	return cfg
 }
@@ -297,14 +316,6 @@ func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg
 func readBuildStream(in io.Reader, out io.Writer) (id string, err error) {
 	const SUCCESS = "Successfully built "
 
-	type Flusher interface {
-		Flush()
-	}
-
-	type ErrFlusher interface {
-		Flush() error
-	}
-
 	var dec = json.NewDecoder(in)
 	for {
 		var jm JSONMessage
@@ -370,6 +381,7 @@ func addPluginFiles(tw *tar.Writer, dst, path string) error {
 func createContainer(cli DockerClient, ctx context.Context, cfg *createConfig) (*Container, error) {
 	config := &container.Config{
 		Labels: map[string]string{
+			VERSION_KEY:       api.Version,
 			CATEGORY_KEY:      string(cfg.Category),
 			PLUGIN_KEY:        cfg.Plugin.Tag,
 			FLAGS_KEY:         strconv.FormatUint(uint64(cfg.Flags), 10),

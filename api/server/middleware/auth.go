@@ -16,7 +16,7 @@ type authMiddleware struct {
 }
 
 func NewAuthMiddleware(broker *broker.Broker, contextRoot string) authMiddleware {
-	pattern := regexp.MustCompile("^" + contextRoot + "(/v[0-9.]+)?/(version|auth)")
+	pattern := regexp.MustCompile("^" + contextRoot + "(/v[0-9.]+)?/(version|auth|swagger.json)")
 	return authMiddleware{broker, pattern}
 }
 

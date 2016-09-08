@@ -1,10 +1,10 @@
 package manifest
 
 type SandboxInfo struct {
-	Env       map[string]string
-	Endpoints []*Endpoint
-	Plugins   []*Plugin
-	State     ActiveState
+	Env       map[string]string `json:"env,omitempty"`
+	Endpoints []*Endpoint       `json:"endpoints,omitempty"`
+	Plugins   []*Plugin         `json:"plugins,omitempty"`
+	State     ActiveState       `json:"state,omitempty"`
 }
 
 type ActiveState byte

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -45,7 +46,7 @@ func init() {
 
 		headers := map[string]string{
 			"Authorization":     "Basic " + auth, // TODO
-			"X-Atlassian-Token": "nocheck",
+			"X-Atlassian-Token": "no-check",
 			"Accept":            "application/json",
 		}
 
@@ -69,56 +70,93 @@ func (cli *bitbucketClient) CreateNamespace(namespace string) error {
 
 	path := "/rest/api/1.0/projects"
 	resp, err := cli.Post(context.Background(), path, nil, opts, nil)
+	resp.EnsureClosed()
 	return checkNamespaceError(namespace, resp, err)
 }
 
 func (cli *bitbucketClient) RemoveNamespace(namespace string) error {
 	ctx := context.Background()
 	start := 0
-
 	for {
-		path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos", namespace)
-		params := url.Values{"start": []string{strconv.Itoa(start)}}
-		resp, err := cli.Get(ctx, path, params, nil)
-		err = checkNamespaceError(namespace, resp, err)
-		if err != nil {
-			return err
-		}
-
-		var page RepoPage
-		err = json.NewDecoder(resp.Body).Decode(&page)
+		page, err := cli.getRepoPage(ctx, namespace, start)
 		if err != nil {
 			return err
 		}
 
 		for _, repo := range page.Values {
-			path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s", namespace, repo.Slug)
-			resp, err := cli.Delete(ctx, path, nil, nil)
-			if err != nil && resp.StatusCode != http.StatusNotFound {
-				return checkServerError(resp, err)
+			err := cli.purgeRepo(ctx, namespace, repo.Slug)
+			if err != nil {
+				return err
 			}
 		}
 
+		start = page.NextPageStart
 		if page.IsLastPage {
 			break
 		}
-		start = page.NextPageStart
 	}
 
 	path := fmt.Sprintf("/rest/api/1.0/projects/%s", namespace)
 	resp, err := cli.Delete(context.Background(), path, nil, nil)
+	resp.EnsureClosed()
 	return checkNamespaceError(namespace, resp, err)
 }
 
-func (cli *bitbucketClient) CreateRepo(namespace, name string) error {
+func (cli *bitbucketClient) getRepoPage(ctx context.Context, namespace string, start int) (page *RepoPage, err error) {
+	var (
+		path   = fmt.Sprintf("/rest/api/1.0/projects/%s/repos", namespace)
+		params = url.Values{"start": []string{strconv.Itoa(start)}}
+	)
+	resp, err := cli.Get(ctx, path, params, nil)
+	if err == nil {
+		page = new(RepoPage)
+		err = json.NewDecoder(resp.Body).Decode(page)
+		resp.Body.Close()
+	} else {
+		err = checkNamespaceError(namespace, resp, err)
+	}
+	return
+}
+
+func (cli *bitbucketClient) purgeRepo(ctx context.Context, namespace, name string) error {
+	path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s", namespace, name)
+	resp, err := cli.Delete(ctx, path, nil, nil)
+	resp.EnsureClosed()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	} else {
+		return checkServerError(resp, err)
+	}
+}
+
+func (cli *bitbucketClient) CreateRepo(namespace, name string, purge bool) error {
 	opts := CreateRepoOpts{
 		Name: name,
 	}
 
-	path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos", namespace)
-	resp, err := cli.Post(context.Background(), path, nil, opts, nil)
+	var (
+		ctx    = context.Background()
+		path   = fmt.Sprintf("/rest/api/1.0/projects/%s/repos", namespace)
+		purged = false
+	)
 
-	if err != nil {
+	for {
+		resp, err := cli.Post(ctx, path, nil, opts, nil)
+		resp.EnsureClosed()
+
+		// remove the garbage repository
+		if purge && !purged && resp.StatusCode == http.StatusConflict {
+			err = cli.purgeRepo(ctx, namespace, name)
+			purged = true
+			if err == nil {
+				continue
+			}
+		}
+
+		if err == nil {
+			break
+		}
+
 		switch resp.StatusCode {
 		case http.StatusNotFound:
 			return scm.NamespaceNotFoundError(namespace)
@@ -132,13 +170,15 @@ func (cli *bitbucketClient) CreateRepo(namespace, name string) error {
 	// enable post-receive hook
 	const hookKey = "com.cloudway.bitbucket.plugins.repo-deployer:repo-deployer"
 	path = fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s/settings/hooks/%s/enabled", namespace, name, hookKey)
-	resp, err = cli.Put(context.Background(), path, nil, nil, nil)
+	resp, err := cli.Put(ctx, path, nil, nil, nil)
+	resp.EnsureClosed()
 	return checkServerError(resp, err)
 }
 
 func (cli *bitbucketClient) RemoveRepo(namespace, name string) error {
 	path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s", namespace, name)
 	resp, err := cli.Delete(context.Background(), path, nil, nil)
+	resp.EnsureClosed()
 
 	switch resp.StatusCode {
 	case http.StatusNotFound:
@@ -153,10 +193,10 @@ func (cli *bitbucketClient) Populate(namespace, name string, payload io.Reader, 
 
 	// check to see if repository already populated
 	resp, err := cli.Head(context.Background(), path, nil, nil)
+	resp.EnsureClosed()
 	if resp.StatusCode == http.StatusForbidden {
 		return nil
-	}
-	if err != nil {
+	} else if err != nil {
 		return checkServerError(resp, err)
 	}
 
@@ -165,6 +205,7 @@ func (cli *bitbucketClient) Populate(namespace, name string, payload io.Reader, 
 		"Content-Length": {strconv.FormatInt(size, 10)},
 	}
 	resp, err = cli.PutRaw(context.Background(), path, nil, payload, headers)
+	resp.EnsureClosed()
 	return checkNamespaceError(namespace, resp, err)
 }
 
@@ -194,16 +235,17 @@ func (cli *bitbucketClient) PopulateURL(namespace, name, remote string) error {
 
 	// check to see if repository already populated
 	resp, err := cli.Head(context.Background(), path, nil, nil)
+	resp.EnsureClosed()
 	if resp.StatusCode == http.StatusForbidden {
 		return nil
-	}
-	if err != nil {
+	} else if err != nil {
 		return checkServerError(resp, err)
 	}
 
 	// populate repository from template URL
 	query := url.Values{"url": []string{remote}}
 	resp, err = cli.Post(context.Background(), path, query, nil, nil)
+	resp.EnsureClosed()
 	return checkNamespaceError(namespace, resp, err)
 }
 
@@ -211,23 +253,56 @@ func (cli *bitbucketClient) Deploy(namespace, name string, branch string) error 
 	path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/deploy", namespace, name)
 	query := url.Values{"branch": []string{branch}}
 	resp, err := cli.Post(context.Background(), path, query, nil, nil)
+	resp.EnsureClosed()
 	return checkNamespaceError(namespace, resp, err)
 }
 
 func (cli *bitbucketClient) DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer) error {
-	return cli.Deploy(namespace, name, branch) // FIXME
+	errCh := make(chan error)
+	go func() {
+		errCh <- cli.Deploy(namespace, name, branch)
+	}()
+
+	var (
+		tiker     = time.NewTicker(500 * time.Millisecond)
+		ticked    = false
+		spinChars = `-\|/`
+		spinning  = 0
+	)
+	for {
+		select {
+		case err := <-errCh:
+			tiker.Stop()
+			if ticked {
+				fmt.Fprint(stdout, "done.\n")
+			}
+			return err
+		case <-tiker.C:
+			if !ticked {
+				ticked = true
+				fmt.Fprint(stdout, "Loading... ")
+			} else {
+				fmt.Fprintf(stdout, "\033[34;1m%c\033[0m\033[D", spinChars[spinning])
+				spinning++
+				if spinning == len(spinChars) {
+					spinning = 0
+				}
+			}
+		}
+	}
 }
 
-func (cli *bitbucketClient) GetDeploymentBranch(namespace, name string) (*scm.Branch, error) {
+func (cli *bitbucketClient) GetDeploymentBranch(namespace, name string) (branch *scm.Branch, err error) {
 	path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/settings", namespace, name)
 	resp, err := cli.Get(context.Background(), path, nil, nil)
-	if err = checkNamespaceError(namespace, resp, err); err != nil {
-		return nil, err
+	if err == nil {
+		branch = new(scm.Branch)
+		err = json.NewDecoder(resp.Body).Decode(branch)
+		resp.Body.Close()
+	} else {
+		err = checkNamespaceError(namespace, resp, err)
 	}
-
-	var branch scm.Branch
-	err = json.NewDecoder(resp.Body).Decode(&branch)
-	return &branch, err
+	return
 }
 
 func (cli *bitbucketClient) GetDeploymentBranches(namespace, name string) ([]*scm.Branch, error) {
@@ -244,35 +319,38 @@ func (cli *bitbucketClient) GetDeploymentBranches(namespace, name string) ([]*sc
 	return append(branches, tags...), nil
 }
 
-func (cli *bitbucketClient) getRefs(namespace, name, typ string) ([]*scm.Branch, error) {
-	path := fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s/%s", namespace, name, typ)
-	ctx := context.Background()
-
-	refs := make([]*scm.Branch, 0)
-	start := 0
-
+func (cli *bitbucketClient) getRefs(namespace, name, typ string) (refs []*scm.Branch, err error) {
+	var (
+		path  = fmt.Sprintf("/rest/api/1.0/projects/%s/repos/%s/%s", namespace, name, typ)
+		ctx   = context.Background()
+		start = 0
+	)
 	for {
-		params := url.Values{"start": []string{strconv.Itoa(start)}}
-		resp, err := cli.Get(ctx, path, params, nil)
-		err = checkNamespaceError(namespace, resp, err)
-		if err != nil {
-			return refs, err
-		}
-
-		var page BranchPage
-		err = json.NewDecoder(resp.Body).Decode(&page)
-		if err != nil {
-			return refs, err
+		page, er := cli.getRefPage(ctx, path, namespace, start)
+		if er != nil {
+			err = er
+			break
 		}
 		refs = append(refs, page.Values...)
-
+		start = page.NextPageStart
 		if page.IsLastPage {
 			break
 		}
-		start = page.NextPageStart
 	}
+	return
+}
 
-	return refs, nil
+func (cli *bitbucketClient) getRefPage(ctx context.Context, path, namespace string, start int) (page *BranchPage, err error) {
+	params := url.Values{"start": []string{strconv.Itoa(start)}}
+	resp, err := cli.Get(ctx, path, params, nil)
+	if err == nil {
+		page = new(BranchPage)
+		err = json.NewDecoder(resp.Body).Decode(page)
+		resp.Body.Close()
+	} else {
+		err = checkNamespaceError(namespace, resp, err)
+	}
+	return
 }
 
 func (cli *bitbucketClient) AddKey(namespace string, key string) error {
@@ -282,6 +360,7 @@ func (cli *bitbucketClient) AddKey(namespace string, key string) error {
 
 	path := fmt.Sprintf("/rest/keys/1.0/projects/%s/ssh", namespace)
 	resp, err := cli.Post(context.Background(), path, nil, opts, nil)
+	resp.EnsureClosed()
 
 	switch resp.StatusCode {
 	case http.StatusBadRequest:
@@ -304,8 +383,9 @@ func (cli *bitbucketClient) RemoveKey(namespace string, key string) error {
 		if strings.TrimSpace(k.Key.Text) == strings.TrimSpace(key) {
 			path := fmt.Sprintf("/rest/keys/1.0/projects/%s/ssh/%d", namespace, k.Key.Id)
 			resp, err := cli.Delete(ctx, path, nil, nil)
-			if err != nil {
-				return checkServerError(resp, err)
+			resp.EnsureClosed()
+			if err = checkServerError(resp, err); err != nil {
+				return err
 			}
 		}
 	}
@@ -327,33 +407,37 @@ func (cli *bitbucketClient) ListKeys(namespace string) ([]scm.SSHKey, error) {
 	return result, nil
 }
 
-func (cli *bitbucketClient) listKeys(ctx context.Context, namespace string) ([]SSHKey, error) {
-	keys := make([]SSHKey, 0)
+func (cli *bitbucketClient) listKeys(ctx context.Context, namespace string) (keys []SSHKey, err error) {
 	start := 0
-
 	for {
-		path := fmt.Sprintf("/rest/keys/1.0/projects/%s/ssh", namespace)
-		params := url.Values{"start": []string{strconv.Itoa(start)}}
-		resp, err := cli.Get(ctx, path, params, nil)
-		err = checkNamespaceError(namespace, resp, err)
-		if err != nil {
-			return keys, err
-		}
-
-		var page SSHKeyPage
-		err = json.NewDecoder(resp.Body).Decode(&page)
-		if err != nil {
-			return keys, err
+		page, er := cli.getKeyPage(ctx, namespace, start)
+		if er != nil {
+			err = er
+			break
 		}
 		keys = append(keys, page.Values...)
-
+		start = page.NextPageStart
 		if page.IsLastPage {
 			break
 		}
-		start = page.NextPageStart
 	}
+	return
+}
 
-	return keys, nil
+func (cli *bitbucketClient) getKeyPage(ctx context.Context, namespace string, start int) (page *SSHKeyPage, err error) {
+	var (
+		path   = fmt.Sprintf("/rest/keys/1.0/projects/%s/ssh", namespace)
+		params = url.Values{"start": []string{strconv.Itoa(start)}}
+	)
+	resp, err := cli.Get(ctx, path, params, nil)
+	if err == nil {
+		page = new(SSHKeyPage)
+		err = json.NewDecoder(resp.Body).Decode(page)
+		resp.Body.Close()
+	} else {
+		err = checkNamespaceError(namespace, resp, err)
+	}
+	return
 }
 
 func checkNamespaceError(namespace string, resp *rest.ServerResponse, err error) error {

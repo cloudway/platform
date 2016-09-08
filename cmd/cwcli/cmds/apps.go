@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/net/context"
 	"io"
 	"io/ioutil"
 	"net/url"
@@ -14,10 +13,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/docker/go-units"
+	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/api/types"
+	"github.com/cloudway/platform/cmd/cwcli/cmds/ansi"
+	"github.com/cloudway/platform/cmd/cwcli/cmds/prettyjson"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/archive"
+	"github.com/cloudway/platform/pkg/manifest"
 	"github.com/cloudway/platform/pkg/mflag"
 	"github.com/cloudway/platform/pkg/opts"
 )
@@ -33,6 +39,10 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:start          Start an application
   app:stop           Stop an application
   app:restart        Restart an application
+  app:status         Show application status
+  app:ps             Show application processes
+  app:stats          Display application live resource usage statistics
+  app:service        Manage application services
   app:clone          Clone application source code
   app:deploy         Deploy an application
   app:upload         Upload an application repository
@@ -43,9 +53,6 @@ Additional commands, type "cwcli help COMMAND" for more details:
   app:env            Get or set application environment variables
   app:open           Open the application in a web brower
   app:ssh            Log into application console via SSH
-
-  app:service:add    Add new service to the application
-  app:service:rm     Remove service from the application
 `
 
 func (cli *CWCli) CmdApps(args ...string) error {
@@ -143,6 +150,16 @@ func searchFile(name string) (string, error) {
 	}
 }
 
+func (cli *CWCli) writeJson(obj interface{}) {
+	if ansi.IsTerminal {
+		b, _ := prettyjson.Marshal(obj)
+		cli.stdout.Write(b)
+		fmt.Fprintln(cli.stdout)
+	} else {
+		json.NewEncoder(os.Stdout).Encode(obj)
+	}
+}
+
 func (cli *CWCli) CmdAppInfo(args ...string) error {
 	var js bool
 
@@ -163,8 +180,7 @@ func (cli *CWCli) CmdAppInfo(args ...string) error {
 	}
 
 	if js {
-		b, _ := json.MarshalIndent(&app, "", "   ")
-		fmt.Fprintln(cli.stdout, string(b))
+		cli.writeJson(&app)
 	} else {
 		fmt.Fprintf(cli.stdout, "Name:       %s\n", app.Name)
 		fmt.Fprintf(cli.stdout, "Namespace:  %s\n", app.Namespace)
@@ -172,8 +188,8 @@ func (cli *CWCli) CmdAppInfo(args ...string) error {
 		fmt.Fprintf(cli.stdout, "Framework:  %s\n", app.Framework.DisplayName)
 		fmt.Fprintf(cli.stdout, "Scaling:    %v\n", app.Scaling)
 		fmt.Fprintf(cli.stdout, "URL:        %s\n", app.URL)
-		fmt.Fprintf(cli.stdout, "Clone URL:  %s\n", app.CloneURL)
-		fmt.Fprintf(cli.stdout, "SSH URL:    %s\n", app.SSHURL)
+		fmt.Fprintf(cli.stdout, "Source:     %s\n", app.CloneURL)
+		fmt.Fprintf(cli.stdout, "SSH:        %s\n", app.SSHURL)
 		fmt.Fprintf(cli.stdout, "Services:\n")
 		for _, p := range app.Services {
 			fmt.Fprintf(cli.stdout, " - %s\n", p.DisplayName)
@@ -520,6 +536,170 @@ func (cli *CWCli) CmdAppRestart(args ...string) error {
 	return cli.RestartApplication(context.Background(), name)
 }
 
+func (cli *CWCli) CmdAppStatus(args ...string) error {
+	var all, js bool
+	var name string
+
+	cmd := cli.Subcmd("app:status", "")
+	cmd.Require(mflag.Exact, 0)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.BoolVar(&all, []string{"-all"}, false, "Display all application status")
+	cmd.BoolVar(&js, []string{"-json"}, false, "Display as JSON")
+	cmd.ParseFlags(args, true)
+
+	if !all {
+		name = cli.getAppName(cmd)
+	}
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	var header = []string{"ID", "NAME", "DISPLAY NAME", "IP ADDRESS", "PORTS", "UP TIME", "STATE"}
+	var addRow = func(tab *Table, s *types.ContainerStatus) {
+		ports := strings.Join(s.Ports, ",")
+		uptime := units.HumanDuration(time.Duration(s.Uptime))
+		tab.AddRow(s.ID[:12], s.Name, s.DisplayName, s.IPAddress, ports, uptime, wrapState(s.State))
+	}
+
+	if all {
+		status, err := cli.GetAllApplicationStatus(context.Background())
+		if err != nil {
+			return err
+		}
+		if js {
+			cli.writeJson(status)
+		} else {
+			tab := NewTable(header...)
+			tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
+			tab.SetColor(1, ansi.NewColor(ansi.FgCyan))
+			for name, st := range status {
+				tab.AddSubtitle(ansi.Info(name))
+				for _, s := range st {
+					addRow(tab, s)
+				}
+			}
+			tab.Display(cli.stdout, 3)
+		}
+	} else {
+		st, err := cli.GetApplicationStatus(context.Background(), name)
+		if err != nil {
+			return err
+		}
+		if js {
+			cli.writeJson(st)
+		} else {
+			tab := NewTable(header...)
+			tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
+			tab.SetColor(1, ansi.NewColor(ansi.FgCyan))
+			for _, s := range st {
+				addRow(tab, s)
+			}
+			tab.Display(cli.stdout, 3)
+		}
+	}
+
+	return nil
+}
+
+func wrapState(state manifest.ActiveState) string {
+	switch state {
+	case manifest.StateRunning:
+		return ansi.Success(state.String())
+	case manifest.StateStarting, manifest.StateRestarting, manifest.StateStopping:
+		return ansi.Warning(state.String())
+	case manifest.StateBuilding:
+		return ansi.Info(state.String())
+	default:
+		return ansi.Fail(state.String())
+	}
+}
+
+func (cli *CWCli) CmdAppPs(args ...string) error {
+	var js bool
+
+	cmd := cli.Subcmd("app:ps", "")
+	cmd.Require(mflag.Exact, 0)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.BoolVar(&js, []string{"-json"}, false, "Display as JSON")
+	cmd.ParseFlags(args, true)
+	name := cli.getAppName(cmd)
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	procs, err := cli.GetApplicationProcesses(context.Background(), name)
+	if err != nil {
+		return err
+	}
+
+	if len(procs) == 0 {
+		return nil
+	}
+
+	if js {
+		cli.writeJson(procs)
+		return nil
+	}
+
+	for _, pl := range procs {
+		io.WriteString(cli.stdout, ansi.Warning(pl.ID[:12])+" "+ansi.Info(pl.DisplayName+"\n"))
+		tab := NewTable(pl.Headers...)
+		for _, row := range pl.Processes {
+			tab.AddRow(row...)
+		}
+		tab.Display(cli.stdout, 1)
+		fmt.Fprintln(cli.stdout)
+	}
+	return nil
+}
+
+func (cli *CWCli) CmdAppStats(args ...string) error {
+	cmd := cli.Subcmd("app:stats", "")
+	cmd.Require(mflag.Exact, 0)
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.ParseFlags(args, true)
+	name := cli.getAppName(cmd)
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	resp, err := cli.GetApplicationStats(context.Background(), name)
+	if err != nil {
+		return err
+	}
+	defer resp.Close()
+
+	dec := json.NewDecoder(resp)
+	for {
+		var stats []*types.ContainerStats
+		err = dec.Decode(&stats)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		tab := NewTable("ID", "NAME", "%CPU", "%MEM", "MEM USAGE / LIMIT", "NET I/O R/W", "BLOCK I/O R/W")
+		tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
+		tab.SetColor(1, ansi.NewColor(ansi.FgCyan))
+		for _, s := range stats {
+			tab.AddRow(
+				s.ID[:12],
+				s.Name,
+				fmt.Sprintf("%.2f%%", s.CPUPercentage),
+				fmt.Sprintf("%.2f%%", s.MemoryPercentage),
+				units.BytesSize(float64(s.MemoryUsage))+" / "+units.BytesSize(float64(s.MemoryLimit)),
+				units.HumanSize(float64(s.NetworkRx))+" / "+units.HumanSize(float64(s.NetworkTx)),
+				units.HumanSize(float64(s.BlockRead))+" / "+units.HumanSize(float64(s.BlockWrite)))
+		}
+		io.WriteString(cli.stdout, "\033[2J\033[H")
+		tab.Display(cli.stdout, 2)
+	}
+}
+
 func (cli *CWCli) CmdAppDeploy(args ...string) error {
 	var branch string
 	var show bool
@@ -545,7 +725,7 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
 		var display = func(ref *types.Branch) {
 			display := ref.DisplayId
 			if ref.Id == deployments.Current.Id {
-				display = "* " + hilite(display)
+				display = "* " + ansi.Hilite(display)
 			} else {
 				display = "  " + display
 			}
@@ -591,11 +771,15 @@ func (cli *CWCli) CmdAppScale(args ...string) error {
 func (cli *CWCli) CmdAppEnv(args ...string) error {
 	var service string
 	var del bool
+	var all bool
+	var showPassword bool
 
 	cmd := cli.Subcmd("app:env", "", "KEY", "KEY=VALUE...", "-d KEY...")
 	cmd.String([]string{"a", "-app"}, "", "Application name")
 	cmd.StringVar(&service, []string{"s", "-service"}, "", "Service name")
 	cmd.BoolVar(&del, []string{"d"}, false, "Remove the environment variable")
+	cmd.BoolVar(&all, []string{"A", "-all"}, false, "Show all environment variables")
+	cmd.BoolVar(&showPassword, []string{"p", "-show-password"}, false, "Show password environment variable values")
 	cmd.ParseFlags(args, true)
 	name := cli.getAppName(cmd)
 
@@ -613,10 +797,30 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 	switch {
 	case cmd.NArg() == 0:
 		// cwcli app:env
-		env, err := cli.ApplicationEnviron(ctx, name, service)
+		env, err := cli.ApplicationEnviron(ctx, name, service, all)
 		if err != nil {
 			return err
 		}
+
+		if !showPassword {
+			var passwords []string
+			for k, v := range env {
+				if strings.Contains(strings.ToLower(k), "password") || strings.Contains(strings.ToLower(k), "secret") {
+					passwords = append(passwords, v)
+					env[k] = strings.Repeat("*", len(v))
+				}
+			}
+			if len(passwords) != 0 {
+				for k, v := range env {
+					for _, pass := range passwords {
+						if strings.Contains(v, pass) {
+							env[k] = strings.Replace(v, pass, strings.Repeat("*", len(pass)), -1)
+						}
+					}
+				}
+			}
+		}
+
 		for k, v := range env {
 			fmt.Fprintf(cli.stdout, "%s=%s\n", k, v)
 		}
@@ -647,8 +851,48 @@ func (cli *CWCli) CmdAppEnv(args ...string) error {
 	return nil
 }
 
+const appServiceUsage = `Usage: cwcli app:service [COMMAND]
+
+Manage application services.
+
+Additional commands, type "cwcli help app:service COMMAND" for more details:
+
+  add                Add services to the application
+  remove             Remove a service from the applicaiton
+`
+
+func (cli *CWCli) CmdAppService(args ...string) error {
+	var help bool
+
+	cmd := cli.Subcmd("app:service", "")
+	cmd.Require(mflag.Exact, 0)
+	cmd.BoolVar(&help, []string{"-help"}, false, "Print usage")
+	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
+	cmd.ParseFlags(args, false)
+
+	if help {
+		fmt.Fprintln(cli.stdout, appServiceUsage)
+		os.Exit(0)
+	}
+
+	name := cli.getAppName(cmd)
+
+	if err := cli.ConnectAndLogin(); err != nil {
+		return err
+	}
+
+	app, err := cli.GetApplicationInfo(context.Background(), name)
+	if err != nil {
+		return err
+	}
+	for _, p := range app.Services {
+		fmt.Fprintf(cli.stdout, "%-12.12s%s\n", p.Name, p.DisplayName)
+	}
+	return nil
+}
+
 func (cli *CWCli) CmdAppServiceAdd(args ...string) error {
-	cmd := cli.Subcmd("app:service:add", "SERVICES...")
+	cmd := cli.Subcmd("app:service add", "SERVICES...")
 	cmd.Require(mflag.Min, 1)
 	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
 	cmd.ParseFlags(args, true)
@@ -666,7 +910,7 @@ func (cli *CWCli) CmdAppServiceAdd(args ...string) error {
 func (cli *CWCli) CmdAppServiceRemove(args ...string) error {
 	var yes bool
 
-	cmd := cli.Subcmd("app:service:rm", "SERVICE")
+	cmd := cli.Subcmd("app:service remove", "SERVICE")
 	cmd.Require(mflag.Exact, 1)
 	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
 	cmd.BoolVar(&yes, []string{"y"}, false, "Confirm 'yes' to remove the service")

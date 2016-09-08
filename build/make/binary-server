@@ -4,5 +4,6 @@ set -e
 (
     export BINARY_SHORT_NAME='cwman'
     export SOURCE_PATH='./cmd/cwman'
+    export ASSETS="$SCRIPTDIR/resources"
     source "${MAKEDIR}/.binary"
 )

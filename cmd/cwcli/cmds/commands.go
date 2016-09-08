@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/cloudway/platform/api/client"
+	"github.com/cloudway/platform/cmd/cwcli/cmds/ansi"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/cli"
 	flag "github.com/cloudway/platform/pkg/mflag"
@@ -33,14 +34,18 @@ var CommandUsage = []Command{
 	{"login", "Login to a Cloudway server"},
 	{"logout", "Log out from a Cloudway server"},
 	{"namespace", "Get or set application namespace"},
-	{"namespace:set", "Set to a new namespace"},
-	{"namespace:rm", "Remove the namespace"},
 	{"app", "Manage applications"},
 	{"app:create", "Create application"},
 	{"app:remove", "Permanently remove an application"},
 	{"app:start", "Start an application"},
 	{"app:stop", "Stop an application"},
 	{"app:restart", "Restart an application"},
+	{"app:status", "Show application status"},
+	{"app:ps", "Show application processes"},
+	{"app:stats", "Display application live resource usage statistics"},
+	{"app:service", "Manage application services"},
+	{"app:service add", "Add services to the application"},
+	{"app:service remove", "Remove service from the application"},
 	{"app:clone", "Clone application source code"},
 	{"app:deploy", "Deploy an application"},
 	{"app:upload", "Upload an application repository"},
@@ -51,8 +56,6 @@ var CommandUsage = []Command{
 	{"app:env", "Get or set application environment variables"},
 	{"app:open", "Open the application in a web brower"},
 	{"app:ssh", "Log into application console via SSH"},
-	{"app:service:add", "Add new service to the application"},
-	{"app:service:rm", "Remove service from the application"},
 	{"plugin", "Show plugin information"},
 	{"plugin:install", "Install a user defined plugin"},
 	{"plugin:remove", "Remove a user defined plugin"},
@@ -76,33 +79,35 @@ func Init(host string, stdout, stderr io.Writer) *CWCli {
 	c.stderr = stderr
 
 	c.handlers = map[string]func(...string) error{
-		"login":           c.CmdLogin,
-		"logout":          c.CmdLogout,
-		"namespace":       c.CmdNamespace,
-		"namespace:set":   c.cmdNamespaceSet,
-		"namespace:rm":    c.CmdNamespaceRm,
-		"app":             c.CmdApps,
-		"app:create":      c.CmdAppCreate,
-		"app:remove":      c.CmdAppRemove,
-		"app:start":       c.CmdAppStart,
-		"app:stop":        c.CmdAppStop,
-		"app:restart":     c.CmdAppRestart,
-		"app:clone":       c.CmdAppClone,
-		"app:deploy":      c.CmdAppDeploy,
-		"app:upload":      c.CmdAppUpload,
-		"app:dump":        c.CmdAppDump,
-		"app:restore":     c.CmdAppRestore,
-		"app:scale":       c.CmdAppScale,
-		"app:info":        c.CmdAppInfo,
-		"app:env":         c.CmdAppEnv,
-		"app:open":        c.CmdAppOpen,
-		"app:ssh":         c.CmdAppSSH,
-		"app:service:add": c.CmdAppServiceAdd,
-		"app:service:rm":  c.CmdAppServiceRemove,
-		"plugin":          c.CmdPlugin,
-		"plugin:install":  c.CmdPluginInstall,
-		"plugin:remove":   c.CmdPluginRemove,
-		"version":         c.CmdVersion,
+		"login":              c.CmdLogin,
+		"logout":             c.CmdLogout,
+		"namespace":          c.CmdNamespace,
+		"app":                c.CmdApps,
+		"app:create":         c.CmdAppCreate,
+		"app:remove":         c.CmdAppRemove,
+		"app:start":          c.CmdAppStart,
+		"app:stop":           c.CmdAppStop,
+		"app:restart":        c.CmdAppRestart,
+		"app:status":         c.CmdAppStatus,
+		"app:ps":             c.CmdAppPs,
+		"app:stats":          c.CmdAppStats,
+		"app:service":        c.CmdAppService,
+		"app:service add":    c.CmdAppServiceAdd,
+		"app:service remove": c.CmdAppServiceRemove,
+		"app:clone":          c.CmdAppClone,
+		"app:deploy":         c.CmdAppDeploy,
+		"app:upload":         c.CmdAppUpload,
+		"app:dump":           c.CmdAppDump,
+		"app:restore":        c.CmdAppRestore,
+		"app:scale":          c.CmdAppScale,
+		"app:info":           c.CmdAppInfo,
+		"app:env":            c.CmdAppEnv,
+		"app:open":           c.CmdAppOpen,
+		"app:ssh":            c.CmdAppSSH,
+		"plugin":             c.CmdPlugin,
+		"plugin:install":     c.CmdPluginInstall,
+		"plugin:remove":      c.CmdPluginRemove,
+		"version":            c.CmdVersion,
 	}
 
 	return c
@@ -163,7 +168,7 @@ func (c *CWCli) ConnectAndLogin() (err error) {
 func (cli *CWCli) confirm(prompt string) bool {
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Fprintf(cli.stdout, alert("WARNING")+": "+prompt+", continue (yes/no)? ")
+		fmt.Fprintf(cli.stdout, ansi.Danger("WARNING")+": "+prompt+", continue (yes/no)? ")
 		answer, err := reader.ReadString('\n')
 		if err == io.EOF {
 			return false

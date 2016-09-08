@@ -83,6 +83,38 @@ func (api *APIClient) RestartApplication(ctx context.Context, name string) error
 	return err
 }
 
+func (api *APIClient) GetApplicationStatus(ctx context.Context, name string) (status []*types.ContainerStatus, err error) {
+	resp, err := api.cli.Get(ctx, "/applications/"+name+"/status", nil, nil)
+	if err == nil {
+		err = json.NewDecoder(resp.Body).Decode(&status)
+		resp.EnsureClosed()
+	}
+	return
+}
+
+func (api *APIClient) GetAllApplicationStatus(ctx context.Context) (status map[string][]*types.ContainerStatus, err error) {
+	resp, err := api.cli.Get(ctx, "/applications/status/", nil, nil)
+	if err == nil {
+		err = json.NewDecoder(resp.Body).Decode(&status)
+		resp.EnsureClosed()
+	}
+	return
+}
+
+func (api *APIClient) GetApplicationProcesses(ctx context.Context, name string) (procs []*types.ProcessList, err error) {
+	resp, err := api.cli.Get(ctx, "/applications/"+name+"/procs", nil, nil)
+	if err == nil {
+		err = json.NewDecoder(resp.Body).Decode(&procs)
+		resp.EnsureClosed()
+	}
+	return
+}
+
+func (api *APIClient) GetApplicationStats(ctx context.Context, name string) (io.ReadCloser, error) {
+	resp, err := api.cli.Get(ctx, "/applications/"+name+"/stats", nil, nil)
+	return resp.Body, err
+}
+
 func (api *APIClient) DeployApplication(ctx context.Context, name, branch string, logger io.Writer) error {
 	var query url.Values
 	if branch != "" {
@@ -160,9 +192,15 @@ func envpath(name, service string) string {
 	return "/applications/" + name + "/services/" + service + "/env/"
 }
 
-func (api *APIClient) ApplicationEnviron(ctx context.Context, name, service string) (map[string]string, error) {
+func (api *APIClient) ApplicationEnviron(ctx context.Context, name, service string, all bool) (map[string]string, error) {
+	var query url.Values
+	if all {
+		query = url.Values{}
+		query.Set("all", "1")
+	}
+
 	var env map[string]string
-	resp, err := api.cli.Get(ctx, envpath(name, service), nil, nil)
+	resp, err := api.cli.Get(ctx, envpath(name, service), query, nil)
 	if err == nil {
 		err = json.NewDecoder(resp.Body).Decode(&env)
 		resp.EnsureClosed()

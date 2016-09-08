@@ -43,6 +43,9 @@ var funcs = template.FuncMap{
 	"formatDate": func(date time.Time) string {
 		return date.Format("2006/01/02 03:04pm")
 	},
+	"humanDuration": func(date time.Time) string {
+		return humanDuration(time.Now().UTC().Sub(date))
+	},
 	"yield": func() string {
 		return ""
 	},
@@ -80,6 +83,15 @@ func NewConsole(br *broker.Broker) (con *Console, err error) {
 	err = con.setupAuthboss(br)
 	if err != nil {
 		return nil, err
+	}
+
+	funcs["download"] = func(os string) template.URL {
+		dlurl := *con.baseURL
+		dlurl.Path = fmt.Sprintf("/dist/%s/amd64/cwcli", os)
+		if os == "windows" {
+			dlurl.Path += ".exe"
+		}
+		return template.URL(dlurl.String())
 	}
 
 	viewRoot := filepath.Join(config.RootDir, "views", "console")
@@ -339,4 +351,28 @@ func (con *Console) getPluginLogo(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(b)
+}
+
+func humanDuration(d time.Duration) string {
+	if seconds := int(d.Seconds()); seconds < 1 {
+		return "不到一秒钟前"
+	} else if seconds < 60 {
+		return fmt.Sprintf("%d 秒钟前", seconds)
+	} else if minutes := int(d.Minutes()); minutes == 1 {
+		return "大约一分钟前"
+	} else if minutes < 60 {
+		return fmt.Sprintf("%d 分钟前", minutes)
+	} else if hours := int(d.Hours()); hours == 1 {
+		return "大约一小时前"
+	} else if hours < 48 {
+		return fmt.Sprintf("%d 小时前", hours)
+	} else if hours < 24*7*2 {
+		return fmt.Sprintf("%d 天前", hours/24)
+	} else if hours < 24*30*3 {
+		return fmt.Sprintf("%d 周前", hours/24/7)
+	} else if hours < 24*365*2 {
+		return fmt.Sprintf("%d 个月前", hours/24/30)
+	} else {
+		return fmt.Sprintf("%d 年前", int(d.Hours())/24/365)
+	}
 }

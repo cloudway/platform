@@ -40,7 +40,7 @@ func (br *Broker) RemoveUser(username string) (err error) {
 
 	if user.Namespace != "" {
 		// remove all containers belongs to the user
-		cs, err := br.FindAll(ctx, "", user.Namespace)
+		cs, err := br.FindInNamespace(ctx, user.Namespace)
 		if err != nil {
 			errors.Add(err)
 		} else {

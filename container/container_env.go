@@ -65,6 +65,8 @@ func (c *Container) ActiveState(ctx context.Context) manifest.ActiveState {
 		if err == nil {
 			return state
 		}
+	} else {
+		return manifest.StateStopped
 	}
 
 	// Fallback to get active state from state file
@@ -76,13 +78,7 @@ func (c *Container) ActiveState(ctx context.Context) manifest.ActiveState {
 	if err != nil {
 		return manifest.StateUnknown
 	}
-
-	state := manifest.ActiveState(i)
-	if state == manifest.StateRunning && !c.State.Running {
-		// container stopped ungracefully
-		state = manifest.StateStopped
-	}
-	return state
+	return manifest.ActiveState(i)
 }
 
 var statePattern = regexp.MustCompile(`^/usr/bin/cwctl \[([0-9])\]`)

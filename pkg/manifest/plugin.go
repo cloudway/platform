@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -109,6 +110,23 @@ func Read(f io.Reader) (*Plugin, error) {
 	plugin := &Plugin{}
 	err = yaml.Unmarshal(data, plugin)
 	return plugin, err
+}
+
+func (p *Plugin) GetPrivatePorts() (ports []string) {
+	for _, ep := range p.Endpoints {
+		port := strconv.FormatInt(int64(ep.PrivatePort), 10)
+		exists := false
+		for _, p := range ports {
+			if p == port {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			ports = append(ports, port)
+		}
+	}
+	return
 }
 
 func (p *Plugin) GetEndpoints(publicHost, serviceName, privateHost string) []*Endpoint {

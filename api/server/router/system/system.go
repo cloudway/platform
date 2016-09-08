@@ -24,6 +24,7 @@ func NewRouter(broker *broker.Broker) router.Router {
 
 	r.routes = []router.Route{
 		router.NewGetRoute("/version", r.getVersion),
+		router.NewGetRoute("/swagger.json", r.getSwaggerJson),
 		router.NewPostRoute("/auth", r.postAuth),
 	}
 

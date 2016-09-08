@@ -3,8 +3,6 @@ package middleware
 import (
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 
 	"github.com/cloudway/platform/api"
 	"github.com/cloudway/platform/api/server/httputils"
@@ -39,13 +37,13 @@ func (m VersionMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIF
 			apiVersion = api.Version
 		}
 
-		if compareVersions(apiVersion, api.Version) > 0 {
+		if api.CompareVersions(apiVersion, api.Version) > 0 {
 			return badRequestError{
 				fmt.Errorf("client is newer than server (client API version: %s, server API version: %s)",
 					apiVersion, api.Version),
 			}
 		}
-		if compareVersions(apiVersion, api.MinVersion) < 0 {
+		if api.CompareVersions(apiVersion, api.MinVersion) < 0 {
 			return badRequestError{
 				fmt.Errorf("client version %s is too old. Minimum supported API version is %s, "+
 					"please upgrade your client to a newer version", apiVersion, api.MinVersion),
@@ -70,31 +68,4 @@ func (m VersionMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIF
 		ctx = context.WithValue(ctx, httputils.APIVersionKey, apiVersion)
 		return handler(ctx, w, r, vars)
 	}
-}
-
-func compareVersions(v1, v2 string) int {
-	currTab := strings.Split(v1, ".")
-	otherTab := strings.Split(v2, ".")
-
-	max := len(currTab)
-	if len(otherTab) > max {
-		max = len(otherTab)
-	}
-
-	for i := 0; i < max; i++ {
-		var currInt, otherInt int
-		if len(currTab) > i {
-			currInt, _ = strconv.Atoi(currTab[i])
-		}
-		if len(otherTab) > i {
-			otherInt, _ = strconv.Atoi(otherTab[i])
-		}
-		if currInt > otherInt {
-			return 1
-		}
-		if otherInt > currInt {
-			return -1
-		}
-	}
-	return 0
 }

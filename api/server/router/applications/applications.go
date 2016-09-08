@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/cloudway/platform/api/server/httputils"
 	"github.com/cloudway/platform/api/server/router"
@@ -19,6 +21,8 @@ import (
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/container"
+	"github.com/cloudway/platform/hub"
+	"github.com/cloudway/platform/pkg/manifest"
 	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
 	"golang.org/x/net/context"
@@ -43,6 +47,10 @@ func NewRouter(broker *broker.Broker) router.Router {
 		router.NewPostRoute(appPath+"/start", r.start),
 		router.NewPostRoute(appPath+"/stop", r.stop),
 		router.NewPostRoute(appPath+"/restart", r.restart),
+		router.NewGetRoute(appPath+"/status", r.status),
+		router.NewGetRoute("/applications/status/", r.allStatus),
+		router.NewGetRoute(appPath+"/procs", r.procs),
+		router.NewGetRoute(appPath+"/stats", r.stats),
 		router.NewPostRoute(appPath+"/deploy", r.deploy),
 		router.NewGetRoute(appPath+"/deploy", r.getDeployments),
 		router.NewGetRoute(appPath+"/repo", r.download),
@@ -281,6 +289,154 @@ func (ar *applicationsRouter) restart(ctx context.Context, w http.ResponseWriter
 	return ar.NewUserBroker(user, ctx).RestartApplication(vars["name"])
 }
 
+func (ar *applicationsRouter) status(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var (
+		user = httputils.UserFromContext(ctx)
+		br   = ar.NewUserBroker(user, ctx)
+		name = vars["name"]
+	)
+	if err := br.Refresh(); err != nil {
+		return err
+	}
+	status, err := ar.getStatus(ctx, name, br.Namespace())
+	if err != nil {
+		return err
+	}
+	return httputils.WriteJSON(w, http.StatusOK, status)
+}
+
+func (ar *applicationsRouter) allStatus(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var (
+		user = httputils.UserFromContext(ctx)
+		br   = ar.NewUserBroker(user, ctx)
+	)
+	if err := br.Refresh(); err != nil {
+		return err
+	}
+
+	var (
+		apps      = br.User.Basic().Applications
+		namespace = br.Namespace()
+		status    = map[string][]*types.ContainerStatus{}
+		mu        sync.Mutex
+		wg        sync.WaitGroup
+	)
+	wg.Add(len(apps))
+	for name := range apps {
+		go func(name string, wg *sync.WaitGroup) {
+			defer wg.Done()
+			st, err := ar.getStatus(ctx, name, namespace)
+			if err == nil {
+				mu.Lock()
+				status[name] = st
+				mu.Unlock()
+			}
+		}(name, &wg)
+	}
+	wg.Wait()
+	return httputils.WriteJSON(w, http.StatusOK, status)
+}
+
+func (ar *applicationsRouter) getStatus(ctx context.Context, name, namespace string) ([]*types.ContainerStatus, error) {
+	cs, err := ar.FindAll(ctx, name, namespace)
+	if err != nil {
+		return nil, err
+	}
+	if len(cs) == 0 {
+		return nil, broker.ApplicationNotFoundError(name)
+	}
+
+	status := make([]*types.ContainerStatus, len(cs))
+	for i, c := range cs {
+		st := &types.ContainerStatus{}
+		plugin := ar.initContainerJSON(c, &st.ContainerJSONBase)
+		status[i] = st
+
+		st.IPAddress = c.IP()
+		st.State = c.ActiveState(ctx)
+		if plugin != nil {
+			st.Ports = plugin.GetPrivatePorts()
+		}
+
+		started, err := time.Parse(time.RFC3339Nano, c.State.StartedAt)
+		if err == nil {
+			st.Uptime = int64(time.Now().UTC().Sub(started))
+		}
+	}
+	return status, nil
+}
+
+func (ar *applicationsRouter) initContainerJSON(c *container.Container, data *types.ContainerJSONBase) *manifest.Plugin {
+	data.ID = c.ID
+	data.Category = c.Category()
+
+	tag := c.PluginTag()
+	plugin, err := ar.Hub.GetPluginInfo(tag)
+
+	if err == nil {
+		data.Name = plugin.Name
+		data.DisplayName = plugin.DisplayName
+	} else {
+		_, _, pn, pv, _ := hub.ParseTag(tag)
+		data.Name = pn
+		data.DisplayName = pn + " " + pv
+	}
+
+	if c.ServiceName() != "" {
+		data.Name = c.ServiceName()
+	}
+
+	return plugin
+}
+
+func (ar *applicationsRouter) procs(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var (
+		user = httputils.UserFromContext(ctx)
+		br   = ar.NewUserBroker(user, ctx)
+		name = vars["name"]
+	)
+
+	if err := br.Refresh(); err != nil {
+		return err
+	}
+
+	cs, err := ar.FindAll(ctx, name, br.Namespace())
+	if err != nil {
+		return err
+	}
+	if len(cs) == 0 {
+		return broker.ApplicationNotFoundError(name)
+	}
+
+	procs := make([]*types.ProcessList, 0, len(cs))
+	for _, c := range cs {
+		if top, err := c.ContainerTop(ctx, c.ID, nil); err == nil {
+			proc := &types.ProcessList{}
+			ar.initContainerJSON(c, &proc.ContainerJSONBase)
+			proc.Processes = top.Processes
+			proc.Headers = top.Titles
+			procs = append(procs, proc)
+		}
+	}
+	return httputils.WriteJSON(w, http.StatusOK, procs)
+}
+
+func (ar *applicationsRouter) stats(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var (
+		user = httputils.UserFromContext(ctx)
+		br   = ar.NewUserBroker(user, ctx)
+		name = vars["name"]
+	)
+
+	w.Header().Set("Content-Type", "application/x-json-stream")
+	err := br.Stats(ctx, name, w)
+	if err != nil {
+		w.Header().Del("Content-Type")
+		return err
+	}
+	return nil
+}
+
 func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := httputils.UserFromContext(ctx)
 	name, branch := vars["name"], r.FormValue("branch")
@@ -431,16 +587,15 @@ func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, 
 
 func (ar *applicationsRouter) getContainers(ctx context.Context, namespace string, vars map[string]string) (cs []*container.Container, err error) {
 	name, service := vars["name"], vars["service"]
-	if service == "" || service == "*" || service == "_" {
+	if service == "" || service == "_" {
 		cs, err = ar.FindApplications(ctx, name, namespace)
+		if err == nil && len(cs) == 0 {
+			err = broker.ApplicationNotFoundError(name)
+		}
 	} else {
 		cs, err = ar.FindService(ctx, name, namespace, service)
-	}
-	if err == nil && len(cs) == 0 {
-		if service != "" {
+		if err == nil && len(cs) == 0 {
 			err = fmt.Errorf("Service '%s' not found in application '%s'", service, name)
-		} else {
-			err = broker.ApplicationNotFoundError(name)
 		}
 	}
 	return cs, err
@@ -456,13 +611,21 @@ func (ar *applicationsRouter) getContainer(ctx context.Context, namespace string
 }
 
 func (ar *applicationsRouter) environ(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := httputils.UserFromContext(ctx)
+	if err := r.ParseForm(); err != nil {
+		return err
+	}
 
+	user := httputils.UserFromContext(ctx)
 	container, err := ar.getContainer(ctx, user.Namespace, vars)
 	if err != nil {
 		return err
 	}
-	if info, err := container.GetInfo(ctx); err != nil {
+
+	opt := "env"
+	if _, all := r.Form["all"]; all {
+		opt = "env-all"
+	}
+	if info, err := container.GetInfo(ctx, opt); err != nil {
 		return err
 	} else {
 		return httputils.WriteJSON(w, http.StatusOK, info.Env)
@@ -476,7 +639,7 @@ func (ar *applicationsRouter) getenv(ctx context.Context, w http.ResponseWriter,
 	if err != nil {
 		return err
 	}
-	if info, err := container.GetInfo(ctx); err != nil {
+	if info, err := container.GetInfo(ctx, "env"); err != nil {
 		return err
 	} else {
 		key := vars["key"]

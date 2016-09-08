@@ -336,6 +336,102 @@ paths:
         404:
           description: application not found
 
+  /applications/{name}/status:
+    get:
+      summary: Application Status
+      description: Get application status
+      operationId: getApplicationStatus
+      security:
+        - apiKey: []
+      produces:
+        - application/json
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        200:
+          description: application status
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/ContainerStatus'
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/status/:
+    get:
+      summary: All Application Status
+      description: Get all application status
+      operationId: getAllApplicationStatus
+      security:
+        - apiKey: []
+      produces:
+        - application/json
+      responses:
+        200:
+          description: application status
+          schema:
+            type: object
+            additionalProperties:
+              $ref: '#/definitions/ContainerStatus'
+        401:
+          description: unauthorized
+
+  /applications/{name}/procs:
+    get:
+      summary: Application Processes
+      description: Get application running processes
+      operationId: getApplicationProcesses
+      security:
+        - apiKey: []
+      produces:
+        - application/json
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        200:
+          description: application processes
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/ProcessList'
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
+  /applications/{name}/stats:
+    get:
+      summary: Application Stats
+      description: Get live resource usage statistics
+      operationId: getApplicationStats
+      security:
+        - apiKey: []
+      produces:
+        - application/x-json-stream
+      parameters:
+        - name: name
+          in: path
+          description: application name
+          required: true
+          type: string
+      responses:
+        200:
+          description: application statistics
+        401:
+          description: unauthorized
+        404:
+          description: application not found
+
   /applications/{name}/deploy:
     post:
       summary: Deploy application
@@ -609,6 +705,11 @@ paths:
           description: name of the service
           required: true
           type: string
+        - name: all
+          in: query
+          description: return all environment variables
+          required: false
+          type: boolean
       responses:
         200:
           description: the application environment
@@ -801,6 +902,61 @@ definitions:
       Repo:
         type: string
         description: the code repository url
+  ContainerStatus:
+    type: object
+    properties:
+      ID:
+        type: string
+        description: container ID
+      Category:
+        $ref: '#/definitions/Category'
+      Name:
+        type: string
+        description: conainer name
+      DisplayName:
+        type: string
+        description: container display name
+      IPAddress:
+        type: string
+        description: IP address
+      Ports:
+        type: array
+        items:
+          type: string
+        description: exported ports
+      Uptime:
+        type: integer
+        format: int64
+        description: container uptime in nanosecond
+      State:
+        type: integer
+        description: active state
+  ProcessList:
+    type: object
+    properties:
+      ID:
+        type: string
+        description: container ID
+      Category:
+        $ref: '#/definitions/Category'
+      Name:
+        type: string
+        description: conainer name
+      DisplayName:
+        type: string
+        description: container display name
+      Headers:
+        type: array
+        items:
+          type: string
+        description: process list headers
+      Processes:
+        type: array
+        items:
+          type: array
+          items:
+            type: string
+        description: process list
   Deployments:
     type: object
     properties:

@@ -168,7 +168,7 @@ func listen(cli container.DockerClient, proxy Proxy) error {
 
 func handleStart(proxy Proxy, ctx context.Context, c *container.Container) error {
 	// reterieve application info from container
-	info, err := c.GetInfo(ctx)
+	info, err := c.GetInfo(ctx, "endpoints")
 	if err != nil {
 		return err
 	}

@@ -127,6 +127,14 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 		opts.Namespace = user.Namespace
 	}
 
+	// purge leftover containers
+	leftovers, err := br.FindAll(br.ctx, opts.Name, opts.Namespace)
+	if err == nil {
+		for _, c := range leftovers {
+			c.Destroy(br.ctx)
+		}
+	}
+
 	// create all containers
 	containers, err = br.createContainers(opts, names, plugins)
 	if err != nil {
@@ -134,7 +142,7 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	}
 
 	// create repository for the application
-	err = br.SCM.CreateRepo(opts.Namespace, opts.Name)
+	err = br.SCM.CreateRepo(opts.Namespace, opts.Name, true)
 	if err != nil {
 		return
 	}
@@ -420,19 +428,7 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int, secret stri
 	}
 	defer repo.Close()
 
-	repodir, err := archive.PrepareRepo(repo, true)
-	if repodir != "" {
-		defer os.RemoveAll(repodir)
-	}
-	if err != nil {
-		return
-	}
-	for _, c := range containers {
-		err = c.Deploy(br.ctx, repodir)
-		if err != nil {
-			break
-		}
-	}
+	err = br.DistributeRepo(br.ctx, containers, repo, true)
 	return
 }
 
@@ -650,15 +646,6 @@ func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
 // Upload application repository from a archive file.
 func (br *UserBroker) Upload(name string, content io.Reader, binary bool, logger io.Writer) error {
 	if binary {
-		repodir, err := archive.PrepareRepo(content, false)
-		if repodir != "" {
-			defer os.RemoveAll(repodir)
-		}
-		if err != nil {
-			return err
-		}
-
-		// deploy to containers
 		containers, err := br.FindApplications(br.ctx, name, br.Namespace())
 		if err != nil {
 			return err
@@ -666,16 +653,9 @@ func (br *UserBroker) Upload(name string, content io.Reader, binary bool, logger
 		if len(containers) == 0 {
 			return ApplicationNotFoundError(name)
 		}
-		for _, c := range containers {
-			er := c.Deploy(br.ctx, repodir)
-			if er != nil {
-				err = er
-			}
-		}
-		return err
+		return br.DistributeRepo(br.ctx, containers, content, false)
 	} else {
-		// deploy the repository
-		return scm.DeployRepository(br.DockerClient, br.ctx, name, br.Namespace(), content, logger, logger)
+		return br.DeployRepo(br.ctx, name, br.Namespace(), content, logger, logger)
 	}
 }
 

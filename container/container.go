@@ -19,6 +19,7 @@ const (
 	APP_NAME_KEY        = "com.cloudway.app.name"
 	APP_NAMESPACE_KEY   = "com.cloudway.app.namespace"
 	APP_HOME_KEY        = "com.cloudway.app.home"
+	VERSION_KEY         = "com.cloudway.container.version"
 	CATEGORY_KEY        = "com.cloudway.container.category"
 	PLUGIN_KEY          = "com.cloudway.container.plugin"
 	FLAGS_KEY           = "com.cloudway.container.flags"
@@ -71,18 +72,52 @@ func (cli DockerClient) Inspect(ctx context.Context, id string) (*Container, err
 	}, nil
 }
 
+// FindInNamespace finds all containers in the given namespace. If the namespace
+// is an empty string, then returns all containers in the system.
+func (cli DockerClient) FindInNamespace(ctx context.Context, namespace string) ([]*Container, error) {
+	return find(cli, ctx, "", "", "", namespace)
+}
+
 // Find all containers with the given name and namespace.
 func (cli DockerClient) FindAll(ctx context.Context, name, namespace string) ([]*Container, error) {
-	return find(cli, ctx, "", "", name, namespace)
+	if name == "" || namespace == "" {
+		return nil, nil
+	}
+	cs, err := find(cli, ctx, "", "", name, namespace)
+	if err != nil {
+		return cs, err
+	}
+
+	// reorder the container list
+	var cs2, i = make([]*Container, len(cs)), 0
+	for _, c := range cs {
+		if c.Category().IsFramework() {
+			cs2[i] = c
+			i++
+		}
+	}
+	for _, c := range cs {
+		if !c.Category().IsFramework() {
+			cs2[i] = c
+			i++
+		}
+	}
+	return cs2, nil
 }
 
 // Find all application containers with the given name and namespace.
 func (cli DockerClient) FindApplications(ctx context.Context, name, namespace string) ([]*Container, error) {
+	if name == "" || namespace == "" {
+		return nil, nil
+	}
 	return find(cli, ctx, manifest.Framework, "", name, namespace)
 }
 
 // Find service container with the give name, namespace and service name.
 func (cli DockerClient) FindService(ctx context.Context, name, namespace, service string) ([]*Container, error) {
+	if name == "" || namespace == "" {
+		return nil, nil
+	}
 	return find(cli, ctx, manifest.Service, service, name, namespace)
 }
 
@@ -122,9 +157,8 @@ func find(cli DockerClient, ctx context.Context, category manifest.Category, ser
 	return containers, nil
 }
 
-func (c *Container) Flags() uint32 {
-	flags, _ := strconv.ParseUint(c.Config.Labels[FLAGS_KEY], 10, 32)
-	return uint32(flags)
+func (c *Container) Version() string {
+	return c.Config.Labels[VERSION_KEY]
 }
 
 func (c *Container) Category() manifest.Category {
@@ -133,6 +167,11 @@ func (c *Container) Category() manifest.Category {
 
 func (c *Container) PluginTag() string {
 	return c.Config.Labels[PLUGIN_KEY]
+}
+
+func (c *Container) Flags() uint32 {
+	flags, _ := strconv.ParseUint(c.Config.Labels[FLAGS_KEY], 10, 32)
+	return uint32(flags)
 }
 
 func (c *Container) ServiceName() string {

@@ -84,19 +84,25 @@ var _ = Describe("SCM", func() {
 	Describe("Create repository", func() {
 		It("should create a git directory", func() {
 			Expect(mock.CreateNamespace("demo")).To(Succeed())
-			Expect(mock.CreateRepo("demo", "test")).To(Succeed())
+			Expect(mock.CreateRepo("demo", "test", false)).To(Succeed())
 			Expect(filepath.Join(repoRoot, "demo", "test")).To(BeADirectory())
 			Expect(filepath.Join(repoRoot, "demo", "test", "config")).To(BeARegularFile())
 		})
 
 		It("should fail when repository already exists", func() {
 			Expect(mock.CreateNamespace("demo")).To(Succeed())
-			Expect(mock.CreateRepo("demo", "test")).To(Succeed())
-			Expect(mock.CreateRepo("demo", "test")).NotTo(Succeed())
+			Expect(mock.CreateRepo("demo", "test", false)).To(Succeed())
+			Expect(mock.CreateRepo("demo", "test", false)).NotTo(Succeed())
+		})
+
+		It("should success when purging old repository", func() {
+			Expect(mock.CreateNamespace("demo")).To(Succeed())
+			Expect(mock.CreateRepo("demo", "test", false)).To(Succeed())
+			Expect(mock.CreateRepo("demo", "test", true)).To(Succeed())
 		})
 
 		It("should fail when namespace does not exists", func() {
-			Expect(mock.CreateRepo("demo", "test")).NotTo(Succeed())
+			Expect(mock.CreateRepo("demo", "test", false)).NotTo(Succeed())
 		})
 	})
 
@@ -119,7 +125,7 @@ var _ = Describe("SCM", func() {
 			Expect(tw.Close()).To(Succeed())
 
 			Expect(mock.CreateNamespace("demo")).To(Succeed())
-			Expect(mock.CreateRepo("demo", "test")).To(Succeed())
+			Expect(mock.CreateRepo("demo", "test", false)).To(Succeed())
 		})
 
 		It("should create a git repository", func() {
@@ -176,7 +182,7 @@ var _ = Describe("SCM", func() {
 			Expect(repo.Commit("Initial commit")).To(Succeed())
 
 			Expect(mock.CreateNamespace("demo")).To(Succeed())
-			Expect(mock.CreateRepo("demo", "test")).To(Succeed())
+			Expect(mock.CreateRepo("demo", "test", false)).To(Succeed())
 		})
 
 		AfterEach(func() {
@@ -235,7 +241,7 @@ var _ = Describe("SCM", func() {
 
 				// Push the local git repository
 				Expect(mock.CreateNamespace("demo")).To(Succeed())
-				Expect(mock.CreateRepo("demo", "test")).To(Succeed())
+				Expect(mock.CreateRepo("demo", "test", false)).To(Succeed())
 				Expect(mock.PopulateURL("demo", "test", tempdir)).To(Succeed())
 
 				// Check to see the branches and tags are returned correctly
@@ -276,7 +282,7 @@ var _ = Describe("SCM", func() {
 		Context("with empty repository", func() {
 			It("should return default deployment branch", func() {
 				Expect(mock.CreateNamespace("demo")).To(Succeed())
-				Expect(mock.CreateRepo("demo", "test")).To(Succeed())
+				Expect(mock.CreateRepo("demo", "test", false)).To(Succeed())
 
 				branch, err := mock.GetDeploymentBranch("demo", "test")
 				Expect(err).NotTo(HaveOccurred())
@@ -374,7 +380,7 @@ var _ = Describe("SCM", func() {
 
 			ExpectWithOffset(1, mock.CreateNamespace(namespace)).To(Succeed())
 			ExpectWithOffset(1, mock.AddKey(namespace, pub)).To(Succeed())
-			ExpectWithOffset(1, mock.CreateRepo(namespace, name)).To(Succeed())
+			ExpectWithOffset(1, mock.CreateRepo(namespace, name, false)).To(Succeed())
 
 			repourl = sshURL + "/" + namespace + "/" + name + ".git"
 			return
