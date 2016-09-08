@@ -682,7 +682,7 @@ func (cli *CWCli) CmdAppStats(args ...string) error {
 			return err
 		}
 
-		tab := NewTable("ID", "NAME", "%CPU", "%MEM", "MEM USAGE / LIMIT", "NET I/O R/W", "BLOCK I/O R/W")
+		tab := NewTable("ID", "NAME", "%CPU", "%MEM", "MEM USAGE / LIMIT", "NET RX / TX", "BLOCK IO (R/W)")
 		tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
 		tab.SetColor(1, ansi.NewColor(ansi.FgCyan))
 		for _, s := range stats {
@@ -695,7 +695,7 @@ func (cli *CWCli) CmdAppStats(args ...string) error {
 				units.HumanSize(float64(s.NetworkRx))+" / "+units.HumanSize(float64(s.NetworkTx)),
 				units.HumanSize(float64(s.BlockRead))+" / "+units.HumanSize(float64(s.BlockWrite)))
 		}
-		io.WriteString(cli.stdout, "\033[2J\033[H")
+		io.WriteString(cli.stdout, "\033[2J\033[H") // clear screen
 		tab.Display(cli.stdout, 2)
 	}
 }
