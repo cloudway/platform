@@ -41,63 +41,89 @@ func (cli *CWCtl) CmdDaemon(args ...string) error {
 	command := cmd.Arg(0)
 
 	daemon.AddCommand(daemon.StringFlag(&command, "stop"), syscall.SIGTERM, termHandler)
-	daemon.AddCommand(daemon.StringFlag(&command, "interrupt"), syscall.SIGINT, termHandler)
-	daemon.AddCommand(daemon.StringFlag(&command, "quit"), syscall.SIGQUIT, termHandler)
 	daemon.AddCommand(daemon.StringFlag(&command, "reload"), syscall.SIGHUP, reloadHandler)
 
-	if command == "status" {
-		d, err := context.Search()
-		if err == nil {
-			err = d.Signal(syscall.Signal(0))
-		}
-		if err != nil {
-			fmt.Println("Daemon is either stopped or inaccessible")
-			os.Exit(1)
-		} else {
+	d, err := context.Search()
+	if err == nil {
+		err = d.Signal(syscall.Signal(0))
+	}
+	running := err == nil
+
+	switch command {
+	case "status":
+		if running {
 			fmt.Println("Daemon is running")
 			os.Exit(0)
+		} else {
+			fmt.Println("Daemon is either stopped or inaccessible")
+			os.Exit(1)
 		}
 		return nil
-	}
 
-	if command == "stop" || command == "reload" {
-		d, err := context.Search()
+	case "start":
+		if running {
+			fmt.Fprintln(os.Stderr, "Daemon is already running")
+			return nil
+		}
+
+		args := cmd.Args()[1:]
+		if len(args) == 0 {
+			return fmt.Errorf("start: missing command arguments")
+		}
+
+		d, err = context.Reborn()
 		if err != nil {
-			return fmt.Errorf("Unable send signal to the daemon: %v", err)
+			return err
 		}
-		daemon.SendCommands(d)
-		return nil
-	}
+		if d != nil {
+			return nil
+		}
+		defer context.Release()
 
-	if command != "start" {
+		logrus.Info("daemon started")
+		if err = worker(args); err != nil {
+			return err
+		}
+		err = daemon.ServeSignals()
+		if err != nil {
+			logrus.Error(err)
+		}
+		logrus.Info("daemon terminated")
+		return nil
+
+	case "stop":
+		if !running {
+			fmt.Fprintln(os.Stderr, "Daemon is not running")
+			return nil
+		}
+
+		// send signal to terminate daemon
+		if err := d.Signal(syscall.SIGTERM); err != nil {
+			return err
+		}
+
+		// wait until daemon fully stopped
+		waitTime, maxWaitTime := 100*time.Millisecond, 10*time.Second
+		for waitTime < maxWaitTime {
+			if d.Signal(syscall.Signal(0)) != nil {
+				break
+			}
+			time.Sleep(waitTime)
+			waitTime *= 2
+		}
+		return nil
+
+	case "reload":
+		if !running {
+			fmt.Fprintln(os.Stderr, "Daemon is not running")
+			return nil
+		} else {
+			return d.Signal(syscall.SIGHUP)
+		}
+
+	default:
 		return fmt.Errorf("%s: unknown command", command)
 	}
-
-	startArgs := cmd.Args()[1:]
-	if len(startArgs) == 0 {
-		return fmt.Errorf("start: missing command arguments")
-	}
-
-	d, err := context.Reborn()
-	if err != nil {
-		return err
-	}
-	if d != nil {
-		return nil
-	}
-	defer context.Release()
-
-	logrus.Info("daemon started")
-	if err = worker(startArgs); err != nil {
-		return err
-	}
-
-	err = daemon.ServeSignals()
-	if err != nil {
-		logrus.Error(err)
-	}
-	logrus.Info("daemon terminated")
-	return nil
 }
 
 func worker(args []string) error {
