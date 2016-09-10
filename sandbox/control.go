@@ -73,7 +73,7 @@ func (box *Sandbox) Control(action string, enable_action_hooks, process_template
 		}
 	}
 
-	eenv := makeExecEnv(box.Environ())
+	eenv := MakeExecEnv(box.Environ())
 
 	if enable_action_hooks {
 		if err := box.runActionHook("pre_"+action, eenv); err != nil {
@@ -172,7 +172,7 @@ func (box *Sandbox) runActionHook(action string, env []string) error {
 	return cmd.Run()
 }
 
-func makeExecEnv(env map[string]string) []string {
+func MakeExecEnv(env map[string]string) []string {
 	if env != nil {
 		eenv := make([]string, 0, len(env))
 		for k, v := range env {

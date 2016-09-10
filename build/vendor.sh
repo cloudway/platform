@@ -61,6 +61,7 @@ clone git github.com/justinas/nosurf 2e708f28095ba17463e41438bbfd53abae8b6794
 clone git github.com/kardianos/osext c2c54e542fb797ad986b31721e1baedf214ca413
 clone git github.com/opencontainers/runc 8e22b1d36b2ec794e16fb47cf662c50e2553cb9f
 clone git github.com/oxtoacart/bpool 4e1c5567d7c2dd59fa4c7c83d34c2f3528b025d6
+clone git github.com/sevlyar/go-daemon 3bf5e993af87194518e81cf9a81c1c53190a8911
 clone git github.com/Sirupsen/logrus v0.10.0
 clone git github.com/Microsoft/go-winio v0.3.4
 clone git golang.org/x/crypto 5bcd134fee4dd1475da17714aac19c0aa0142e2f https://github.com/golang/crypto.git
