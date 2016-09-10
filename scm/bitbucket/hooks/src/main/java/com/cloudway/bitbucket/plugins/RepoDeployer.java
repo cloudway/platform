@@ -383,7 +383,7 @@ public class RepoDeployer
     }
 
     private void pushTemplateToNewRepo(Path tempRepoDir, Repository newRepo) {
-        // temprarily disable post-receive hook
+        // temporarily disable post-receive hook
         repoHookService.disable(newRepo, HOOK_KEY);
         try {
             GitScmCommandBuilder builder = gitCommandBuilderFactory.builder()
@@ -396,6 +396,19 @@ public class RepoDeployer
             HookUtils.configure(requestHandle, builder);
 
             builder.build(new LoggingHandler(System.err)).call();
+
+            // ensure new repository was populated
+            int waitTime = 100, maxWaitTime = 10000; // 10 seconds
+            while (repoService.isEmpty(newRepo)) {
+                try {
+                    Thread.sleep(waitTime);
+                    if ((waitTime *= 2) > maxWaitTime) {
+                        break;
+                    }
+                } catch (InterruptedException ex) {
+                    break;
+                }
+            }
         } finally {
             repoHookService.enable(newRepo, HOOK_KEY);
         }
