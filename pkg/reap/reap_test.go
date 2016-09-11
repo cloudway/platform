@@ -23,32 +23,14 @@ var _ = Describe("Reaper", func() {
 	})
 
 	Context("when spawn and kill subprocess", func() {
-		Context("when reaper unlocked", func() {
-			It("should reap subprocess", func() {
-				cmd := exec.Command("sleep", "5")
-				Ω(cmd.Start()).Should(Succeed())
-				Ω(cmd.Process.Kill()).Should(Succeed())
+		It("should reap subprocess", func() {
+			cmd := exec.Command("sleep", "5")
+			Ω(cmd.Start()).Should(Succeed())
+			Ω(cmd.Process.Kill()).Should(Succeed())
 
-				var child Child
-				Eventually(reapChan).Should(Receive(&child))
-				Ω(child.Pid).Should(Equal(cmd.Process.Pid))
-			})
-		})
-
-		Context("when reaper locked", func() {
-			It("should not reap subprocess", func() {
-				cmd := exec.Command("sleep", "5")
-				Ω(cmd.Start()).Should(Succeed())
-
-				reaper.Lock()
-				Ω(cmd.Process.Kill()).Should(Succeed())
-				Consistently(reapChan).ShouldNot(Receive())
-				reaper.Unlock()
-
-				var child Child
-				Eventually(reapChan).Should(Receive(&child))
-				Ω(child.Pid).Should(Equal(cmd.Process.Pid))
-			})
+			var child Child
+			Eventually(reapChan).Should(Receive(&child))
+			Ω(child.Pid).Should(Equal(cmd.Process.Pid))
 		})
 	})
 
@@ -68,13 +50,11 @@ var _ = Describe("Reaper", func() {
 
 		Context("when reaper locked", func() {
 			It("should success to wait", func() {
-				reaper.Lock()
 				cmd := exec.Command("true")
-				Ω(cmd.Start()).Should(Succeed())
+				ch := make(chan int, 1)
+				Ω(reaper.StartCmd(cmd, ch)).Should(Succeed())
 				time.Sleep(1 * time.Second)
-				Ω(cmd.Wait()).Should(Succeed())
-				reaper.Unlock()
-
+				Ω(reaper.WaitCmd(cmd, ch)).Should(Succeed())
 				Consistently(reapChan).ShouldNot(Receive())
 			})
 		})

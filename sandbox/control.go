@@ -135,18 +135,13 @@ func runPluginAction(path, dir string, env []string, action string, args ...stri
 		return err
 	}
 
-	if reaper != nil {
-		reaper.Lock()
-		defer reaper.Unlock()
-	}
-
 	cmd := exec.Command(filename, args...)
 	cmd.Stdin = nil
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = env
 	cmd.Dir = dir
-	return cmd.Run()
+	return reaper.RunCmd(cmd)
 }
 
 func (box *Sandbox) runActionHook(action string, env []string) error {
@@ -158,18 +153,13 @@ func (box *Sandbox) runActionHook(action string, env []string) error {
 		return err
 	}
 
-	if reaper != nil {
-		reaper.Lock()
-		defer reaper.Unlock()
-	}
-
 	cmd := exec.Command(hook)
 	cmd.Stdin = nil
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = env
 	cmd.Dir = box.HomeDir()
-	return cmd.Run()
+	return reaper.RunCmd(cmd)
 }
 
 func MakeExecEnv(env map[string]string) []string {

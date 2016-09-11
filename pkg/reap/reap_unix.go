@@ -3,20 +3,24 @@
 package reap
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"sync"
 	"syscall"
 )
 
 type Reaper struct {
-	lock sync.RWMutex
-	done chan struct{}
+	lock      sync.Mutex
+	done      chan struct{}
+	waitQueue map[int]chan int
 }
 
 func New() *Reaper {
 	return &Reaper{
-		done: make(chan struct{}),
+		done:      make(chan struct{}),
+		waitQueue: make(map[int]chan int),
 	}
 }
 
@@ -29,6 +33,7 @@ func sigChildHandler(notifications chan os.Signal, done chan struct{}) {
 	for {
 		select {
 		case <-done:
+			signal.Stop(sigs)
 			return
 		case sig := <-sigs:
 			select {
@@ -63,23 +68,37 @@ func (r *Reaper) Run(reapchan chan<- Child) {
 }
 
 func (r *Reaper) reap(reapchan chan<- Child) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	for {
 		var status syscall.WaitStatus
 		pid, err := syscall.Wait4(-1, &status, syscall.WNOHANG, nil)
 
 		switch err {
 		case nil:
-			if pid > 0 {
-				// Got a child, clean this up and poll again.
-				if reapchan != nil {
-					reapchan <- Child{Pid: pid, Status: status}
-				}
-				continue
+			if pid <= 0 {
+				return
 			}
-			return
+
+			// Got a child, clean this up and poll again.
+			r.lock.Lock()
+			ch := r.waitQueue[pid]
+			if ch != nil {
+				delete(r.waitQueue, pid)
+			}
+			r.lock.Unlock()
+
+			if ch != nil {
+				// A go routine is waiting for subprocess, send it the exit status.
+				var exitCode int
+				if status.Exited() {
+					exitCode = status.ExitStatus()
+				} else {
+					exitCode = int(status)
+				}
+				ch <- exitCode
+			} else if reapchan != nil {
+				reapchan <- Child{Pid: pid, Status: status}
+			}
+			continue
 
 		case syscall.ECHILD:
 			// No more children, we are done
@@ -105,18 +124,46 @@ func (r *Reaper) Close() {
 	close(r.done)
 }
 
-// Lock to prevent reaping during periods when you know your application
-// is waiting for subprocesses to return. You need to use care in order
-// to prevent the reaper from stealing your return values from uses of
-// packages like Go's exec. We use an RWMutex so that we don't serialize
-// all of the application's execution of sub processes with each other,
-// but we do serialize them with reaping. The application should get a
-// read lock when it wants to do a wait.
-func (r *Reaper) Lock() {
-	r.lock.RLock()
+// RunCmd execute a command without reaping the subprocess.
+func (r *Reaper) RunCmd(cmd *exec.Cmd) error {
+	if r == nil {
+		return cmd.Run()
+	}
+
+	ch := make(chan int, 1)
+	if err := r.StartCmd(cmd, ch); err != nil {
+		return err
+	}
+	return r.WaitCmd(cmd, ch)
 }
 
-// Unlock reaping when application finished waiting for subprocesses to return.
-func (r *Reaper) Unlock() {
-	r.lock.RUnlock()
+// StartCmd starts a command without reaping the subprocess. A channel must
+// be provided to receive notification when subprocess terminated.
+func (r *Reaper) StartCmd(cmd *exec.Cmd, ch chan int) error {
+	if r == nil {
+		return cmd.Start()
+	}
+
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	r.waitQueue[cmd.Process.Pid] = ch
+	return nil
+}
+
+// WaitCmd waits on subprocess to finish executing.
+func (r *Reaper) WaitCmd(cmd *exec.Cmd, ch chan int) error {
+	status := <-ch
+	err := cmd.Wait() // need to call Cmd.Wait to cleanup goroutines
+	if syserr, ok := err.(*os.SyscallError); ok && syserr.Err == syscall.ECHILD {
+		err = nil // this is ok because the child has been reaped
+	}
+	if err == nil && status != 0 {
+		err = fmt.Errorf("process terminated with status %d", status)
+	}
+	return err
 }
