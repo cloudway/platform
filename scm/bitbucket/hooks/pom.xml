@@ -82,6 +82,11 @@
       <artifactId>commons-compress</artifactId>
       <version>1.9</version>
     </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-exec</artifactId>
+      <version>1.2</version>
+    </dependency>
   </dependencies>
 
   <build>
