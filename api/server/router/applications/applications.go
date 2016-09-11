@@ -180,7 +180,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		Name:    req.Name,
 		Repo:    req.Repo,
 		Scaling: 1,
-		Logger:  serverlog.NewLogWriter(w),
+		Logger:  serverlog.NewWriter(w),
 	}
 
 	if !namePattern.MatchString(opts.Name) {
@@ -244,7 +244,7 @@ func (ar *applicationsRouter) createService(ctx context.Context, w http.Response
 
 	opts := container.CreateOptions{
 		Name:   vars["name"],
-		Logger: serverlog.NewLogWriter(w),
+		Logger: serverlog.NewWriter(w),
 	}
 
 	cs, err := br.CreateServices(opts, tags)
@@ -441,7 +441,7 @@ func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter,
 	user := httputils.UserFromContext(ctx)
 	name, branch := vars["name"], r.FormValue("branch")
 
-	logger := serverlog.NewLogWriter(w)
+	logger := serverlog.NewWriter(w)
 	err := ar.SCM.DeployWithLog(user.Namespace, name, branch, logger, logger)
 	if err != nil {
 		serverlog.SendError(w, err)
@@ -512,7 +512,7 @@ func (ar *applicationsRouter) upload(ctx context.Context, w http.ResponseWriter,
 
 	user := httputils.UserFromContext(ctx)
 	_, binary := r.Form["binary"]
-	logger := serverlog.NewLogWriter(w)
+	logger := serverlog.NewWriter(w)
 
 	err := ar.NewUserBroker(user, ctx).Upload(vars["name"], r.Body, binary, logger)
 	if err != nil {
