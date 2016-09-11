@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -249,18 +250,21 @@ func (cli *bitbucketClient) PopulateURL(namespace, name, remote string) error {
 	return checkNamespaceError(namespace, resp, err)
 }
 
-func (cli *bitbucketClient) Deploy(namespace, name string, branch string) error {
-	path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/deploy", namespace, name)
-	query := url.Values{"branch": []string{branch}}
-	resp, err := cli.Post(context.Background(), path, query, nil, nil)
-	resp.EnsureClosed()
-	return checkNamespaceError(namespace, resp, err)
-}
+func (cli *bitbucketClient) Deploy(namespace, name string, branch string, stdout, stderr io.Writer) error {
+	if stdout == nil {
+		stdout = ioutil.Discard
+	}
+	if stderr == nil {
+		stderr = ioutil.Discard
+	}
 
-func (cli *bitbucketClient) DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer) error {
 	errCh := make(chan error)
 	go func() {
-		errCh <- cli.Deploy(namespace, name, branch)
+		path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/deploy", namespace, name)
+		query := url.Values{"branch": []string{branch}}
+		resp, err := cli.Post(context.Background(), path, query, nil, nil)
+		resp.EnsureClosed()
+		errCh <- checkNamespaceError(namespace, resp, err)
 	}()
 
 	var (

@@ -26,10 +26,6 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("Error response from server: %s", e.Message)
 }
 
-func NewWriter(out io.Writer) io.Writer {
-	return stdcopy.NewWriter(out, stdcopy.Stdout)
-}
-
 func SendError(w io.Writer, err error) error {
 	rec := record{
 		Error: &Error{Message: err.Error()},
@@ -43,9 +39,9 @@ func SendObject(w io.Writer, obj interface{}) error {
 	return json.NewEncoder(out).Encode(&record{Result: obj})
 }
 
-func Drain(in io.Reader, out io.Writer, result interface{}) (err error) {
+func Drain(in io.Reader, dstout, dsterr io.Writer, result interface{}) (err error) {
 	data := bytes.NewBuffer(nil)
-	_, err = stdcopy.Copy(out, out, data, in)
+	_, err = stdcopy.Copy(dstout, dsterr, data, in)
 	if err != nil {
 		return err
 	}

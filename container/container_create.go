@@ -45,7 +45,8 @@ type CreateOptions struct {
 	Hosts       []string
 	Env         map[string]string
 	Repo        string
-	Logger      io.Writer
+	OutLog      io.Writer
+	ErrLog      io.Writer
 }
 
 type createConfig struct {
@@ -298,7 +299,7 @@ func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg
 	var imageId string
 	if err == nil {
 		defer response.Body.Close()
-		imageId, err = readBuildStream(response.Body, cfg.Logger)
+		imageId, err = readBuildStream(response.Body, cfg.OutLog)
 	}
 
 	// get actual image ID

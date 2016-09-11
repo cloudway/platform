@@ -321,7 +321,7 @@ func (cli *CWCli) upload(name, path string, binary bool) error {
 		return err
 	}
 
-	return cli.Upload(context.Background(), name, tempfile, binary, cli.stdout)
+	return cli.Upload(context.Background(), name, tempfile, binary, cli.stdout, cli.stderr)
 }
 
 func (cli *CWCli) CmdAppDump(args ...string) (err error) {
@@ -466,7 +466,7 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
 		return err
 	}
 
-	app, err := cli.CreateApplication(context.Background(), req, cli.stdout)
+	app, err := cli.CreateApplication(context.Background(), req, cli.stdout, cli.stderr)
 	if err != nil {
 		return err
 	}
@@ -749,7 +749,7 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
 
 		return nil
 	} else {
-		return cli.DeployApplication(context.Background(), name, branch, cli.stdout)
+		return cli.DeployApplication(context.Background(), name, branch, cli.stdout, cli.stderr)
 	}
 }
 
@@ -904,7 +904,7 @@ func (cli *CWCli) CmdAppServiceAdd(args ...string) error {
 		return err
 	}
 
-	return cli.CreateService(context.Background(), cli.stdout, name, tags...)
+	return cli.CreateService(context.Background(), cli.stdout, cli.stderr, name, tags...)
 }
 
 func (cli *CWCli) CmdAppServiceRemove(args ...string) error {

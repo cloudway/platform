@@ -256,11 +256,14 @@ func (mock mockSCM) PopulateURL(namespace, name string, url string) error {
 	return repo.Run("push", "--mirror", repodir)
 }
 
-func (mock mockSCM) Deploy(namespace, name string, branch string) (err error) {
-	return mock.DeployWithLog(namespace, name, branch, ioutil.Discard, ioutil.Discard)
-}
+func (mock mockSCM) Deploy(namespace, name string, branch string, stdout, stderr io.Writer) (err error) {
+	if stdout == nil {
+		stdout = ioutil.Discard
+	}
+	if stderr == nil {
+		stderr = ioutil.Discard
+	}
 
-func (mock mockSCM) DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer) (err error) {
 	empty, err := mock.isEmptyRepository(namespace, name)
 	if err != nil {
 		return err

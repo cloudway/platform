@@ -30,14 +30,14 @@ func (api *APIClient) GetApplicationInfo(ctx context.Context, name string) (*typ
 	return &info, err
 }
 
-func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateApplication, logger io.Writer) (*types.ApplicationInfo, error) {
+func (api *APIClient) CreateApplication(ctx context.Context, opts types.CreateApplication, dstout, dsterr io.Writer) (*types.ApplicationInfo, error) {
 	resp, err := api.cli.Post(ctx, "/applications/", nil, &opts, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var info types.ApplicationInfo
-	err = serverlog.Drain(resp.Body, logger, &info)
+	err = serverlog.Drain(resp.Body, dstout, dsterr, &info)
 	resp.Body.Close()
 	return &info, err
 }
@@ -48,13 +48,13 @@ func (api *APIClient) RemoveApplication(ctx context.Context, name string) error 
 	return err
 }
 
-func (api *APIClient) CreateService(ctx context.Context, logger io.Writer, app string, tags ...string) error {
+func (api *APIClient) CreateService(ctx context.Context, dstout, dsterr io.Writer, app string, tags ...string) error {
 	resp, err := api.cli.Post(ctx, "/applications/"+app+"/services/", nil, tags, nil)
 	if err != nil {
 		return err
 	}
 
-	err = serverlog.Drain(resp.Body, logger, nil)
+	err = serverlog.Drain(resp.Body, dstout, dsterr, nil)
 	resp.Body.Close()
 	return err
 }
@@ -115,7 +115,7 @@ func (api *APIClient) GetApplicationStats(ctx context.Context, name string) (io.
 	return resp.Body, err
 }
 
-func (api *APIClient) DeployApplication(ctx context.Context, name, branch string, logger io.Writer) error {
+func (api *APIClient) DeployApplication(ctx context.Context, name, branch string, dstout, dsterr io.Writer) error {
 	var query url.Values
 	if branch != "" {
 		query = url.Values{"branch": []string{branch}}
@@ -126,7 +126,7 @@ func (api *APIClient) DeployApplication(ctx context.Context, name, branch string
 		return err
 	}
 
-	err = serverlog.Drain(resp.Body, logger, nil)
+	err = serverlog.Drain(resp.Body, dstout, dsterr, nil)
 	resp.Body.Close()
 	return err
 }
@@ -147,7 +147,7 @@ func (api *APIClient) Download(ctx context.Context, name string) (io.ReadCloser,
 	return resp.Body, err
 }
 
-func (api *APIClient) Upload(ctx context.Context, name string, content io.Reader, binary bool, logger io.Writer) error {
+func (api *APIClient) Upload(ctx context.Context, name string, content io.Reader, binary bool, dstout, dsterr io.Writer) error {
 	var query url.Values
 	if binary {
 		query = url.Values{}
@@ -160,7 +160,7 @@ func (api *APIClient) Upload(ctx context.Context, name string, content io.Reader
 		return err
 	}
 
-	err = serverlog.Drain(resp.Body, logger, nil)
+	err = serverlog.Drain(resp.Body, dstout, dsterr, nil)
 	resp.Body.Close()
 	return err
 }

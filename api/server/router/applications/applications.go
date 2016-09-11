@@ -24,6 +24,7 @@ import (
 	"github.com/cloudway/platform/hub"
 	"github.com/cloudway/platform/pkg/manifest"
 	"github.com/cloudway/platform/pkg/serverlog"
+	"github.com/cloudway/platform/pkg/stdcopy"
 	"github.com/cloudway/platform/scm"
 	"golang.org/x/net/context"
 )
@@ -180,7 +181,8 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		Name:    req.Name,
 		Repo:    req.Repo,
 		Scaling: 1,
-		Logger:  serverlog.NewWriter(w),
+		OutLog:  stdcopy.NewWriter(w, stdcopy.Stdout),
+		ErrLog:  stdcopy.NewWriter(w, stdcopy.Stderr),
 	}
 
 	if !namePattern.MatchString(opts.Name) {
@@ -244,7 +246,8 @@ func (ar *applicationsRouter) createService(ctx context.Context, w http.Response
 
 	opts := container.CreateOptions{
 		Name:   vars["name"],
-		Logger: serverlog.NewWriter(w),
+		OutLog: stdcopy.NewWriter(w, stdcopy.Stdout),
+		ErrLog: stdcopy.NewWriter(w, stdcopy.Stderr),
 	}
 
 	cs, err := br.CreateServices(opts, tags)
@@ -441,8 +444,9 @@ func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter,
 	user := httputils.UserFromContext(ctx)
 	name, branch := vars["name"], r.FormValue("branch")
 
-	logger := serverlog.NewWriter(w)
-	err := ar.SCM.DeployWithLog(user.Namespace, name, branch, logger, logger)
+	dstout := stdcopy.NewWriter(w, stdcopy.Stdout)
+	dsterr := stdcopy.NewWriter(w, stdcopy.Stderr)
+	err := ar.SCM.Deploy(user.Namespace, name, branch, dstout, dsterr)
 	if err != nil {
 		serverlog.SendError(w, err)
 	}
@@ -512,9 +516,10 @@ func (ar *applicationsRouter) upload(ctx context.Context, w http.ResponseWriter,
 
 	user := httputils.UserFromContext(ctx)
 	_, binary := r.Form["binary"]
-	logger := serverlog.NewWriter(w)
+	dstout := stdcopy.NewWriter(w, stdcopy.Stdout)
+	dsterr := stdcopy.NewWriter(w, stdcopy.Stderr)
 
-	err := ar.NewUserBroker(user, ctx).Upload(vars["name"], r.Body, binary, logger)
+	err := ar.NewUserBroker(user, ctx).Upload(vars["name"], r.Body, binary, dstout, dsterr)
 	if err != nil {
 		serverlog.SendError(w, err)
 	}
