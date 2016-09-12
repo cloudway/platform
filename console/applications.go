@@ -1,9 +1,6 @@
 package console
 
 import (
-	"crypto/md5"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,12 +9,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"golang.org/x/net/context"
+	"golang.org/x/net/websocket"
 	"gopkg.in/authboss.v0"
 
 	"github.com/cloudway/platform/auth/userdb"
@@ -33,12 +30,11 @@ func (con *Console) initApplicationsRoutes(gets *mux.Router, posts *mux.Router) 
 	gets.HandleFunc("/forms/applications", con.createApplicationForm)
 	posts.HandleFunc("/applications", con.createApplication)
 	gets.HandleFunc("/applications/{name}", con.getApplication)
-	gets.HandleFunc("/applications/{name}/status", con.getApplicationStatus)
 	gets.HandleFunc("/applications/{name}/settings", con.getApplicationSettings)
 	posts.HandleFunc("/applications/{name}/host", con.addHost)
 	posts.HandleFunc("/applications/{name}/host/delete", con.removeHost)
 	posts.HandleFunc("/applications/{name}/reload", con.restartApplication)
-	posts.HandleFunc("/applications/{name}/reload/async", con.asyncRestartApplication)
+	gets.HandleFunc("/applications/{name}/reload/ws", con.wsRestartApplication)
 	posts.HandleFunc("/applications/{name}/deploy", con.deployApplication)
 	posts.HandleFunc("/applications/{name}/scale", con.scaleApplication)
 	posts.HandleFunc("/applications/{name}/delete", con.removeApplication)
@@ -70,6 +66,14 @@ func (con *Console) appURL(name, namespace string) string {
 		port = host[i:]
 	}
 	return fmt.Sprintf("%s://%s-%s.%s%s", con.baseURL.Scheme, name, namespace, defaults.Domain(), port)
+}
+
+func (con *Console) wsURL() string {
+	scheme := "ws"
+	if con.baseURL.Scheme == "https" {
+		scheme = "wss"
+	}
+	return scheme + "://" + con.baseURL.Host
 }
 
 func (con *Console) getApplications(w http.ResponseWriter, r *http.Request) {
@@ -250,6 +254,7 @@ type appData struct {
 	Name       string
 	DNS        string
 	URL        string
+	WS         string
 	CloneURL   string
 	Branch     *scm.Branch
 	Branches   []*scm.Branch
@@ -296,6 +301,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 		Name: name,
 		DNS:  con.appDNS(name, user.Namespace),
 		URL:  con.appURL(name, user.Namespace),
+		WS:   con.wsURL(),
 	}
 
 	cloneURL := config.Get("scm.clone_url")
@@ -445,6 +451,7 @@ func (con *Console) showApplicationSettings(w http.ResponseWriter, r *http.Reque
 		Name: name,
 		DNS:  con.appDNS(name, user.Namespace),
 		URL:  con.appURL(name, user.Namespace),
+		WS:   con.wsURL(),
 	}
 
 	cloneURL := config.Get("scm.clone_url")
@@ -491,92 +498,50 @@ func (con *Console) restartApplication(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/applications/"+name, http.StatusFound)
 }
 
-var asyncTasks = make(map[string]bool)
-var muTask sync.RWMutex
-
-func (con *Console) asyncRestartApplication(w http.ResponseWriter, r *http.Request) {
+func (con *Console) wsRestartApplication(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
 	user := con.currentUser(w, r)
 	if user == nil {
 		return
 	}
 
-	var b [16]byte
-	rand.Read(b[:])
-	buf := name + "-" + user.Namespace + ":" + string(b[:])
-	hash := md5.Sum([]byte(buf))
-	id := hex.EncodeToString(hash[:])
+	type state struct {
+		ID, State string
+	}
 
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(id))
-
-	muTask.Lock()
-	asyncTasks[id] = true
-	muTask.Unlock()
-
-	go func() {
-		defer func() {
-			muTask.Lock()
-			delete(asyncTasks, id)
-			muTask.Unlock()
+	h := func(conn *websocket.Conn) {
+		done := make(chan error)
+		go func() {
+			done <- con.NewUserBroker(user).RestartApplication(name)
 		}()
 
-		err := con.NewUserBroker(user).RestartApplication(name)
-		if err != nil {
-			logrus.Error(err)
+		ctx := context.Background()
+		enc := json.NewEncoder(conn)
+		var send = func() {
+			cs, err := con.FindAll(ctx, name, user.Namespace)
+			if err == nil {
+				states := make([]state, len(cs))
+				for i, c := range cs {
+					states[i].ID = c.ID
+					states[i].State = c.ActiveState(ctx).String()
+					enc.Encode(states)
+				}
+			}
 		}
-	}()
-}
 
-type stateData struct {
-	ID, State string
-}
-
-type statusData struct {
-	Status string
-	States []stateData
-}
-
-func (con *Console) getApplicationStatus(w http.ResponseWriter, r *http.Request) {
-	user := con.currentUser(w, r)
-	if user == nil {
-		return
+		for {
+			select {
+			case <-done:
+				send()
+				return
+			case <-time.After(500 * time.Millisecond):
+				send()
+			}
+		}
 	}
 
-	id := r.FormValue("id")
-	name := mux.Vars(r)["name"]
-	ctx := context.Background()
-
-	var inprogress bool
-	if id != "" {
-		muTask.RLock()
-		inprogress = asyncTasks[id]
-		muTask.RUnlock()
-	}
-
-	cs, err := con.FindAll(ctx, name, user.Namespace)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	status := statusData{}
-	status.States = make([]stateData, len(cs))
-	for i, c := range cs {
-		status.States[i].ID = c.ID
-		status.States[i].State = c.ActiveState(ctx).String()
-	}
-
-	if inprogress {
-		status.Status = "inprogress"
-	} else {
-		status.Status = "finished"
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(&status)
+	srv := websocket.Server{Handler: h, Handshake: nil}
+	srv.ServeHTTP(w, r)
 }
 
 func (con *Console) deployApplication(w http.ResponseWriter, r *http.Request) {

@@ -152,46 +152,36 @@ function setStateLabelClass() {
 }
 setStateLabelClass()
 
-$('#refresh-btn').on('click', function(e) {
-  $.post("/applications/{{$name}}/reload/async", function(id) {
-    $('#refresh-btn').attr('disabled', 'disabled')
-    $('#refresh-btn i').addClass('fa-spin')
-    updateStatus(id)
-  })
-})
+$('#refresh-btn').on('click', refreshApp);
 
-function updateStatus(id) {
-  var restore = function() {
-    clearInterval(intervalHandle)
-    $('#refresh-btn').removeAttr("disabled")
-    $('#refresh-btn i').removeClass("fa-spin")
+function refreshApp() {
+  var ws;
+  var serviceLocation = "{{.app.WS}}/applications/{{$name}}/reload/ws"
+
+  var begin = function(evt) {
+    $('#refresh-btn').attr('disabled', 'disabled');
+    $('#refresh-btn i').addClass('fa-spin');
   }
 
-  var update = function(states) {
+  var update = function(evt) {
+    var states = JSON.parse(evt.data);
     for (var i in states) {
-      var st = states[i]
-      $('#'+st.ID).text(st.State)
-      $('#'+st.ID).attr("class", "label state state-"+st.State)
+      var st = states[i];
+      $('#'+st.ID).text(st.State);
+      $('#'+st.ID).attr("class", "label state state-"+st.State);
     }
-    setStateLabelClass()
+    setStateLabelClass();
   }
 
-  var intervalHandle = setInterval(function() {
-    $.ajax({
-      url: "/applications/{{$name}}/status",
-      data: {id: id},
-      type: "GET",
-      dataType: "json",
-    })
-    .done(function(json) {
-      update(json.States)
-      if (json.Status == "finished") {
-        restore()
-      }
-    })
-    .fail(function(xhr, status, errorThrown) {
-      restore()
-    })
-  }, 1000)
+  var restore = function(evt) {
+    $('#refresh-btn').removeAttr("disabled");
+    $('#refresh-btn i').removeClass("fa-spin");
+  }
+
+  ws = new WebSocket(serviceLocation);
+  ws.onopen = begin;
+  ws.onmessage = update;
+  ws.onclose = restore;
+  ws.onerror = restore;
 }
 </script>
