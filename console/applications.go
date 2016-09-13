@@ -237,7 +237,7 @@ func (con *Console) parseServiceCreateOptions(r *http.Request) (opts container.C
 func (con *Console) startContainers(containers []*container.Container) error {
 	errChan := make(chan error, 1)
 	go func() {
-		errChan <- con.Broker.StartContainers(context.Background(), containers)
+		errChan <- con.Broker.StartContainers(context.Background(), containers, nil)
 	}()
 
 	timer := time.NewTimer(time.Second * 10)
@@ -488,7 +488,7 @@ func (con *Console) restartApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := con.NewUserBroker(user).RestartApplication(name)
+	err := con.NewUserBroker(user).RestartApplication(name, nil)
 	if err != nil {
 		logrus.Error(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -512,7 +512,7 @@ func (con *Console) wsRestartApplication(w http.ResponseWriter, r *http.Request)
 	h := func(conn *websocket.Conn) {
 		done := make(chan error)
 		go func() {
-			done <- con.NewUserBroker(user).RestartApplication(name)
+			done <- con.NewUserBroker(user).RestartApplication(name, nil)
 		}()
 
 		ctx := context.Background()

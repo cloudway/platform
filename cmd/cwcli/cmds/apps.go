@@ -507,7 +507,7 @@ func (cli *CWCli) CmdAppStart(args ...string) error {
 	if err := cli.ConnectAndLogin(); err != nil {
 		return err
 	}
-	return cli.StartApplication(context.Background(), name)
+	return cli.StartApplication(context.Background(), name, cli.stdout, cli.stderr)
 }
 
 func (cli *CWCli) CmdAppStop(args ...string) error {
@@ -533,7 +533,7 @@ func (cli *CWCli) CmdAppRestart(args ...string) error {
 	if err := cli.ConnectAndLogin(); err != nil {
 		return err
 	}
-	return cli.RestartApplication(context.Background(), name)
+	return cli.RestartApplication(context.Background(), name, cli.stdout, cli.stderr)
 }
 
 func (cli *CWCli) CmdAppStatus(args ...string) error {
@@ -765,7 +765,7 @@ func (cli *CWCli) CmdAppScale(args ...string) error {
 	if err := cli.ConnectAndLogin(); err != nil {
 		return err
 	}
-	return cli.ScaleApplication(context.Background(), name, scale)
+	return cli.ScaleApplication(context.Background(), name, scale, cli.stdout, cli.stderr)
 }
 
 func (cli *CWCli) CmdAppEnv(args ...string) error {

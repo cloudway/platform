@@ -65,9 +65,14 @@ func (api *APIClient) RemoveService(ctx context.Context, app, service string) er
 	return err
 }
 
-func (api *APIClient) StartApplication(ctx context.Context, name string) error {
+func (api *APIClient) StartApplication(ctx context.Context, name string, dstout, dsterr io.Writer) error {
 	resp, err := api.cli.Post(ctx, "/applications/"+name+"/start", nil, nil, nil)
-	resp.EnsureClosed()
+	if err != nil {
+		return err
+	}
+
+	err = serverlog.Drain(resp.Body, dstout, dsterr, nil)
+	resp.Body.Close()
 	return err
 }
 
@@ -77,9 +82,14 @@ func (api *APIClient) StopApplication(ctx context.Context, name string) error {
 	return err
 }
 
-func (api *APIClient) RestartApplication(ctx context.Context, name string) error {
+func (api *APIClient) RestartApplication(ctx context.Context, name string, dstout, dsterr io.Writer) error {
 	resp, err := api.cli.Post(ctx, "/applications/"+name+"/restart", nil, nil, nil)
-	resp.EnsureClosed()
+	if err != nil {
+		return err
+	}
+
+	err = serverlog.Drain(resp.Body, dstout, dsterr, nil)
+	resp.Body.Close()
 	return err
 }
 
@@ -178,10 +188,15 @@ func (api *APIClient) Restore(ctx context.Context, name string, content io.Reade
 	return err
 }
 
-func (api *APIClient) ScaleApplication(ctx context.Context, name, scaling string) error {
+func (api *APIClient) ScaleApplication(ctx context.Context, name, scaling string, dstout, dsterr io.Writer) error {
 	query := url.Values{"scale": []string{scaling}}
 	resp, err := api.cli.Post(ctx, "/applications/"+name+"/scale", query, nil, nil)
-	resp.EnsureClosed()
+	if err != nil {
+		return err
+	}
+
+	serverlog.Drain(resp.Body, dstout, dsterr, nil)
+	resp.Body.Close()
 	return err
 }
 

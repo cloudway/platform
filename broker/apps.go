@@ -514,12 +514,16 @@ func (br *UserBroker) RemoveHost(name, host string) error {
 	return br.Users.Update(user.Name, userdb.Args{"applications": user.Applications})
 }
 
-func (br *UserBroker) StartApplication(name string) error {
-	return br.startApplication(name, func(c *container.Container) error { return c.Start(br.ctx) })
+func (br *UserBroker) StartApplication(name string, log *serverlog.ServerLog) error {
+	return br.startApplication(name, func(c *container.Container) error {
+		return c.Start(br.ctx, log)
+	})
 }
 
-func (br *UserBroker) RestartApplication(name string) error {
-	return br.startApplication(name, func(c *container.Container) error { return c.Restart(br.ctx) })
+func (br *UserBroker) RestartApplication(name string, log *serverlog.ServerLog) error {
+	return br.startApplication(name, func(c *container.Container) error {
+		return c.Restart(br.ctx, log)
+	})
 }
 
 func (br *UserBroker) startApplication(name string, fn func(*container.Container) error) error {
@@ -544,8 +548,10 @@ func (br *UserBroker) StopApplication(name string) error {
 	return runParallel(err, containers, func(c *container.Container) error { return c.Stop(br.ctx) })
 }
 
-func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container) error {
-	return startContainers(containers, func(c *container.Container) error { return c.Start(ctx) })
+func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container, log *serverlog.ServerLog) error {
+	return startContainers(containers, func(c *container.Container) error {
+		return c.Start(ctx, log)
+	})
 }
 
 func startContainers(containers []*container.Container, fn func(*container.Container) error) error {

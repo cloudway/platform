@@ -59,7 +59,7 @@ var _ = Describe("Deploy", func() {
 		Expect(containers).To(HaveLen(1))
 		app = containers[0]
 
-		Expect(br.StartApplication("test")).To(Succeed())
+		Expect(br.StartApplication("test", nil)).To(Succeed())
 	})
 
 	AfterEach(func() {

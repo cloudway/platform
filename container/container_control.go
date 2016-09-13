@@ -3,10 +3,10 @@ package container
 import (
 	"archive/tar"
 	"bytes"
-	"os"
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/docker/engine-api/types"
 	"golang.org/x/net/context"
 )
@@ -14,21 +14,21 @@ import (
 var waitTimeout = time.Second * 60
 
 // Start the application container.
-func (c *Container) Start(ctx context.Context) error {
+func (c *Container) Start(ctx context.Context, log *serverlog.ServerLog) error {
 	err := c.ContainerStart(ctx, c.ID, types.ContainerStartOptions{})
 	if err != nil {
 		return err
 	}
-	return startSandbox(ctx, c)
+	return startSandbox(ctx, c, log)
 }
 
 // Restart the application container.
-func (c *Container) Restart(ctx context.Context) error {
+func (c *Container) Restart(ctx context.Context, log *serverlog.ServerLog) error {
 	err := c.ContainerRestart(ctx, c.ID, &waitTimeout)
 	if err != nil {
 		return err
 	}
-	return startSandbox(ctx, c)
+	return startSandbox(ctx, c, log)
 }
 
 // Stop the application container.
@@ -36,8 +36,8 @@ func (c *Container) Stop(ctx context.Context) error {
 	return c.ContainerStop(ctx, c.ID, &waitTimeout)
 }
 
-func startSandbox(ctx context.Context, c *Container) error {
-	err := c.Exec(ctx, "", nil, os.Stdout, os.Stderr, "/usr/bin/cwctl", "start")
+func startSandbox(ctx context.Context, c *Container, log *serverlog.ServerLog) error {
+	err := c.Exec(ctx, "", nil, log.Stdout(), log.Stderr(), "/usr/bin/cwctl", "start")
 	if err != nil {
 		return err
 	}

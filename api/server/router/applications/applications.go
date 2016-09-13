@@ -203,7 +203,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		return nil
 	}
 
-	if err = br.StartContainers(ctx, cs); err != nil {
+	if err = br.StartContainers(ctx, cs, opts.Log); err != nil {
 		serverlog.SendError(w, err)
 		return nil
 	}
@@ -253,7 +253,7 @@ func (ar *applicationsRouter) createService(ctx context.Context, w http.Response
 		return nil
 	}
 
-	if err := br.StartContainers(ctx, cs); err != nil {
+	if err := br.StartContainers(ctx, cs, opts.Log); err != nil {
 		serverlog.SendError(w, err)
 		return nil
 	}
@@ -276,7 +276,11 @@ func (ar *applicationsRouter) removeService(ctx context.Context, w http.Response
 
 func (ar *applicationsRouter) start(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := httputils.UserFromContext(ctx)
-	return ar.NewUserBroker(user, ctx).StartApplication(vars["name"])
+	err := ar.NewUserBroker(user, ctx).StartApplication(vars["name"], serverlog.New(w))
+	if err != nil {
+		serverlog.SendError(w, err)
+	}
+	return nil
 }
 
 func (ar *applicationsRouter) stop(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -286,7 +290,11 @@ func (ar *applicationsRouter) stop(ctx context.Context, w http.ResponseWriter, r
 
 func (ar *applicationsRouter) restart(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := httputils.UserFromContext(ctx)
-	return ar.NewUserBroker(user, ctx).RestartApplication(vars["name"])
+	err := ar.NewUserBroker(user, ctx).RestartApplication(vars["name"], serverlog.New(w))
+	if err != nil {
+		serverlog.SendError(w, err)
+	}
+	return nil
 }
 
 func (ar *applicationsRouter) status(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -577,10 +585,15 @@ func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, 
 
 	br := ar.NewUserBroker(user, ctx)
 	cs, err := br.ScaleApplication(name, num)
-	if err == nil {
-		err = br.StartContainers(ctx, cs)
+	if err != nil {
+		return err
 	}
-	return err
+
+	err = br.StartContainers(ctx, cs, serverlog.New(w))
+	if err != nil {
+		serverlog.SendError(w, err)
+	}
+	return nil
 }
 
 func (ar *applicationsRouter) getContainers(ctx context.Context, namespace string, vars map[string]string) (cs []*container.Container, err error) {
