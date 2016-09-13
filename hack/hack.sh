@@ -7,6 +7,7 @@ version=$(< ./VERSION)
 docker cp bundles/$version/binary-server/cwman-$version cloudway-broker:/usr/bin/cwman
 docker cp bundles/$version/binary-sandbox/cwctl-$version cloudway-broker:/usr/local/cloudway/sandbox/usr/bin/cwctl
 docker cp build/broker/files/views cloudway-broker:/usr/local/cloudway/
+docker cp build/broker/files/static cloudway-broker:/usr/local/cloudway/
 docker cp bundles/$version/binary-server/cwman-$version cloudway-bitbucket:/usr/bin/cwman
 docker cp bundles/$version/binary-server/cwman-$version cloudway-proxy:/usr/bin/cwman
 docker cp bundles/$version/binary-server/cwman-$version cloudway-sshd:/usr/bin/cwman

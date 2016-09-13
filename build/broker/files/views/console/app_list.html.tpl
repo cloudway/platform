@@ -23,11 +23,11 @@
   <hr style="margin-top:10px; margin-bottom:15px;"/>
   {{end}}
   <div class="col-md-2">
-    <a class="btn btn-primary" href="/forms/applications"><i class="fa fa-plus"></i> 创建应用</a>
+    <a class="btn btn-primary" href="/applications/create/form"><i class="fa fa-plus"></i> 创建应用</a>
   </div>
 {{else}}
   <div class="col-md-2">
-    <a class="btn btn-primary" href="/forms/applications"><i class="fa fa-bolt"></i> 创建你的第一个应用</a>
+    <a class="btn btn-primary" href="/applications/create/form"><i class="fa fa-bolt"></i> 创建你的第一个应用</a>
   </div>
 {{end}}
 </div>

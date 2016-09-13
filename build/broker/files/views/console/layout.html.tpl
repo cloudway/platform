@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.3.0/css/font-awesome.min.css" />
   <script type="text/javascript" src="//cdn.bootcss.com/jquery/2.1.3/jquery.min.js"></script>
   <script type="text/javascript" src="//cdn.bootcss.com/bootstrap/3.3.2/js/bootstrap.min.js"></script>
+  {{template "prelude" .}}
   <style>
     .modal-danger.modal-header {
       padding: 9px 15px;
@@ -66,5 +67,6 @@
 </body>
 </html>
 {{define "pagetitle"}}{{end}}
+{{define "prelude"}}{{end}}
 {{define "yield"}}{{end}}
 {{define "authboss"}}{{end}}
