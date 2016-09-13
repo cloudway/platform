@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -250,12 +249,9 @@ func (cli *bitbucketClient) PopulateURL(namespace, name, remote string) error {
 	return checkNamespaceError(namespace, resp, err)
 }
 
-func (cli *bitbucketClient) Deploy(namespace, name string, branch string, stdout, stderr io.Writer) error {
-	if stdout == nil {
-		stdout = ioutil.Discard
-	}
-	if stderr == nil {
-		stderr = ioutil.Discard
+func (cli *bitbucketClient) Deploy(namespace, name string, branch string, log *serverlog.ServerLog) error {
+	if log == nil {
+		log = serverlog.Discard
 	}
 
 	path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/deploy", namespace, name)
@@ -265,7 +261,7 @@ func (cli *bitbucketClient) Deploy(namespace, name string, branch string, stdout
 		return checkNamespaceError(namespace, resp, err)
 	} else {
 		defer resp.Body.Close()
-		return serverlog.Drain(resp.Body, stdout, stderr, nil)
+		return serverlog.Drain(resp.Body, log.Stdout(), log.Stderr(), nil)
 	}
 }
 

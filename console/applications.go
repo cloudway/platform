@@ -552,7 +552,7 @@ func (con *Console) deployApplication(w http.ResponseWriter, r *http.Request) {
 
 	name := mux.Vars(r)["name"]
 	branch := r.FormValue("branch")
-	err := con.SCM.Deploy(user.Namespace, name, branch, nil, nil)
+	err := con.SCM.Deploy(user.Namespace, name, branch, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	} else {

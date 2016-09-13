@@ -16,6 +16,7 @@ import (
 	"github.com/cloudway/platform/hub"
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/manifest"
+	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/docker/engine-api/types"
 )
 
@@ -87,7 +88,7 @@ func (cli DockerClient) DistributeRepo(ctx context.Context, containers []*Contai
 	return err
 }
 
-func (cli DockerClient) DeployRepo(ctx context.Context, name, namespace string, in io.Reader, stdout, stderr io.Writer) error {
+func (cli DockerClient) DeployRepo(ctx context.Context, name, namespace string, in io.Reader, log *serverlog.ServerLog) error {
 	containers, err := cli.FindApplications(ctx, name, namespace)
 	if err != nil {
 		return err
@@ -109,11 +110,11 @@ func (cli DockerClient) DeployRepo(ctx context.Context, name, namespace string, 
 		return cli.DistributeRepo(ctx, containers, in, false)
 	} else {
 		// build and distribute the repository
-		return build(cli, ctx, containers, base, in, stdout, stderr)
+		return build(cli, ctx, containers, base, in, log)
 	}
 }
 
-func build(cli DockerClient, ctx context.Context, containers []*Container, base *Container, in io.Reader, stdout, stderr io.Writer) (err error) {
+func build(cli DockerClient, ctx context.Context, containers []*Container, base *Container, in io.Reader, log *serverlog.ServerLog) (err error) {
 	plugin, err := readPluginManifestFromContainer(ctx, base)
 	if err != nil {
 		return
@@ -127,6 +128,7 @@ func build(cli DockerClient, ctx context.Context, containers []*Container, base 
 		Image:     base.Config.Image,
 		Home:      base.Home(),
 		User:      base.User(),
+		Log:       log,
 	}
 	builder, err := cli.CreateBuilder(ctx, opts)
 	if err != nil {
@@ -145,7 +147,7 @@ func build(cli DockerClient, ctx context.Context, containers []*Container, base 
 
 	// build the application, use cache during build
 	copyCache(ctx, plugin, base, builder, true)
-	err = builder.Exec(ctx, "", in, stdout, stderr, "/usr/bin/cwctl", "build")
+	err = builder.Exec(ctx, "", in, log.Stdout(), log.Stderr(), "/usr/bin/cwctl", "build")
 	if err != nil {
 		return
 	}

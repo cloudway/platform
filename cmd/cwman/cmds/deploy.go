@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/cloudway/platform/pkg/mflag"
+	"github.com/cloudway/platform/pkg/serverlog"
 	"golang.org/x/net/context"
 )
 
@@ -13,5 +14,6 @@ func (cli *CWMan) CmdDeploy(args ...string) (err error) {
 	cmd.ParseFlags(args, true)
 
 	name, namespace := cmd.Arg(0), cmd.Arg(1)
-	return cli.DeployRepo(context.Background(), name, namespace, os.Stdin, os.Stdout, os.Stderr)
+	log := serverlog.Encap(os.Stdout, os.Stderr)
+	return cli.DeployRepo(context.Background(), name, namespace, os.Stdin, log)
 }

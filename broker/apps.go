@@ -27,6 +27,7 @@ import (
 	"github.com/cloudway/platform/pkg/errors"
 	"github.com/cloudway/platform/pkg/files"
 	"github.com/cloudway/platform/pkg/manifest"
+	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
 )
 
@@ -211,7 +212,7 @@ func populateFromTemplate(scm scm.SCM, opts *container.CreateOptions, template s
 }
 
 func deployRepo(scm scm.SCM, opts *container.CreateOptions, containers []*container.Container) error {
-	return scm.Deploy(opts.Namespace, opts.Name, "", opts.OutLog, opts.ErrLog)
+	return scm.Deploy(opts.Namespace, opts.Name, "", opts.Log)
 }
 
 func generateSharedSecret() (string, error) {
@@ -640,7 +641,7 @@ func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
 }
 
 // Upload application repository from a archive file.
-func (br *UserBroker) Upload(name string, content io.Reader, binary bool, dstout, dsterr io.Writer) error {
+func (br *UserBroker) Upload(name string, content io.Reader, binary bool, log *serverlog.ServerLog) error {
 	if binary {
 		containers, err := br.FindApplications(br.ctx, name, br.Namespace())
 		if err != nil {
@@ -651,7 +652,7 @@ func (br *UserBroker) Upload(name string, content io.Reader, binary bool, dstout
 		}
 		return br.DistributeRepo(br.ctx, containers, content, false)
 	} else {
-		return br.DeployRepo(br.ctx, name, br.Namespace(), content, dstout, dsterr)
+		return br.DeployRepo(br.ctx, name, br.Namespace(), content, log)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 
 	"github.com/cloudway/platform/pkg/stdcopy"
 )
@@ -24,6 +25,55 @@ type record struct {
 
 func (e *Error) Error() string {
 	return fmt.Sprintf("Error response from server: %s", e.Message)
+}
+
+// ServerLog encapsulate multiplexed standard output and standard error streams.
+type ServerLog struct {
+	stdout io.Writer
+	stderr io.Writer
+}
+
+// New create a multiplexed server log.
+func New(w io.Writer) *ServerLog {
+	return &ServerLog{
+		stdout: stdcopy.NewWriter(w, stdcopy.Stdout),
+		stderr: stdcopy.NewWriter(w, stdcopy.Stderr),
+	}
+}
+
+// Encap encapsulate two streams.
+func Encap(stdout, stderr io.Writer) *ServerLog {
+	return &ServerLog{
+		stdout: stdout,
+		stderr: stderr,
+	}
+}
+
+// Discard write server logs succeed without doing anything.
+var Discard = Encap(ioutil.Discard, ioutil.Discard)
+
+func (l *ServerLog) Stdout() io.Writer {
+	if l == nil {
+		return nil
+	} else {
+		return l.stdout
+	}
+}
+
+func (l *ServerLog) Stderr() io.Writer {
+	if l == nil {
+		return nil
+	} else {
+		return l.stderr
+	}
+}
+
+func (l *ServerLog) Write(p []byte) (n int, err error) {
+	if l == nil {
+		return len(p), nil
+	} else {
+		return l.stdout.Write(p)
+	}
 }
 
 func SendError(w io.Writer, err error) error {
