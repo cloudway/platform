@@ -1,4 +1,15 @@
 {{define "pagetitle"}}应用控制台 - {{.app.Name}} - 设置{{end}}
+{{define "prelude"}}
+<script type="text/javascript" src="/static/js/terminal.min.js"></script>
+<style>
+#deploy-term {
+    background: black;
+    color: white;
+    font-family: Courier, monospace;
+    display: inline-block;
+}
+</style>
+{{end}}
 
 {{$name := .app.Name}}
 <div class="panel panel-default">
@@ -87,7 +98,6 @@ $ git push origin master</pre>
             <button id="deploy-btn" class="btn btn-success btn-sm" type="submit">
               <i class="fa fa-cloud-upload"></i> 立即部署
             </button>
-            <span id="deploy-spinner" class="hidden"><i class="fa fa-spinner fa-spin"></i></span>
           </div>
         </form>
         {{- else }}
@@ -96,7 +106,6 @@ $ git push origin master</pre>
           <button id="deploy-btn" class="btn btn-success btn-sm" type="submit">
             <i class="fa fa-cloud-upload"></i> 立即部署
           </button>
-          <span id="deploy-spinner" class="hidden"><i class="fa fa-spinner fa-spin"></i></span>
         </form>
         {{- end }}
       </div>
@@ -156,18 +165,17 @@ $ git push origin master</pre>
   </div>
 </div>
 
-<div class="modal" id="deploy-confirm-modal" role="dialog">
-  <div class="modal-dialog" role="document">
+<div class="modal" id="deploy-modal" role="dialog">
+  <div class="modal-dialog" role="document" style="width:724px">
     <div class="modal-content">
       <div class="modal-header">
-        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
-        <h4 class="modal-title">继续</h4>
+        <h4>应用部署</h4>
       </div>
       <div class="modal-body">
-        <p>已触发应用构建，构建过程将在后台进行，构建成功并完成部署后才能继续访问你的应用。</p>
+        <div id="deploy-term" data-columns="80" data-rows="24"></div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+        <button id="deploy-close-btn" type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
       </div>
     </div>
   </div>
@@ -177,12 +185,42 @@ $ git push origin master</pre>
 
 <script>
 $('#deploy-form').submit(function(e) {
-  $('#deploy-spinner').removeClass("hidden");
-  $.post(this.action, $(this).serialize(), function(resp) {
-    $('#deploy-spinner').addClass("hidden");
-    $('#deploy-confirm-modal').modal({});
-  });
+  $('#deploy-modal').modal();
   e.preventDefault();
+});
+
+$('#deploy-modal').on('show.bs.modal', function(e) {
+  $('#deploy-close-btn').prop('disabled', true);
+
+  var t = $('#deploy-term')[0];
+  t.innerHTML = '';
+
+  var term = new Terminal(t.dataset);
+  term.state.setMode('crlf', true);
+  term.state.setMode('cursor', false);
+  term.dom(t);
+
+  var wsurl = "{{.app.WS}}/applications/{{$name}}/deploy?" + $('#deploy-form').serialize();
+  var ws = new WebSocket(wsurl);
+  var err;
+
+  ws.onmessage = function(evt) {
+    var data = JSON.parse(evt.data);
+    if (data.msg) {
+      term.write(data.msg);
+    }
+    if (data.err) {
+      term.write("\x1b[31;1m" + data.err + "\x1b[0m\n");
+      err = true;
+    }
+  };
+
+  ws.onclose = function(evt) {
+    if (!err) {
+      term.write("\n\x1b[32;1m应用部署成功\x1b[0m\n");
+    }
+    $('#deploy-close-btn').prop('disabled', false);
+  };
 });
 </script>
 

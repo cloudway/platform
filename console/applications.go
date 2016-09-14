@@ -38,7 +38,7 @@ func (con *Console) initApplicationsRoutes(gets *mux.Router, posts *mux.Router) 
 	posts.HandleFunc("/applications/{name}/host/delete", con.removeHost)
 	posts.HandleFunc("/applications/{name}/reload", con.restartApplication)
 	gets.HandleFunc("/applications/{name}/reload/ws", con.wsRestartApplication)
-	posts.HandleFunc("/applications/{name}/deploy", con.deployApplication)
+	gets.HandleFunc("/applications/{name}/deploy", con.deployApplication)
 	posts.HandleFunc("/applications/{name}/scale", con.scaleApplication)
 	posts.HandleFunc("/applications/{name}/delete", con.removeApplication)
 	posts.HandleFunc("/applications/{name}/services", con.createServices)
@@ -135,9 +135,7 @@ type jsonWriter struct {
 }
 
 func (w jsonWriter) Write(p []byte) (n int, err error) {
-	data := map[string]string{
-		"msg": string(p),
-	}
+	data := map[string]string{"msg": string(p)}
 	err = w.enc.Encode(data)
 	return len(p), err
 }
@@ -151,9 +149,7 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
 	h := func(conn *websocket.Conn) {
 		opts, tags, err := parseCreateOptions(r)
 		if err != nil {
-			data := map[string]string{
-				"err": err.Error(),
-			}
+			data := map[string]string{"err": err.Error()}
 			json.NewEncoder(conn).Encode(data)
 			return
 		}
@@ -165,9 +161,7 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
 			err = con.StartContainers(context.Background(), cs, opts.Log)
 		}
 		if err != nil {
-			data := map[string]string{
-				"err": err.Error(),
-			}
+			data := map[string]string{"err": err.Error()}
 			json.NewEncoder(conn).Encode(data)
 		}
 	}
@@ -586,12 +580,19 @@ func (con *Console) deployApplication(w http.ResponseWriter, r *http.Request) {
 
 	name := mux.Vars(r)["name"]
 	branch := r.FormValue("branch")
-	err := con.SCM.Deploy(user.Namespace, name, branch, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	} else {
-		w.WriteHeader(http.StatusNoContent)
+
+	h := func(conn *websocket.Conn) {
+		jw := jsonWriter{enc: json.NewEncoder(conn)}
+		log := serverlog.Encap(jw, jw)
+		err := con.SCM.Deploy(user.Namespace, name, branch, log)
+		if err != nil {
+			data := map[string]string{"err": err.Error()}
+			json.NewEncoder(conn).Encode(data)
+		}
 	}
+
+	srv := websocket.Server{Handler: h}
+	srv.ServeHTTP(w, r)
 }
 
 func (con *Console) removeApplication(w http.ResponseWriter, r *http.Request) {
