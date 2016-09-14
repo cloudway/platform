@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/engine-api/types"
 	"github.com/gorilla/mux"
 	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
@@ -41,6 +43,8 @@ func (con *Console) initApplicationsRoutes(gets *mux.Router, posts *mux.Router) 
 	posts.HandleFunc("/applications/{name}/delete", con.removeApplication)
 	posts.HandleFunc("/applications/{name}/services", con.createServices)
 	posts.HandleFunc("/applications/{name}/services/{service}/delete", con.removeService)
+	gets.HandleFunc("/applications/{id}/shell", con.shell)
+	gets.HandleFunc("/applications/{id}/shell/ws", con.shellSession)
 }
 
 type appListData struct {
@@ -646,4 +650,74 @@ func (con *Console) scaleApplication(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/applications/"+name, http.StatusFound)
+}
+
+func (con *Console) shell(w http.ResponseWriter, r *http.Request) {
+	user := con.currentUser(w, r)
+	if user == nil {
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+	container, err := con.Inspect(context.Background(), id)
+	if err != nil || container.Namespace != user.Namespace {
+		http.Redirect(w, r, "/applications", http.StatusNotFound)
+		return
+	}
+
+	data := con.layoutUserData(w, r, user)
+	data.MergeKV("ws", con.wsURL()+"/applications/"+id+"/shell/ws")
+	data.MergeKV("name", container.Name)
+	con.mustRender(w, r, "shell", data)
+}
+
+func (con *Console) shellSession(w http.ResponseWriter, r *http.Request) {
+	user := con.currentUser(w, r)
+	if user == nil {
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+	container, err := con.Inspect(context.Background(), id)
+	if err != nil || container.Namespace != user.Namespace {
+		http.Redirect(w, r, "/applications", http.StatusNotFound)
+		return
+	}
+
+	h := func(conn *websocket.Conn) {
+		ctx := context.Background()
+		cmd := []string{"/usr/bin/cwctl", "sh", "-e", "TERM=xterm-256color", "cwsh"}
+		execConfig := types.ExecConfig{
+			Tty:          true,
+			AttachStdin:  true,
+			AttachStdout: true,
+			AttachStderr: true,
+			Cmd:          cmd,
+		}
+
+		execResp, err := container.ContainerExecCreate(ctx, container.ID, execConfig)
+		if err != nil {
+			return
+		}
+		execId := execResp.ID
+
+		resp, err := container.ContainerExecAttach(ctx, execId, execConfig)
+		if err != nil {
+			return
+		}
+		defer resp.Close()
+
+		resize := types.ResizeOptions{Width: 120, Height: 30} // FIXME
+		container.ContainerExecResize(ctx, execId, resize)
+
+		// Pipe session to container and vice-versa
+		go func() {
+			io.Copy(resp.Conn, conn)
+			resp.CloseWrite()
+		}()
+		io.Copy(conn, resp.Reader)
+	}
+
+	srv := websocket.Server{Handler: h}
+	srv.ServeHTTP(w, r)
 }
