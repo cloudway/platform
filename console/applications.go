@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/engine-api/types"
@@ -716,9 +717,57 @@ func (con *Console) shellSession(w http.ResponseWriter, r *http.Request) {
 			io.Copy(resp.Conn, conn)
 			resp.CloseWrite()
 		}()
-		io.Copy(conn, resp.Reader)
+
+		var buf [4096]byte
+		for {
+			nr, er := resp.Reader.Read(buf[:])
+			if nr > 0 {
+				if utf8.Valid(buf[:nr]) {
+					if _, ew := conn.Write(buf[:nr]); ew != nil {
+						break
+					}
+				} else {
+					if ew := writeUTF8(conn, buf[:nr]); ew != nil {
+						break
+					}
+				}
+			}
+			if er != nil {
+				break
+			}
+		}
 	}
 
 	srv := websocket.Server{Handler: h}
 	srv.ServeHTTP(w, r)
+}
+
+func writeUTF8(w io.Writer, buf []byte) (err error) {
+	var first, next int
+	var max = len(buf)
+	var utf [8]byte
+
+	for next < max {
+		r, sz := utf8.DecodeRune(buf[next:max])
+		if r != utf8.RuneError {
+			next += sz
+		} else {
+			if next > first {
+				if _, err = w.Write(buf[first:next]); err != nil {
+					return
+				}
+			}
+			sz := utf8.EncodeRune(utf[:], rune(buf[next]))
+			logrus.Debugf("encoded invalid utf-8 character %v to %s", buf[next], string(utf[0:sz]))
+			if _, err = w.Write(utf[0:sz]); err != nil {
+				return
+			}
+			next++
+			first = next
+		}
+	}
+	if next > first {
+		_, err = w.Write(buf[first:next])
+	}
+	return
 }
