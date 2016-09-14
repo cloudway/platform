@@ -1936,13 +1936,16 @@ HtmlOutput.prototype._mkAttr = function(attr, type, e) {
 	}
 
 	var css = this._mkCssProperties(attr);
+	var cssClass = "";
 
 	switch(type) {
 	case "cursor":
+		cssClass = "cursor blink";
 		css += "background:" + this._opts.cursorBg + ";";
 		css += "color:" + this._opts.cursorFg + ";";
 		break;
 	case "line":
+		cssClass = "line";
 		css += "overflow:hidden;white-space:nowrap;";
 		break;
 	}
@@ -1952,7 +1955,12 @@ HtmlOutput.prototype._mkAttr = function(attr, type, e) {
 
 	if(e)
 		e.setAttribute("style", css);
-	return "style='" + css + "'";
+
+	if(cssClass !== "") {
+		return "class='" + cssClass + "' style='" + css + "'";
+	} else {
+		return "style='" + css + "'";
+	}
 };
 
 HtmlOutput.prototype._renderLine = function(line, cursor) {

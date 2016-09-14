@@ -1,12 +1,13 @@
 {{define "pagetitle"}}应用控制台 - {{.app.Name}} - 设置{{end}}
 {{define "prelude"}}
 <script type="text/javascript" src="/static/js/terminal.min.js"></script>
+<link rel="stylesheet" href="/static/css/terminal.css" />
 <style>
-#deploy-term {
-    background: black;
-    color: white;
-    font-family: Courier, monospace;
-    display: inline-block;
+#deploy-modal .modal-dialog {
+  position: relative;
+  display: table;
+  overflow: auto;
+  width: auto;
 }
 </style>
 {{end}}
@@ -166,13 +167,13 @@ $ git push origin master</pre>
 </div>
 
 <div class="modal" id="deploy-modal" role="dialog">
-  <div class="modal-dialog" role="document" style="width:724px">
+  <div class="modal-dialog" role="document">
     <div class="modal-content">
       <div class="modal-header">
         <h4>应用部署</h4>
       </div>
       <div class="modal-body">
-        <div id="deploy-term" data-columns="80" data-rows="24"></div>
+        <pre id="deploy-term" class="terminal" data-columns="80" data-rows="24"></pre>
       </div>
       <div class="modal-footer">
         <button id="deploy-close-btn" type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
@@ -199,6 +200,7 @@ $('#deploy-modal').on('show.bs.modal', function(e) {
   term.state.setMode('crlf', true);
   term.state.setMode('cursor', false);
   term.dom(t);
+  term.write('');
 
   var wsurl = "{{.app.WS}}/applications/{{$name}}/deploy?" + $('#deploy-form').serialize();
   var ws = new WebSocket(wsurl);

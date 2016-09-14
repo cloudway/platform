@@ -1,14 +1,7 @@
 {{define "pagetitle"}}应用控制台 - 创建应用{{end}}
 {{define "prelude"}}
 <script type="text/javascript" src="/static/js/terminal.min.js"></script>
-<style>
-#term {
-    background: black;
-    color: white;
-    font-family: Courier, monospace;
-    display: inline-block;
-}
-</style>
+<link rel="stylesheet" href="/static/css/terminal.css" />
 {{end}}
 
 <div class="row">
@@ -88,7 +81,7 @@
 </div>
 
 <div id="term-div" class="row container hidden">
-  <pre id="term" data-columns="120" data-rows="25"></pre>
+  <pre id="term" class="terminal" data-columns="120" data-rows="25"></pre>
   <div class="col-md-12" style="margin-top:20px;">
     <button id="return-btn" type="button" class="btn btn-primary hidden">返回</button>
   </div>
@@ -116,6 +109,7 @@
       term.state.setMode('crlf', true);
       term.state.setMode('cursor', false);
       term.dom(t);
+      term.write('');
     };
 
     ws.onmessage = function(evt) {

@@ -1,18 +1,11 @@
 {{define "pagetitle"}}应用控制台 - 终端{{end}}
 {{define "prelude"}}
 <script type="text/javascript" src="/static/js/terminal.min.js"></script>
-<style>
-#term {
-    background: black;
-    color: white;
-    font-family: Courier, monospace;
-    display: inline-block;
-}
-</style>
+<link rel="stylesheet" href="/static/css/terminal.css" />
 {{end}}
 
 <div class="row container">
-  <pre id="term" data-columns="120" data-rows="30" contenteditable="true"></pre>
+  <pre id="term" class="terminal" data-columns="120" data-rows="30" contenteditable="true"></pre>
 </div>
 
 <div id="close-modal" class="modal" tabindex="-1" role="dialog">
@@ -46,16 +39,18 @@ $(document).on('ready', function() {
     ws.send(data);
   });
 
+  term.write('');
   ws.onmessage = function(evt) {
     term.write(evt.data);
   };
 
   ws.onclose = function(evt) {
-    $('#close-modal').on('hide.bs.modal', function(e) {
-      window.location.href = "/applications/{{.name}}";
-    });
-    $('#close-modal').modal();
+    $('#close-modal').modal({keyboard: true});
   };
+
+  $('#close-modal').on('hide.bs.modal', function(e) {
+    window.location.href = "/applications/{{.name}}";
+  });
 
   t.focus();
   $(window).on('focus', function(e) {
