@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/engine-api/types"
 	"github.com/gorilla/mux"
 	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
@@ -22,24 +24,27 @@ import (
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/manifest"
+	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
 )
 
 func (con *Console) initApplicationsRoutes(gets *mux.Router, posts *mux.Router) {
 	gets.HandleFunc("/applications", con.getApplications)
-	gets.HandleFunc("/forms/applications", con.createApplicationForm)
-	posts.HandleFunc("/applications", con.createApplication)
+	gets.HandleFunc("/applications/create/form", con.createApplicationForm)
+	gets.HandleFunc("/applications/create/ws", con.createApplication)
 	gets.HandleFunc("/applications/{name}", con.getApplication)
 	gets.HandleFunc("/applications/{name}/settings", con.getApplicationSettings)
 	posts.HandleFunc("/applications/{name}/host", con.addHost)
 	posts.HandleFunc("/applications/{name}/host/delete", con.removeHost)
 	posts.HandleFunc("/applications/{name}/reload", con.restartApplication)
 	gets.HandleFunc("/applications/{name}/reload/ws", con.wsRestartApplication)
-	posts.HandleFunc("/applications/{name}/deploy", con.deployApplication)
+	gets.HandleFunc("/applications/{name}/deploy", con.deployApplication)
 	posts.HandleFunc("/applications/{name}/scale", con.scaleApplication)
 	posts.HandleFunc("/applications/{name}/delete", con.removeApplication)
 	posts.HandleFunc("/applications/{name}/services", con.createServices)
 	posts.HandleFunc("/applications/{name}/services/{service}/delete", con.removeService)
+	gets.HandleFunc("/applications/{id}/shell", con.shell)
+	gets.HandleFunc("/applications/{id}/shell/ws", con.shellSession)
 }
 
 type appListData struct {
@@ -120,8 +125,19 @@ func (con *Console) createApplicationForm(w http.ResponseWriter, r *http.Request
 
 	data := con.layoutUserData(w, r, user)
 	data.MergeKV("domain", defaults.Domain())
-	data.MergeKV("available_plugins", con.NewUserBroker(user).GetInstalledPlugins(""))
+	data.MergeKV("plugins", con.NewUserBroker(user).GetInstalledPlugins(""))
+	data.MergeKV("ws", con.wsURL()+"/applications/create/ws")
 	con.mustRender(w, r, "app_create", data)
+}
+
+type jsonWriter struct {
+	enc *json.Encoder
+}
+
+func (w jsonWriter) Write(p []byte) (n int, err error) {
+	data := map[string]string{"msg": string(p)}
+	err = w.enc.Encode(data)
+	return len(p), err
 }
 
 func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
@@ -130,33 +146,28 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var cs []*container.Container
-	opts, tags, err := parseCreateOptions(r)
-	if err == nil {
-		_, cs, err = con.NewUserBroker(user).CreateApplication(opts, tags)
+	h := func(conn *websocket.Conn) {
+		opts, tags, err := parseCreateOptions(r)
+		if err != nil {
+			data := map[string]string{"err": err.Error()}
+			json.NewEncoder(conn).Encode(data)
+			return
+		}
+
+		jw := jsonWriter{enc: json.NewEncoder(conn)}
+		opts.Log = serverlog.Encap(jw, jw)
+		_, cs, err := con.NewUserBroker(user).CreateApplication(opts, tags)
+		if err == nil {
+			err = con.StartContainers(context.Background(), cs, opts.Log)
+		}
+		if err != nil {
+			data := map[string]string{"err": err.Error()}
+			json.NewEncoder(conn).Encode(data)
+		}
 	}
 
-	if err != nil {
-		data := con.layoutUserData(w, r, user)
-		data.MergeKV("error", err)
-		data.MergeKV("name", r.PostForm.Get("name"))
-		data.MergeKV("framework", r.PostForm.Get("framework"))
-		data.MergeKV("services", r.PostForm.Get("services"))
-		data.MergeKV("repo", r.PostForm.Get("repo"))
-		data.MergeKV("domain", defaults.Domain())
-		data.MergeKV("available_plugins", con.NewUserBroker(user).GetInstalledPlugins(""))
-		con.mustRender(w, r, "app_create", data)
-		return
-	}
-
-	err = con.startContainers(cs)
-	if err != nil {
-		logrus.Error(err)
-		con.error(w, r, http.StatusInternalServerError, err.Error(), "/applications")
-		return
-	}
-
-	http.Redirect(w, r, "/applications/"+opts.Name, http.StatusFound)
+	srv := websocket.Server{Handler: h}
+	srv.ServeHTTP(w, r)
 }
 
 var namePattern = regexp.MustCompile("^[a-z][a-z_0-9]*$")
@@ -168,8 +179,8 @@ func parseCreateOptions(r *http.Request) (opts container.CreateOptions, tags []s
 	}
 
 	opts = container.CreateOptions{
-		Name:    r.PostForm.Get("name"),
-		Repo:    r.PostForm.Get("repo"),
+		Name:    r.Form.Get("name"),
+		Repo:    r.Form.Get("repo"),
 		Scaling: 1,
 	}
 
@@ -178,8 +189,8 @@ func parseCreateOptions(r *http.Request) (opts container.CreateOptions, tags []s
 		return
 	}
 
-	framework := r.PostForm.Get("framework")
-	services := strings.Fields(r.PostForm.Get("services"))
+	framework := r.Form.Get("framework")
+	services := strings.Fields(r.Form.Get("services"))
 	if framework == "" {
 		err = errors.New("应用框架不能为空")
 		return
@@ -515,27 +526,44 @@ func (con *Console) wsRestartApplication(w http.ResponseWriter, r *http.Request)
 			done <- con.NewUserBroker(user).RestartApplication(name, nil)
 		}()
 
-		ctx := context.Background()
-		enc := json.NewEncoder(conn)
-		var send = func() {
-			cs, err := con.FindAll(ctx, name, user.Namespace)
-			if err == nil {
-				states := make([]state, len(cs))
-				for i, c := range cs {
-					states[i].ID = c.ID
-					states[i].State = c.ActiveState(ctx).String()
-					enc.Encode(states)
-				}
-			}
-		}
-
+		var (
+			ctx   = context.Background()
+			enc   = json.NewEncoder(conn)
+			tick  = time.NewTicker(500 * time.Millisecond)
+			count = -1
+		)
 		for {
 			select {
 			case <-done:
-				send()
-				return
-			case <-time.After(500 * time.Millisecond):
-				send()
+				count = 20
+			case <-tick.C:
+			}
+
+			cs, err := con.FindAll(ctx, name, user.Namespace)
+			if err == nil {
+				started := true
+				states := make([]state, len(cs))
+				for i, c := range cs {
+					state := c.ActiveState(ctx)
+					states[i].ID = c.ID
+					states[i].State = state.String()
+					if !(state == manifest.StateRunning || state == manifest.StateFailed) {
+						started = false
+					}
+				}
+				enc.Encode(states)
+				if started {
+					tick.Stop()
+					return
+				}
+			}
+
+			if count > 0 {
+				count--
+				if count == 0 {
+					tick.Stop()
+					return
+				}
 			}
 		}
 	}
@@ -552,12 +580,19 @@ func (con *Console) deployApplication(w http.ResponseWriter, r *http.Request) {
 
 	name := mux.Vars(r)["name"]
 	branch := r.FormValue("branch")
-	err := con.SCM.Deploy(user.Namespace, name, branch, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	} else {
-		w.WriteHeader(http.StatusNoContent)
+
+	h := func(conn *websocket.Conn) {
+		jw := jsonWriter{enc: json.NewEncoder(conn)}
+		log := serverlog.Encap(jw, jw)
+		err := con.SCM.Deploy(user.Namespace, name, branch, log)
+		if err != nil {
+			data := map[string]string{"err": err.Error()}
+			json.NewEncoder(conn).Encode(data)
+		}
 	}
+
+	srv := websocket.Server{Handler: h}
+	srv.ServeHTTP(w, r)
 }
 
 func (con *Console) removeApplication(w http.ResponseWriter, r *http.Request) {
@@ -616,4 +651,74 @@ func (con *Console) scaleApplication(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/applications/"+name, http.StatusFound)
+}
+
+func (con *Console) shell(w http.ResponseWriter, r *http.Request) {
+	user := con.currentUser(w, r)
+	if user == nil {
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+	container, err := con.Inspect(context.Background(), id)
+	if err != nil || container.Namespace != user.Namespace {
+		http.Redirect(w, r, "/applications", http.StatusNotFound)
+		return
+	}
+
+	data := con.layoutUserData(w, r, user)
+	data.MergeKV("ws", con.wsURL()+"/applications/"+id+"/shell/ws")
+	data.MergeKV("name", container.Name)
+	con.mustRender(w, r, "shell", data)
+}
+
+func (con *Console) shellSession(w http.ResponseWriter, r *http.Request) {
+	user := con.currentUser(w, r)
+	if user == nil {
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+	container, err := con.Inspect(context.Background(), id)
+	if err != nil || container.Namespace != user.Namespace {
+		http.Redirect(w, r, "/applications", http.StatusNotFound)
+		return
+	}
+
+	h := func(conn *websocket.Conn) {
+		ctx := context.Background()
+		cmd := []string{"/usr/bin/cwctl", "sh", "-e", "TERM=xterm-256color", "cwsh"}
+		execConfig := types.ExecConfig{
+			Tty:          true,
+			AttachStdin:  true,
+			AttachStdout: true,
+			AttachStderr: true,
+			Cmd:          cmd,
+		}
+
+		execResp, err := container.ContainerExecCreate(ctx, container.ID, execConfig)
+		if err != nil {
+			return
+		}
+		execId := execResp.ID
+
+		resp, err := container.ContainerExecAttach(ctx, execId, execConfig)
+		if err != nil {
+			return
+		}
+		defer resp.Close()
+
+		resize := types.ResizeOptions{Width: 120, Height: 30} // FIXME
+		container.ContainerExecResize(ctx, execId, resize)
+
+		// Pipe session to container and vice-versa
+		go func() {
+			io.Copy(resp.Conn, conn)
+			resp.CloseWrite()
+		}()
+		io.Copy(conn, resp.Reader)
+	}
+
+	srv := websocket.Server{Handler: h}
+	srv.ServeHTTP(w, r)
 }

@@ -21,8 +21,8 @@
       <th>名称</th>
       <th style="width:12em;">IP</th>
       <th style="width:15em;">输出端口</th>
-      <th style="width:6em;">状态</th>
-      <th style="width:2em;">
+      <th style="width:5em;">状态</th>
+      <th style="width:4em;">
         <button id="refresh-btn" class="btn btn-link" type="button" style="padding:0;margin:0;" title="重新启动">
           <i class="fa fa-refresh"></i>
         </button>
@@ -35,12 +35,16 @@
       <td>{{.IP}}</td>
       <td>{{.Ports}}</td>
       <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
-      <td></td>
+      <td>
+        <a href="/applications/{{printf "%.12s" .ID}}/shell" class="btn btn-link" type="button" style="padding:0;margin:0;" title="终端">
+          <i class="fa fa-tty"></i>
+        </a>
+      </td>
     </tr>
     {{- end}}
   </table>
   <div class="panel-footer" style="padding-top:5px; padding-bottom:5px;">
-    <form id="scaling-form" class="form-inline" action="/applications/{{$name}}/scale" method="POST">
+    <form id="scaling-form" class="form-inline" action="/applications/{{$name}}/scale" method="post">
       <div class="form-group">
         <p class="form-control-static">弹性伸缩&nbsp;</p>
         <input id="scaling" type="hidden" name="scale" value="{{.app.Scale}}"/>
@@ -67,9 +71,9 @@
       <th>名称</th>
       <th style="width:12em;">IP</th>
       <th style="width:15em;">输出端口</th>
-      <th style="width:6em;">状态</th>
-      <th style="width:2em;"></th>
-    <tr>
+      <th style="width:5em;">状态</th>
+      <th style="width:4em;"></th>
+    </tr>
     {{- range .}}
     <tr>
       <td>{{printf "%.12s" .ID}}</td>
@@ -79,6 +83,9 @@
       <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
       <td>
         <form class="form-inline" action="/applications/{{$name}}/services/{{.Name}}/delete" method="post">
+          <a href="/applications/{{printf "%.12s" .ID}}/shell" class="btn btn-link" type="button" style="padding:0;margin:0;" title="终端">
+            <i class="fa fa-tty"></i>
+          </a>
           <button class="btn btn-link" type="button" style="padding:0;margin:0;" title="删除" data-toggle="modal" data-target="#confirm-modal"
                   data-message="<p>即将删除 <strong>{{.DisplayName}}</strong> 服务。</p><p>删除服务有可能使应用运行不正常，与服务相关的所有数据都将被删除，并且无法恢复，是否继续？</p>">
             <i class="fa fa-minus"></i>
