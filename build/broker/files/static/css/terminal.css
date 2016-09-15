@@ -5,6 +5,10 @@
     display: inline-block;
 }
 
+.terminal .line {
+	color: #cacaca;
+}
+
 .terminal .cursor.blink {
     background-color: #aaa;
     color: #000;

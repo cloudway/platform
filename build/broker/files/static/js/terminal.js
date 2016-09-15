@@ -1394,13 +1394,17 @@ function DomInput(target, buffer, opts) {
 	DomInput.super_.apply(this, arguments);
 
 	target.tabIndex = 0;
-	this._addListener(this.target, "keypress", this._keypress);
-	this._addListener(this.target, "keydown", this._keydown);
-	this._addListener(this.target, "paste", this._paste);
-	this._addListener(this.target, "contextmenu", this._contextmenu);
-	this._addListener(this.target, "cut", this._cut);
-	this._addListener(this.target, "click", this._click);
-	this._addListener(this.target, "mousemove", this._mousemove);
+	this._input = window.document.createElement("input");
+	this._input.type = "password"; // allow key repetition
+	this._input.style.width = this._input.style.height = this._input.style.opacity = "0";
+	this._input.style.border = "none";
+	this._input.style.position = "absolute";
+	this._input.style.zIndex = -10000;
+	target.parentNode.insertBefore(this._input, target);
+	this._addListener(target, "focus", this._focus);
+	this._addListener(this._input, "keypress", this._keypress);
+	this._addListener(this._input, "keydown", this._keydown);
+	this._addListener(this._input, "paste", this._paste);
 }
 inherits(DomInput, require("./base"));
 module.exports = DomInput;
@@ -1427,22 +1431,13 @@ DomInput.prototype.getKeyCode = function(ev) {
 	else
 		return ev.keyCode;
 };
-DomInput.prototype._mousemove = function(ev) {
 
-};
-DomInput.prototype._click = function(ev) {
-	this.target.contentEditable=false;
-};
 DomInput.prototype._cancelEvent = function(ev) {
 	if(ev.stopPropagation) ev.stopPropagation();
-		if(ev.preventDefault) ev.preventDefault();
-			this.target.contentEditable=false;
+	if(ev.preventDefault) ev.preventDefault();
 	return false;
 };
-DomInput.prototype._contextmenu = function(ev) {
-	var self = this;
-	this.target.contentEditable=true;
-};
+
 DomInput.prototype._paste = function(ev) {
 	this.push(ev.clipboardData.getData("text/plain"));
 	return this._cancelEvent(ev);
@@ -1454,8 +1449,11 @@ DomInput.prototype._keypress = function(ev) {
 	if (!key || ev.ctrlKey || ev.altKey || ev.metaKey) return;
 
 	this.push(String.fromCharCode(key));
-	this.target.contentEditable=false;
 	return this._cancelEvent(ev);
+};
+
+DomInput.prototype._focus = function(ev) {
+	this._input.focus();
 };
 
 // Taken from tty.js: https://github.com/chjj/tty.js
@@ -1611,7 +1609,6 @@ DomInput.prototype._keydown = function(ev) {
 		break;
 	}
 	if(key !== undefined) {
-		this.target.contentEditable=false;
 		this.push(key);
 		return this._cancelEvent(ev);
 	}
@@ -1833,23 +1830,23 @@ HtmlOutput.prototype._defOpts = {
 // Taken from https://github.com/dtinth/headles-terminal/blob/master/vendor/term.js#L226
 HtmlOutput.prototype.colors = [
 	// dark:
-	"#2e3436",
-	"#cc0000",
-	"#4e9a06",
-	"#c4a000",
-	"#3465a4",
-	"#75507b",
-	"#06989a",
-	"#d3d7cf",
+	"#000000",
+	"#bd3829",
+	"#3abb42",
+	"#acac3f",
+	"#4930da",
+	"#ce39cc",
+	"#43bac6",
+	"#cacaca",
 	// bright:
-	"#555753",
-	"#ef2929",
-	"#8ae234",
-	"#fce94f",
-	"#729fcf",
-	"#ad7fa8",
-	"#34e2e2",
-	"#eeeeec"
+	"#808080",
+	"#f73b28",
+	"#49e74a",
+	"#ffff4a",
+	"#5734f8",
+	"#f435f1",
+	"#3df0ef",
+	"#eaeaea"
 ];
 
 // Taken from https://github.com/chjj/tty.js/blob/master/static/term.js#L250
@@ -1894,12 +1891,13 @@ HtmlOutput.prototype._mkCssProperties = function(attr) {
 	if(!attr)
 		return "";
 
-	if(attr.fg)
-		css += (attr.inverse ? "background" : "color") + ":" + this.colors[attr.fg] + ";";
+	if(attr.fg) {
+		var fg = attr.fg;
+		if(attr.bold && fg < 8) fg += 8;
+		css += (attr.inverse ? "background" : "color") + ":" + this.colors[fg] + ";";
+	}
 	if(attr.bg)
 		css += (attr.inverse ? "color" : "background") + ":" + this.colors[attr.bg] + ";";
-	if(attr.bold)
-		css += "font-weight:bold;";
 	if(attr.italic)
 		css += "font-style:italic;";
 	if(attr.underline || attr.blink)
