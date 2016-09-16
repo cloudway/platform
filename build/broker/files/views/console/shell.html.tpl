@@ -3,28 +3,15 @@
 <script type="text/javascript" src="/static/js/xterm.js"></script>
 <script type="text/javascript" src="/static/js/xterm/fit.js"></script>
 <link rel="stylesheet" href="/static/css/xterm.css" />
-<style>
-html, body {
-  height: 100%;
-}
-#term-div {
-  height: 80%;
-  min-height: 80%;
-}
-#term-container {
-  padding: 8px;
-  background: black;
-  height: 100%;
-  min-height: 100%;
-}
-#term {
-  height: 100%;
-  min-height: 100%;
-}
-</style>
+<link rel="stylesheet" href="/static/css/shell.css" />
 {{end}}
 
-<div id="term-div" class="row container">
+<div id="term-div" class="row container normal">
+  <div class="term-title">
+    <span class="term-title-item">{{printf "%.12s" .id}}</span><span class="term-title-item">{{.name}}</span>
+    {{- if .service}}<span class="term-title-item">{{.service}}</span>{{end}}
+    <a href="#" id="btn-fullscreen" title="全屏幕"><i class="fa fa-toggle-up"></i></a>
+  </div>
   <div id="term-container">
     <div id="term"></div>
   </div>
@@ -61,6 +48,19 @@ $(document).on('ready', function() {
   var rows = geometry.rows;
   var execId = "";
 
+  var resizeTerm = function() {
+    var geometry = term.proposeGeometry();
+    if ($('#term-div').hasClass('fullscreen')) {
+      geometry.rows--; // workaround
+      term.resize(geometry.cols, geometry.rows);
+    }
+    if (geometry.cols != cols || geometry.rows != rows) {
+      cols = geometry.cols;
+      rows = geometry.rows;
+      $.post("/shell/"+execId+"/resize", {cols: cols, rows: rows});
+    }
+  };
+
   // receive termainl ID and send terminal size
   socket.onopen = function(evt) {
     socket.send(JSON.stringify({Width: cols, Height: rows}));
@@ -69,13 +69,17 @@ $(document).on('ready', function() {
       socket.send(data);
     });
 
-    $(window).resize(function() {
-      var geometry = term.proposeGeometry();
-      if (geometry.cols != cols || geometry.rows != rows) {
-        cols = geometry.cols;
-        rows = geometry.rows;
-        $.post("/shell/"+execId+"/resize", {cols: cols, rows: rows});
-      }
+    $(window).resize(resizeTerm);
+
+    $('#btn-fullscreen').on('click', function() {
+      $('#term-div').toggleClass('fullscreen');
+      $('#term-div').toggleClass('normal');
+      $('#btn-fullscreen i').toggleClass('fa-toggle-up');
+      $('#btn-fullscreen i').toggleClass('fa-toggle-down');
+
+      term.fit();
+      resizeTerm();
+      $('.xterm-helper-textarea').focus();
     });
   };
 

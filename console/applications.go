@@ -671,7 +671,9 @@ func (con *Console) shellOpen(w http.ResponseWriter, r *http.Request) {
 
 	data := con.layoutUserData(w, r, user)
 	data.MergeKV("ws", con.wsURL()+"/shell/"+id+"/session")
+	data.MergeKV("id", id)
 	data.MergeKV("name", container.Name)
+	data.MergeKV("service", container.ServiceName())
 	con.mustRender(w, r, "shell", data)
 }
 
