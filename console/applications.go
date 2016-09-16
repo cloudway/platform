@@ -44,8 +44,10 @@ func (con *Console) initApplicationsRoutes(gets *mux.Router, posts *mux.Router) 
 	posts.HandleFunc("/applications/{name}/delete", con.removeApplication)
 	posts.HandleFunc("/applications/{name}/services", con.createServices)
 	posts.HandleFunc("/applications/{name}/services/{service}/delete", con.removeService)
-	gets.HandleFunc("/applications/{id}/shell", con.shell)
-	gets.HandleFunc("/applications/{id}/shell/ws", con.shellSession)
+
+	gets.HandleFunc("/shell/{id}/open", con.shellOpen)
+	gets.HandleFunc("/shell/{id}/session", con.shellSession)
+	posts.HandleFunc("/shell/{id}/resize", con.shellResize)
 }
 
 type appListData struct {
@@ -654,7 +656,7 @@ func (con *Console) scaleApplication(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/applications/"+name, http.StatusFound)
 }
 
-func (con *Console) shell(w http.ResponseWriter, r *http.Request) {
+func (con *Console) shellOpen(w http.ResponseWriter, r *http.Request) {
 	user := con.currentUser(w, r)
 	if user == nil {
 		return
@@ -668,7 +670,7 @@ func (con *Console) shell(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := con.layoutUserData(w, r, user)
-	data.MergeKV("ws", con.wsURL()+"/applications/"+id+"/shell/ws")
+	data.MergeKV("ws", con.wsURL()+"/shell/"+id+"/session")
 	data.MergeKV("name", container.Name)
 	con.mustRender(w, r, "shell", data)
 }
@@ -709,7 +711,14 @@ func (con *Console) shellSession(w http.ResponseWriter, r *http.Request) {
 		}
 		defer resp.Close()
 
-		resize := types.ResizeOptions{Width: 120, Height: 30} // FIXME
+		// receive terminal size and send exec id
+		var resize types.ResizeOptions
+		if json.NewDecoder(conn).Decode(&resize) != nil {
+			return
+		}
+		if json.NewEncoder(conn).Encode(&execResp) != nil {
+			return
+		}
 		container.ContainerExecResize(ctx, execId, resize)
 
 		// Pipe session to container and vice-versa
@@ -770,4 +779,19 @@ func writeUTF8(w io.Writer, buf []byte) (err error) {
 		_, err = w.Write(buf[first:next])
 	}
 	return
+}
+
+func (con *Console) shellResize(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+	cols, _ := strconv.Atoi(r.PostForm.Get("cols"))
+	rows, _ := strconv.Atoi(r.PostForm.Get("rows"))
+	if cols > 0 && rows > 0 {
+		resize := types.ResizeOptions{Width: cols, Height: rows}
+		con.ContainerExecResize(context.Background(), id, resize)
+	}
 }

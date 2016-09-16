@@ -1,7 +1,27 @@
 {{define "pagetitle"}}应用控制台 - 创建应用{{end}}
 {{define "prelude"}}
-<script type="text/javascript" src="/static/js/terminal.min.js"></script>
-<link rel="stylesheet" href="/static/css/terminal.css" />
+<script type="text/javascript" src="/static/js/xterm.js"></script>
+<script type="text/javascript" src="/static/js/xterm/fit.js"></script>
+<link rel="stylesheet" href="/static/css/xterm.css" />
+<style>
+html, body {
+  height: 100%;
+}
+#term-div {
+  height: 70%;
+  min-height: 70%;
+}
+#term-container {
+  padding: 8px;
+  background: black;
+  height: 100%;
+  min-height: 100%;
+}
+#term {
+  height: 100%;
+  min-height: 100%;
+}
+</style>
 {{end}}
 
 <div class="row">
@@ -81,7 +101,9 @@
 </div>
 
 <div id="term-div" class="row container hidden">
-  <pre id="term" class="terminal" data-columns="120" data-rows="25"></pre>
+  <div id="term-container">
+    <div id="term"></div>
+  </div>
   <div class="col-md-12" style="margin-top:20px;">
     <button id="return-btn" type="button" class="btn btn-primary hidden">返回</button>
   </div>
@@ -102,24 +124,21 @@
       $('#form-div').addClass('hidden');
       $('#term-div').removeClass('hidden');
 
-      var t = $('#term')[0];
-      t.innerHTML = '';
-
-      term = new Terminal(t.dataset);
-      term.state.setMode('crlf', true);
-      term.state.setMode('cursor', false);
-      term.dom(t);
-      term.write('');
+      var container = document.getElementById('term');
+      container.innerHTML = '';
+      term = new Terminal();
+      term.open(container);
+      term.fit();
     };
 
     ws.onmessage = function(evt) {
       var data = JSON.parse(evt.data)
       if (data.msg) {
-        term.write(data.msg);
+        term.write(data.msg.replace(/\n/g, '\r\n'));
       }
       if (data.err) {
-        term.write("\x1b[31;1m" + data.err + "\x1b[0m\n");
-        err = true
+        term.writeln("\x1b[31;1m" + data.err + "\x1b[0m");
+        err = true;
       }
     };
 
@@ -131,7 +150,7 @@
           $('#term-div').addClass('hidden');
         });
       } else {
-        term.write("\n\x1b[32;1m应用创建成功\x1b[0m\n");
+        term.write("\r\n\x1b[32;1m应用创建成功\x1b[0m\r\n");
         $('#return-btn').on('click', function(e) {
           window.location.href = '/applications/' + $('#name').val();
         });

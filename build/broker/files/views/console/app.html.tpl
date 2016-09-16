@@ -36,7 +36,7 @@
       <td>{{.Ports}}</td>
       <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
       <td>
-        <a href="/applications/{{printf "%.12s" .ID}}/shell" class="btn btn-link" type="button" style="padding:0;margin:0;" title="终端">
+        <a href="/shell/{{printf "%.12s" .ID}}/open" class="btn btn-link" type="button" style="padding:0;margin:0;" title="终端">
           <i class="fa fa-tty"></i>
         </a>
       </td>
@@ -83,7 +83,7 @@
       <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
       <td>
         <form class="form-inline" action="/applications/{{$name}}/services/{{.Name}}/delete" method="post">
-          <a href="/applications/{{printf "%.12s" .ID}}/shell" class="btn btn-link" type="button" style="padding:0;margin:0;" title="终端">
+          <a href="/shell/{{printf "%.12s" .ID}}/open" class="btn btn-link" type="button" style="padding:0;margin:0;" title="终端">
             <i class="fa fa-tty"></i>
           </a>
           <button class="btn btn-link" type="button" style="padding:0;margin:0;" title="删除" data-toggle="modal" data-target="#confirm-modal"

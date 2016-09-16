@@ -1,13 +1,18 @@
 {{define "pagetitle"}}应用控制台 - {{.app.Name}} - 设置{{end}}
 {{define "prelude"}}
-<script type="text/javascript" src="/static/js/terminal.min.js"></script>
-<link rel="stylesheet" href="/static/css/terminal.css" />
+<script type="text/javascript" src="/static/js/xterm.js"></script>
+<script type="text/javascript" src="/static/js/xterm/fit.js"></script>
+<link rel="stylesheet" href="/static/css/xterm.css" />
 <style>
 #deploy-modal .modal-dialog {
   position: relative;
   display: table;
   overflow: auto;
   width: auto;
+}
+#deploy-term {
+  width: 800px;
+  height: 450px;
 }
 </style>
 {{end}}
@@ -173,7 +178,9 @@ $ git push origin master</pre>
         <h4>应用部署</h4>
       </div>
       <div class="modal-body">
-        <pre id="deploy-term" class="terminal" data-columns="80" data-rows="24"></pre>
+        <div style="padding:8px; background:black;">
+          <div id="deploy-term"></div>
+        </div>
       </div>
       <div class="modal-footer">
         <button id="deploy-close-btn" type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
@@ -186,40 +193,39 @@ $ git push origin master</pre>
 
 <script>
 $('#deploy-form').submit(function(e) {
-  $('#deploy-modal').modal();
+  $('#deploy-modal').modal({backdrop: 'static'});
   e.preventDefault();
 });
 
 $('#deploy-modal').on('show.bs.modal', function(e) {
   $('#deploy-close-btn').prop('disabled', true);
 
-  var t = $('#deploy-term')[0];
-  t.innerHTML = '';
-
-  var term = new Terminal(t.dataset);
-  term.state.setMode('crlf', true);
-  term.state.setMode('cursor', false);
-  term.dom(t);
-  term.write('');
-
   var wsurl = "{{.app.WS}}/applications/{{$name}}/deploy?" + $('#deploy-form').serialize();
   var ws = new WebSocket(wsurl);
-  var err;
+  var term, err;
+
+  ws.onopen = function(evt) {
+    var container = document.getElementById('deploy-term');
+    container.innerHTML = '';
+    term = new Terminal();
+    term.open(container);
+    term.fit();
+  };
 
   ws.onmessage = function(evt) {
     var data = JSON.parse(evt.data);
     if (data.msg) {
-      term.write(data.msg);
+      term.write(data.msg.replace(/\n/g, '\r\n'));
     }
     if (data.err) {
-      term.write("\x1b[31;1m" + data.err + "\x1b[0m\n");
+      term.writeln("\x1b[31;1m" + data.err + "\x1b[0m");
       err = true;
     }
   };
 
   ws.onclose = function(evt) {
     if (!err) {
-      term.write("\n\x1b[32;1m应用部署成功\x1b[0m\n");
+      term.write("\r\n\x1b[32;1m应用部署成功\x1b[0m\r\n");
     }
     $('#deploy-close-btn').prop('disabled', false);
   };
