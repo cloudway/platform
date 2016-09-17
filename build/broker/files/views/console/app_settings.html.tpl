@@ -207,7 +207,8 @@ $('#deploy-modal').on('show.bs.modal', function(e) {
   ws.onopen = function(evt) {
     var container = document.getElementById('deploy-term');
     container.innerHTML = '';
-    term = new Terminal();
+    term = new Terminal({convertEol:true});
+    term.cursorHidden = true;
     term.open(container);
     term.fit();
   };
@@ -215,17 +216,17 @@ $('#deploy-modal').on('show.bs.modal', function(e) {
   ws.onmessage = function(evt) {
     var data = JSON.parse(evt.data);
     if (data.msg) {
-      term.write(data.msg.replace(/\n/g, '\r\n'));
+      term.write(data.msg);
     }
     if (data.err) {
-      term.writeln("\x1b[31;1m" + data.err + "\x1b[0m");
+      term.write("\x1b[31;1m" + data.err + "\x1b[0m\n");
       err = true;
     }
   };
 
   ws.onclose = function(evt) {
     if (!err) {
-      term.write("\r\n\x1b[32;1m应用部署成功\x1b[0m\r\n");
+      term.write("\n\x1b[32;1m应用部署成功\x1b[0m\n");
     }
     $('#deploy-close-btn').prop('disabled', false);
   };

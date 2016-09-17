@@ -126,7 +126,8 @@ html, body {
 
       var container = document.getElementById('term');
       container.innerHTML = '';
-      term = new Terminal();
+      term = new Terminal({convertEol:true});
+      term.cursorHidden = true;
       term.open(container);
       term.fit();
     };
@@ -134,10 +135,10 @@ html, body {
     ws.onmessage = function(evt) {
       var data = JSON.parse(evt.data)
       if (data.msg) {
-        term.write(data.msg.replace(/\n/g, '\r\n'));
+        term.write(data.msg);
       }
       if (data.err) {
-        term.writeln("\x1b[31;1m" + data.err + "\x1b[0m");
+        term.write("\x1b[31;1m" + data.err + "\x1b[0m\n");
         err = true;
       }
     };
@@ -150,7 +151,7 @@ html, body {
           $('#term-div').addClass('hidden');
         });
       } else {
-        term.write("\r\n\x1b[32;1m应用创建成功\x1b[0m\r\n");
+        term.write("\n\x1b[32;1m应用创建成功\x1b[0m\n");
         $('#return-btn').on('click', function(e) {
           window.location.href = '/applications/' + $('#name').val();
         });

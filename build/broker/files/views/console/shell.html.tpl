@@ -9,7 +9,7 @@
 <div id="term-div" class="row container normal">
   <div class="term-title">
     <span class="term-title-item">{{printf "%.12s" .id}}</span><span class="term-title-item">{{.name}}</span>
-    {{- if .service}}<span class="term-title-item">{{.service}}</span>{{end}}
+    {{- if .service}}<span class="term-title-item">{{.service}}</span>{{end}}<span id="term-title" style="padding-left:10px;"></span>
     <a href="#" id="btn-fullscreen" title="全屏幕"><i class="fa fa-toggle-up"></i></a>
   </div>
   <div id="term-container">
@@ -39,6 +39,10 @@ $(document).on('ready', function() {
   var term = new Terminal({cursorBlink: true});
   term.open(container);
   term.fit();
+
+  term.on('title', function(title) {
+    $('#term-title').text(title);
+  });
 
   var socket = new WebSocket("{{.ws}}");
   socket.binaryType = 'arraybuffer';
@@ -79,7 +83,7 @@ $(document).on('ready', function() {
 
       term.fit();
       resizeTerm();
-      $('.xterm-helper-textarea').focus();
+      term.focus();
     });
   };
 
