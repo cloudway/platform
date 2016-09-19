@@ -1,0 +1,74 @@
+/* Features list. */
+.feature-list-group {
+	margin-bottom: 50px;
+}
+
+.feature-list-group .header > h2 {
+	margin-bottom: 26px;
+}
+
+.feature-list-group .header .lead {
+	color: #777777;
+	font-size: 14px;
+	font-weight: normal;
+	line-height: 1.42857143;
+	margin-bottom: 35px;
+}
+
+.feature-list {
+	margin-bottom: 25px;
+}
+
+.feature-item h4 {
+	color: #4EADE2;
+	font-family: HelveticaNeue-Medium,Helvetica,Arial,sans-serif;
+	font-size: 16px;
+	text-transform: uppercase;
+	margin-bottom: 16px;
+}
+
+.feature-item p {
+	font-family: HelveticaNeue-Light,Helvetica,Arial,sans-serif;
+	font-size: 15px;
+	text-align: justify;
+}
+
+.modal-danger.modal-header {
+	padding: 9px 15px;
+	border-bottom: 1px solid #eee;
+	background-color: #d35455;
+	color: #eee;
+	-webkit-border-top-left-radius: 5px;
+	-webkit-border-top-right-radius: 5px;
+	-moz-border-radius-topleft: 5px;
+	-moz-border-radius-topright: 5px;
+	border-top-left-radius: 5px;
+	border-top-right-radius: 5px;
+}
+
+@media (max-width: 767px) {
+	.conditional-text-align {
+		text-align: left;
+	}
+}
+
+@media (min-width: 768px) {
+	.conditional-text-align {
+		text-align: right;
+	}
+}
+
+.ssh-keys-table {
+	table-layout: fixed;
+}
+
+.ssh-label-col, .ssh-key-col {
+	-o-text-overflow: ellipsis;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.ssh-label-col {
+	width: 20%;
+}

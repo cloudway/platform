@@ -63,7 +63,7 @@
     <div class="row">
       <div class="col-md-2">应用部署</div>
       <div class="col-md-6">
-       <p>可以通过<code>git</code>推送来部署应用，使用以下命令获得应用代码的副本。</p>
+       <p>可以通过 <a href="https://git-scm.com/">git</a> 推送来部署应用，使用以下命令获得应用代码的副本。</p>
        <pre>$ {{.app.CloneURL}}</pre>
        <p>代码修改完成后，使用以下命令将改动推送到云端，服务器将自动完成应用的构建与部署。</p>
        <pre>$ git add .

@@ -4,11 +4,11 @@
 {{if .apps}}
   {{range .apps}}
   <div class="row container">
-    <div class="col-md-2">
+    <div class="col-md-2 col-lg-offset-1">
       <a href="/applications/{{.Name}}" style="font-size:160%; color:#555;">{{.Name}}</a>
       <sup> <a href="{{.URL}}" target="_blank"><i class="fa fa-external-link"></i></a></sup>
     </div>
-    <div class="col-md-10 text-right">
+    <div class="col-md-10 col-lg-8 conditional-text-align">
       <div>
         <span class="label label-success">{{.Framework}}</span>
         {{range .Plugins}}
@@ -22,11 +22,11 @@
   </div>
   <hr style="margin-top:10px; margin-bottom:15px;"/>
   {{end}}
-  <div class="col-md-2">
+  <div class="col-md-2 col-lg-offset-1">
     <a class="btn btn-primary" href="/applications/create/form"><i class="fa fa-plus"></i> 创建应用</a>
   </div>
 {{else}}
-  <div class="col-md-2">
+  <div class="col-md-2 col-lg-offset-1">
     <a class="btn btn-primary" href="/applications/create/form"><i class="fa fa-bolt"></i> 创建你的第一个应用</a>
   </div>
 {{end}}

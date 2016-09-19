@@ -6,7 +6,7 @@
     <h4>名字空间</h4>
     <p>通过名字空间组织你的应用，并赋予每个应用一个唯一的域名</p>
     <div class="col-md">
-      <form class="form-inline" action="/settings/namespace/delete" method="POST">
+      <form class="form-inline" action="/settings/namespace/delete" method="post">
         <p class="form-control-static">当前正在使用的名字空间：{{.user.Namespace}}</p>
         {{if eq (len .user.Applications) 0}}
         <button class="btn btn-link" type="submit" title="删除">
@@ -24,22 +24,28 @@
     <div class="col-md-12" style="margin-top: 10px;">
       {{if ne (len .sshkeys) 0}}
       <div class="panel panel-default">
-        <table class="table">
-          <tr><th>标签</th><th>内容</th><th></th></tr>
-          {{range .sshkeys}}
-          <tr>
-            <td>{{.Label}}</td>
-            <td>{{printf "%.64s..." .Text}}</td>
-            <td>
-              <form action="/settings/sshkey/delete?key={{.Text}}" method="POST">
-                <button class="btn btn-link" type="submit" title="删除" style="padding:0;margin:0;">
-                  <i class="fa fa-minus"></i>
-                </button>
-              </form>
-            </td>
-          </tr>
-          {{end}}
-        </table>
+        <div class="table-responsive">
+          <table class="table ssh-keys-table">
+            <tr>
+              <th class="ssh-label-col">标签</th>
+              <th class="ssh-key-col">内容</th>
+              <th style="width:2em;"></th>
+            </tr>
+            {{range .sshkeys}}
+            <tr>
+              <td class="ssh-label-col"><span>{{.Label}}</span></td>
+              <td class="ssh-key-col"><span>{{.Text}}</span></td>
+              <td>
+                <form action="/settings/sshkey/delete?key={{.Text}}" method="post">
+                  <button class="btn btn-link" type="submit" title="删除" style="padding:0;margin:0;">
+                    <i class="fa fa-minus"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {{end}}
+          </table>
+        </div>
       </div>
       {{end}}
 

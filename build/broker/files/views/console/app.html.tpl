@@ -15,6 +15,7 @@
 
 <div class="panel panel-default">
   <div class="panel-heading">应用框架</div>
+  <div class="table-responsive">
   <table class="table">
     <tr>
       <th style="width:12em;">ID</th>
@@ -36,17 +37,18 @@
       <td>{{.Ports}}</td>
       <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
       <td>
-        <a href="/shell/{{printf "%.12s" .ID}}/open" class="btn btn-link" type="button" style="padding:0;margin:0;" title="终端">
+        <a href='/shell/{{printf "%.12s" .ID}}/open' class="btn btn-link" type="button" style="padding:0;margin:0;" title="终端">
           <i class="fa fa-tty"></i>
         </a>
       </td>
     </tr>
     {{- end}}
   </table>
+  </div>
   <div class="panel-footer" style="padding-top:5px; padding-bottom:5px;">
     <form id="scaling-form" class="form-inline" action="/applications/{{$name}}/scale" method="post">
       <div class="form-group">
-        <p class="form-control-static">弹性伸缩&nbsp;</p>
+        <span class="form-control-static">弹性伸缩&nbsp;</span>
         <input id="scaling" type="hidden" name="scale" value="{{.app.Scale}}"/>
         <div class="btn-group">
           <button id="scaleup" class="btn btn-default btn-xs" {{if ge .app.Scale 10}}disabled="disabled"{{end}} type="button">
@@ -65,6 +67,7 @@
 <div class="panel panel-default">
   <div class="panel-heading">当前服务</div>
   {{- with .app.Services}}
+  <div class="table-responsive">
   <table class="table">
     <tr>
       <th style="width:12em;">ID</th>
@@ -83,7 +86,7 @@
       <td><span id="{{.ID}}" class="label state state-{{.State}}">{{.State}}</span></td>
       <td>
         <form class="form-inline" action="/applications/{{$name}}/services/{{.Name}}/delete" method="post">
-          <a href="/shell/{{printf "%.12s" .ID}}/open" class="btn btn-link" type="button" style="padding:0;margin:0;" title="终端">
+          <a href='/shell/{{printf "%.12s" .ID}}/open' class="btn btn-link" type="button" style="padding:0;margin:0;" title="终端">
             <i class="fa fa-tty"></i>
           </a>
           <button class="btn btn-link" type="button" style="padding:0;margin:0;" title="删除" data-toggle="modal" data-target="#confirm-modal"
@@ -95,6 +98,7 @@
     </tr>
     {{- end}}
   </table>
+  </div>
   {{- else}}
   <div class="panel-body">无</div>
   {{- end}}

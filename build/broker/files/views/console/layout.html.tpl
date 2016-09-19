@@ -9,30 +9,22 @@
   <link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.3.0/css/font-awesome.min.css" />
   <script type="text/javascript" src="//cdn.bootcss.com/jquery/2.1.3/jquery.min.js"></script>
   <script type="text/javascript" src="//cdn.bootcss.com/bootstrap/3.3.2/js/bootstrap.min.js"></script>
+  <link rel="stylesheet" href="/static/css/main.css" />
   {{template "prelude" .}}
-  <style>
-    .modal-danger.modal-header {
-      padding: 9px 15px;
-      border-bottom: 1px solid #eee;
-      background-color: #d35455;
-      color: #eee;
-      -webkit-border-top-left-radius: 5px;
-      -webkit-border-top-right-radius: 5px;
-      -moz-border-radius-topleft: 5px;
-      -moz-border-radius-topright: 5px;
-      border-top-left-radius: 5px;
-      border-top-right-radius: 5px;
-    }
-  </style>
 </head>
 <body class="container" style="padding-top: 15px;">
   <nav class="navbar navbar-default">
     <div class="container-fluid">
       <div class="navbar-header">
+        <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+        </button>
         <a class="navbar-brand" href="/">应用控制台</a>
       </div>
 
-      <div class="collapse navbar-collapse">
+      <div id="navbar" class="collapse navbar-collapse">
         <ul class="nav navbar-nav navbar-right">
           {{if not .loggedin}}
           <li><a href="/auth/register">注册</a></li>
