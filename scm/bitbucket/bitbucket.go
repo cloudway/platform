@@ -10,12 +10,12 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/rest"
+	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
 )
 
@@ -249,46 +249,19 @@ func (cli *bitbucketClient) PopulateURL(namespace, name, remote string) error {
 	return checkNamespaceError(namespace, resp, err)
 }
 
-func (cli *bitbucketClient) Deploy(namespace, name string, branch string) error {
+func (cli *bitbucketClient) Deploy(namespace, name string, branch string, log *serverlog.ServerLog) error {
+	if log == nil {
+		log = serverlog.Discard
+	}
+
 	path := fmt.Sprintf("/rest/deploy/1.0/projects/%s/repos/%s/deploy", namespace, name)
 	query := url.Values{"branch": []string{branch}}
 	resp, err := cli.Post(context.Background(), path, query, nil, nil)
-	resp.EnsureClosed()
-	return checkNamespaceError(namespace, resp, err)
-}
-
-func (cli *bitbucketClient) DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer) error {
-	errCh := make(chan error)
-	go func() {
-		errCh <- cli.Deploy(namespace, name, branch)
-	}()
-
-	var (
-		tiker     = time.NewTicker(500 * time.Millisecond)
-		ticked    = false
-		spinChars = `-\|/`
-		spinning  = 0
-	)
-	for {
-		select {
-		case err := <-errCh:
-			tiker.Stop()
-			if ticked {
-				fmt.Fprint(stdout, "done.\n")
-			}
-			return err
-		case <-tiker.C:
-			if !ticked {
-				ticked = true
-				fmt.Fprint(stdout, "Loading... ")
-			} else {
-				fmt.Fprintf(stdout, "\033[34;1m%c\033[0m\033[D", spinChars[spinning])
-				spinning++
-				if spinning == len(spinChars) {
-					spinning = 0
-				}
-			}
-		}
+	if err != nil {
+		return checkNamespaceError(namespace, resp, err)
+	} else {
+		defer resp.Body.Close()
+		return serverlog.Drain(resp.Body, log.Stdout(), log.Stderr(), nil)
 	}
 }
 
@@ -460,5 +433,3 @@ func checkServerError(resp *rest.ServerResponse, err error) error {
 	}
 	return err
 }
-
-var _ scm.SCM = &bitbucketClient{}

@@ -87,7 +87,7 @@ func (box *Sandbox) installPlugin(target string) error {
 	}
 
 	// run setup script to setup the plugin
-	if err = runPluginAction(target, target, makeExecEnv(box.Environ()), "setup"); err != nil {
+	if err = runPluginAction(target, target, MakeExecEnv(box.Environ()), "setup"); err != nil {
 		logrus.WithError(err).Error("run setup script failed")
 		return err
 	}

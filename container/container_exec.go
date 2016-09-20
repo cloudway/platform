@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/cloudway/platform/pkg/stdcopy"
 	"github.com/docker/engine-api/types"
 	"golang.org/x/net/context"
 )
@@ -80,7 +81,7 @@ func pumpStreams(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer,
 	receiveStdout := make(chan error, 1)
 	if stdout != nil || stderr != nil {
 		go func() {
-			_, err = stdCopy(stdout, stderr, resp.Reader)
+			_, err = stdcopy.Copy(stdout, stderr, nil, resp.Reader)
 			logrus.Debugf("[hijack] End of stdout")
 			receiveStdout <- err
 		}()

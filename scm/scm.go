@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/cloudway/platform/config"
+	"github.com/cloudway/platform/pkg/serverlog"
 )
 
 // Source Code Management interface.
@@ -35,11 +36,8 @@ type SCM interface {
 	// Populate repository from an URL.
 	PopulateURL(namespace, name string, url string) error
 
-	// Deploy application with new commit.
-	Deploy(namespace, name string, branch string) error
-
 	// Deploy application with new commit. Log build output to the give writer.
-	DeployWithLog(namespace, name string, branch string, stdout, stderr io.Writer) error
+	Deploy(namespace, name string, branch string, log *serverlog.ServerLog) error
 
 	// Get the current deployment branch.
 	GetDeploymentBranch(namespace, name string) (*Branch, error)

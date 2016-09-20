@@ -13,6 +13,7 @@ import (
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/mflag"
+	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/docker/engine-api/types"
 )
 
@@ -55,7 +56,7 @@ func (cli *CWMan) CmdUpgrade(args ...string) error {
 			logrus.Infof("upgrading container %s.%s-%s", c.ServiceName(), c.Name, c.Namespace)
 			logError(c.Stop(ctx))
 			logError(c.CopyToContainer(ctx, c.ID, "/", file, cpopts))
-			logError(c.Start(ctx))
+			logError(c.Start(ctx, serverlog.Encap(os.Stdout, os.Stderr)))
 			file.Close()
 		}
 	}

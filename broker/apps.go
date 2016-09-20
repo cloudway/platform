@@ -27,6 +27,7 @@ import (
 	"github.com/cloudway/platform/pkg/errors"
 	"github.com/cloudway/platform/pkg/files"
 	"github.com/cloudway/platform/pkg/manifest"
+	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
 )
 
@@ -211,11 +212,7 @@ func populateFromTemplate(scm scm.SCM, opts *container.CreateOptions, template s
 }
 
 func deployRepo(scm scm.SCM, opts *container.CreateOptions, containers []*container.Container) error {
-	if opts.Logger == nil {
-		return scm.Deploy(opts.Namespace, opts.Name, "")
-	} else {
-		return scm.DeployWithLog(opts.Namespace, opts.Name, "", opts.Logger, opts.Logger)
-	}
+	return scm.Deploy(opts.Namespace, opts.Name, "", opts.Log)
 }
 
 func generateSharedSecret() (string, error) {
@@ -517,12 +514,16 @@ func (br *UserBroker) RemoveHost(name, host string) error {
 	return br.Users.Update(user.Name, userdb.Args{"applications": user.Applications})
 }
 
-func (br *UserBroker) StartApplication(name string) error {
-	return br.startApplication(name, func(c *container.Container) error { return c.Start(br.ctx) })
+func (br *UserBroker) StartApplication(name string, log *serverlog.ServerLog) error {
+	return br.startApplication(name, func(c *container.Container) error {
+		return c.Start(br.ctx, log)
+	})
 }
 
-func (br *UserBroker) RestartApplication(name string) error {
-	return br.startApplication(name, func(c *container.Container) error { return c.Restart(br.ctx) })
+func (br *UserBroker) RestartApplication(name string, log *serverlog.ServerLog) error {
+	return br.startApplication(name, func(c *container.Container) error {
+		return c.Restart(br.ctx, log)
+	})
 }
 
 func (br *UserBroker) startApplication(name string, fn func(*container.Container) error) error {
@@ -547,8 +548,10 @@ func (br *UserBroker) StopApplication(name string) error {
 	return runParallel(err, containers, func(c *container.Container) error { return c.Stop(br.ctx) })
 }
 
-func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container) error {
-	return startContainers(containers, func(c *container.Container) error { return c.Start(ctx) })
+func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container, log *serverlog.ServerLog) error {
+	return startContainers(containers, func(c *container.Container) error {
+		return c.Start(ctx, log)
+	})
 }
 
 func startContainers(containers []*container.Container, fn func(*container.Container) error) error {
@@ -644,7 +647,7 @@ func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
 }
 
 // Upload application repository from a archive file.
-func (br *UserBroker) Upload(name string, content io.Reader, binary bool, logger io.Writer) error {
+func (br *UserBroker) Upload(name string, content io.Reader, binary bool, log *serverlog.ServerLog) error {
 	if binary {
 		containers, err := br.FindApplications(br.ctx, name, br.Namespace())
 		if err != nil {
@@ -655,7 +658,7 @@ func (br *UserBroker) Upload(name string, content io.Reader, binary bool, logger
 		}
 		return br.DistributeRepo(br.ctx, containers, content, false)
 	} else {
-		return br.DeployRepo(br.ctx, name, br.Namespace(), content, logger, logger)
+		return br.DeployRepo(br.ctx, name, br.Namespace(), content, log)
 	}
 }
 

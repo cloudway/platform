@@ -59,7 +59,7 @@ var _ = Describe("Deploy", func() {
 		Expect(containers).To(HaveLen(1))
 		app = containers[0]
 
-		Expect(br.StartApplication("test")).To(Succeed())
+		Expect(br.StartApplication("test", nil)).To(Succeed())
 	})
 
 	AfterEach(func() {
@@ -131,7 +131,7 @@ var _ = Describe("Deploy", func() {
 		}
 
 		var assertDeployment = func(branch, actual string) {
-			ExpectWithOffset(1, broker.SCM.Deploy(NAMESPACE, "test", branch)).To(Succeed())
+			ExpectWithOffset(1, broker.SCM.Deploy(NAMESPACE, "test", branch, nil)).To(Succeed())
 
 			ref, err := broker.SCM.GetDeploymentBranch(NAMESPACE, "test")
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -228,7 +228,7 @@ var _ = Describe("Deploy", func() {
 			Eventually(fetchCommittedFile, deployTimeout).Should(Equal("master"))
 
 			By("Switch deployment branch to develop")
-			Expect(broker.SCM.Deploy(NAMESPACE, "test", "develop"))
+			Expect(broker.SCM.Deploy(NAMESPACE, "test", "develop", nil))
 			Eventually(fetchCommittedFile, deployTimeout).Should(Equal("develop"))
 
 			By("Switch local repository to develop branch")

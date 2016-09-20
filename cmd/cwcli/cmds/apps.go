@@ -321,7 +321,7 @@ func (cli *CWCli) upload(name, path string, binary bool) error {
 		return err
 	}
 
-	return cli.Upload(context.Background(), name, tempfile, binary, cli.stdout)
+	return cli.Upload(context.Background(), name, tempfile, binary, cli.stdout, cli.stderr)
 }
 
 func (cli *CWCli) CmdAppDump(args ...string) (err error) {
@@ -466,7 +466,7 @@ func (cli *CWCli) CmdAppCreate(args ...string) error {
 		return err
 	}
 
-	app, err := cli.CreateApplication(context.Background(), req, cli.stdout)
+	app, err := cli.CreateApplication(context.Background(), req, cli.stdout, cli.stderr)
 	if err != nil {
 		return err
 	}
@@ -507,7 +507,7 @@ func (cli *CWCli) CmdAppStart(args ...string) error {
 	if err := cli.ConnectAndLogin(); err != nil {
 		return err
 	}
-	return cli.StartApplication(context.Background(), name)
+	return cli.StartApplication(context.Background(), name, cli.stdout, cli.stderr)
 }
 
 func (cli *CWCli) CmdAppStop(args ...string) error {
@@ -533,7 +533,7 @@ func (cli *CWCli) CmdAppRestart(args ...string) error {
 	if err := cli.ConnectAndLogin(); err != nil {
 		return err
 	}
-	return cli.RestartApplication(context.Background(), name)
+	return cli.RestartApplication(context.Background(), name, cli.stdout, cli.stderr)
 }
 
 func (cli *CWCli) CmdAppStatus(args ...string) error {
@@ -682,7 +682,7 @@ func (cli *CWCli) CmdAppStats(args ...string) error {
 			return err
 		}
 
-		tab := NewTable("ID", "NAME", "%CPU", "%MEM", "MEM USAGE / LIMIT", "NET I/O R/W", "BLOCK I/O R/W")
+		tab := NewTable("ID", "NAME", "%CPU", "%MEM", "MEM USAGE / LIMIT", "NET RX / TX", "BLOCK IO (R/W)")
 		tab.SetColor(0, ansi.NewColor(ansi.FgYellow))
 		tab.SetColor(1, ansi.NewColor(ansi.FgCyan))
 		for _, s := range stats {
@@ -695,7 +695,7 @@ func (cli *CWCli) CmdAppStats(args ...string) error {
 				units.HumanSize(float64(s.NetworkRx))+" / "+units.HumanSize(float64(s.NetworkTx)),
 				units.HumanSize(float64(s.BlockRead))+" / "+units.HumanSize(float64(s.BlockWrite)))
 		}
-		io.WriteString(cli.stdout, "\033[2J\033[H")
+		io.WriteString(cli.stdout, "\033[2J\033[H") // clear screen
 		tab.Display(cli.stdout, 2)
 	}
 }
@@ -749,7 +749,7 @@ func (cli *CWCli) CmdAppDeploy(args ...string) error {
 
 		return nil
 	} else {
-		return cli.DeployApplication(context.Background(), name, branch, cli.stdout)
+		return cli.DeployApplication(context.Background(), name, branch, cli.stdout, cli.stderr)
 	}
 }
 
@@ -765,7 +765,7 @@ func (cli *CWCli) CmdAppScale(args ...string) error {
 	if err := cli.ConnectAndLogin(); err != nil {
 		return err
 	}
-	return cli.ScaleApplication(context.Background(), name, scale)
+	return cli.ScaleApplication(context.Background(), name, scale, cli.stdout, cli.stderr)
 }
 
 func (cli *CWCli) CmdAppEnv(args ...string) error {
@@ -904,7 +904,7 @@ func (cli *CWCli) CmdAppServiceAdd(args ...string) error {
 		return err
 	}
 
-	return cli.CreateService(context.Background(), cli.stdout, name, tags...)
+	return cli.CreateService(context.Background(), cli.stdout, cli.stderr, name, tags...)
 }
 
 func (cli *CWCli) CmdAppServiceRemove(args ...string) error {

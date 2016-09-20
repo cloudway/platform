@@ -27,6 +27,7 @@ import (
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/manifest"
+	"github.com/cloudway/platform/pkg/serverlog"
 )
 
 type CreateOptions struct {
@@ -45,7 +46,7 @@ type CreateOptions struct {
 	Hosts       []string
 	Env         map[string]string
 	Repo        string
-	Logger      io.Writer
+	Log         *serverlog.ServerLog
 }
 
 type createConfig struct {
@@ -298,7 +299,7 @@ func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg
 	var imageId string
 	if err == nil {
 		defer response.Body.Close()
-		imageId, err = readBuildStream(response.Body, cfg.Logger)
+		imageId, err = readBuildStream(response.Body, cfg.Log.Stdout())
 	}
 
 	// get actual image ID

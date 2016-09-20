@@ -14,11 +14,15 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.StreamingOutput;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 
 import com.atlassian.bitbucket.hook.HookService;
 import com.atlassian.bitbucket.hook.repository.RepositoryHookService;
@@ -73,20 +77,30 @@ public class RepoDeployerRestResource {
 
     @POST
     @Path("/deploy")
-    public Response deploy(@Context Repository repository, @QueryParam("branch") String branch) {
+    public Response deploy(@Context final Repository repository, @QueryParam("branch") final String branch) {
         validator.validateForRepository(repository, Permission.REPO_READ);
 
-        try {
-            if (branch != null && !branch.isEmpty()) {
-                deployer.setDeploymentBranch(repository, branch);
-            }
+        StreamingOutput stream = new StreamingOutput() {
+            @Override
+            public void write(OutputStream out) throws IOException {
+                try {
+                    if (branch != null && !branch.isEmpty()) {
+                        deployer.setDeploymentBranch(repository, branch);
+                    }
 
-            Ref ref = deployer.getDeploymentBranch(repository);
-            deployer.deploy(repository, ref);
-            return Response.ok().build();
-        } catch (Exception ex) {
-            return Response.serverError().build();
-        }
+                    Ref ref = deployer.getDeploymentBranch(repository);
+                    OutputStream stdout = new StdWriter(out, StdWriter.Stdout);
+                    OutputStream stderr = new StdWriter(out, StdWriter.Stderr);
+                    deployer.deploy(repository, ref, stdout, stderr);
+                } catch (IOException ioe) {
+                    throw ioe;
+                } catch (Exception ex) {
+                    throw new WebApplicationException(ex);
+                }
+            }
+        };
+
+        return Response.ok(stream).build();
     }
 
     @GET

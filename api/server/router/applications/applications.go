@@ -180,7 +180,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		Name:    req.Name,
 		Repo:    req.Repo,
 		Scaling: 1,
-		Logger:  serverlog.NewLogWriter(w),
+		Log:     serverlog.New(w),
 	}
 
 	if !namePattern.MatchString(opts.Name) {
@@ -203,7 +203,7 @@ func (ar *applicationsRouter) create(ctx context.Context, w http.ResponseWriter,
 		return nil
 	}
 
-	if err = br.StartContainers(ctx, cs); err != nil {
+	if err = br.StartContainers(ctx, cs, opts.Log); err != nil {
 		serverlog.SendError(w, err)
 		return nil
 	}
@@ -243,8 +243,8 @@ func (ar *applicationsRouter) createService(ctx context.Context, w http.Response
 	}
 
 	opts := container.CreateOptions{
-		Name:   vars["name"],
-		Logger: serverlog.NewLogWriter(w),
+		Name: vars["name"],
+		Log:  serverlog.New(w),
 	}
 
 	cs, err := br.CreateServices(opts, tags)
@@ -253,7 +253,7 @@ func (ar *applicationsRouter) createService(ctx context.Context, w http.Response
 		return nil
 	}
 
-	if err := br.StartContainers(ctx, cs); err != nil {
+	if err := br.StartContainers(ctx, cs, opts.Log); err != nil {
 		serverlog.SendError(w, err)
 		return nil
 	}
@@ -276,7 +276,11 @@ func (ar *applicationsRouter) removeService(ctx context.Context, w http.Response
 
 func (ar *applicationsRouter) start(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := httputils.UserFromContext(ctx)
-	return ar.NewUserBroker(user, ctx).StartApplication(vars["name"])
+	err := ar.NewUserBroker(user, ctx).StartApplication(vars["name"], serverlog.New(w))
+	if err != nil {
+		serverlog.SendError(w, err)
+	}
+	return nil
 }
 
 func (ar *applicationsRouter) stop(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -286,7 +290,11 @@ func (ar *applicationsRouter) stop(ctx context.Context, w http.ResponseWriter, r
 
 func (ar *applicationsRouter) restart(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	user := httputils.UserFromContext(ctx)
-	return ar.NewUserBroker(user, ctx).RestartApplication(vars["name"])
+	err := ar.NewUserBroker(user, ctx).RestartApplication(vars["name"], serverlog.New(w))
+	if err != nil {
+		serverlog.SendError(w, err)
+	}
+	return nil
 }
 
 func (ar *applicationsRouter) status(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -441,8 +449,7 @@ func (ar *applicationsRouter) deploy(ctx context.Context, w http.ResponseWriter,
 	user := httputils.UserFromContext(ctx)
 	name, branch := vars["name"], r.FormValue("branch")
 
-	logger := serverlog.NewLogWriter(w)
-	err := ar.SCM.DeployWithLog(user.Namespace, name, branch, logger, logger)
+	err := ar.SCM.Deploy(user.Namespace, name, branch, serverlog.New(w))
 	if err != nil {
 		serverlog.SendError(w, err)
 	}
@@ -512,9 +519,8 @@ func (ar *applicationsRouter) upload(ctx context.Context, w http.ResponseWriter,
 
 	user := httputils.UserFromContext(ctx)
 	_, binary := r.Form["binary"]
-	logger := serverlog.NewLogWriter(w)
 
-	err := ar.NewUserBroker(user, ctx).Upload(vars["name"], r.Body, binary, logger)
+	err := ar.NewUserBroker(user, ctx).Upload(vars["name"], r.Body, binary, serverlog.New(w))
 	if err != nil {
 		serverlog.SendError(w, err)
 	}
@@ -579,10 +585,15 @@ func (ar *applicationsRouter) scale(ctx context.Context, w http.ResponseWriter, 
 
 	br := ar.NewUserBroker(user, ctx)
 	cs, err := br.ScaleApplication(name, num)
-	if err == nil {
-		err = br.StartContainers(ctx, cs)
+	if err != nil {
+		return err
 	}
-	return err
+
+	err = br.StartContainers(ctx, cs, serverlog.New(w))
+	if err != nil {
+		serverlog.SendError(w, err)
+	}
+	return nil
 }
 
 func (ar *applicationsRouter) getContainers(ctx context.Context, namespace string, vars map[string]string) (cs []*container.Container, err error) {

@@ -1,98 +1,108 @@
 package serverlog
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"io/ioutil"
+
+	"github.com/cloudway/platform/pkg/stdcopy"
 )
 
-// ServerLog describes log messages generated from server and should display
-// in client. It also contains a error message to indicate server failure.
-type ServerLog struct {
-	Message string       `json:"msg,omitempty"`
-	Error   *ServerError `json:"err,omitempty"`
-	Object  interface{}  `json:"obj,omitempty"`
-}
-
-// ServerError describes the error that occurred in server. `Code` is a integer
+// Error describes the error that occurred in server. `Code` is an integer
 // error code, `Message` is the error message.
-type ServerError struct {
+type Error struct {
 	Code    int    `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
+	Message string `json:"msg,omitempty"`
 }
 
-func (e *ServerError) Error() string {
-	return e.Message
+// record represents object generated from server
+type record struct {
+	Error  *Error      `json:"err,omitempty"`
+	Result interface{} `json:"obj,omitempty"`
 }
 
-type logWriter struct {
-	out io.Writer
-	enc *json.Encoder
+func (e *Error) Error() string {
+	return fmt.Sprintf("Error response from server: %s", e.Message)
 }
 
-func NewLogWriter(out io.Writer) io.Writer {
-	return &logWriter{
-		out: out,
-		enc: json.NewEncoder(out),
+// ServerLog encapsulate multiplexed standard output and standard error streams.
+type ServerLog struct {
+	stdout io.Writer
+	stderr io.Writer
+}
+
+// New create a multiplexed server log.
+func New(w io.Writer) *ServerLog {
+	return &ServerLog{
+		stdout: stdcopy.NewWriter(w, stdcopy.Stdout),
+		stderr: stdcopy.NewWriter(w, stdcopy.Stderr),
 	}
 }
 
-func (log *logWriter) Write(p []byte) (n int, err error) {
-	stream := ServerLog{Message: string(p)}
-	if err = log.enc.Encode(&stream); err != nil {
-		return 0, err
+// Encap encapsulate two streams.
+func Encap(stdout, stderr io.Writer) *ServerLog {
+	return &ServerLog{
+		stdout: stdout,
+		stderr: stderr,
 	}
+}
 
-	type Flusher interface {
-		Flush()
-	}
+// Discard write server logs succeed without doing anything.
+var Discard = Encap(ioutil.Discard, ioutil.Discard)
 
-	type ErrFlusher interface {
-		Flush() error
+func (l *ServerLog) Stdout() io.Writer {
+	if l == nil {
+		return nil
+	} else {
+		return l.stdout
 	}
+}
 
-	switch b := log.out.(type) {
-	case Flusher:
-		b.Flush()
-	case ErrFlusher:
-		err = b.Flush()
+func (l *ServerLog) Stderr() io.Writer {
+	if l == nil {
+		return nil
+	} else {
+		return l.stderr
 	}
-	return len(p), err
+}
+
+func (l *ServerLog) Write(p []byte) (n int, err error) {
+	if l == nil {
+		return len(p), nil
+	} else {
+		return l.stdout.Write(p)
+	}
 }
 
 func SendError(w io.Writer, err error) error {
-	log := ServerLog{
-		Error: &ServerError{
-			Message: err.Error(),
-		},
+	rec := record{
+		Error: &Error{Message: err.Error()},
 	}
-	return json.NewEncoder(w).Encode(&log)
+	out := stdcopy.NewWriter(w, stdcopy.Data)
+	return json.NewEncoder(out).Encode(&rec)
 }
 
 func SendObject(w io.Writer, obj interface{}) error {
-	log := ServerLog{
-		Object: obj,
-	}
-	return json.NewEncoder(w).Encode(&log)
+	out := stdcopy.NewWriter(w, stdcopy.Data)
+	return json.NewEncoder(out).Encode(&record{Result: obj})
 }
 
-func Drain(in io.Reader, out io.Writer, result interface{}) (err error) {
-	var dec = json.NewDecoder(in)
-	for {
-		serverLog := ServerLog{
-			Object: result,
-		}
-		if er := dec.Decode(&serverLog); er != nil {
-			if er != io.EOF {
-				err = er
-			}
-			break
-		}
-		if out != nil && serverLog.Message != "" {
-			out.Write([]byte(serverLog.Message))
-		}
-		if serverLog.Error != nil {
-			err = serverLog.Error
+func Drain(in io.Reader, dstout, dsterr io.Writer, result interface{}) (err error) {
+	data := bytes.NewBuffer(nil)
+	_, err = stdcopy.Copy(dstout, dsterr, data, in)
+	if err != nil {
+		return err
+	}
+
+	if data.Len() != 0 {
+		rec := record{Result: result}
+		err = json.NewDecoder(data).Decode(&rec)
+		if err == nil && rec.Error != nil {
+			err = rec.Error
 		}
 	}
-	return err
+
+	return
 }

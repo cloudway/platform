@@ -45,6 +45,7 @@ import com.atlassian.utils.process.Watchdog;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.exec.PumpStreamHandler;
 import org.apache.commons.io.FileUtils;
 import com.google.common.io.ByteStreams;
 
@@ -133,7 +134,7 @@ public class RepoDeployer
         return ref;
     }
 
-    public void deploy(Repository repository, Ref ref) throws IOException {
+    public void deploy(Repository repository, Ref ref, OutputStream stdout, OutputStream stderr) throws IOException {
         // Retrieve namespace and name from repository
         String namespace = repository.getProject().getKey().toLowerCase();
         String name = repository.getSlug().toLowerCase();
@@ -141,7 +142,7 @@ public class RepoDeployer
 
         // Create a temporary file to save the repository archive
         Path archiveFile = Files.createTempFile("repo", ".tar");
-        DeploymentHandler handler = new DeploymentHandler(name, namespace, archiveFile);
+        DeploymentHandler handler = new DeploymentHandler(name, namespace, archiveFile, stdout, stderr);
 
         if (repoService.isEmpty(repository)) {
             // Create empty archive file
@@ -176,12 +177,15 @@ public class RepoDeployer
     static class DeploymentHandler extends LoggingHandler {
         private final String name, namespace;
         private final Path repo;
+        private final OutputStream stdout, stderr;
 
-        DeploymentHandler(String name, String namespace, Path repo) {
+        DeploymentHandler(String name, String namespace, Path repo, OutputStream stdout, OutputStream stderr) {
             super(System.err);
             this.name = name;
             this.namespace = namespace;
             this.repo = repo;
+            this.stdout = stdout;
+            this.stderr = stderr;
         }
 
         @Override
@@ -190,11 +194,30 @@ public class RepoDeployer
                 // Run cwman to deploy the archive
                 ProcessBuilder builder = new ProcessBuilder();
                 builder.command("/usr/bin/cwman", "deploy", name, namespace);
-                builder.redirectInput(repo.toFile());
-                builder.redirectError(ProcessBuilder.Redirect.INHERIT);
-                builder.redirectOutput(ProcessBuilder.Redirect.INHERIT);
 
-                int status = builder.start().waitFor();
+                builder.redirectInput(repo.toFile());
+                if (stdout == null) {
+                    builder.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                }
+                if (stderr == null) {
+                    builder.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                }
+
+                Process proc = builder.start();
+                PumpStreamHandler psh = new PumpStreamHandler(stdout, stderr);
+
+                if (stdout != null) {
+                    psh.setProcessOutputStream(proc.getInputStream());
+                }
+                if (stderr != null) {
+                    psh.setProcessErrorStream(proc.getErrorStream());
+                }
+                if (stdout != null || stderr != null) {
+                    psh.start();
+                }
+
+                int status = proc.waitFor();
+                psh.stop();
                 if (status != 0) {
                     logger.severe("Deployer exited with status code " + status);
                 } else {
@@ -383,7 +406,7 @@ public class RepoDeployer
     }
 
     private void pushTemplateToNewRepo(Path tempRepoDir, Repository newRepo) {
-        // temprarily disable post-receive hook
+        // temporarily disable post-receive hook
         repoHookService.disable(newRepo, HOOK_KEY);
         try {
             GitScmCommandBuilder builder = gitCommandBuilderFactory.builder()
@@ -396,6 +419,19 @@ public class RepoDeployer
             HookUtils.configure(requestHandle, builder);
 
             builder.build(new LoggingHandler(System.err)).call();
+
+            // ensure new repository was populated
+            int waitTime = 100, maxWaitTime = 10000; // 10 seconds
+            while (repoService.isEmpty(newRepo)) {
+                try {
+                    Thread.sleep(waitTime);
+                    if ((waitTime *= 2) > maxWaitTime) {
+                        break;
+                    }
+                } catch (InterruptedException ex) {
+                    break;
+                }
+            }
         } finally {
             repoHookService.enable(newRepo, HOOK_KEY);
         }

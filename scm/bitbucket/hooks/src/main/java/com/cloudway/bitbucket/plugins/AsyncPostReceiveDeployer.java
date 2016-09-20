@@ -54,7 +54,7 @@ public class AsyncPostReceiveDeployer implements AsyncPostReceiveRepositoryHook 
                 logger.fine("Push to deploy the repository " +
                             repo.getSlug().toLowerCase() + "-" +
                             repo.getProject().getKey().toLowerCase());
-                deployer.deploy(context.getRepository(), ref);
+                deployer.deploy(context.getRepository(), ref, null, null);
             } catch (Exception ex) {
                 logger.log(Level.SEVERE, "Push to deploy failed", ex);
             }

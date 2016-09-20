@@ -54,7 +54,7 @@ var _ = Describe("Namespace", func() {
 					Name:      "test",
 					Framework: "mock",
 				}
-				_, err := cli.CreateApplication(ctx, opts, nil)
+				_, err := cli.CreateApplication(ctx, opts, nil, nil)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -95,7 +95,7 @@ var _ = Describe("Namespace", func() {
 					Name:      "test",
 					Framework: "mock",
 				}
-				_, err := cli.CreateApplication(ctx, opts, nil)
+				_, err := cli.CreateApplication(ctx, opts, nil, nil)
 				Expect(err).NotTo(HaveOccurred())
 			})
 

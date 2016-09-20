@@ -19,7 +19,7 @@ func (box *Sandbox) Build() (err error) {
 	if err = processTemplates(primary.Path, box.Environ()); err != nil {
 		return err
 	}
-	return runPluginAction(primary.Path, box.RepoDir(), makeExecEnv(box.Environ()), "build")
+	return runPluginAction(primary.Path, box.RepoDir(), MakeExecEnv(box.Environ()), "build")
 }
 
 func (box *Sandbox) Deploy() error {
@@ -48,7 +48,7 @@ func (box *Sandbox) Deploy() error {
 	if err != nil {
 		return err
 	}
-	return runPluginAction(primary.Path, box.RepoDir(), makeExecEnv(box.Environ()), "deploy")
+	return runPluginAction(primary.Path, box.RepoDir(), MakeExecEnv(box.Environ()), "deploy")
 }
 
 func (box *Sandbox) hasDeployments() bool {

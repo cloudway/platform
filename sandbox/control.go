@@ -73,7 +73,7 @@ func (box *Sandbox) Control(action string, enable_action_hooks, process_template
 		}
 	}
 
-	eenv := makeExecEnv(box.Environ())
+	eenv := MakeExecEnv(box.Environ())
 
 	if enable_action_hooks {
 		if err := box.runActionHook("pre_"+action, eenv); err != nil {
@@ -141,7 +141,7 @@ func runPluginAction(path, dir string, env []string, action string, args ...stri
 	cmd.Stderr = os.Stderr
 	cmd.Env = env
 	cmd.Dir = dir
-	return RunCommand(cmd)
+	return reaper.RunCmd(cmd)
 }
 
 func (box *Sandbox) runActionHook(action string, env []string) error {
@@ -159,10 +159,10 @@ func (box *Sandbox) runActionHook(action string, env []string) error {
 	cmd.Stderr = os.Stderr
 	cmd.Env = env
 	cmd.Dir = box.HomeDir()
-	return RunCommand(cmd)
+	return reaper.RunCmd(cmd)
 }
 
-func makeExecEnv(env map[string]string) []string {
+func MakeExecEnv(env map[string]string) []string {
 	if env != nil {
 		eenv := make([]string, 0, len(env))
 		for k, v := range env {

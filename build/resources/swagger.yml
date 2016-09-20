@@ -213,7 +213,7 @@ paths:
       consumes:
         - application/json
       produces:
-        - application/x-json-stream
+        - application/octet-stream
       parameters:
         - in: body
           name: options
@@ -280,6 +280,8 @@ paths:
       operationId: startApplication
       security:
         - apiKey: []
+      produces:
+        - application/octet-stream
       parameters:
         - name: name
           in: path
@@ -322,6 +324,8 @@ paths:
       operationId: restartApplication
       security:
         - apiKey: []
+      produces:
+        - application/octet-stream
       parameters:
         - name: name
           in: path
@@ -440,7 +444,7 @@ paths:
       security:
         - apiKey: []
       produces:
-        - application/x-json-stream
+        - application/octet-stream
       parameters:
         - name: name
           in: path
@@ -516,7 +520,7 @@ paths:
       consumes:
         - application/tar+gzip
       produces:
-        - application/x-json-stream
+        - application/octet-stream
       security:
         - apiKey: []
       parameters:
@@ -605,6 +609,8 @@ paths:
       operationId: scaleApplication
       security:
         - apiKey: []
+      produces:
+        - application/octet-stream
       parameters:
         - name: name
           in: path
