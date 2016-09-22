@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"mime"
+	"net"
 	"net/http"
 	"net/smtp"
 	"net/url"
@@ -17,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudway/platform/api/server"
 	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/broker"
 	"github.com/cloudway/platform/config"
@@ -66,6 +66,8 @@ var funcs = template.FuncMap{
 
 type Console struct {
 	*broker.Broker
+	server    *http.Server
+	listener  net.Listener
 	ab        *authboss.Authboss
 	templates tpl.Templates
 	baseURL   *url.URL
@@ -100,17 +102,39 @@ func NewConsole(br *broker.Broker) (con *Console, err error) {
 	return con, nil
 }
 
-func (con *Console) InitRoutes(s *server.Server) {
-	s.Mux.PathPrefix("/auth/").Handler(con.ab.NewRouter())
+func (con *Console) Accept(addr string, listener net.Listener) {
+	con.server = &http.Server{Addr: addr}
+	con.listener = listener
+}
+
+func (con *Console) Serve() (err error) {
+	m := mux.NewRouter()
+	con.server.Handler = m
+	con.InitRoutes(m)
+
+	logrus.Infof("Console server listen on %s", con.listener.Addr())
+	err = con.server.Serve(con.listener)
+	if err != nil && strings.Contains(err.Error(), "use of closed network connection") {
+		err = nil
+	}
+	return err
+}
+
+func (con *Console) Close() {
+	con.listener.Close()
+}
+
+func (con *Console) InitRoutes(m *mux.Router) {
+	m.PathPrefix("/auth/").Handler(con.ab.NewRouter())
 
 	dist := http.FileServer(http.Dir(filepath.Join(config.RootDir, "dist")))
-	s.Mux.PathPrefix("/dist/").Handler(http.StripPrefix("/dist/", dist))
+	m.PathPrefix("/dist/").Handler(http.StripPrefix("/dist/", dist))
 
 	static := http.FileServer(http.Dir(filepath.Join(config.RootDir, "static")))
-	s.Mux.PathPrefix("/static/").Handler(http.StripPrefix("/static/", static))
+	m.PathPrefix("/static/").Handler(http.StripPrefix("/static/", static))
 
-	gets := s.Mux.Methods("GET").Subrouter()
-	posts := s.Mux.Methods("POST").Subrouter()
+	gets := m.Methods("GET").Subrouter()
+	posts := m.Methods("POST").Subrouter()
 
 	gets.HandleFunc("/", con.index)
 	gets.HandleFunc("/password", con.password)

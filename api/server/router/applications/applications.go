@@ -123,7 +123,7 @@ func (ar *applicationsRouter) getInfo(name, namespace string, app *userdb.Applic
 		Scaling:   1,
 	}
 
-	base, err := url.Parse(config.GetOrDefault("console.url", "http://api."+defaults.Domain()))
+	base, err := url.Parse(defaults.ApiURL())
 	if err != nil {
 		return
 	}

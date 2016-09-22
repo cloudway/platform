@@ -8,6 +8,20 @@ cwman config "console.url" ${CONSOLE_URL}
 
 export CLOUDWAY_DOMAIN
 
+if [[ -n "$API_URL" && "$API_URL" != "$CONSOLE_URL" ]]; then
+    cwman config "api.url" "${API_URL}"
+    if ! grep 'program:console' /etc/supervisor/conf.d/supervisord.conf &>/dev/null; then
+        cat >> /etc/supervisor/conf.d/supervisord.conf <<EOF
+
+[program:console]
+command=/usr/bin/cwman console
+stdout_logfile=/var/log/supervisor/%(program_name)s.log
+stderr_logfile=/var/log/supervisor/%(program_name)s.log
+autorestart=true
+EOF
+    fi
+fi
+
 # install plugins
 cwman config "hub.dir" /data/plugins
 for d in $CLOUDWAY_ROOT/plugins/*; do

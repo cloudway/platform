@@ -17,6 +17,7 @@ import (
 	"github.com/cloudway/platform/api/server/router/plugins"
 	"github.com/cloudway/platform/api/server/router/system"
 	"github.com/cloudway/platform/broker"
+	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/console"
 )
 
@@ -37,11 +38,6 @@ func (cli *CWMan) CmdAPIServer(args ...string) (err error) {
 		return err
 	}
 
-	con, err := console.NewConsole(br)
-	if err != nil {
-		return err
-	}
-
 	api := server.New(_CONTEXT_ROOT)
 
 	l, err := net.Listen("tcp", addr)
@@ -53,7 +49,14 @@ func (cli *CWMan) CmdAPIServer(args ...string) (err error) {
 	initMiddlewares(api, br)
 	initRouters(api, br)
 
-	con.InitRoutes(api)
+	if defaults.ApiURL() == defaults.ConsoleURL() {
+		// backward compatibility
+		console, err := console.NewConsole(br)
+		if err != nil {
+			return err
+		}
+		console.InitRoutes(api.Mux)
+	}
 
 	// The serve API routine never exists unless an error occurs
 	// we need to start it as a goroutine and wait on it so

@@ -24,6 +24,25 @@ cwman config "scm.type" mock
 cwman config "scm.url" "file:///data/git"
 cwman config "scm.clone_url" "git clone ssh://git@${GIT_DOMAIN}:7999/<namespace>/<repo>.git"
 
+if [[ -n "$API_URL" && "$API_URL" != "$CONSOLE_URL" ]]; then
+    API_DOMAIN=$(get_domain $API_URL)
+
+    cwman config "api.url" "${API_URL}"
+    cwman config "proxy-mapping.${API_DOMAIN}" http://127.0.0.1:6616
+    cwman config "proxy-mapping.${CONSOLE_DOMAIN}" http://127.0.0.1:3000
+
+    if ! grep 'program:console' /etc/supervisor/conf.d/supervisord.conf &>/dev/null; then
+        cat >> /etc/supervisor/conf.d/supervisord.conf <<EOF
+
+[program:console]
+command=/usr/bin/cwman console
+stdout_logfile=/var/log/supervisor/%(program_name)s.log
+stderr_logfile=/var/log/supervisor/%(program_name)s.log
+autorestart=true
+EOF
+    fi
+fi
+
 # Install plugins
 cwman config "hub.dir" /data/plugins
 for d in $CLOUDWAY_ROOT/plugins/*; do

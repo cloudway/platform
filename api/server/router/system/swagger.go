@@ -12,7 +12,7 @@ import (
 	"gopkg.in/cookieo9/resources-go.v2"
 	"gopkg.in/yaml.v2"
 
-	"github.com/cloudway/platform/config"
+	"github.com/cloudway/platform/config/defaults"
 )
 
 // Minimalist swagger schema
@@ -66,7 +66,7 @@ func loadSwaggerJson() error {
 	schema.Definitions = mapValue(schema.Definitions)
 
 	// fill in api server host and scheme
-	if baseurl := config.Get("console.url"); baseurl != "" {
+	if baseurl := defaults.ApiURL(); baseurl != "" {
 		if u, err := url.Parse(baseurl); err == nil {
 			schema.Host = u.Host
 			schema.Schemes = []string{u.Scheme}

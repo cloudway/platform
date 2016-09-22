@@ -182,18 +182,37 @@ func handleStart(proxy Proxy, ctx context.Context, c *container.Container) error
 }
 
 func handleVirtualHost(proxy Proxy, info types.ContainerJSON) error {
-	var vhost, vport string
-	for _, env := range info.Config.Env {
-		if strings.HasPrefix(env, "VIRTUAL_HOST=") {
-			vhost = env[13:]
-		}
-		if strings.HasPrefix(env, "VIRTUAL_PORT=") {
-			vport = env[13:]
+	// convert env to a map
+	env := make(map[string]string)
+	for _, entry := range info.Config.Env {
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) == 2 {
+			env[parts[0]] = parts[1]
 		}
 	}
-	if vhost == "" {
-		return nil
+
+	// find VIRTUAL_HOST env var(s)
+	var mappings []*manifest.ProxyMapping
+	for key := range env {
+		if strings.HasPrefix(key, "VIRTUAL_HOST") {
+			m := getVirtualHostMapping(proxy, key[12:], env, info)
+			if m != nil {
+				mappings = append(mappings, m)
+			}
+		}
 	}
+
+	if len(mappings) > 0 {
+		eps := []*manifest.Endpoint{{ProxyMappings: mappings}}
+		return proxy.AddEndpoints(info.ID, eps)
+	}
+
+	return nil
+}
+
+func getVirtualHostMapping(proxy Proxy, key string, env map[string]string, info types.ContainerJSON) *manifest.ProxyMapping {
+	vhost := env["VIRTUAL_HOST"+key]
+	vport := env["VIRTUAL_PORT"+key]
 
 	if vport == "" {
 		ports := info.Config.ExposedPorts
@@ -226,14 +245,11 @@ func handleVirtualHost(proxy Proxy, info types.ContainerJSON) error {
 		}
 	}
 
-	eps := []*manifest.Endpoint{{
-		ProxyMappings: []*manifest.ProxyMapping{{
-			Frontend: vhost,
-			Backend:  "http://" + ip + ":" + vport,
-			Protocol: "http",
-		}},
-	}}
-	return proxy.AddEndpoints(info.ID, eps)
+	return &manifest.ProxyMapping{
+		Frontend: vhost,
+		Backend:  "http://" + ip + ":" + vport,
+		Protocol: "http",
+	}
 }
 
 func handleStop(proxy Proxy, id string) error {

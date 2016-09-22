@@ -21,6 +21,7 @@ type CWMan struct {
 // Commands lists the top level commands and their short usage
 var CommandUsage = []Command{
 	{"api-server", "Start the API server"},
+	{"console", "Start the console server"},
 	{"config", "Get or set a configuration value"},
 	{"install", "Install one or more plugins"},
 	{"upgrade", "Upgrade application containers"},
@@ -44,6 +45,7 @@ func Init(docker container.DockerClient) *CWMan {
 
 	cli.handlers = map[string]func(...string) error{
 		"api-server":   cli.CmdAPIServer,
+		"console":      cli.CmdConsole,
 		"update-proxy": cli.CmdUpdateProxy,
 		"sshd":         cli.CmdSshd,
 		"git-ssh":      cli.CmdGitSSH,
