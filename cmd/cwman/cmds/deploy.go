@@ -1,11 +1,11 @@
 package cmds
 
 import (
+	"context"
 	"os"
 
 	"github.com/cloudway/platform/pkg/mflag"
 	"github.com/cloudway/platform/pkg/serverlog"
-	"golang.org/x/net/context"
 )
 
 func (cli *CWMan) CmdDeploy(args ...string) (err error) {

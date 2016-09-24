@@ -7,7 +7,6 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/api/server/httputils"
 	"github.com/cloudway/platform/api/server/middleware"
@@ -103,13 +102,6 @@ func (s *HTTPServer) Close() error {
 
 func (s *Server) makeHTTPHandler(handler httputils.APIFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Define the context that we'll pass around to share info
-		//
-		// The 'context' will be used for global data that should
-		// apply to all requests. Data that is specific to the
-		// immediate function being called should still be passed
-		// as 'args' on the function call.
-		ctx := context.Background()
 		handlerFunc := s.handleWithGlobalMiddlewares(handler)
 
 		vars := mux.Vars(r)
@@ -117,7 +109,7 @@ func (s *Server) makeHTTPHandler(handler httputils.APIFunc) http.HandlerFunc {
 			vars = make(map[string]string)
 		}
 
-		if err := handlerFunc(ctx, w, r, vars); err != nil {
+		if err := handlerFunc(w, r, vars); err != nil {
 			httputils.WriteError(w, r, err)
 		}
 	}

@@ -2,12 +2,12 @@ package cmds
 
 import (
 	"archive/tar"
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/Sirupsen/logrus"
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/container"

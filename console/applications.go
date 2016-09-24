@@ -1,6 +1,7 @@
 package console
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,11 +17,11 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/engine-api/types"
 	"github.com/gorilla/mux"
-	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
 	"gopkg.in/authboss.v0"
 
 	"github.com/cloudway/platform/auth/userdb"
+	"github.com/cloudway/platform/broker"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/container"
@@ -159,9 +160,11 @@ func (con *Console) createApplication(w http.ResponseWriter, r *http.Request) {
 
 		jw := jsonWriter{enc: json.NewEncoder(conn)}
 		opts.Log = serverlog.Encap(jw, jw)
-		_, cs, err := con.NewUserBroker(user).CreateApplication(opts, tags)
+
+		br := con.NewUserBroker(user)
+		_, cs, err := br.CreateApplication(opts, tags)
 		if err == nil {
-			err = con.StartContainers(context.Background(), cs, opts.Log)
+			err = br.StartContainers(cs, opts.Log)
 		}
 		if err != nil {
 			data := map[string]string{"err": err.Error()}
@@ -207,11 +210,12 @@ func (con *Console) createServices(w http.ResponseWriter, r *http.Request) {
 	if user == nil {
 		return
 	}
+	br := con.NewUserBroker(user)
 
 	var cs []*container.Container
 	opts, tags, err := con.parseServiceCreateOptions(r)
 	if err == nil {
-		cs, err = con.NewUserBroker(user).CreateServices(opts, tags)
+		cs, err = br.CreateServices(opts, tags)
 	}
 
 	if err != nil {
@@ -221,7 +225,7 @@ func (con *Console) createServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = con.startContainers(cs)
+	err = startContainers(br, cs)
 	if err != nil {
 		logrus.Error(err)
 		con.error(w, r, http.StatusInternalServerError, err.Error(), "/applications")
@@ -248,10 +252,10 @@ func (con *Console) parseServiceCreateOptions(r *http.Request) (opts container.C
 	return
 }
 
-func (con *Console) startContainers(containers []*container.Container) error {
+func startContainers(br *broker.UserBroker, containers []*container.Container) error {
 	errChan := make(chan error, 1)
 	go func() {
-		errChan <- con.Broker.StartContainers(context.Background(), containers, nil)
+		errChan <- br.StartContainers(containers, nil)
 	}()
 
 	timer := time.NewTimer(time.Second * 10)
@@ -641,12 +645,13 @@ func (con *Console) scaleApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cs, err := con.NewUserBroker(user).ScaleApplication(name, scale)
+	br := con.NewUserBroker(user)
+	cs, err := br.ScaleApplication(name, scale)
 	if con.badRequest(w, r, err, "/applications/"+name) {
 		return
 	}
 
-	err = con.startContainers(cs)
+	err = startContainers(br, cs)
 	if err != nil {
 		logrus.Error(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

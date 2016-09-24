@@ -2,6 +2,7 @@ package sshd
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/net/context"
 
 	conf "github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/container"

@@ -1,7 +1,6 @@
 package plugins
 
 import (
-	"golang.org/x/net/context"
 	"net/http"
 
 	"github.com/cloudway/platform/api/server/httputils"
@@ -32,7 +31,13 @@ func (pr *pluginsRouter) Routes() []router.Route {
 	return pr.routes
 }
 
-func (pr *pluginsRouter) list(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+func (pr *pluginsRouter) NewUserBroker(r *http.Request) *broker.UserBroker {
+	ctx := r.Context()
+	user := httputils.UserFromContext(ctx)
+	return pr.Broker.NewUserBroker(user, ctx)
+}
+
+func (pr *pluginsRouter) list(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := httputils.ParseForm(r); err != nil {
 		return err
 	}
@@ -40,8 +45,7 @@ func (pr *pluginsRouter) list(ctx context.Context, w http.ResponseWriter, r *htt
 	category := manifest.Category(r.FormValue("category"))
 	_, userDefined := r.Form["user"]
 
-	user := httputils.UserFromContext(ctx)
-	br := pr.NewUserBroker(user, ctx)
+	br := pr.NewUserBroker(r)
 
 	var plugins []*manifest.Plugin
 	if userDefined {
@@ -55,21 +59,18 @@ func (pr *pluginsRouter) list(ctx context.Context, w http.ResponseWriter, r *htt
 	return httputils.WriteJSON(w, http.StatusOK, plugins)
 }
 
-func (pr *pluginsRouter) info(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := httputils.UserFromContext(ctx)
-	plugin, err := pr.NewUserBroker(user, ctx).GetPluginInfo(vars["tag"])
+func (pr *pluginsRouter) info(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	plugin, err := pr.NewUserBroker(r).GetPluginInfo(vars["tag"])
 	if err != nil {
 		return err
 	}
 	return httputils.WriteJSON(w, http.StatusOK, plugin)
 }
 
-func (pr *pluginsRouter) create(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := httputils.UserFromContext(ctx)
-	return pr.NewUserBroker(user, ctx).InstallPlugin(r.Body)
+func (pr *pluginsRouter) create(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	return pr.NewUserBroker(r).InstallPlugin(r.Body)
 }
 
-func (pr *pluginsRouter) remove(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	user := httputils.UserFromContext(ctx)
-	return pr.NewUserBroker(user, ctx).RemovePlugin(vars["tag"])
+func (pr *pluginsRouter) remove(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	return pr.NewUserBroker(r).RemovePlugin(vars["tag"])
 }

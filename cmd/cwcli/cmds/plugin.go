@@ -2,6 +2,7 @@ package cmds
 
 import (
 	"archive/tar"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -9,7 +10,6 @@ import (
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/manifest"
 	"github.com/cloudway/platform/pkg/mflag"
-	"golang.org/x/net/context"
 )
 
 const pluginCmdUsage = `Usage: cwcli plugin

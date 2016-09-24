@@ -3,6 +3,7 @@ package container
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/cloudway/platform/pkg/archive"
-	"golang.org/x/net/context"
 )
 
 func (c *Container) Install(ctx context.Context, source string) error {

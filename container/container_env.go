@@ -3,16 +3,15 @@ package container
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"errors"
 	"io/ioutil"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/docker/engine-api/types"
-	"golang.org/x/net/context"
-
 	"github.com/cloudway/platform/pkg/manifest"
+	"github.com/docker/engine-api/types"
 )
 
 // Adds the variable to the environment with the value, if name does not

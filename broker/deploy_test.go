@@ -1,6 +1,7 @@
 package broker_test
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -14,7 +15,6 @@ import (
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/scm"
 	"github.com/cloudway/platform/scm/mock"
-	"golang.org/x/net/context"
 )
 
 const deployTimeout = "10s"

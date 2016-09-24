@@ -2,9 +2,9 @@ package cmds
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/net/context"
 	"net/http"
 	"os"
 	"strings"

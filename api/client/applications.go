@@ -1,13 +1,13 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/url"
 
 	"github.com/cloudway/platform/api/types"
 	"github.com/cloudway/platform/pkg/serverlog"
-	"golang.org/x/net/context"
 )
 
 func (api *APIClient) GetApplications(ctx context.Context) ([]string, error) {

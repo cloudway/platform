@@ -1,6 +1,7 @@
 package console
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -36,7 +37,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/justinas/nosurf"
 	"github.com/oxtoacart/bpool"
-	"golang.org/x/net/context"
 )
 
 var funcs = template.FuncMap{

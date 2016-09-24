@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -22,7 +23,6 @@ import (
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/rest"
-	"golang.org/x/net/context"
 
 	_ "github.com/cloudway/platform/auth/userdb/mongodb"
 	_ "github.com/cloudway/platform/scm/mock"

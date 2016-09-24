@@ -1,13 +1,13 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"regexp"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/cloudway/platform/api/server/httputils"
 	"github.com/cloudway/platform/broker"
-	"golang.org/x/net/context"
 )
 
 type authMiddleware struct {
@@ -21,9 +21,9 @@ func NewAuthMiddleware(broker *broker.Broker, contextRoot string) authMiddleware
 }
 
 func (m authMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc {
-	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	return func(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 		if m.noAuthPattern.MatchString(r.URL.Path) {
-			return handler(ctx, w, r, vars)
+			return handler(w, r, vars)
 		}
 
 		user, err := m.Authz.Verify(r)
@@ -33,7 +33,7 @@ func (m authMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc
 		}
 
 		logrus.Debugf("Logged in user: %s", user)
-		ctx = context.WithValue(ctx, httputils.UserKey, user)
-		return handler(ctx, w, r, vars)
+		ctx := context.WithValue(r.Context(), httputils.UserKey, user)
+		return handler(w, r.WithContext(ctx), vars)
 	}
 }

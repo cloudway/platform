@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -12,7 +13,6 @@ import (
 	"github.com/docker/engine-api/types"
 	"github.com/docker/engine-api/types/events"
 	"github.com/docker/engine-api/types/filters"
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/container"

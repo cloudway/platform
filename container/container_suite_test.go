@@ -1,6 +1,7 @@
 package container_test
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -10,7 +11,6 @@ import (
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/hub"
 	_ "github.com/cloudway/platform/scm/mock"
-	"golang.org/x/net/context"
 )
 
 var (

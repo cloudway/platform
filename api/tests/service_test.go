@@ -1,11 +1,12 @@
 package api_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudway/platform/api/types"
-	"golang.org/x/net/context"
 )
 
 var _ = Describe("Service", func() {

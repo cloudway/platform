@@ -1,6 +1,7 @@
 package container
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/docker/engine-api/types"
 	"github.com/docker/engine-api/types/filters"
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"

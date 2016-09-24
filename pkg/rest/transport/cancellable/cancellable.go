@@ -2,11 +2,11 @@
 package cancellable
 
 import (
+	"context"
 	"io"
 	"net/http"
 
 	"github.com/cloudway/platform/pkg/rest/transport"
-	"golang.org/x/net/context"
 )
 
 // Do sends an HTTP request with the provided transport.Sender and returns an

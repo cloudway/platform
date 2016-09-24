@@ -1,8 +1,8 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/api/types"
 )

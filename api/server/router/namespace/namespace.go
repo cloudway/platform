@@ -6,7 +6,6 @@ import (
 	"github.com/cloudway/platform/api/server/httputils"
 	"github.com/cloudway/platform/api/server/router"
 	"github.com/cloudway/platform/broker"
-	"golang.org/x/net/context"
 )
 
 type namespaceRouter struct {
@@ -30,32 +29,33 @@ func (nr *namespaceRouter) Routes() []router.Route {
 	return nr.routes
 }
 
-func (nr *namespaceRouter) get(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+func (nr *namespaceRouter) NewUserBroker(r *http.Request) *broker.UserBroker {
+	ctx := r.Context()
 	user := httputils.UserFromContext(ctx)
-	br := nr.NewUserBroker(user, ctx)
+	return nr.Broker.NewUserBroker(user, ctx)
+}
+
+func (nr *namespaceRouter) get(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	br := nr.NewUserBroker(r)
 	if err := br.Refresh(); err != nil {
 		return err
 	}
 	return httputils.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"Namespace": user.Namespace,
+		"Namespace": br.Namespace(),
 	})
 }
 
-func (nr *namespaceRouter) set(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+func (nr *namespaceRouter) set(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := httputils.ParseForm(r); err != nil {
 		return err
 	}
-	user := httputils.UserFromContext(ctx)
-	br := nr.NewUserBroker(user, ctx)
-	return br.CreateNamespace(r.FormValue("namespace"))
+	return nr.NewUserBroker(r).CreateNamespace(r.FormValue("namespace"))
 }
 
-func (nr *namespaceRouter) delete(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+func (nr *namespaceRouter) delete(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := httputils.ParseForm(r); err != nil {
 		return err
 	}
-	user := httputils.UserFromContext(ctx)
-	br := nr.NewUserBroker(user, ctx)
 	_, force := r.Form["force"]
-	return br.RemoveNamespace(force)
+	return nr.NewUserBroker(r).RemoveNamespace(force)
 }

@@ -1,6 +1,7 @@
 package broker_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -9,7 +10,6 @@ import (
 
 	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/container"
-	"golang.org/x/net/context"
 )
 
 var _ = Describe("Namespaces", func() {

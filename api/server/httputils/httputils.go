@@ -1,6 +1,7 @@
 package httputils
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"mime"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/cloudway/platform/auth/userdb"
-	"golang.org/x/net/context"
 )
 
 // key is an unexported type for keys defined in this package.
@@ -24,7 +24,7 @@ const UserKey key = 1
 
 // APIFunc is an adapter to allow the use of ordinary functions as API endpoints.
 // Any function that has the appropriate signature can be registered as a API endpoint.
-type APIFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error
+type APIFunc func(w http.ResponseWriter, r *http.Request, vars map[string]string) error
 
 // CheckForJSON makes sure that the request's Content-Type is application/json.
 func CheckForJSON(r *http.Request) error {

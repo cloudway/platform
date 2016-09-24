@@ -1,9 +1,10 @@
 package container
 
 import (
+	"context"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/engine-api/types"
-	"golang.org/x/net/context"
 )
 
 // Destroy the application container.

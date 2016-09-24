@@ -2,9 +2,10 @@ package container
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+
 	"github.com/cloudway/platform/pkg/manifest"
-	"golang.org/x/net/context"
 )
 
 // Get application information from container.

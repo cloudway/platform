@@ -1,12 +1,13 @@
 package container_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/manifest"
-	"golang.org/x/net/context"
 )
 
 var _ = Describe("Create Container", func() {

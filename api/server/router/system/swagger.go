@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strconv"
 
-	"golang.org/x/net/context"
 	"gopkg.in/cookieo9/resources-go.v2"
 	"gopkg.in/yaml.v2"
 
@@ -29,7 +28,7 @@ type swaggerSchema struct {
 
 var swaggerJson []byte
 
-func (s *systemRouter) getSwaggerJson(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+func (s *systemRouter) getSwaggerJson(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if swaggerJson == nil {
 		if err := loadSwaggerJson(); err != nil {
 			return err

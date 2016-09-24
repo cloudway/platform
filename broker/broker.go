@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/cloudway/platform/auth"
@@ -8,7 +9,6 @@ import (
 	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/hub"
 	"github.com/cloudway/platform/scm"
-	"golang.org/x/net/context"
 
 	// Load all plugings
 	_ "github.com/cloudway/platform/auth/userdb/mongodb"

@@ -3,6 +3,7 @@ package cmds
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +17,6 @@ import (
 	"time"
 
 	"github.com/docker/go-units"
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/api/types"
 	"github.com/cloudway/platform/cmd/cwcli/cmds/ansi"

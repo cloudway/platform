@@ -3,12 +3,12 @@ package container
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/docker/engine-api/types"
-	"golang.org/x/net/context"
 )
 
 var waitTimeout = time.Second * 60

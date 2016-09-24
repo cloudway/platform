@@ -2,6 +2,7 @@ package rest
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/cloudway/platform/pkg/rest/transport/cancellable"
-	"golang.org/x/net/context"
 )
 
 // serverResponse is a wrapper for http API responses.

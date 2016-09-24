@@ -2,6 +2,7 @@ package container
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/cloudway/platform/pkg/stdcopy"
 	"github.com/docker/engine-api/types"
-	"golang.org/x/net/context"
 )
 
 // StatusError reports an unsuccessful exit by a command

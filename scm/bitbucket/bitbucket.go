@@ -1,6 +1,7 @@
 package bitbucket
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,8 +11,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/rest"

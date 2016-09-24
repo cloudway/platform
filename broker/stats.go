@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	dockertypes "github.com/docker/engine-api/types"
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/api/types"
 	"github.com/cloudway/platform/container"
@@ -181,12 +181,12 @@ func calculateNetwork(network map[string]dockertypes.NetworkStats) (rx, tx uint6
 	return
 }
 
-func (br *UserBroker) Stats(ctx context.Context, name string, w io.Writer) error {
+func (br *UserBroker) Stats(name string, w io.Writer) error {
 	if err := br.Refresh(); err != nil {
 		return err
 	}
 
-	cs, err := br.FindAll(ctx, name, br.Namespace())
+	cs, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
 	}
@@ -201,7 +201,7 @@ func (br *UserBroker) Stats(ctx context.Context, name string, w io.Writer) error
 	for _, c := range cs {
 		s := br.newContainerStats(c)
 		cStats.cs = append(cStats.cs, s)
-		go s.Collect(br.DockerClient, ctx, stopChan, true)
+		go s.Collect(br.DockerClient, br.ctx, stopChan, true)
 	}
 
 	var errs []string

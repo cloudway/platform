@@ -1,6 +1,7 @@
 package broker_test
 
 import (
+	"context"
 	"path/filepath"
 
 	. "github.com/onsi/ginkgo"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/cloudway/platform/auth/userdb"
 	. "github.com/cloudway/platform/auth/userdb/matchers"
-	"golang.org/x/net/context"
 )
 
 var _ = Describe("Users", func() {

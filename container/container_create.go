@@ -3,6 +3,7 @@ package container
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,7 +21,6 @@ import (
 	"github.com/docker/engine-api/types/container"
 	"github.com/docker/engine-api/types/network"
 	"github.com/docker/engine-api/types/strslice"
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/api"
 	"github.com/cloudway/platform/config"

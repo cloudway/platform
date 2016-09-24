@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bufio"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -14,7 +15,6 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/container"

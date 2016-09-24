@@ -1,7 +1,7 @@
 package router
 
 import (
-	"golang.org/x/net/context"
+	"context"
 	"net/http"
 
 	"github.com/cloudway/platform/api/server/httputils"
@@ -65,13 +65,13 @@ func NewHeadRoute(path string, handler httputils.APIFunc) Route {
 }
 
 func cancellableHandler(h httputils.APIFunc) httputils.APIFunc {
-	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	return func(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 		if notifier, ok := w.(http.CloseNotifier); ok {
 			notify := notifier.CloseNotify()
-			notifyCtx, cancel := context.WithCancel(ctx)
+			notifyCtx, cancel := context.WithCancel(r.Context())
 			finished := make(chan struct{})
 			defer close(finished)
-			ctx = notifyCtx
+			r = r.WithContext(notifyCtx)
 			go func() {
 				select {
 				case <-notify:
@@ -80,7 +80,7 @@ func cancellableHandler(h httputils.APIFunc) httputils.APIFunc {
 				}
 			}()
 		}
-		return h(ctx, w, r, vars)
+		return h(w, r, vars)
 	}
 }
 

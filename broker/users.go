@@ -1,9 +1,10 @@
 package broker
 
 import (
+	"context"
+
 	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 func (br *Broker) CreateUser(user userdb.User, password string) (err error) {

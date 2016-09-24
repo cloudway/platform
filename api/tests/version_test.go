@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
@@ -11,7 +12,6 @@ import (
 	"github.com/cloudway/platform/api"
 	"github.com/cloudway/platform/api/server/httputils"
 	"github.com/cloudway/platform/api/server/middleware"
-	"golang.org/x/net/context"
 )
 
 var _ = Describe("Version", func() {
@@ -70,8 +70,8 @@ var _ = Describe("Version", func() {
 		It("should get version from context", func() {
 			var versionFromContext string
 
-			var handler = func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-				versionFromContext = httputils.VersionFromContext(ctx)
+			var handler = func(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+				versionFromContext = httputils.VersionFromContext(r.Context())
 				return nil
 			}
 
@@ -82,7 +82,7 @@ var _ = Describe("Version", func() {
 			resp := httptest.NewRecorder()
 			vars := map[string]string{}
 
-			Ω(h(ctx, resp, req, vars)).Should(Succeed())
+			Ω(h(resp, req, vars)).Should(Succeed())
 			Ω(versionFromContext).Should(Equal(api.Version))
 		})
 	})

@@ -3,6 +3,7 @@ package broker
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
@@ -18,7 +19,6 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/config/defaults"
@@ -548,9 +548,9 @@ func (br *UserBroker) StopApplication(name string) error {
 	return runParallel(err, containers, func(c *container.Container) error { return c.Stop(br.ctx) })
 }
 
-func (br *Broker) StartContainers(ctx context.Context, containers []*container.Container, log *serverlog.ServerLog) error {
+func (br *UserBroker) StartContainers(containers []*container.Container, log *serverlog.ServerLog) error {
 	return startContainers(containers, func(c *container.Container) error {
-		return c.Start(ctx, log)
+		return c.Start(br.ctx, log)
 	})
 }
 

@@ -1,11 +1,11 @@
 package api_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
-	"golang.org/x/net/context"
 )
 
 var _ = Describe("Security", func() {

@@ -3,6 +3,7 @@ package broker_test
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,7 +11,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"golang.org/x/net/context"
 	"gopkg.in/yaml.v2"
 
 	"github.com/cloudway/platform/auth/userdb"

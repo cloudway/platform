@@ -1,12 +1,12 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/url"
 
 	"github.com/cloudway/platform/pkg/manifest"
-	"golang.org/x/net/context"
 )
 
 func (api *APIClient) GetInstalledPlugins(ctx context.Context, category manifest.Category) ([]*manifest.Plugin, error) {

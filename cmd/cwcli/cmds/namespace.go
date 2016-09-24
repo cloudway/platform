@@ -1,11 +1,11 @@
 package cmds
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/pkg/mflag"
-	"golang.org/x/net/context"
 )
 
 func (cli *CWCli) CmdNamespace(args ...string) error {

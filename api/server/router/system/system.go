@@ -5,7 +5,6 @@ import (
 	osruntime "runtime"
 
 	"github.com/Sirupsen/logrus"
-	"golang.org/x/net/context"
 
 	"github.com/cloudway/platform/api"
 	"github.com/cloudway/platform/api/server/httputils"
@@ -35,8 +34,8 @@ func (s *systemRouter) Routes() []router.Route {
 	return s.routes
 }
 
-func (s *systemRouter) getVersion(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	info, err := s.ServerVersion(ctx)
+func (s *systemRouter) getVersion(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	info, err := s.ServerVersion(r.Context())
 	if err != nil {
 		return err
 	}
@@ -53,7 +52,7 @@ func (s *systemRouter) getVersion(ctx context.Context, w http.ResponseWriter, r 
 	return httputils.WriteJSON(w, http.StatusOK, v)
 }
 
-func (s *systemRouter) postAuth(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+func (s *systemRouter) postAuth(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	username, password, ok := r.BasicAuth()
 	if !ok {
 		http.Error(w, "Requires username and password", http.StatusUnauthorized)

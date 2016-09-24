@@ -1,13 +1,13 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
 	"github.com/cloudway/platform/api"
 	"github.com/cloudway/platform/api/server/httputils"
 	"github.com/cloudway/platform/broker"
-	"golang.org/x/net/context"
 )
 
 type badRequestError struct {
@@ -31,7 +31,7 @@ func NewVersionMiddleware(broker *broker.Broker) VersionMiddleware {
 
 // WrapHandler returns a new handler function wrapping the previous one in the request chain
 func (m VersionMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIFunc {
-	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	return func(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 		apiVersion := vars["version"]
 		if apiVersion == "" {
 			apiVersion = api.Version
@@ -51,7 +51,7 @@ func (m VersionMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIF
 		}
 
 		if m.dockerVersion == "" {
-			v, err := m.ServerVersion(ctx)
+			v, err := m.ServerVersion(r.Context())
 			if err == nil {
 				m.dockerVersion = v.Version
 			}
@@ -65,7 +65,7 @@ func (m VersionMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIF
 		}
 
 		w.Header().Set("Server", header)
-		ctx = context.WithValue(ctx, httputils.APIVersionKey, apiVersion)
-		return handler(ctx, w, r, vars)
+		ctx := context.WithValue(r.Context(), httputils.APIVersionKey, apiVersion)
+		return handler(w, r.WithContext(ctx), vars)
 	}
 }

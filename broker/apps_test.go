@@ -1,12 +1,13 @@
 package broker_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudway/platform/auth/userdb"
 	"github.com/cloudway/platform/container"
-	"golang.org/x/net/context"
 )
 
 var _ = Describe("Applications", func() {

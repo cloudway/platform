@@ -1,9 +1,9 @@
 package client
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
-	"golang.org/x/net/context"
 )
 
 func (api *APIClient) Authenticate(ctx context.Context, username, password string) (token string, err error) {

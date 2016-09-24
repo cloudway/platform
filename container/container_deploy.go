@@ -3,6 +3,7 @@ package container
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"golang.org/x/net/context"
 	"gopkg.in/yaml.v2"
 
 	"github.com/cloudway/platform/hub"
