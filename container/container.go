@@ -45,6 +45,9 @@ type Engine interface {
 
 	// DeployRepo deploy repository to containers.
 	DeployRepo(ctx context.Context, name, namespace string, in io.Reader, log *serverlog.ServerLog) error
+
+	// ExecResize is a utility function to resize a container ttys.
+	ExecResize(ctx context.Context, execID string, size TtySize) error
 }
 
 // Container is an abstract interface to the underlying container.
@@ -79,6 +82,9 @@ type Container interface {
 	// contents as the standard output of the command, with any trailing
 	// newlines deleted.
 	Subst(ctx context.Context, user string, in io.Reader, cmd ...string) (string, error)
+
+	// Run interactive command in a container.
+	Run(ctx context.Context, cmd *RunCmd) (err error)
 
 	// Processes returns running processes in the container.
 	Processes(ctx context.Context) (*ProcessList, error)
@@ -171,6 +177,31 @@ type CreateOptions struct {
 type ProcessList struct {
 	Processes [][]string
 	Headers   []string
+}
+
+type Copier func(w io.Writer, r io.Reader) (written int64, err error)
+
+type RunCmd struct {
+	Cmd    []string
+	Stdin  io.Reader
+	Stdout io.Writer
+	Size   *TtySize
+
+	ExecID   string
+	ExitCode int
+
+	CopyInput  Copier
+	CopyOutput Copier
+
+	BeforeStart func(cmd *RunCmd) error
+	OnExit      func(cmd *RunCmd)
+}
+
+// TtySize holds parameters to resize a tty. It can be used to
+// resize container ttys and exec process ttys too.
+type TtySize struct {
+	Height int
+	Width  int
 }
 
 // StatusError reports an unsuccessful exit by a command

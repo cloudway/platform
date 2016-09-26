@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -17,14 +16,10 @@ import (
 
 	conf "github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/container"
-	"github.com/cloudway/platform/container/docker"
 	"github.com/cloudway/platform/scm"
-	"github.com/docker/engine-api/types"
 )
 
 func Serve(engine container.Engine, addr string) error {
-	cli := engine.(docker.DockerEngine)
-
 	scm, err := scm.New()
 	if err != nil {
 		return err
@@ -32,7 +27,7 @@ func Serve(engine container.Engine, addr string) error {
 
 	config := &ssh.ServerConfig{
 		PublicKeyCallback: func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-			return nil, checkPublicKey(cli, scm, c.User(), key)
+			return nil, checkPublicKey(engine, scm, c.User(), key)
 		},
 	}
 
@@ -81,23 +76,23 @@ func Serve(engine container.Engine, addr string) error {
 		// discard all global out-of-band requests
 		go ssh.DiscardRequests(reqs)
 		// accept all channels
-		go handleChannels(cli, sshConn, chans)
+		go handleChannels(engine, sshConn, chans)
 	}
 }
 
-func findContainer(cli docker.DockerEngine, userInfo string) (container.Container, error) {
+func findContainer(engine container.Engine, userInfo string) (container.Container, error) {
 	ctx := context.Background()
 
 	service, name, namespace := container.SplitNames(userInfo)
 	if name == "" || namespace == "" {
-		return cli.Inspect(ctx, userInfo)
+		return engine.Inspect(ctx, userInfo)
 	}
 
 	var cs []container.Container
 	if service == "" || service == "*" {
-		cs, _ = cli.FindApplications(ctx, name, namespace)
+		cs, _ = engine.FindApplications(ctx, name, namespace)
 	} else {
-		cs, _ = cli.FindService(ctx, name, namespace, service)
+		cs, _ = engine.FindService(ctx, name, namespace, service)
 	}
 
 	if len(cs) == 0 {
@@ -107,8 +102,8 @@ func findContainer(cli docker.DockerEngine, userInfo string) (container.Containe
 	}
 }
 
-func checkPublicKey(cli docker.DockerEngine, scm scm.SCM, userInfo string, key ssh.PublicKey) error {
-	c, err := findContainer(cli, userInfo)
+func checkPublicKey(engine container.Engine, scm scm.SCM, userInfo string, key ssh.PublicKey) error {
+	c, err := findContainer(engine, userInfo)
 	if err != nil {
 		return err
 	}
@@ -129,9 +124,9 @@ func checkPublicKey(cli docker.DockerEngine, scm scm.SCM, userInfo string, key s
 	return errors.New("Permission denied")
 }
 
-func handleChannels(cli docker.DockerEngine, conn *ssh.ServerConn, chans <-chan ssh.NewChannel) {
+func handleChannels(engine container.Engine, conn *ssh.ServerConn, chans <-chan ssh.NewChannel) {
 	// use the user name to coordinate the container
-	container, err := findContainer(cli, conn.User())
+	container, err := findContainer(engine, conn.User())
 	if err != nil {
 		logrus.WithError(err).Errorf("Cannot find the container %q", conn.User())
 		conn.Close()
@@ -140,13 +135,13 @@ func handleChannels(cli docker.DockerEngine, conn *ssh.ServerConn, chans <-chan 
 
 	// service the incoming Channel in goroutine
 	for newChannel := range chans {
-		go handleChannel(newChannel, cli, container)
+		go handleChannel(newChannel, container)
 	}
 
 	logrus.Debug("Channel closed")
 }
 
-func handleChannel(newChannel ssh.NewChannel, cli docker.DockerEngine, container container.Container) {
+func handleChannel(newChannel ssh.NewChannel, c container.Container) {
 	if newChannel.ChannelType() != "session" {
 		newChannel.Reject(ssh.Prohibited, "")
 		return
@@ -176,19 +171,19 @@ func handleChannel(newChannel ssh.NewChannel, cli docker.DockerEngine, container
 				// a pty ready for input
 				req.Reply(true, nil)
 			case "shell":
-				execId, err = execShell(channel, cli, container, pty)
+				execId, err = execShell(channel, c, pty)
 				req.Reply(err == nil, nil)
 			case "exec":
 				if cmd, _, ok := decodeString(req.Payload); ok {
-					go execCmd(channel, container, string(cmd))
+					go execCmd(channel, c, string(cmd))
 				} else {
 					req.Reply(false, nil)
 				}
 			case "window-change":
 				if execId != "" {
 					if dims := decodeWindowChange(req.Payload); dims != nil {
-						resize := types.ResizeOptions{Width: int(dims.Width), Height: int(dims.Height)}
-						cli.ContainerExecResize(context.Background(), execId, resize)
+						resize := container.TtySize{Width: int(dims.Width), Height: int(dims.Height)}
+						c.ExecResize(context.Background(), execId, resize)
 					}
 				}
 			default:
@@ -198,69 +193,35 @@ func handleChannel(newChannel ssh.NewChannel, cli docker.DockerEngine, container
 	}()
 }
 
-func execShell(channel ssh.Channel, cli docker.DockerEngine, c container.Container, pty *pty_req) (execId string, err error) {
+func execShell(channel ssh.Channel, c container.Container, pty *pty_req) (execId string, err error) {
 	// construct command to run in sandbox, passing TERM environment variable
-	cmd := []string{"/usr/bin/cwctl", "sh"}
+	command := []string{"/usr/bin/cwctl", "sh"}
 	if pty != nil {
-		cmd = append(cmd, "-e", "TERM="+pty.Term)
+		command = append(command, "-e", "TERM="+pty.Term)
 	}
-	cmd = append(cmd, "cwsh")
+	command = append(command, "cwsh")
 
-	execConfig := types.ExecConfig{
-		Tty:          true,
-		AttachStdin:  true,
-		AttachStdout: true,
-		AttachStderr: true,
-		Cmd:          cmd,
-	}
-
-	ctx := context.Background()
-
-	execResp, err := cli.ContainerExecCreate(ctx, c.ID(), execConfig)
-	if err != nil {
-		return
-	}
-	execId = execResp.ID
-
-	resp, err := cli.ContainerExecAttach(ctx, execId, execConfig)
-	if err != nil {
-		return
+	cmd := &container.RunCmd{
+		Cmd:    command,
+		Stdin:  channel,
+		Stdout: channel,
 	}
 
 	if pty != nil {
-		resize := types.ResizeOptions{Width: int(pty.Width), Height: int(pty.Height)}
-		cli.ContainerExecResize(ctx, execId, resize)
-	}
-
-	go func() {
-		defer channel.Close()
-		defer resp.Close()
-
-		// pipe session to container and vice-versa
-		go func() {
-			io.Copy(resp.Conn, channel)
-			resp.CloseWrite()
-			logrus.Debug("[hijack] End of stdin")
-		}()
-
-		io.Copy(channel, resp.Reader)
-		logrus.Debug("[hijack] End of stdout")
-
-		// send exit code to ssh client
-		exitCode := 0
-		inspectResp, err := cli.ContainerExecInspect(ctx, execId)
-		if err != nil {
-			logrus.WithError(err).Error("Could not inspect exec")
-			exitCode = 127
-		} else {
-			exitCode = inspectResp.ExitCode
+		cmd.Size = &container.TtySize{
+			Width:  int(pty.Width),
+			Height: int(pty.Height),
 		}
+	}
 
-		sendExitStatus(channel, exitCode)
+	cmd.OnExit = func(cmd *container.RunCmd) {
+		sendExitStatus(channel, cmd.ExitCode)
+		channel.Close()
 		logrus.Debug("Session closed")
-	}()
+	}
 
-	return
+	err = c.Run(context.Background(), cmd)
+	return cmd.ExecID, err
 }
 
 func execCmd(channel ssh.Channel, c container.Container, args string) {

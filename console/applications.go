@@ -15,7 +15,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/docker/engine-api/types"
 	"github.com/gorilla/mux"
 	"golang.org/x/net/websocket"
 	"gopkg.in/authboss.v0"
@@ -25,7 +24,6 @@ import (
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/container"
-	"github.com/cloudway/platform/container/docker"
 	"github.com/cloudway/platform/pkg/manifest"
 	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
@@ -678,7 +676,7 @@ func (con *Console) shellOpen(w http.ResponseWriter, r *http.Request) {
 	data := con.layoutUserData(w, r, user)
 	data.MergeKV("ws", con.wsURL()+"/shell/"+id+"/session")
 	data.MergeKV("id", id)
-	data.MergeKV("name", container.Name)
+	data.MergeKV("name", container.Name())
 	data.MergeKV("service", container.ServiceName())
 	con.mustRender(w, r, "shell", data)
 }
@@ -690,70 +688,64 @@ func (con *Console) shellSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := mux.Vars(r)["id"]
-	container, err := con.Inspect(context.Background(), id)
-	if err != nil || container.Namespace() != user.Namespace {
+	c, err := con.Inspect(context.Background(), id)
+	if err != nil || c.Namespace() != user.Namespace {
 		http.Redirect(w, r, "/applications", http.StatusNotFound)
 		return
 	}
 
 	h := func(conn *websocket.Conn) {
-		cli := con.Engine.(docker.DockerEngine)
-		ctx := context.Background()
-		cmd := []string{"/usr/bin/cwctl", "sh", "-e", "TERM=xterm-256color", "cwsh"}
-		execConfig := types.ExecConfig{
-			Tty:          true,
-			AttachStdin:  true,
-			AttachStdout: true,
-			AttachStderr: true,
-			Cmd:          cmd,
+		cmd := &container.RunCmd{
+			Cmd:    []string{"/usr/bin/cwctl", "sh", "-e", "TERM=xterm-256color", "cwsh"},
+			Stdin:  conn,
+			Stdout: conn,
 		}
 
-		execResp, err := cli.ContainerExecCreate(ctx, container.ID(), execConfig)
-		if err != nil {
-			return
+		// receive terminal size and send exec ID
+		cmd.BeforeStart = func(cmd *container.RunCmd) (err error) {
+			if err = json.NewDecoder(conn).Decode(&cmd.Size); err != nil {
+				return err
+			}
+			if err = json.NewEncoder(conn).Encode(map[string]string{"Id": cmd.ExecID}); err != nil {
+				return err
+			}
+			return nil
 		}
-		execId := execResp.ID
 
-		resp, err := cli.ContainerExecAttach(ctx, execId, execConfig)
-		if err != nil {
-			return
-		}
-		defer resp.Close()
-
-		// receive terminal size and send exec id
-		var resize types.ResizeOptions
-		if json.NewDecoder(conn).Decode(&resize) != nil {
-			return
-		}
-		if json.NewEncoder(conn).Encode(&execResp) != nil {
-			return
-		}
-		cli.ContainerExecResize(ctx, execId, resize)
-
-		// Pipe session to container and vice-versa
-		go func() {
-			io.Copy(resp.Conn, conn)
-			resp.CloseWrite()
-		}()
-
-		var buf [4096]byte
-		for {
-			nr, er := resp.Reader.Read(buf[:])
-			if nr > 0 {
-				if utf8.Valid(buf[:nr]) {
-					if _, ew := conn.Write(buf[:nr]); ew != nil {
-						break
+		cmd.CopyOutput = func(w io.Writer, r io.Reader) (written int64, err error) {
+			var buf [4096]byte
+			for {
+				nr, er := r.Read(buf[:])
+				if nr > 0 {
+					if utf8.Valid(buf[:nr]) {
+						if _, ew := w.Write(buf[:nr]); ew != nil {
+							err = ew
+							break
+						}
+					} else {
+						if ew := writeUTF8(w, buf[:nr]); ew != nil {
+							err = ew
+							break
+						}
 					}
-				} else {
-					if ew := writeUTF8(conn, buf[:nr]); ew != nil {
-						break
-					}
+					written += int64(nr)
+				}
+				if er != nil {
+					err = er
+					break
 				}
 			}
-			if er != nil {
-				break
-			}
+			return
 		}
+
+		done := make(chan struct{})
+		cmd.OnExit = func(cmd *container.RunCmd) {
+			close(done)
+		}
+		if c.Run(context.Background(), cmd) == nil {
+			<-done
+		}
+		logrus.Debug("session closed")
 	}
 
 	srv := websocket.Server{Handler: h}
@@ -800,8 +792,7 @@ func (con *Console) shellResize(w http.ResponseWriter, r *http.Request) {
 	cols, _ := strconv.Atoi(r.PostForm.Get("cols"))
 	rows, _ := strconv.Atoi(r.PostForm.Get("rows"))
 	if cols > 0 && rows > 0 {
-		cli := con.Engine.(docker.DockerEngine)
-		resize := types.ResizeOptions{Width: cols, Height: rows}
-		cli.ContainerExecResize(context.Background(), id, resize)
+		size := container.TtySize{Width: cols, Height: rows}
+		con.ExecResize(context.Background(), id, size)
 	}
 }
