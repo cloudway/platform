@@ -21,5 +21,5 @@ func (cli *CWMan) CmdUpdateProxy(args ...string) (err error) {
 		time.Sleep(time.Second * 5)
 	}
 
-	return proxy.RunUpdater(cli.DockerClient, prx)
+	return proxy.RunUpdater(cli.Engine, prx)
 }

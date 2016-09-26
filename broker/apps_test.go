@@ -38,8 +38,8 @@ var _ = Describe("Applications", func() {
 
 			Expect(containers).To(HaveLen(2))
 			for _, c := range containers {
-				Expect(c.Name).To(Equal("test"))
-				Expect(c.Namespace).To(Equal(NAMESPACE))
+				Expect(c.Name()).To(Equal("test"))
+				Expect(c.Namespace()).To(Equal(NAMESPACE))
 				if c.Category().IsFramework() {
 					Expect(c.PluginTag()).To(HavePrefix("mock:"))
 				} else {

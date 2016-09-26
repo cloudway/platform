@@ -1,4 +1,4 @@
-package container_test
+package docker_test
 
 import (
 	"context"
@@ -17,7 +17,7 @@ var _ = Describe("Create Container", func() {
 		ctx        = context.Background()
 		plugin     *manifest.Plugin
 		options    container.CreateOptions
-		containers []*container.Container
+		containers []container.Container
 		err        error
 	)
 

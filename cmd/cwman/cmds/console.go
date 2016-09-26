@@ -18,7 +18,7 @@ func (cli *CWMan) CmdConsole(args ...string) (err error) {
 	stopc := make(chan struct{})
 	defer close(stopc)
 
-	br, err := broker.New(cli.DockerClient)
+	br, err := broker.New(cli.Engine)
 	if err != nil {
 		return err
 	}

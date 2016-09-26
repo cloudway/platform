@@ -8,7 +8,7 @@ import (
 
 	"github.com/cloudway/platform/cmd/cwman/cmds"
 	"github.com/cloudway/platform/config"
-	"github.com/cloudway/platform/container"
+	"github.com/cloudway/platform/container/docker"
 	flag "github.com/cloudway/platform/pkg/mflag"
 )
 
@@ -55,13 +55,13 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	docker, err := container.NewEnvClient()
+	engine, err := docker.NewEngine()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	c := cmds.Init(docker)
+	c := cmds.Init(engine)
 	if err := c.Run(flag.Args()...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

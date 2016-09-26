@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/cloudway/platform/config"
+	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/rest"
 	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
@@ -248,7 +249,7 @@ func (cli *bitbucketClient) PopulateURL(namespace, name, remote string) error {
 	return checkNamespaceError(namespace, resp, err)
 }
 
-func (cli *bitbucketClient) Deploy(namespace, name string, branch string, log *serverlog.ServerLog) error {
+func (cli *bitbucketClient) Deploy(_ container.Engine, namespace, name string, branch string, log *serverlog.ServerLog) error {
 	if log == nil {
 		log = serverlog.Discard
 	}

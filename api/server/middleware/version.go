@@ -53,7 +53,7 @@ func (m VersionMiddleware) WrapHandler(handler httputils.APIFunc) httputils.APIF
 		if m.dockerVersion == "" {
 			v, err := m.ServerVersion(r.Context())
 			if err == nil {
-				m.dockerVersion = v.Version
+				m.dockerVersion = v
 			}
 		}
 

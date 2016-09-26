@@ -18,6 +18,7 @@ import (
 )
 
 type containerStats struct {
+	c container.Container
 	types.ContainerStats
 	mu  sync.RWMutex
 	err error
@@ -28,9 +29,10 @@ type stats struct {
 	cs []*containerStats
 }
 
-func (br *UserBroker) newContainerStats(c *container.Container) *containerStats {
+func (br *UserBroker) newContainerStats(c container.Container) *containerStats {
 	s := &containerStats{}
-	s.ID = c.ID
+	s.c = c
+	s.ID = c.ID()
 	if c.ServiceName() != "" {
 		s.Name = c.ServiceName()
 	} else {
@@ -40,8 +42,8 @@ func (br *UserBroker) newContainerStats(c *container.Container) *containerStats 
 	return s
 }
 
-func (s *containerStats) Collect(cli container.DockerClient, ctx context.Context, stopChan chan struct{}, stream bool) {
-	resp, err := cli.ContainerStats(ctx, s.ID, stream)
+func (s *containerStats) Collect(ctx context.Context, stopChan chan struct{}, stream bool) {
+	resp, err := s.c.Stats(ctx, stream)
 	if err != nil {
 		s.mu.Lock()
 		s.err = err
@@ -201,7 +203,7 @@ func (br *UserBroker) Stats(name string, w io.Writer) error {
 	for _, c := range cs {
 		s := br.newContainerStats(c)
 		cStats.cs = append(cStats.cs, s)
-		go s.Collect(br.DockerClient, br.ctx, stopChan, true)
+		go s.Collect(br.ctx, stopChan, true)
 	}
 
 	var errs []string

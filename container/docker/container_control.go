@@ -1,4 +1,4 @@
-package container
+package docker
 
 import (
 	"archive/tar"
@@ -14,8 +14,8 @@ import (
 var waitTimeout = time.Second * 60
 
 // Start the application container.
-func (c *Container) Start(ctx context.Context, log *serverlog.ServerLog) error {
-	err := c.ContainerStart(ctx, c.ID, types.ContainerStartOptions{})
+func (c *dockerContainer) Start(ctx context.Context, log *serverlog.ServerLog) error {
+	err := c.ContainerStart(ctx, c.ID(), types.ContainerStartOptions{})
 	if err != nil {
 		return err
 	}
@@ -23,8 +23,8 @@ func (c *Container) Start(ctx context.Context, log *serverlog.ServerLog) error {
 }
 
 // Restart the application container.
-func (c *Container) Restart(ctx context.Context, log *serverlog.ServerLog) error {
-	err := c.ContainerRestart(ctx, c.ID, &waitTimeout)
+func (c *dockerContainer) Restart(ctx context.Context, log *serverlog.ServerLog) error {
+	err := c.ContainerRestart(ctx, c.ID(), &waitTimeout)
 	if err != nil {
 		return err
 	}
@@ -32,11 +32,11 @@ func (c *Container) Restart(ctx context.Context, log *serverlog.ServerLog) error
 }
 
 // Stop the application container.
-func (c *Container) Stop(ctx context.Context) error {
-	return c.ContainerStop(ctx, c.ID, &waitTimeout)
+func (c *dockerContainer) Stop(ctx context.Context) error {
+	return c.ContainerStop(ctx, c.ID(), &waitTimeout)
 }
 
-func startSandbox(ctx context.Context, c *Container, log *serverlog.ServerLog) error {
+func startSandbox(ctx context.Context, c *dockerContainer, log *serverlog.ServerLog) error {
 	err := c.Exec(ctx, "", nil, log.Stdout(), log.Stderr(), "/usr/bin/cwctl", "start")
 	if err != nil {
 		return err
@@ -50,7 +50,7 @@ func startSandbox(ctx context.Context, c *Container, log *serverlog.ServerLog) e
 	return distributeEnv(ctx, c, info.Env)
 }
 
-func distributeEnv(ctx context.Context, c *Container, env map[string]string) error {
+func distributeEnv(ctx context.Context, c *dockerContainer, env map[string]string) error {
 	if !c.Category().IsService() || len(env) == 0 {
 		return nil
 	}
@@ -59,15 +59,14 @@ func distributeEnv(ctx context.Context, c *Container, env map[string]string) err
 	envfile := createEnvFile(env)
 
 	// Write environments to all containers in the application
-	cs, err := c.FindAll(ctx, c.Name, c.Namespace)
+	cs, err := c.FindAll(ctx, c.Name(), c.Namespace())
 	if err != nil {
 		return err
 	}
 
-	opt := types.CopyToContainerOptions{}
 	for _, cc := range cs {
-		if cc.ID != c.ID {
-			err := cc.CopyToContainer(ctx, cc.ID, cc.EnvDir(), bytes.NewReader(envfile), opt)
+		if cc.ID() != c.ID() {
+			err := cc.CopyTo(ctx, cc.EnvDir(), bytes.NewReader(envfile))
 			if err != nil {
 				logrus.Error(err)
 			}

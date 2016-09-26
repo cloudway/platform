@@ -38,7 +38,7 @@ func (br *UserBroker) GetApplications() (apps map[string]*userdb.Application, er
 	return br.User.Basic().Applications, nil
 }
 
-func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []string) (app *userdb.Application, containers []*container.Container, err error) {
+func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []string) (app *userdb.Application, containers []container.Container, err error) {
 	if err = br.Refresh(); err != nil {
 		return
 	}
@@ -153,7 +153,7 @@ func (br *UserBroker) CreateApplication(opts container.CreateOptions, tags []str
 	if err = populateRepo(br.SCM, &opts, framework); err != nil {
 		return
 	}
-	if err = deployRepo(br.SCM, &opts, containers); err != nil {
+	if err = br.Deploy(opts.Name, opts.Namespace, "", opts.Log); err != nil {
 		return
 	}
 
@@ -211,8 +211,8 @@ func populateFromTemplate(scm scm.SCM, opts *container.CreateOptions, template s
 	return err
 }
 
-func deployRepo(scm scm.SCM, opts *container.CreateOptions, containers []*container.Container) error {
-	return scm.Deploy(opts.Namespace, opts.Name, "", opts.Log)
+func (br *Broker) Deploy(name, namespace, branch string, log *serverlog.ServerLog) error {
+	return br.SCM.Deploy(br.Engine, namespace, name, branch, log)
 }
 
 func generateSharedSecret() (string, error) {
@@ -224,7 +224,7 @@ func generateSharedSecret() (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string) (containers []*container.Container, err error) {
+func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string) (containers []container.Container, err error) {
 	if err = br.Refresh(); err != nil {
 		return nil, err
 	}
@@ -266,11 +266,11 @@ func (br *UserBroker) CreateServices(opts container.CreateOptions, tags []string
 	return containers, err
 }
 
-func (br *UserBroker) createContainers(opts container.CreateOptions, serviceNames []string, plugins []*manifest.Plugin) (containers []*container.Container, err error) {
+func (br *UserBroker) createContainers(opts container.CreateOptions, serviceNames []string, plugins []*manifest.Plugin) (containers []container.Container, err error) {
 	for i, plugin := range plugins {
 		opts.Plugin = plugin
 		opts.ServiceName = serviceNames[i]
-		var cs []*container.Container
+		var cs []container.Container
 		cs, err = br.Create(br.ctx, opts)
 		containers = append(containers, cs...)
 		if err != nil {
@@ -295,7 +295,7 @@ func (br *UserBroker) RemoveApplication(name string) (err error) {
 	var errors errors.Errors
 
 	// remove application containers
-	var containers []*container.Container
+	var containers []container.Container
 	containers, err = br.FindAll(br.ctx, name, user.Namespace)
 	if err != nil {
 		errors.Add(err)
@@ -328,7 +328,7 @@ func (br *UserBroker) RemoveService(name, service string) (err error) {
 	}
 
 	var errors errors.Errors
-	var containers []*container.Container
+	var containers []container.Container
 
 	containers, err = br.FindService(br.ctx, name, user.Namespace, service)
 	if err != nil {
@@ -365,7 +365,7 @@ func (e ScalingError) HTTPErrorStatusCode() int {
 }
 
 // Scale application by adding or removing containers in the application.
-func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Container, error) {
+func (br *UserBroker) ScaleApplication(name string, num int) ([]container.Container, error) {
 	if num <= 0 || num > 10 {
 		return nil, ScalingError(num)
 	}
@@ -397,15 +397,15 @@ func (br *UserBroker) ScaleApplication(name string, num int) ([]*container.Conta
 	}
 }
 
-func (br *UserBroker) scaleUp(replica *container.Container, num int, secret string, hosts []string) (containers []*container.Container, err error) {
+func (br *UserBroker) scaleUp(replica container.Container, num int, secret string, hosts []string) (containers []container.Container, err error) {
 	meta, err := br.Hub.GetPluginInfo(replica.PluginTag())
 	if err != nil {
 		return
 	}
 
 	opts := container.CreateOptions{
-		Name:      replica.Name,
-		Namespace: replica.Namespace,
+		Name:      replica.Name(),
+		Namespace: replica.Namespace(),
 		Hosts:     hosts,
 		Plugin:    meta,
 		Home:      replica.Home(),
@@ -419,7 +419,7 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int, secret stri
 		return
 	}
 
-	repo, _, err := replica.CopyFromContainer(br.ctx, replica.ID, replica.RepoDir()+"/.")
+	repo, err := replica.CopyFrom(br.ctx, replica.RepoDir()+"/.")
 	if err != nil {
 		return
 	}
@@ -429,7 +429,7 @@ func (br *UserBroker) scaleUp(replica *container.Container, num int, secret stri
 	return
 }
 
-func (br *UserBroker) scaleDown(containers []*container.Container, num int) error {
+func (br *UserBroker) scaleDown(containers []container.Container, num int) error {
 	for i := 0; i < num; i++ {
 		if err := containers[i].Destroy(br.ctx); err != nil {
 			return err
@@ -515,18 +515,18 @@ func (br *UserBroker) RemoveHost(name, host string) error {
 }
 
 func (br *UserBroker) StartApplication(name string, log *serverlog.ServerLog) error {
-	return br.startApplication(name, func(c *container.Container) error {
+	return br.startApplication(name, func(c container.Container) error {
 		return c.Start(br.ctx, log)
 	})
 }
 
 func (br *UserBroker) RestartApplication(name string, log *serverlog.ServerLog) error {
-	return br.startApplication(name, func(c *container.Container) error {
+	return br.startApplication(name, func(c container.Container) error {
 		return c.Restart(br.ctx, log)
 	})
 }
 
-func (br *UserBroker) startApplication(name string, fn func(*container.Container) error) error {
+func (br *UserBroker) startApplication(name string, fn func(container.Container) error) error {
 	containers, err := br.FindAll(br.ctx, name, br.Namespace())
 	if err != nil {
 		return err
@@ -545,16 +545,16 @@ func (br *UserBroker) StopApplication(name string) error {
 	if len(containers) == 0 {
 		return ApplicationNotFoundError(name)
 	}
-	return runParallel(err, containers, func(c *container.Container) error { return c.Stop(br.ctx) })
+	return runParallel(err, containers, func(c container.Container) error { return c.Stop(br.ctx) })
 }
 
-func (br *UserBroker) StartContainers(containers []*container.Container, log *serverlog.ServerLog) error {
-	return startContainers(containers, func(c *container.Container) error {
+func (br *UserBroker) StartContainers(containers []container.Container, log *serverlog.ServerLog) error {
+	return startContainers(containers, func(c container.Container) error {
 		return c.Start(br.ctx, log)
 	})
 }
 
-func startContainers(containers []*container.Container, fn func(*container.Container) error) error {
+func startContainers(containers []container.Container, fn func(container.Container) error) error {
 	err := container.ResolveServiceDependencies(containers)
 	if err != nil {
 		return err
@@ -568,12 +568,12 @@ func startContainers(containers []*container.Container, fn func(*container.Conta
 }
 
 type schedule struct {
-	parallel []*container.Container
-	serial   []*container.Container
-	final    []*container.Container
+	parallel []container.Container
+	serial   []container.Container
+	final    []container.Container
 }
 
-func makeSchedule(containers []*container.Container) *schedule {
+func makeSchedule(containers []container.Container) *schedule {
 	sch := &schedule{}
 	for _, c := range containers {
 		if c.Category().IsService() {
@@ -589,7 +589,7 @@ func makeSchedule(containers []*container.Container) *schedule {
 	return sch
 }
 
-func runParallel(err error, cs []*container.Container, fn func(*container.Container) error) error {
+func runParallel(err error, cs []container.Container, fn func(container.Container) error) error {
 	if err != nil {
 		return err
 	}
@@ -607,7 +607,7 @@ func runParallel(err error, cs []*container.Container, fn func(*container.Contai
 	var errLock sync.Mutex
 
 	for _, c := range cs {
-		go func(wg *sync.WaitGroup, c *container.Container) {
+		go func(wg *sync.WaitGroup, c container.Container) {
 			defer wg.Done()
 			if err := fn(c); err != nil {
 				errLock.Lock()
@@ -621,7 +621,7 @@ func runParallel(err error, cs []*container.Container, fn func(*container.Contai
 	return errors.Err()
 }
 
-func runSerial(err error, cs []*container.Container, fn func(*container.Container) error) error {
+func runSerial(err error, cs []container.Container, fn func(container.Container) error) error {
 	if err == nil {
 		for _, c := range cs {
 			if err = fn(c); err != nil {
@@ -642,8 +642,7 @@ func (br *UserBroker) Download(name string) (io.ReadCloser, error) {
 		return nil, ApplicationNotFoundError(name)
 	}
 	c := containers[0]
-	r, _, err := c.CopyFromContainer(br.ctx, c.ID, c.RepoDir()+"/.")
-	return r, err
+	return c.CopyFrom(br.ctx, c.RepoDir()+"/.")
 }
 
 // Upload application repository from a archive file.
@@ -756,7 +755,7 @@ func (br *UserBroker) Restore(name string, source io.Reader) error {
 	return nil
 }
 
-func saveSnapshot(ctx context.Context, c *container.Container, filename string) error {
+func saveSnapshot(ctx context.Context, c container.Container, filename string) error {
 	if _, err := os.Stat(filename); err == nil {
 		return nil // file exists, don't overwrite
 	}
@@ -769,7 +768,7 @@ func saveSnapshot(ctx context.Context, c *container.Container, filename string) 
 	return c.ExecE(ctx, "", nil, file, "cwctl", "dump")
 }
 
-func restoreSnapshot(ctx context.Context, c *container.Container, filename string) error {
+func restoreSnapshot(ctx context.Context, c container.Container, filename string) error {
 	file, err := os.Open(filename)
 	if err != nil {
 		return err

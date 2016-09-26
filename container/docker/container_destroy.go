@@ -1,4 +1,4 @@
-package container
+package docker
 
 import (
 	"context"
@@ -8,12 +8,12 @@ import (
 )
 
 // Destroy the application container.
-func (c *Container) Destroy(ctx context.Context) error {
+func (c *dockerContainer) Destroy(ctx context.Context) error {
 	image := c.Config.Image
 
 	// remove the container, force kill if it's running
 	options := types.ContainerRemoveOptions{Force: true, RemoveVolumes: true}
-	err := c.ContainerRemove(ctx, c.ID, options)
+	err := c.ContainerRemove(ctx, c.ID(), options)
 	if err != nil {
 		return err
 	}

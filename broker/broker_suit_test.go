@@ -9,7 +9,7 @@ import (
 
 	br "github.com/cloudway/platform/broker"
 	"github.com/cloudway/platform/config"
-	"github.com/cloudway/platform/container"
+	"github.com/cloudway/platform/container/docker"
 
 	_ "github.com/cloudway/platform/auth/userdb/mongodb"
 	_ "github.com/cloudway/platform/scm/mock"
@@ -31,7 +31,7 @@ const (
 var _ = BeforeSuite(func() {
 	var err error
 
-	dockerCli, err := container.NewEnvClient()
+	engine, err := docker.NewEngine()
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(config.Initialize()).To(Succeed())
@@ -39,7 +39,7 @@ var _ = BeforeSuite(func() {
 	config.Set("scm.url", "file://"+REPOROOT)
 	config.Set("userdb.url", "mongodb://127.0.0.1:27017/broker_test")
 
-	broker, err = br.New(dockerCli)
+	broker, err = br.New(engine)
 	Expect(err).NotTo(HaveOccurred())
 })
 

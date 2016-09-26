@@ -1,4 +1,4 @@
-package container
+package docker
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 )
 
 // Get application information from container.
-func (c *Container) GetInfo(ctx context.Context, options ...string) (*manifest.SandboxInfo, error) {
+func (c *dockerContainer) GetInfo(ctx context.Context, options ...string) (*manifest.SandboxInfo, error) {
 	var args = []string{"/usr/bin/cwctl", "info", "--ip", c.IP()}
 	for _, opt := range options {
 		args = append(args, "--"+opt)

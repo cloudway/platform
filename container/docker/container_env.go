@@ -1,4 +1,4 @@
-package container
+package docker
 
 import (
 	"archive/tar"
@@ -11,13 +11,12 @@ import (
 	"strings"
 
 	"github.com/cloudway/platform/pkg/manifest"
-	"github.com/docker/engine-api/types"
 )
 
 // Adds the variable to the environment with the value, if name does not
 // exists. If name does exist in the environment, then its value is changed
 // to value.
-func (c *Container) Setenv(ctx context.Context, name, value string) error {
+func (c *dockerContainer) Setenv(ctx context.Context, name, value string) error {
 	content := []byte(value)
 
 	// Make an archive containing the environmnet file
@@ -32,14 +31,14 @@ func (c *Container) Setenv(ctx context.Context, name, value string) error {
 	tw.Close()
 
 	// Copy the archive to the container at specified path
-	return c.CopyToContainer(ctx, c.ID, c.EnvDir(), buf, types.CopyToContainerOptions{})
+	return c.CopyTo(ctx, c.EnvDir(), buf)
 }
 
 // Get an environment variable value.
-func (c *Container) Getenv(ctx context.Context, name string) (string, error) {
+func (c *dockerContainer) Getenv(ctx context.Context, name string) (string, error) {
 	// Copy the archive from the container that contains the environment file
 	path := c.EnvDir() + "/" + name
-	r, _, err := c.CopyFromContainer(ctx, c.ID, path)
+	r, err := c.CopyFrom(ctx, path)
 	if err != nil {
 		return "", err
 	}
@@ -57,7 +56,7 @@ func (c *Container) Getenv(ctx context.Context, name string) (string, error) {
 	return strings.TrimRight(string(content), "\r\n"), nil
 }
 
-func (c *Container) ActiveState(ctx context.Context) manifest.ActiveState {
+func (c *dockerContainer) ActiveState(ctx context.Context) manifest.ActiveState {
 	// Get active state from running processes
 	if c.State.Running {
 		state, err := c.activeStateFromRunningProcess(ctx)
@@ -82,8 +81,8 @@ func (c *Container) ActiveState(ctx context.Context) manifest.ActiveState {
 
 var statePattern = regexp.MustCompile(`^/usr/bin/cwctl \[([0-9])\]`)
 
-func (c *Container) activeStateFromRunningProcess(ctx context.Context) (manifest.ActiveState, error) {
-	ps, err := c.ContainerTop(ctx, c.ID, []string{})
+func (c *dockerContainer) activeStateFromRunningProcess(ctx context.Context) (manifest.ActiveState, error) {
+	ps, err := c.ContainerTop(ctx, c.ID(), []string{})
 	if err != nil {
 		return manifest.StateUnknown, err
 	}

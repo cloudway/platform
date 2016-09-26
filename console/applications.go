@@ -25,6 +25,7 @@ import (
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/container"
+	"github.com/cloudway/platform/container/docker"
 	"github.com/cloudway/platform/pkg/manifest"
 	"github.com/cloudway/platform/pkg/serverlog"
 	"github.com/cloudway/platform/scm"
@@ -212,7 +213,7 @@ func (con *Console) createServices(w http.ResponseWriter, r *http.Request) {
 	}
 	br := con.NewUserBroker(user)
 
-	var cs []*container.Container
+	var cs []container.Container
 	opts, tags, err := con.parseServiceCreateOptions(r)
 	if err == nil {
 		cs, err = br.CreateServices(opts, tags)
@@ -252,7 +253,7 @@ func (con *Console) parseServiceCreateOptions(r *http.Request) (opts container.C
 	return
 }
 
-func startContainers(br *broker.UserBroker, containers []*container.Container) error {
+func startContainers(br *broker.UserBroker, containers []container.Container) error {
 	errChan := make(chan error, 1)
 	go func() {
 		errChan <- br.StartContainers(containers, nil)
@@ -343,7 +344,7 @@ func (con *Console) showApplication(w http.ResponseWriter, r *http.Request, user
 	)
 	for _, c := range cs {
 		service := serviceData{
-			ID:       c.ID,
+			ID:       c.ID(),
 			Name:     c.ServiceName(),
 			Category: c.Category(),
 			IP:       c.IP(),
@@ -552,7 +553,7 @@ func (con *Console) wsRestartApplication(w http.ResponseWriter, r *http.Request)
 				states := make([]state, len(cs))
 				for i, c := range cs {
 					state := c.ActiveState(ctx)
-					states[i].ID = c.ID
+					states[i].ID = c.ID()
 					states[i].State = state.String()
 					if !(state == manifest.StateRunning || state == manifest.StateFailed) {
 						started = false
@@ -591,7 +592,7 @@ func (con *Console) deployApplication(w http.ResponseWriter, r *http.Request) {
 	h := func(conn *websocket.Conn) {
 		jw := jsonWriter{enc: json.NewEncoder(conn)}
 		log := serverlog.Encap(jw, jw)
-		err := con.SCM.Deploy(user.Namespace, name, branch, log)
+		err := con.Deploy(name, user.Namespace, branch, log)
 		if err != nil {
 			data := map[string]string{"err": err.Error()}
 			json.NewEncoder(conn).Encode(data)
@@ -669,7 +670,7 @@ func (con *Console) shellOpen(w http.ResponseWriter, r *http.Request) {
 
 	id := mux.Vars(r)["id"]
 	container, err := con.Inspect(context.Background(), id)
-	if err != nil || container.Namespace != user.Namespace {
+	if err != nil || container.Namespace() != user.Namespace {
 		http.Redirect(w, r, "/applications", http.StatusNotFound)
 		return
 	}
@@ -690,12 +691,13 @@ func (con *Console) shellSession(w http.ResponseWriter, r *http.Request) {
 
 	id := mux.Vars(r)["id"]
 	container, err := con.Inspect(context.Background(), id)
-	if err != nil || container.Namespace != user.Namespace {
+	if err != nil || container.Namespace() != user.Namespace {
 		http.Redirect(w, r, "/applications", http.StatusNotFound)
 		return
 	}
 
 	h := func(conn *websocket.Conn) {
+		cli := con.Engine.(docker.DockerEngine)
 		ctx := context.Background()
 		cmd := []string{"/usr/bin/cwctl", "sh", "-e", "TERM=xterm-256color", "cwsh"}
 		execConfig := types.ExecConfig{
@@ -706,13 +708,13 @@ func (con *Console) shellSession(w http.ResponseWriter, r *http.Request) {
 			Cmd:          cmd,
 		}
 
-		execResp, err := container.ContainerExecCreate(ctx, container.ID, execConfig)
+		execResp, err := cli.ContainerExecCreate(ctx, container.ID(), execConfig)
 		if err != nil {
 			return
 		}
 		execId := execResp.ID
 
-		resp, err := container.ContainerExecAttach(ctx, execId, execConfig)
+		resp, err := cli.ContainerExecAttach(ctx, execId, execConfig)
 		if err != nil {
 			return
 		}
@@ -726,7 +728,7 @@ func (con *Console) shellSession(w http.ResponseWriter, r *http.Request) {
 		if json.NewEncoder(conn).Encode(&execResp) != nil {
 			return
 		}
-		container.ContainerExecResize(ctx, execId, resize)
+		cli.ContainerExecResize(ctx, execId, resize)
 
 		// Pipe session to container and vice-versa
 		go func() {
@@ -798,7 +800,8 @@ func (con *Console) shellResize(w http.ResponseWriter, r *http.Request) {
 	cols, _ := strconv.Atoi(r.PostForm.Get("cols"))
 	rows, _ := strconv.Atoi(r.PostForm.Get("rows"))
 	if cols > 0 && rows > 0 {
+		cli := con.Engine.(docker.DockerEngine)
 		resize := types.ResizeOptions{Width: cols, Height: rows}
-		con.ContainerExecResize(context.Background(), id, resize)
+		cli.ContainerExecResize(context.Background(), id, resize)
 	}
 }

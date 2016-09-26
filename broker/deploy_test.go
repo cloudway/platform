@@ -29,7 +29,7 @@ var _ = Describe("Deploy", func() {
 		tempdir  string
 		testfile string
 		checkdir string
-		app      *container.Container
+		app      container.Container
 
 		options container.CreateOptions
 		tags    []string
@@ -85,7 +85,7 @@ var _ = Describe("Deploy", func() {
 	}
 
 	var fetchFile = func(dir, filename string) (string, error) {
-		r, _, err := broker.CopyFromContainer(context.Background(), app.ID, dir+"/"+filename)
+		r, err := app.CopyFrom(context.Background(), dir+"/"+filename)
 		if err != nil {
 			return "", err
 		}
@@ -131,7 +131,7 @@ var _ = Describe("Deploy", func() {
 		}
 
 		var assertDeployment = func(branch, actual string) {
-			ExpectWithOffset(1, broker.SCM.Deploy(NAMESPACE, "test", branch, nil)).To(Succeed())
+			ExpectWithOffset(1, broker.Deploy("test", NAMESPACE, branch, nil)).To(Succeed())
 
 			ref, err := broker.SCM.GetDeploymentBranch(NAMESPACE, "test")
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -228,7 +228,7 @@ var _ = Describe("Deploy", func() {
 			Eventually(fetchCommittedFile, deployTimeout).Should(Equal("master"))
 
 			By("Switch deployment branch to develop")
-			Expect(broker.SCM.Deploy(NAMESPACE, "test", "develop", nil))
+			Expect(broker.Deploy("test", NAMESPACE, "develop", nil))
 			Eventually(fetchCommittedFile, deployTimeout).Should(Equal("develop"))
 
 			By("Switch local repository to develop branch")

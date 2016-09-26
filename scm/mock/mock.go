@@ -257,17 +257,12 @@ func (mock mockSCM) PopulateURL(namespace, name string, url string) error {
 	return repo.Run("push", "--mirror", repodir)
 }
 
-func (mock mockSCM) Deploy(namespace, name string, branch string, log *serverlog.ServerLog) (err error) {
+func (mock mockSCM) Deploy(engine container.Engine, namespace, name string, branch string, log *serverlog.ServerLog) (err error) {
 	if log == nil {
 		log = serverlog.Discard
 	}
 
 	empty, err := mock.isEmptyRepository(namespace, name)
-	if err != nil {
-		return err
-	}
-
-	cli, err := container.NewEnvClient()
 	if err != nil {
 		return err
 	}
@@ -312,7 +307,7 @@ func (mock mockSCM) Deploy(namespace, name string, branch string, log *serverlog
 		return err
 	}
 
-	return cli.DeployRepo(context.Background(), name, namespace, repofile, log)
+	return engine.DeployRepo(context.Background(), name, namespace, repofile, log)
 }
 
 const _DEFAULT_BRANCH = "refs/heads/master"

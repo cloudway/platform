@@ -9,5 +9,5 @@ func (cli *CWMan) CmdSshd(args ...string) error {
 	cmd.StringVar(&addr, []string{"-bind"}, "0.0.0.0:2200", "SSHD bind address")
 	cmd.ParseFlags(args, true)
 
-	return sshd.Serve(cli.DockerClient, addr)
+	return sshd.Serve(cli.Engine, addr)
 }

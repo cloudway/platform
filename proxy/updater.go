@@ -16,10 +16,12 @@ import (
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/container"
+	"github.com/cloudway/platform/container/docker"
 	"github.com/cloudway/platform/pkg/manifest"
 )
 
-func RunUpdater(cli container.DockerClient, proxy Proxy) error {
+func RunUpdater(engine container.Engine, proxy Proxy) error {
+	cli := engine.(docker.DockerEngine)
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 
@@ -79,7 +81,7 @@ func update(proxy Proxy) error {
 	return nil
 }
 
-func rebuild(cli container.DockerClient, proxy Proxy) error {
+func rebuild(cli docker.DockerEngine, proxy Proxy) error {
 	ctx := context.Background()
 
 	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
@@ -88,7 +90,7 @@ func rebuild(cli container.DockerClient, proxy Proxy) error {
 	}
 
 	for _, item := range containers {
-		if item.Labels[container.APP_NAME_KEY] != "" && item.Labels[container.APP_NAMESPACE_KEY] != "" {
+		if item.Labels[docker.APP_NAME_KEY] != "" && item.Labels[docker.APP_NAMESPACE_KEY] != "" {
 			c, err := cli.Inspect(ctx, item.ID)
 			if err == nil {
 				err = handleStart(proxy, ctx, c)
@@ -109,7 +111,7 @@ func rebuild(cli container.DockerClient, proxy Proxy) error {
 	return nil
 }
 
-func listen(cli container.DockerClient, proxy Proxy) error {
+func listen(cli docker.DockerEngine, proxy Proxy) error {
 	var ctx = context.Background()
 	var err error
 
@@ -138,8 +140,8 @@ func listen(cli container.DockerClient, proxy Proxy) error {
 
 		switch event.Action {
 		case "start":
-			_, ok1 := event.Actor.Attributes[container.APP_NAME_KEY]
-			_, ok2 := event.Actor.Attributes[container.APP_NAMESPACE_KEY]
+			_, ok1 := event.Actor.Attributes[docker.APP_NAME_KEY]
+			_, ok2 := event.Actor.Attributes[docker.APP_NAMESPACE_KEY]
 			if ok1 && ok2 {
 				logrus.Debugf("container started: %s", event.Actor.ID)
 				c, err := cli.Inspect(ctx, event.Actor.ID)
@@ -166,7 +168,7 @@ func listen(cli container.DockerClient, proxy Proxy) error {
 	return nil
 }
 
-func handleStart(proxy Proxy, ctx context.Context, c *container.Container) error {
+func handleStart(proxy Proxy, ctx context.Context, c container.Container) error {
 	// reterieve application info from container
 	info, err := c.GetInfo(ctx, "endpoints")
 	if err != nil {
@@ -174,7 +176,7 @@ func handleStart(proxy Proxy, ctx context.Context, c *container.Container) error
 	}
 
 	// add endpoints to the proxy server
-	if err = proxy.AddEndpoints(c.ID, info.Endpoints); err != nil {
+	if err = proxy.AddEndpoints(c.ID(), info.Endpoints); err != nil {
 		return err
 	}
 

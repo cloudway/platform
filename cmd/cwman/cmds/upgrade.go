@@ -14,7 +14,6 @@ import (
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/mflag"
 	"github.com/cloudway/platform/pkg/serverlog"
-	"github.com/docker/engine-api/types"
 )
 
 func (cli *CWMan) CmdUpgrade(args ...string) error {
@@ -37,14 +36,13 @@ func (cli *CWMan) CmdUpgrade(args ...string) error {
 	}
 
 	// group containers by applications
-	apps := make(map[string][]*container.Container)
+	apps := make(map[string][]container.Container)
 	for _, c := range containers {
-		key := c.Name + "-" + c.Namespace
+		key := c.Name() + "-" + c.Namespace()
 		apps[key] = append(apps[key], c)
 	}
 
 	// Stop applications, copy support files, and restart applications
-	cpopts := types.CopyToContainerOptions{}
 	for app, cs := range apps {
 		logrus.Infof("upgrading application %s", app)
 		logError(container.ResolveServiceDependencies(cs))
@@ -53,9 +51,9 @@ func (cli *CWMan) CmdUpgrade(args ...string) error {
 			if err != nil {
 				return err
 			}
-			logrus.Infof("upgrading container %s.%s-%s", c.ServiceName(), c.Name, c.Namespace)
+			logrus.Infof("upgrading container %s.%s-%s", c.ServiceName(), c.Name(), c.Namespace())
 			logError(c.Stop(ctx))
-			logError(c.CopyToContainer(ctx, c.ID, "/", file, cpopts))
+			logError(c.CopyTo(ctx, "/", file))
 			logError(c.Start(ctx, serverlog.Encap(os.Stdout, os.Stderr)))
 			file.Close()
 		}

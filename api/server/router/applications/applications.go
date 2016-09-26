@@ -359,7 +359,7 @@ func (ar *applicationsRouter) getStatus(ctx context.Context, name, namespace str
 			st.Ports = plugin.GetPrivatePorts()
 		}
 
-		started, err := time.Parse(time.RFC3339Nano, c.State.StartedAt)
+		started, err := time.Parse(time.RFC3339Nano, c.StartedAt())
 		if err == nil {
 			st.Uptime = int64(time.Now().UTC().Sub(started))
 		}
@@ -367,8 +367,8 @@ func (ar *applicationsRouter) getStatus(ctx context.Context, name, namespace str
 	return status, nil
 }
 
-func (ar *applicationsRouter) initContainerJSON(c *container.Container, data *types.ContainerJSONBase) *manifest.Plugin {
-	data.ID = c.ID
+func (ar *applicationsRouter) initContainerJSON(c container.Container, data *types.ContainerJSONBase) *manifest.Plugin {
+	data.ID = c.ID()
 	data.Category = c.Category()
 
 	tag := c.PluginTag()
@@ -411,11 +411,11 @@ func (ar *applicationsRouter) procs(w http.ResponseWriter, r *http.Request, vars
 
 	procs := make([]*types.ProcessList, 0, len(cs))
 	for _, c := range cs {
-		if top, err := c.ContainerTop(ctx, c.ID, nil); err == nil {
+		if ps, err := c.Processes(ctx); err == nil {
 			proc := &types.ProcessList{}
 			ar.initContainerJSON(c, &proc.ContainerJSONBase)
-			proc.Processes = top.Processes
-			proc.Headers = top.Titles
+			proc.Processes = ps.Processes
+			proc.Headers = ps.Headers
 			procs = append(procs, proc)
 		}
 	}
@@ -436,7 +436,7 @@ func (ar *applicationsRouter) deploy(w http.ResponseWriter, r *http.Request, var
 	user := httputils.UserFromContext(r.Context())
 	name, branch := vars["name"], r.FormValue("branch")
 
-	err := ar.SCM.Deploy(user.Namespace, name, branch, serverlog.New(w))
+	err := ar.Deploy(name, user.Namespace, branch, serverlog.New(w))
 	if err != nil {
 		serverlog.SendError(w, err)
 	}
@@ -577,7 +577,7 @@ func (ar *applicationsRouter) scale(w http.ResponseWriter, r *http.Request, vars
 	return nil
 }
 
-func (ar *applicationsRouter) getContainers(ctx context.Context, namespace string, vars map[string]string) (cs []*container.Container, err error) {
+func (ar *applicationsRouter) getContainers(ctx context.Context, namespace string, vars map[string]string) (cs []container.Container, err error) {
 	name, service := vars["name"], vars["service"]
 	if service == "" || service == "_" {
 		cs, err = ar.FindApplications(ctx, name, namespace)
@@ -593,7 +593,7 @@ func (ar *applicationsRouter) getContainers(ctx context.Context, namespace strin
 	return cs, err
 }
 
-func (ar *applicationsRouter) getContainer(ctx context.Context, namespace string, vars map[string]string) (*container.Container, error) {
+func (ar *applicationsRouter) getContainer(ctx context.Context, namespace string, vars map[string]string) (container.Container, error) {
 	cs, err := ar.getContainers(ctx, namespace, vars)
 	if err == nil {
 		return cs[0], nil

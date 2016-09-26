@@ -3,44 +3,195 @@ package container
 import (
 	"context"
 	"fmt"
+	"io"
 	"regexp"
-	"strconv"
 	"strings"
 
-	"github.com/docker/engine-api/types"
-	"github.com/docker/engine-api/types/filters"
-
-	"github.com/cloudway/platform/config"
-	"github.com/cloudway/platform/config/defaults"
 	"github.com/cloudway/platform/pkg/manifest"
+	"github.com/cloudway/platform/pkg/serverlog"
 )
 
-const (
-	APP_NAME_KEY        = "com.cloudway.app.name"
-	APP_NAMESPACE_KEY   = "com.cloudway.app.namespace"
-	APP_HOME_KEY        = "com.cloudway.app.home"
-	VERSION_KEY         = "com.cloudway.container.version"
-	CATEGORY_KEY        = "com.cloudway.container.category"
-	PLUGIN_KEY          = "com.cloudway.container.plugin"
-	FLAGS_KEY           = "com.cloudway.container.flags"
-	SERVICE_NAME_KEY    = "com.cloudway.service.name"
-	SERVICE_DEPENDS_KEY = "com.cloudway.service.depends"
-)
+// Engine is an abstract interface to the underlying containerization
+// infrastructure.
+type Engine interface {
+	// ServerVersion returns the engine server version.
+	ServerVersion(ctx context.Context) (string, error)
 
-const (
-	HotDeployable uint32 = 1 << iota
-)
+	// Create create a new application container.
+	Create(ctx context.Context, opts CreateOptions) ([]Container, error)
 
-type Container struct {
-	Name      string
-	Namespace string
+	// Inspect returns an application container constructed from the
+	// container id in the system.
+	Inspect(ctx context.Context, id string) (Container, error)
 
-	DockerClient
-	*types.ContainerJSON
+	// FindInNamespace finds all containers in the given namespace.
+	// If the namespace is an empty string, then returns all containers
+	// in the system.
+	FindInNamespace(ctx context.Context, namespace string) ([]Container, error)
+
+	// FindAll finds all containers with the given name and namespace.
+	FindAll(ctx context.Context, name, namespace string) ([]Container, error)
+
+	// FindApplications finds all application containers with the given name
+	// and namespace.
+	FindApplications(ctx context.Context, name, namespace string) ([]Container, error)
+
+	// FindService find a service container with the given name, namespace
+	// and service name.
+	FindService(ctx context.Context, name, namespace, service string) ([]Container, error)
+
+	// DistributeRepo distribute repository to containers.
+	DistributeRepo(ctx context.Context, containers []Container, repo io.Reader, zip bool) error
+
+	// DeployRepo deploy repository to containers.
+	DeployRepo(ctx context.Context, name, namespace string, in io.Reader, log *serverlog.ServerLog) error
+}
+
+// Container is an abstract interface to the underlying container.
+type Container interface {
+	Engine
+	Info
+
+	// Start the application container.
+	Start(ctx context.Context, log *serverlog.ServerLog) error
+
+	// Restart the application container.
+	Restart(ctx context.Context, log *serverlog.ServerLog) error
+
+	// Stop the application container.
+	Stop(ctx context.Context) error
+
+	// Destroy destroys the container.
+	Destroy(ctx context.Context) error
+
+	// Exec execute command in application container.
+	Exec(ctx context.Context, user string, stdin io.Reader, stdout, stderr io.Writer, cmd ...string) error
+
+	// ExecE execute the command and accumulate error messages from
+	// standard error of the command.
+	ExecE(ctx context.Context, user string, in io.Reader, out io.Writer, cmd ...string) error
+
+	// ExecQ silently execute the command and accumulate error messages
+	// from standard error of the command.
+	ExecQ(ctx context.Context, user string, cmd ...string) error
+
+	// Subst performs the expansion by executing command return the
+	// contents as the standard output of the command, with any trailing
+	// newlines deleted.
+	Subst(ctx context.Context, user string, in io.Reader, cmd ...string) (string, error)
+
+	// Processes returns running processes in the container.
+	Processes(ctx context.Context) (*ProcessList, error)
+
+	// Stats returns stream of statistics of a container.
+	//
+	// Note: The current API returns a stream of docker stats type encoded
+	// in JSON data. Other implementations must returns the same data type
+	// as defined by docker API.
+	Stats(ctx context.Context, stream bool) (io.ReadCloser, error)
+
+	// CopyTo copy files into container.
+	CopyTo(ctx context.Context, path string, content io.Reader) error
+
+	// CopyFrom copy files from container.
+	CopyFrom(ctx context.Context, path string) (io.ReadCloser, error)
+
+	// Deploy the application.
+	Deploy(ctx context.Context, path string) error
+
+	// GetInfo get application information from container.
+	GetInfo(ctx context.Context, options ...string) (*manifest.SandboxInfo, error)
+
+	// Setenv adds the variable to the environment with the value, if name
+	// does not exists. If name does exist in the environment, then its value
+	// is replaced by value.
+	Setenv(ctx context.Context, name, value string) error
+
+	// Getenv returns an environment variable value.
+	Getenv(ctx context.Context, name string) (string, error)
+
+	// ActiveState returns container active state.
+	ActiveState(ctx context.Context) manifest.ActiveState
+
+	// AddHost add more or more custom host to the container.
+	AddHost(ctx context.Context, host string, more ...string) error
+
+	// RemoveHost remove one or more custom host from the container.
+	RemoveHost(ctx context.Context, host string, more ...string) error
+
+	// GetHosts returns all custom host in the container.
+	GetHosts(ctx context.Context) []string
+}
+
+// Info contains container informations.
+type Info interface {
+	ID() string
+	Name() string
+	Namespace() string
+	Version() string
+	Category() manifest.Category
+	PluginTag() string
+	Flags() uint32
+	ServiceName() string
+	DependsOn() []string
+	Hostname() string
+	FQDN() string
+	IP() string
+	User() string
+	Home() string
+	EnvDir() string
+	RepoDir() string
+	DeployDir() string
+	DataDir() string
+	LogDir() string
+	StartedAt() string
+}
+
+// CreateOptions contains options when creating container.
+type CreateOptions struct {
+	Name        string
+	Namespace   string
+	ServiceName string
+	Plugin      *manifest.Plugin
+	Image       string
+	Flags       uint32
+	Secret      string
+	Home        string
+	User        string
+	Network     string
+	Capacity    string
+	Scaling     int
+	Hosts       []string
+	Env         map[string]string
+	Repo        string
+	Log         *serverlog.ServerLog
+}
+
+// ProcessList contains running process list in a container.
+type ProcessList struct {
+	Processes [][]string
+	Headers   []string
+}
+
+// StatusError reports an unsuccessful exit by a command
+type StatusError struct {
+	Command []string
+	Code    int
+	Message string
+}
+
+func (e StatusError) Error() string {
+	if e.Message != "" {
+		return e.Message
+	} else {
+		return fmt.Sprintf("exec command '%s' failed, Code: %d", strings.Join(e.Command, " "), e.Code)
+	}
 }
 
 var reNamePattern = regexp.MustCompile(`^((\*|[a-z][a-z_0-9]*)\.)?([a-z][a-z_0-9]*)-([a-z][a-z_0-9]*)$`)
 
+// SplitNames is a utility function that split a container specification
+// into name, namespace, and service name.
 func SplitNames(name string) (string, string, string) {
 	m := reNamePattern.FindStringSubmatch(name)
 	if len(m) != 0 {
@@ -48,203 +199,4 @@ func SplitNames(name string) (string, string, string) {
 	} else {
 		return "", "", ""
 	}
-}
-
-// Returns an application container object constructed from the
-// container id in the system.
-func (cli DockerClient) Inspect(ctx context.Context, id string) (*Container, error) {
-	info, err := cli.ContainerInspect(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	name := info.Config.Labels[APP_NAME_KEY]
-	namespace := info.Config.Labels[APP_NAMESPACE_KEY]
-	if name == "" || namespace == "" {
-		return nil, fmt.Errorf("%s: Not a cloudway application container", id)
-	}
-
-	return &Container{
-		Name:          name,
-		Namespace:     namespace,
-		DockerClient:  cli,
-		ContainerJSON: &info,
-	}, nil
-}
-
-// FindInNamespace finds all containers in the given namespace. If the namespace
-// is an empty string, then returns all containers in the system.
-func (cli DockerClient) FindInNamespace(ctx context.Context, namespace string) ([]*Container, error) {
-	return find(cli, ctx, "", "", "", namespace)
-}
-
-// Find all containers with the given name and namespace.
-func (cli DockerClient) FindAll(ctx context.Context, name, namespace string) ([]*Container, error) {
-	if name == "" || namespace == "" {
-		return nil, nil
-	}
-	cs, err := find(cli, ctx, "", "", name, namespace)
-	if err != nil {
-		return cs, err
-	}
-
-	// reorder the container list
-	var cs2, i = make([]*Container, len(cs)), 0
-	for _, c := range cs {
-		if c.Category().IsFramework() {
-			cs2[i] = c
-			i++
-		}
-	}
-	for _, c := range cs {
-		if !c.Category().IsFramework() {
-			cs2[i] = c
-			i++
-		}
-	}
-	return cs2, nil
-}
-
-// Find all application containers with the given name and namespace.
-func (cli DockerClient) FindApplications(ctx context.Context, name, namespace string) ([]*Container, error) {
-	if name == "" || namespace == "" {
-		return nil, nil
-	}
-	return find(cli, ctx, manifest.Framework, "", name, namespace)
-}
-
-// Find service container with the give name, namespace and service name.
-func (cli DockerClient) FindService(ctx context.Context, name, namespace, service string) ([]*Container, error) {
-	if name == "" || namespace == "" {
-		return nil, nil
-	}
-	return find(cli, ctx, manifest.Service, service, name, namespace)
-}
-
-func find(cli DockerClient, ctx context.Context, category manifest.Category, service, name, namespace string) ([]*Container, error) {
-	args := filters.NewArgs()
-	if category != "" {
-		args.Add("label", CATEGORY_KEY+"="+string(category))
-	}
-	if service != "" {
-		args.Add("label", SERVICE_NAME_KEY+"="+service)
-	}
-	if name != "" {
-		args.Add("label", APP_NAME_KEY+"="+name)
-	} else {
-		args.Add("label", APP_NAME_KEY)
-	}
-	if namespace != "" {
-		args.Add("label", APP_NAMESPACE_KEY+"="+namespace)
-	} else {
-		args.Add("label", APP_NAMESPACE_KEY)
-	}
-
-	options := types.ContainerListOptions{All: true, Filter: args}
-	list, err := cli.ContainerList(ctx, options)
-	if err != nil {
-		return nil, err
-	}
-
-	containers := make([]*Container, 0, len(list))
-	for _, c := range list {
-		cc, err := cli.Inspect(ctx, c.ID)
-		if err != nil {
-			return nil, err
-		}
-		containers = append(containers, cc)
-	}
-	return containers, nil
-}
-
-func (c *Container) Version() string {
-	return c.Config.Labels[VERSION_KEY]
-}
-
-func (c *Container) Category() manifest.Category {
-	return manifest.Category(c.Config.Labels[CATEGORY_KEY])
-}
-
-func (c *Container) PluginTag() string {
-	return c.Config.Labels[PLUGIN_KEY]
-}
-
-func (c *Container) Flags() uint32 {
-	flags, _ := strconv.ParseUint(c.Config.Labels[FLAGS_KEY], 10, 32)
-	return uint32(flags)
-}
-
-func (c *Container) ServiceName() string {
-	return c.Config.Labels[SERVICE_NAME_KEY]
-}
-
-func (c *Container) DependsOn() []string {
-	depends := c.Config.Labels[SERVICE_DEPENDS_KEY]
-	if depends != "" {
-		return strings.Split(depends, ",")
-	} else {
-		return nil
-	}
-}
-
-// Returns the host name of the container.
-func (c *Container) Hostname() string {
-	if c.Category().IsService() {
-		return c.ServiceName() + "." + c.Name + "-" + c.Namespace
-	} else {
-		return c.Name + "-" + c.Namespace
-	}
-}
-
-// Returns the fully qualified domain name of the container.
-func (c *Container) FQDN() string {
-	return c.Hostname() + "." + defaults.Domain()
-}
-
-// Returns the IP address of the container
-func (c *Container) IP() (ip string) {
-	if network := config.Get("network"); network != "" {
-		if net := c.NetworkSettings.Networks[network]; net != nil {
-			ip = net.IPAddress
-		}
-	}
-	if ip == "" {
-		ip = c.NetworkSettings.IPAddress
-	}
-	return ip
-}
-
-// Returns the container's operating system user that running the application.
-func (c *Container) User() string {
-	return c.Config.User
-}
-
-// Returns the application home directory within the container.
-func (c *Container) Home() string {
-	if home, ok := c.Config.Labels[APP_HOME_KEY]; ok {
-		return home
-	} else {
-		return defaults.AppHome()
-	}
-}
-
-// Returns the env directory of the container.
-func (c *Container) EnvDir() string {
-	return c.Home() + "/.env"
-}
-
-func (c *Container) RepoDir() string {
-	return c.Home() + "/repo"
-}
-
-func (c *Container) DeployDir() string {
-	return c.Home() + "/deploy"
-}
-
-func (c *Container) DataDir() string {
-	return c.Home() + "/data"
-}
-
-func (c *Container) LogDir() string {
-	return c.Home() + "/logs"
 }

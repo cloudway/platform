@@ -3,7 +3,7 @@ package container
 import "strings"
 
 // Resolve service dependencies.
-func ResolveServiceDependencies(cs []*Container) error {
+func ResolveServiceDependencies(cs []Container) error {
 	nodes := make([]*node, len(cs))
 	for i, c := range cs {
 		nodes[i] = &node{data: c}
@@ -34,7 +34,7 @@ func ResolveServiceDependencies(cs []*Container) error {
 	nodes, err := TSort(nodes)
 	if err == nil {
 		for i, n := range nodes {
-			cs[i] = n.data.(*Container)
+			cs[i] = n.data.(Container)
 		}
 	}
 	return err

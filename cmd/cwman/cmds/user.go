@@ -18,7 +18,7 @@ func (cli *CWMan) CmdUserAdd(args ...string) (err error) {
 	cmd.Require(mflag.Max, 3)
 	cmd.ParseFlags(args, true)
 
-	br, err := broker.New(cli.DockerClient)
+	br, err := broker.New(cli.Engine)
 	if err != nil {
 		return err
 	}
@@ -37,7 +37,7 @@ func (cli *CWMan) CmdUserDel(args ...string) error {
 	cmd.Require(mflag.Exact, 1)
 	cmd.ParseFlags(args, true)
 
-	br, err := broker.New(cli.DockerClient)
+	br, err := broker.New(cli.Engine)
 	if err != nil {
 		return err
 	}

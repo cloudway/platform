@@ -1,4 +1,4 @@
-package container
+package docker
 
 import (
 	"archive/tar"
@@ -15,7 +15,7 @@ import (
 	"github.com/cloudway/platform/pkg/archive"
 )
 
-func (c *Container) Install(ctx context.Context, source string) error {
+func (c *dockerContainer) Install(ctx context.Context, source string) error {
 	if !c.State.Running || c.State.Paused {
 		return errors.New("Container is not running")
 	}

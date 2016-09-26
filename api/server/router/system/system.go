@@ -35,7 +35,7 @@ func (s *systemRouter) Routes() []router.Route {
 }
 
 func (s *systemRouter) getVersion(w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	info, err := s.ServerVersion(r.Context())
+	sv, err := s.ServerVersion(r.Context())
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func (s *systemRouter) getVersion(w http.ResponseWriter, r *http.Request, vars m
 		Version:       api.Version,
 		GitCommit:     api.GitCommit,
 		BuildTime:     api.BuildTime,
-		DockerVersion: info.Version,
+		DockerVersion: sv,
 		Os:            osruntime.GOOS,
 		Arch:          osruntime.GOARCH,
 	}

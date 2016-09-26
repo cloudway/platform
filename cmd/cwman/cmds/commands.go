@@ -14,7 +14,7 @@ type Command struct {
 
 type CWMan struct {
 	*Cli.Cli
-	container.DockerClient
+	container.Engine
 	handlers map[string]func(...string) error
 }
 
@@ -37,10 +37,10 @@ func init() {
 	}
 }
 
-func Init(docker container.DockerClient) *CWMan {
+func Init(engine container.Engine) *CWMan {
 	cli := new(CWMan)
 	cli.Cli = Cli.New("cwman", cli)
-	cli.DockerClient = docker
+	cli.Engine = engine
 	cli.Description = "Cloudway application container management tool"
 
 	cli.handlers = map[string]func(...string) error{

@@ -1,4 +1,4 @@
-package container
+package docker
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 const EXTRA_HOSTS_KEY = "CLOUDWAY_EXTRA_HOSTS"
 
-func (c *Container) AddHost(ctx context.Context, host string, more ...string) error {
+func (c *dockerContainer) AddHost(ctx context.Context, host string, more ...string) error {
 	hosts := c.GetHosts(ctx)
 	hosts = addToSlice(hosts, host)
 	for _, v := range more {
@@ -16,7 +16,7 @@ func (c *Container) AddHost(ctx context.Context, host string, more ...string) er
 	return c.Setenv(ctx, EXTRA_HOSTS_KEY, strings.Join(hosts, ","))
 }
 
-func (c *Container) RemoveHost(ctx context.Context, host string, more ...string) error {
+func (c *dockerContainer) RemoveHost(ctx context.Context, host string, more ...string) error {
 	hosts := c.GetHosts(ctx)
 	if len(hosts) == 0 {
 		return nil
@@ -28,7 +28,7 @@ func (c *Container) RemoveHost(ctx context.Context, host string, more ...string)
 	return c.Setenv(ctx, EXTRA_HOSTS_KEY, strings.Join(hosts, ","))
 }
 
-func (c *Container) GetHosts(ctx context.Context) []string {
+func (c *dockerContainer) GetHosts(ctx context.Context) []string {
 	hosts, _ := c.Getenv(ctx, EXTRA_HOSTS_KEY)
 	if hosts == "" {
 		return nil

@@ -1,4 +1,4 @@
-package container
+package docker
 
 import (
 	"archive/tar"
@@ -18,39 +18,20 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/engine-api/types"
-	"github.com/docker/engine-api/types/container"
+	docker "github.com/docker/engine-api/types/container"
 	"github.com/docker/engine-api/types/network"
 	"github.com/docker/engine-api/types/strslice"
 
 	"github.com/cloudway/platform/api"
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/config/defaults"
+	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/archive"
 	"github.com/cloudway/platform/pkg/manifest"
-	"github.com/cloudway/platform/pkg/serverlog"
 )
 
-type CreateOptions struct {
-	Name        string
-	Namespace   string
-	ServiceName string
-	Plugin      *manifest.Plugin
-	Image       string
-	Flags       uint32
-	Secret      string
-	Home        string
-	User        string
-	Network     string
-	Capacity    string
-	Scaling     int
-	Hosts       []string
-	Env         map[string]string
-	Repo        string
-	Log         *serverlog.ServerLog
-}
-
 type createConfig struct {
-	*CreateOptions
+	*container.CreateOptions
 	Env               map[string]string // duplicate env map to prevent destruct original map
 	PluginInstallPath string
 	Category          manifest.Category
@@ -63,7 +44,7 @@ type createConfig struct {
 }
 
 // Create new application containers.
-func (cli DockerClient) Create(ctx context.Context, opts CreateOptions) ([]*Container, error) {
+func (cli DockerEngine) Create(ctx context.Context, opts container.CreateOptions) ([]container.Container, error) {
 	cfg := configure(&opts)
 
 	switch cfg.Category {
@@ -76,7 +57,7 @@ func (cli DockerClient) Create(ctx context.Context, opts CreateOptions) ([]*Cont
 	}
 }
 
-func configure(opts *CreateOptions) *createConfig {
+func configure(opts *container.CreateOptions) *createConfig {
 	cfg := &createConfig{CreateOptions: opts}
 	cfg.Env = make(map[string]string)
 	for k, v := range opts.Env {
@@ -136,7 +117,7 @@ func configure(opts *CreateOptions) *createConfig {
 }
 
 // Create a builder container.
-func (cli DockerClient) CreateBuilder(ctx context.Context, opts CreateOptions) (c *Container, err error) {
+func (cli DockerEngine) CreateBuilder(ctx context.Context, opts container.CreateOptions) (c *dockerContainer, err error) {
 	cfg := configure(&opts)
 
 	cfg.Hostname = cfg.Name + "-" + cfg.Namespace
@@ -151,7 +132,7 @@ func (cli DockerClient) CreateBuilder(ctx context.Context, opts CreateOptions) (
 	return createBuilderContainer(cli, ctx, cfg)
 }
 
-func createApplicationContainer(cli DockerClient, ctx context.Context, cfg *createConfig) ([]*Container, error) {
+func createApplicationContainer(cli DockerEngine, ctx context.Context, cfg *createConfig) ([]container.Container, error) {
 	if cfg.ServiceName != "" {
 		return nil, fmt.Errorf("The application name cannot contains a serivce name: %s", cfg.ServiceName)
 	}
@@ -175,7 +156,7 @@ func createApplicationContainer(cli DockerClient, ctx context.Context, cfg *crea
 		return nil, err
 	}
 
-	var containers []*Container
+	var containers []container.Container
 	for i := 0; i < scale; i++ {
 		if c, err := createContainer(cli, ctx, cfg); err != nil {
 			return containers, err
@@ -187,7 +168,7 @@ func createApplicationContainer(cli DockerClient, ctx context.Context, cfg *crea
 	return containers, err
 }
 
-func getScaling(cli DockerClient, ctx context.Context, name, namespace string, scale int) (int, error) {
+func getScaling(cli DockerEngine, ctx context.Context, name, namespace string, scale int) (int, error) {
 	if scale <= 0 {
 		return 0, fmt.Errorf("Invalid scaling value, it must be greater than 0")
 	}
@@ -218,7 +199,7 @@ func (e serviceExistsError) HTTPErrorStatusCode() int {
 	return http.StatusConflict
 }
 
-func createServiceContainer(cli DockerClient, ctx context.Context, cfg *createConfig) ([]*Container, error) {
+func createServiceContainer(cli DockerEngine, ctx context.Context, cfg *createConfig) ([]container.Container, error) {
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = cfg.Plugin.Name
 	}
@@ -246,11 +227,11 @@ func createServiceContainer(cli DockerClient, ctx context.Context, cfg *createCo
 	if err != nil {
 		return nil, err
 	} else {
-		return []*Container{c}, nil
+		return []container.Container{c}, nil
 	}
 }
 
-func buildImage(cli DockerClient, ctx context.Context, t *template.Template, cfg *createConfig) (err error) {
+func buildImage(cli DockerEngine, ctx context.Context, t *template.Template, cfg *createConfig) (err error) {
 	if cfg.Image != "" {
 		return
 	}
@@ -379,8 +360,8 @@ func addPluginFiles(tw *tar.Writer, dst, path string) error {
 	}
 }
 
-func createContainer(cli DockerClient, ctx context.Context, cfg *createConfig) (*Container, error) {
-	config := &container.Config{
+func createContainer(cli DockerEngine, ctx context.Context, cfg *createConfig) (container.Container, error) {
+	config := &docker.Config{
 		Labels: map[string]string{
 			VERSION_KEY:       api.Version,
 			CATEGORY_KEY:      string(cfg.Category),
@@ -405,11 +386,11 @@ func createContainer(cli DockerClient, ctx context.Context, cfg *createConfig) (
 		config.Labels[SERVICE_DEPENDS_KEY] = strings.Join(cfg.DependsOn, ",")
 	}
 
-	hostConfig := &container.HostConfig{}
+	hostConfig := &docker.HostConfig{}
 	netConfig := &network.NetworkingConfig{}
 
 	if cfg.Network != "" {
-		hostConfig.NetworkMode = container.NetworkMode(cfg.Network)
+		hostConfig.NetworkMode = docker.NetworkMode(cfg.Network)
 	}
 
 	var baseName = cfg.Name + "-" + cfg.Namespace + "-"
@@ -451,18 +432,18 @@ func createContainer(cli DockerClient, ctx context.Context, cfg *createConfig) (
 	return c, nil
 }
 
-func createBuilderContainer(cli DockerClient, ctx context.Context, cfg *createConfig) (*Container, error) {
-	config := &container.Config{
+func createBuilderContainer(cli DockerEngine, ctx context.Context, cfg *createConfig) (*dockerContainer, error) {
+	config := &docker.Config{
 		Image:      cfg.Image,
 		User:       cfg.User,
 		Entrypoint: strslice.StrSlice{"/usr/bin/cwctl", "run"},
 	}
 
-	hostConfig := &container.HostConfig{}
+	hostConfig := &docker.HostConfig{}
 	netConfig := &network.NetworkingConfig{}
 
 	if cfg.Network != "" {
-		hostConfig.NetworkMode = container.NetworkMode(cfg.Network)
+		hostConfig.NetworkMode = docker.NetworkMode(cfg.Network)
 	}
 
 	resp, err := cli.ContainerCreate(ctx, config, hostConfig, netConfig, "")
@@ -476,10 +457,8 @@ func createBuilderContainer(cli DockerClient, ctx context.Context, cfg *createCo
 		return nil, err
 	}
 
-	return &Container{
-		Name:          cfg.Name,
-		Namespace:     cfg.Namespace,
-		DockerClient:  cli,
+	return &dockerContainer{
+		DockerEngine:  cli,
 		ContainerJSON: &info,
 	}, nil
 }

@@ -29,7 +29,7 @@ var _ = Describe("Version", func() {
 
 			dockerVersion, err := broker.ServerVersion(ctx)
 			Ω(err).ShouldNot(HaveOccurred())
-			Ω(version.DockerVersion).Should(Equal(dockerVersion.Version))
+			Ω(version.DockerVersion).Should(Equal(dockerVersion))
 
 			Ω(version.Os).Should(Equal(runtime.GOOS))
 			Ω(version.Arch).Should(Equal(runtime.GOARCH))

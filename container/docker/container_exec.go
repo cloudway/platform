@@ -1,34 +1,19 @@
-package container
+package docker
 
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/stdcopy"
 	"github.com/docker/engine-api/types"
 )
 
-// StatusError reports an unsuccessful exit by a command
-type StatusError struct {
-	Command []string
-	Code    int
-	Message string
-}
-
-func (e StatusError) Error() string {
-	if e.Message != "" {
-		return e.Message
-	} else {
-		return fmt.Sprintf("exec command '%s' failed, Code: %d", strings.Join(e.Command, " "), e.Code)
-	}
-}
-
 // Execute command in application container.
-func (c *Container) Exec(ctx context.Context, user string, stdin io.Reader, stdout, stderr io.Writer, cmd ...string) error {
+func (c *dockerContainer) Exec(ctx context.Context, user string, stdin io.Reader, stdout, stderr io.Writer, cmd ...string) error {
 	// FIXME: Output may be closed if no stdin attached at sometimes.
 	// To workaround this problem always attach the stdin. This problem
 	// just occurres in docker swarm cluster, so it may be a docker bug.
@@ -45,7 +30,7 @@ func (c *Container) Exec(ctx context.Context, user string, stdin io.Reader, stdo
 		Cmd:          cmd,
 	}
 
-	execResp, err := c.ContainerExecCreate(ctx, c.ID, execConfig)
+	execResp, err := c.ContainerExecCreate(ctx, c.ID(), execConfig)
 	if err != nil {
 		return err
 	}
@@ -66,7 +51,7 @@ func (c *Container) Exec(ctx context.Context, user string, stdin io.Reader, stdo
 	if err != nil {
 		return err
 	} else if inspectResp.ExitCode != 0 {
-		return StatusError{
+		return container.StatusError{
 			Command: cmd,
 			Code:    inspectResp.ExitCode,
 		}
@@ -122,10 +107,10 @@ func pumpStreams(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer,
 
 // Execute the command and accumulate error messages from standard error of
 // the command.
-func (c *Container) ExecE(ctx context.Context, user string, in io.Reader, out io.Writer, cmd ...string) error {
+func (c *dockerContainer) ExecE(ctx context.Context, user string, in io.Reader, out io.Writer, cmd ...string) error {
 	var errbuf bytes.Buffer
 	err := c.Exec(ctx, user, in, out, &errbuf, cmd...)
-	if se, ok := err.(StatusError); ok && se.Message == "" {
+	if se, ok := err.(container.StatusError); ok && se.Message == "" {
 		se.Message = chomp(&errbuf)
 	}
 	return err
@@ -135,17 +120,17 @@ func (c *Container) ExecE(ctx context.Context, user string, in io.Reader, out io
 // error of the command.
 //
 // Equivalent to: ExecE(user, nil, nil, cmd...)
-func (c *Container) ExecQ(ctx context.Context, user string, cmd ...string) error {
+func (c *dockerContainer) ExecQ(ctx context.Context, user string, cmd ...string) error {
 	return c.ExecE(ctx, user, nil, nil, cmd...)
 }
 
 // Performs the expansion by executing command and return the contents
 // as the standard output of the command, with any trailing newlines
 // deleted.
-func (c *Container) Subst(ctx context.Context, user string, in io.Reader, cmd ...string) (string, error) {
+func (c *dockerContainer) Subst(ctx context.Context, user string, in io.Reader, cmd ...string) (string, error) {
 	var outbuf, errbuf bytes.Buffer
 	err := c.Exec(ctx, user, in, &outbuf, &errbuf, cmd...)
-	if se, ok := err.(StatusError); ok && se.Message == "" {
+	if se, ok := err.(container.StatusError); ok && se.Message == "" {
 		se.Message = chomp(&errbuf)
 	}
 	return chomp(&outbuf), err
@@ -153,4 +138,19 @@ func (c *Container) Subst(ctx context.Context, user string, in io.Reader, cmd ..
 
 func chomp(b *bytes.Buffer) string {
 	return strings.TrimRight(b.String(), "\r\n")
+}
+
+func (c *dockerContainer) Processes(ctx context.Context) (*container.ProcessList, error) {
+	if top, err := c.ContainerTop(ctx, c.ID(), nil); err == nil {
+		return &container.ProcessList{
+			Processes: top.Processes,
+			Headers:   top.Titles,
+		}, nil
+	} else {
+		return nil, err
+	}
+}
+
+func (c *dockerContainer) Stats(ctx context.Context, stream bool) (io.ReadCloser, error) {
+	return c.ContainerStats(ctx, c.ID(), stream)
 }

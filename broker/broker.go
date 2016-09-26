@@ -18,7 +18,7 @@ import (
 
 // Broker maintains all external services.
 type Broker struct {
-	container.DockerClient
+	container.Engine
 	Users *userdb.UserDatabase
 	Authz *auth.Authenticator
 	SCM   scm.SCM
@@ -32,9 +32,9 @@ type UserBroker struct {
 	ctx  context.Context
 }
 
-func New(cli container.DockerClient) (broker *Broker, err error) {
+func New(engine container.Engine) (broker *Broker, err error) {
 	broker = new(Broker)
-	broker.DockerClient = cli
+	broker.Engine = engine
 
 	broker.Users, err = userdb.Open()
 	if err != nil {

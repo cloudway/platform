@@ -1,7 +1,6 @@
-package container_test
+package docker_test
 
 import (
-	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -9,12 +8,13 @@ import (
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/container"
+	"github.com/cloudway/platform/container/docker"
 	"github.com/cloudway/platform/hub"
 	_ "github.com/cloudway/platform/scm/mock"
 )
 
 var (
-	dockerCli container.DockerClient
+	dockerCli container.Engine
 	pluginHub *hub.PluginHub
 )
 
@@ -28,10 +28,7 @@ var _ = BeforeSuite(func() {
 
 	Expect(config.Initialize()).To(Succeed())
 
-	dockerCli, err = container.NewEnvClient()
-	Expect(err).NotTo(HaveOccurred())
-
-	_, err = dockerCli.ServerVersion(context.Background())
+	dockerCli, err = docker.NewEngine()
 	Expect(err).NotTo(HaveOccurred())
 
 	pluginHub, err = hub.New()
