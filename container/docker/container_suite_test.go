@@ -8,13 +8,12 @@ import (
 
 	"github.com/cloudway/platform/config"
 	"github.com/cloudway/platform/container"
-	"github.com/cloudway/platform/container/docker"
 	"github.com/cloudway/platform/hub"
 	_ "github.com/cloudway/platform/scm/mock"
 )
 
 var (
-	dockerCli container.Engine
+	engine    container.Engine
 	pluginHub *hub.PluginHub
 )
 
@@ -28,7 +27,7 @@ var _ = BeforeSuite(func() {
 
 	Expect(config.Initialize()).To(Succeed())
 
-	dockerCli, err = docker.NewEngine()
+	engine, err = container.NewEngine()
 	Expect(err).NotTo(HaveOccurred())
 
 	pluginHub, err = hub.New()

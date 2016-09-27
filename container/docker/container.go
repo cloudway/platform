@@ -43,9 +43,11 @@ type dockerContainer struct {
 	*types.ContainerJSON
 }
 
-func NewEngine() (container.Engine, error) {
-	cli, err := client.NewEnvClient()
-	return DockerEngine{cli}, err
+func init() {
+	container.NewEngine = func() (container.Engine, error) {
+		cli, err := client.NewEnvClient()
+		return DockerEngine{cli}, err
+	}
 }
 
 func (cli DockerEngine) ServerVersion(ctx context.Context) (string, error) {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/cloudway/platform/cmd/cwman/cmds"
 	"github.com/cloudway/platform/config"
-	"github.com/cloudway/platform/container/docker"
+	"github.com/cloudway/platform/container"
 	flag "github.com/cloudway/platform/pkg/mflag"
 )
 
@@ -55,7 +55,7 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	engine, err := docker.NewEngine()
+	engine, err := container.NewEngine()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

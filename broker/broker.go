@@ -12,6 +12,7 @@ import (
 
 	// Load all plugings
 	_ "github.com/cloudway/platform/auth/userdb/mongodb"
+	_ "github.com/cloudway/platform/container/docker"
 	_ "github.com/cloudway/platform/scm/bitbucket"
 	_ "github.com/cloudway/platform/scm/mock"
 )

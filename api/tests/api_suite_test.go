@@ -21,7 +21,7 @@ import (
 	"github.com/cloudway/platform/auth/userdb"
 	br "github.com/cloudway/platform/broker"
 	"github.com/cloudway/platform/config"
-	"github.com/cloudway/platform/container/docker"
+	"github.com/cloudway/platform/container"
 	"github.com/cloudway/platform/pkg/rest"
 
 	_ "github.com/cloudway/platform/auth/userdb/mongodb"
@@ -55,7 +55,7 @@ var _ = BeforeSuite(func() {
 	config.Set("scm.url", "file://"+REPO_ROOT)
 	config.Set("userdb.url", "mongodb://127.0.0.1:27017/api_test")
 
-	engine, err := docker.NewEngine()
+	engine, err := container.NewEngine()
 	Ω(err).ShouldNot(HaveOccurred())
 
 	broker, err = br.New(engine)

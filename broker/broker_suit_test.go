@@ -9,7 +9,7 @@ import (
 
 	br "github.com/cloudway/platform/broker"
 	"github.com/cloudway/platform/config"
-	"github.com/cloudway/platform/container/docker"
+	"github.com/cloudway/platform/container"
 
 	_ "github.com/cloudway/platform/auth/userdb/mongodb"
 	_ "github.com/cloudway/platform/scm/mock"
@@ -31,7 +31,7 @@ const (
 var _ = BeforeSuite(func() {
 	var err error
 
-	engine, err := docker.NewEngine()
+	engine, err := container.NewEngine()
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(config.Initialize()).To(Succeed())

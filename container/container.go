@@ -231,3 +231,6 @@ func SplitNames(name string) (string, string, string) {
 		return "", "", ""
 	}
 }
+
+// NewEngine create a new container engine.
+var NewEngine func() (Engine, error)
