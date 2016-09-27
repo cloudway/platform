@@ -159,6 +159,7 @@ func handleChannel(newChannel ssh.NewChannel, c container.Container) {
 	go func() {
 		var (
 			pty    *pty_req
+			lang   string
 			execId string
 			err    error
 		)
@@ -170,8 +171,14 @@ func handleChannel(newChannel ssh.NewChannel, c container.Container) {
 				// responding true (OK) here will let the client know we have
 				// a pty ready for input
 				req.Reply(true, nil)
+			case "env":
+				env := decodeEnvReq(req.Payload)
+				if env != nil && env.Name == "LANG" {
+					lang = env.Value
+				}
+				req.Reply(true, nil)
 			case "shell":
-				execId, err = execShell(channel, c, pty)
+				execId, err = execShell(channel, c, pty, lang)
 				req.Reply(err == nil, nil)
 			case "exec":
 				if cmd, _, ok := decodeString(req.Payload); ok {
@@ -193,11 +200,14 @@ func handleChannel(newChannel ssh.NewChannel, c container.Container) {
 	}()
 }
 
-func execShell(channel ssh.Channel, c container.Container, pty *pty_req) (execId string, err error) {
+func execShell(channel ssh.Channel, c container.Container, pty *pty_req, lang string) (execId string, err error) {
 	// construct command to run in sandbox, passing TERM environment variable
 	command := []string{"/usr/bin/cwctl", "sh"}
 	if pty != nil {
 		command = append(command, "-e", "TERM="+pty.Term)
+	}
+	if lang != "" {
+		command = append(command, "-e", "LANG="+lang)
 	}
 	command = append(command, "cwsh")
 
@@ -276,6 +286,20 @@ type pty_req struct {
 
 func decodePtyReq(data []byte) *pty_req {
 	var req pty_req
+	if ssh.Unmarshal(data, &req) == nil {
+		return &req
+	} else {
+		return nil
+	}
+}
+
+type env_req struct {
+	Name  string
+	Value string
+}
+
+func decodeEnvReq(data []byte) *env_req {
+	var req env_req
 	if ssh.Unmarshal(data, &req) == nil {
 		return &req
 	} else {
