@@ -391,7 +391,6 @@ func (cli *CWCli) CmdAppSSH(args ...string) error {
 	var name, service, identity string
 
 	cmd := cli.Subcmd("app:ssh", "")
-	cmd.Require(mflag.Exact, 0)
 	cmd.String([]string{"a", "-app"}, "", "Specify the application name")
 	cmd.StringVar(&service, []string{"s", "-service"}, "", "Service name")
 	cmd.StringVar(&identity, []string{"i"}, "", "Identity file")
@@ -431,6 +430,10 @@ func (cli *CWCli) CmdAppSSH(args ...string) error {
 		container = service + "." + container
 	}
 	sshCmdArgs = append(sshCmdArgs, container+"@"+host)
+
+	if cmd.NArg() != 0 {
+		sshCmdArgs = append(sshCmdArgs, cmd.Args()...)
+	}
 
 	sshCmd := exec.Command("ssh", sshCmdArgs...)
 	sshCmd.Stdin = os.Stdin
