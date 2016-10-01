@@ -13,7 +13,7 @@
 
 FROM icloudway/dev:latest
 
-ENV GOPATH /go:/go/src/github.com/cloudway/platform/vendor
+ENV GOPATH /go
 
 RUN go get -u github.com/onsi/ginkgo/ginkgo github.com/onsi/gomega
 

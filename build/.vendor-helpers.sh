@@ -122,6 +122,8 @@ clean() {
     echo -n 'pruning .orig files, '
     $find vendor -type f -name '*.orig' -exec rm '{}' ';'
 
+    mv vendor/src/* vendor
+    rm -rf vendor/src
     echo done
 }
 

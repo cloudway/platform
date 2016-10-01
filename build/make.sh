@@ -95,7 +95,7 @@ if [ "$AUTO_GOPATH" ]; then
     rm -rf .gopath
     mkdir -p .gopath/src/"$(dirname "${CLOUDWAY_PKG}")"
     ln -sf ../../../.. .gopath/src/"${CLOUDWAY_PKG}"
-    export GOPATH="${PWD}/.gopath:${PWD}/vendor"
+    export GOPATH="${PWD}/.gopath"
 fi
 
 if [ ! "$GOPATH" ]; then
